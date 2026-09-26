@@ -72,6 +72,79 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal(Resources.TerminalStrings.TerminalFocusControlsHint, cut.Find(".terminal-focus-hint").TextContent);
         Assert.Equal(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize, cut.Find(".terminal-font-minus").GetAttribute("aria-label"));
         Assert.Equal(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize, cut.Find(".terminal-font-plus").GetAttribute("aria-label"));
+        foreach (var button in cut.FindAll(".terminal-controls fluent-button"))
+        {
+            Assert.Single(button.QuerySelectorAll("svg"));
+            Assert.False(string.IsNullOrEmpty(button.GetAttribute("aria-label")));
+            Assert.Equal(button.GetAttribute("aria-label"), button.GetAttribute("title"));
+        }
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task PaletteSelector_UsesSavedStateAndRemainsAvailableWithoutResizeAuthority(bool readOnly, bool showDimensions)
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var save = module.Setup<bool>("setPaletteFromHost", 1, "light");
+        save.SetResult(true);
+        var cut = Render<TerminalView>(builder => builder
+            .Add(p => p.ResourceName, "shell")
+            .Add(p => p.ReadOnly, readOnly)
+            .Add(p => p.ShowDimensionsPicker, showDimensions));
+        var state = new TerminalToolbarState { TerminalId = 1, Generation = 1, Palette = "dark" };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state));
+        var select = cut.FindComponent<FluentSelect<string, string>>();
+        Assert.Equal("dark", select.Instance.Value);
+        Assert.False(select.Instance.Disabled);
+        Assert.Equal(Resources.TerminalStrings.TerminalPalette, select.Instance.AriaLabel);
+        Assert.Equal(["Aspire light", "Aspire dark"], select.Instance.Items!.Select(select.Instance.OptionText!));
+        Assert.Equal("terminal-palette-select aspire-input", cut.Find(".terminal-controls").LastElementChild!.ClassName);
+
+        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
+        Assert.Single(save.Invocations);
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Palette = "light" }));
+        Assert.Equal("light", select.Instance.Value);
+
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Error = "palette-failed" }));
+        Assert.Equal("dark", select.Instance.Value);
+        Assert.Equal(Resources.TerminalStrings.TerminalPaletteSaveFailed, cut.Find("[role=alert]").TextContent);
+        Assert.Equal(Resources.TerminalStrings.TerminalDismissError, cut.Find(".terminal-error fluent-button").TextContent.Trim());
+        var failedSave = module.Setup<bool>("setPaletteFromHost", 1, "light");
+        failedSave.SetResult(false);
+        var originalSelect = select.Instance;
+        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync("light"));
+        var restoredSelect = cut.FindComponent<FluentSelect<string, string>>();
+        Assert.NotSame(originalSelect, restoredSelect.Instance);
+        Assert.Equal("dark", restoredSelect.Instance.Value);
+    }
+
+    [Fact]
+    public void Footer_UsesCustomLabelsForIconTooltipsAndAccessibleNames()
+    {
+        TerminalSetupHelpers.SetupTerminalView(this);
+        var cut = Render<TerminalView>(builder => builder
+            .Add(p => p.DecreaseFontSizeLabel, "Smaller text")
+            .Add(p => p.IncreaseFontSizeLabel, "Larger text")
+            .Add(p => p.FitLabel, "Fit to bounds"));
+
+        Assert.Collection(cut.FindAll(".terminal-controls fluent-button"),
+            button =>
+            {
+                Assert.Equal("Smaller text", button.GetAttribute("title"));
+                Assert.Equal("Smaller text", button.GetAttribute("aria-label"));
+            },
+            button =>
+            {
+                Assert.Equal("Larger text", button.GetAttribute("title"));
+                Assert.Equal("Larger text", button.GetAttribute("aria-label"));
+            },
+            button =>
+            {
+                Assert.Equal("Fit to bounds", button.GetAttribute("title"));
+                Assert.Equal("Fit to bounds", button.GetAttribute("aria-label"));
+            });
     }
 
     [Theory]
@@ -98,6 +171,29 @@ public class TerminalViewTests : DashboardTestContext
         {
             Assert.Equal(Resources.TerminalStrings.TerminalTitle, cut.Find(".terminal-title").TextContent);
         }
+    }
+
+    [Fact]
+    public async Task Titlebar_UsesWorkloadMetadataAndHidesDisconnectedProgress()
+    {
+        var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
+        module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var state = new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 2, Connected = true,
+            Title = "building", WorkingDirectory = "/work/app",
+            WorkingDirectoryUri = "file:///work/app", ProgressState = "normal", ProgressPercentage = 42
+        };
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state));
+        Assert.Equal("building", cut.Find(".terminal-titlebar .terminal-title").TextContent);
+        Assert.Equal("/work/app", cut.Find(".terminal-titlebar .terminal-directory").GetAttribute("data-text"));
+        Assert.Equal("42", cut.Find(".terminal-titlebar [role=progressbar]").GetAttribute("aria-valuenow"));
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Generation = 1, Title = "stale" }));
+        Assert.Equal("building", cut.Find(".terminal-title").TextContent);
+        await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(state with { Connected = false }));
+        Assert.Empty(cut.FindAll("[role=progressbar]"));
+        Assert.Equal("building", cut.Find(".terminal-title").TextContent);
     }
 
     [Fact]
@@ -136,7 +232,7 @@ public class TerminalViewTests : DashboardTestContext
             Cols = 97, Rows = 38, SizeKey = "97x38", SizeSelectEnabled = true
         }));
         Assert.False(cut.Find(".terminal-fit").HasAttribute("disabled"));
-        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").TextContent.Trim());
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").GetAttribute("title"));
         var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
         Assert.NotNull(items);
         Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], items);

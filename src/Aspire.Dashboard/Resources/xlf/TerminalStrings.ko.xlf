@@ -7,6 +7,16 @@
         <target state="new">Toggle terminal (`)</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalCopyTitle">
+        <source>Copy terminal title: {0}</source>
+        <target state="new">Copy terminal title: {0}</target>
+        <note>{0} is the terminal title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalCopyWorkingDirectory">
+        <source>Copy working directory: {0}</source>
+        <target state="new">Copy working directory: {0}</target>
+        <note>{0} is the working directory path.</note>
+      </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
         <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
@@ -127,6 +137,41 @@
         <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalPalette">
+        <source>Terminal palette</source>
+        <target state="new">Terminal palette</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteDark">
+        <source>Aspire dark</source>
+        <target state="new">Aspire dark</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteLight">
+        <source>Aspire light</source>
+        <target state="new">Aspire light</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteSaveFailed">
+        <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
+        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalProgress">
+        <source>Terminal progress</source>
+        <target state="new">Terminal progress</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalProgressError">
+        <source>Error</source>
+        <target state="new">Error</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalProgressWarning">
+        <source>Warning</source>
+        <target state="new">Warning</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
         <target state="new">Reconnect terminal</target>
@@ -153,8 +198,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit</source>
-        <target state="new">Fit</target>
+        <source>Fit terminal to available space</source>
+        <target state="new">Fit terminal to available space</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">

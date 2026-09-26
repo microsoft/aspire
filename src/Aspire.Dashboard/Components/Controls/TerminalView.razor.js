@@ -1,12 +1,34 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute } from "../../js/hex1b-web-terminal/dist/index.js";
+import { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, InputRoute, createDefaultScrollbarRenderer, renderDefaultScrollbarTooltip, defaultDarkPalette, defaultLightPalette, linkAction } from "../../js/hex1b-web-terminal/dist/index.min.js";
 
 const terminals = new Map();
 const rememberedFontSizes = new Map();
 let nextId = 1;
 const DEFAULT_FONT_SIZE = 13;
+const TERMINAL_PADDING = 3;
+const TERMINAL_PALETTE_STORAGE_KEY = "Aspire.TerminalPalette";
+// Retain Hex1b's neutral slots and selection colors. Chromatic slots increase OKLCH chroma
+// by up to 25% (dark) / 10% (light), reducing chroma at the sRGB boundary rather than clipping.
+// Lightness is adjusted where necessary for >=5:1 normal / >=6:1 bright text on these backgrounds.
+// These are precomputed colors, so palette changes need no runtime color conversion.
+const darkPalette = {
+    ...defaultDarkPalette,
+    background: "#312e3c",
+    ansi: [
+        "#242424", "#fb7d88", "#87b179", "#ca9f2c", "#6fabdc", "#c195cc", "#4cb4ba", "#b7b4ae",
+        "#9a9a9a", "#ff99a0", "#94c384", "#dfaf2b", "#79bcf3", "#d6a3e2", "#4fc8cd", "#dedad3",
+    ],
+};
+const lightPalette = {
+    ...defaultLightPalette,
+    background: "#d5d0df",
+    ansi: [
+        "#24262b", "#9e233a", "#365d28", "#6a4f00", "#165786", "#6d4478", "#005d61", "#b7b4ae",
+        "#595959", "#93042d", "#295118", "#5b4500", "#004b7a", "#62376d", "#005054", "#e3dfd7",
+    ],
+};
 const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 5000];
 const MAX_RECONNECT_ATTEMPTS = 30;
 // Aspire's WebSocket endpoint sends this private-use code only after authoritative
@@ -19,6 +41,131 @@ const SIZE_PRESETS = [
     { value: "132x30", label: "132×30", cols: 132, rows: 30 },
     { value: "132x50", label: "132×50", cols: 132, rows: 50 },
 ];
+
+function scrollbarConfiguration(state) {
+    // Resolve variables/system colors to concrete canvas colors before passing
+    // them to the snapshotted built-in painter.
+    const probe = document.createElement("span");
+    probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;forced-color-adjust:none";
+    document.body.append(probe);
+    try {
+        const color = value => {
+            probe.style.color = value;
+            return getComputedStyle(probe).color;
+        };
+        const forced = state.forcedColors.matches;
+        const palette = state.colorMode === "light" ? lightPalette : darkPalette;
+        const tooltipStyle = {
+            background: color(forced ? "Canvas" : "var(--aspire-popup-background)"),
+            color: color(forced ? "CanvasText" : "var(--colorNeutralForeground1)"),
+            borderColor: color(forced ? "CanvasText" : "var(--colorNeutralStroke1)"),
+            borderRadius: "var(--aspire-popup-radius)",
+            boxShadow: forced ? "none" : getComputedStyle(probe).getPropertyValue("--aspire-popup-shadow"),
+            font: "var(--fontSizeBase200)/var(--lineHeightBase200) var(--fontFamilyBase)",
+            padding: "8px 12px",
+        };
+        const renderScrollbar = createDefaultScrollbarRenderer({
+            // The overlay shares the terminal palette rather than the surrounding page surface.
+            track: {
+                color: forced ? color("Canvas") : palette.background,
+                opacity: forced || state.moreContrast.matches ? 1 : 0.35,
+            },
+            thumb: {
+                color: forced ? color("CanvasText") : palette.foreground,
+            },
+            markers: {
+                color: color(forced ? "Highlight" : "var(--colorBrandForeground1)"),
+                errorColor: color(forced ? "LinkText" : "var(--error)"),
+                opacity: forced || state.moreContrast.matches ? 1 : 0.65,
+            },
+        });
+        return {
+            placement: "overlay",
+            markers: true,
+            tooltip(context) {
+                // Preserve upstream text escaping, async detail states and positioning.
+                const element = renderDefaultScrollbarTooltip(context);
+                Object.assign(element.style, tooltipStyle);
+                return element;
+            },
+            render: renderScrollbar,
+        };
+    } finally {
+        probe.remove();
+    }
+}
+
+export function getTerminalPalette() {
+    try {
+        const stored = localStorage.getItem(TERMINAL_PALETTE_STORAGE_KEY);
+        if (stored === null) {
+            return "dark";
+        }
+        // This non-sensitive browser preference is stored as JSON, e.g. "dark".
+        const value = JSON.parse(stored);
+        if (value === "dark" || value === "light") {
+            return value;
+        }
+        // The former theme-following preference now resolves to the default explicit palette.
+        if (value === "dashboard") {
+            return "dark";
+        }
+        console.warn("Invalid Dashboard terminal palette preference; using Dark.");
+    } catch (error) {
+        console.warn("Could not read Dashboard terminal palette preference; using Dark.", error);
+    }
+    return "dark";
+}
+
+export function setTerminalPalette(value) {
+    if (value !== "dark" && value !== "light") {
+        throw new TypeError("Invalid terminal palette preference.");
+    }
+    // Persist before applying so a failed write can be reported without a false success.
+    localStorage.setItem(TERMINAL_PALETTE_STORAGE_KEY, JSON.stringify(value));
+    for (const state of terminals.values()) {
+        updateAppearance(state);
+    }
+}
+
+function updateAppearance(state) {
+    if (state.disposed) {
+        return;
+    }
+    const preference = getTerminalPalette();
+    state.palette = preference;
+    state.colorMode = preference;
+    const palette = state.colorMode === "light" ? lightPalette : darkPalette;
+    state.viewElement.style.setProperty("--terminal-background", palette.background);
+    state.viewElement.style.setProperty("--terminal-foreground", palette.foreground);
+    state.client?.setColorMode(state.colorMode);
+    state.scrollbar = scrollbarConfiguration(state);
+    // setScrollbar replaces, rather than merges, the configuration.
+    state.client?.setScrollbar(state.scrollbar);
+    notifyToolbar(state);
+}
+
+export function setPaletteFromHost(id, value) {
+    const state = terminals.get(id);
+    if (!state || state.disposed) {
+        return false;
+    }
+    let saved = false;
+    try {
+        // Palette is a local presentation preference, even for read-only or disconnected terminals.
+        setTerminalPalette(value);
+        saved = true;
+        if (state.error === "palette-failed") {
+            state.error = null;
+        }
+    } catch (error) {
+        console.warn("Dashboard terminal palette save failed.", error);
+        state.error = "palette-failed";
+    }
+    // Restore the authoritative selection after a failed save, even if the rest of the state is unchanged.
+    refreshToolbarState(id);
+    return saved;
+}
 
 function isCurrent(state, generation) {
     return !state.disposed && state.generation === generation;
@@ -89,6 +236,8 @@ function cancelReconnect(state) {
 }
 
 function releaseClient(state) {
+    state.inspectionObserver?.disconnect();
+    state.inspectionObserver = null;
     if (state.client?.element.contains(document.activeElement)) {
         requestFocus(state);
     }
@@ -98,6 +247,58 @@ function releaseClient(state) {
     state.client = null;
     controller?.abort();
     client?.dispose();
+}
+
+function configureTerminalChrome(client) {
+    // This pinned Hex1b release has no options/parts for its history chrome or
+    // pointer focus outline, or unused-space styling. Keep keyboard focus, errors and selection feedback;
+    // remove these overrides when upstream exposes controls for them.
+    const shadow = client.element.shadowRoot;
+    const status = shadow?.querySelector(".inspection-message");
+    if (!status || !shadow.querySelector(".return-live")) {
+        throw new Error("Hex1b history chrome could not be configured.");
+    }
+    const style = document.createElement("style");
+    // Paint the edge inside the existing padding so it neither resizes nor overlaps terminal cells.
+    // Keep transparent default cells solid; only the unused viewport is hatched.
+    style.textContent = `
+        .return-live { display: none !important; }
+        .inspection-message[data-aspire-history-position] { display: none !important; }
+        :host([data-aspire-pointer-input="true"]) .scrollbar-accessibility:focus-visible { outline: none; }
+        .viewport {
+            background-color: color-mix(in srgb, var(--terminal-background) 92%, black);
+            background-image: repeating-linear-gradient(135deg,
+                color-mix(in srgb, var(--terminal-foreground) 10%, transparent) 0 1px,
+                transparent 1px 8px);
+        }
+        .surface {
+            background: var(--terminal-background);
+            box-shadow:
+                0 0 0 ${TERMINAL_PADDING - 0.5}px var(--terminal-background),
+                0 0 0 ${TERMINAL_PADDING}px color-mix(in srgb, var(--terminal-foreground) 10%, var(--terminal-background));
+        }
+        @media (forced-colors: active) {
+            .viewport {
+                background-color: Canvas;
+                background-image: none;
+            }
+            .surface {
+                outline: 1px solid CanvasText;
+                outline-offset: ${TERMINAL_PADDING - 1}px;
+            }
+        }
+    `;
+    shadow.append(style);
+    const update = () => {
+        // Hex1b emits "42 rows above live"; other status text includes selection
+        // feedback and navigation errors and must not be suppressed.
+        status.toggleAttribute("data-aspire-history-position",
+            status.dataset.level !== "error" && /^\d+ rows above live$/.test(status.textContent));
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(status, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["data-level"] });
+    update();
+    return observer;
 }
 
 function scheduleReconnect(state, generation) {
@@ -332,7 +533,7 @@ function focusControls(state, reverse) {
         previous?.focus();
         return !!previous;
     }
-    const controls = Array.from(state.footer.querySelectorAll("fluent-button, fluent-select"))
+    const controls = Array.from(state.footer.querySelectorAll("fluent-button, fluent-select, fluent-dropdown button[role='combobox']"))
         .filter(element => !element.disabled && element.tabIndex >= 0);
     controls[0]?.focus();
     if (controls.length === 0) {
@@ -387,6 +588,49 @@ async function mountClient(state, generation, controller) {
             label: state.options.label,
             sizing: state.sizing,
             readOnly: state.readOnly,
+            colorMode: state.colorMode,
+            lightModePalette: lightPalette,
+            darkModePalette: darkPalette,
+            scrollbar: state.scrollbar,
+            padding: TERMINAL_PADDING,
+            links: {
+                detection: {
+                    activation: "modifierClick",
+                    underlineStyle: "dashed",
+                    rules: [{
+                        id: "web",
+                        builtin: "url",
+                        action: linkAction((_context, activation) => {
+                            // Detected destinations are untrusted workload output, not Dashboard URLs.
+                            // Keep OSC 8 on Hex1b's default allowlist and authorize detected web URLs here.
+                            const url = new URL(activation.target);
+                            if (url.protocol !== "https:" && url.protocol !== "http:") {
+                                throw new Error("Terminal web links must use HTTP or HTTPS.");
+                            }
+                            window.open(url.href, "_blank", "noopener,noreferrer");
+                        }),
+                    }],
+                },
+            },
+            onTitleChange(title) {
+                if (current()) {
+                    state.title = title;
+                    notifyToolbar(state);
+                }
+            },
+            onWorkingDirectoryChange(directory) {
+                if (current()) {
+                    state.workingDirectory = directory.path;
+                    state.workingDirectoryUri = directory.uri;
+                    notifyToolbar(state);
+                }
+            },
+            onProgressChange(progress) {
+                if (current()) {
+                    state.progress = progress;
+                    notifyToolbar(state);
+                }
+            },
             onInput: input => inputPolicy(state, input),
             onClose(details) {
                 if (current()) {
@@ -450,6 +694,10 @@ async function mountClient(state, generation, controller) {
             return;
         }
         state.client = client;
+        state.inspectionObserver = configureTerminalChrome(client);
+        // Theme/accessibility settings can change while awaiting the first frame.
+        client.setColorMode(state.colorMode);
+        client.setScrollbar(state.scrollbar);
         // Selection notifications can precede mount completion, before the handle is available.
         clearInvalidatedSelection(state);
         // Policy can change while mount is waiting for its first frame.
@@ -527,13 +775,19 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         (Number.isFinite(options.initialFontSize) ? clampFontSize(options.initialFontSize) : DEFAULT_FONT_SIZE);
     const state = {
         id, element, wsUrl, dotNetRef, options, selectionTemplate, footer,
+        viewElement: element.closest(".terminal-view"),
         readOnly: !!options.readOnly,
         autoFit: !!options.autoFit,
         client: null,
+        inspectionObserver: null,
         controller: null,
         disposed: false,
         ended: false,
         connected: false,
+        title: "",
+        workingDirectory: null,
+        workingDirectoryUri: null,
+        progress: { state: "none", percentage: null },
         peer: { id: null, primaryId: null, isPrimary: false },
         geometry: null,
         sizing: { mode: "auto", fontSize },
@@ -550,7 +804,46 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         focusOrigin: document.activeElement,
         failurePending: false,
         listeners: new AbortController(),
+        forcedColors: window.matchMedia("(forced-colors: active)"),
+        moreContrast: window.matchMedia("(prefers-contrast: more)"),
     };
+    updateAppearance(state);
+    state.themeObserver = new MutationObserver(() => updateAppearance(state));
+    state.themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    // FluentSelect places AriaLabel on the dropdown host, not its generated combobox button.
+    // Forward it until Fluent propagates this attribute; observe child creation because upgrade is async.
+    // https://github.com/microsoft/fluentui-blazor/blob/dev/src/Core/Components/List/FluentSelect.razor
+    const labelPaletteControl = () => {
+        const dropdown = footer.querySelector(".terminal-palette-select fluent-dropdown");
+        const label = dropdown?.getAttribute("aria-label");
+        if (label) {
+            dropdown.querySelector("button[role='combobox']")?.setAttribute("aria-label", label);
+        }
+    };
+    state.footerObserver = new MutationObserver(labelPaletteControl);
+    state.footerObserver.observe(footer, { childList: true, subtree: true });
+    labelPaletteControl();
+    // Other windows (including detached terminals) receive storage events; the writer updates its views above.
+    window.addEventListener("storage", event => {
+        if (event.storageArea === localStorage && (event.key === TERMINAL_PALETTE_STORAGE_KEY || event.key === null)) {
+            updateAppearance(state);
+        }
+    }, { signal: state.listeners.signal });
+    for (const media of [state.forcedColors, state.moreContrast]) {
+        media.addEventListener("change", () => updateAppearance(state), { signal: state.listeners.signal });
+    }
+    // A programmatically focused scrollbar can remain :focus-visible after a mouse
+    // drag. Track modality before Hex1b consumes events, without moving actual focus.
+    element.addEventListener("pointerdown", () => {
+        if (state.client) {
+            state.client.element.dataset.aspirePointerInput = "true";
+        }
+    }, { capture: true, signal: state.listeners.signal });
+    element.addEventListener("keydown", () => {
+        if (state.client) {
+            delete state.client.element.dataset.aspirePointerInput;
+        }
+    }, { capture: true, signal: state.listeners.signal });
     footer.addEventListener("click", event => focusAfterMouseControl(state, event),
         { signal: state.listeners.signal });
     footer.addEventListener("keydown", event => {
@@ -579,6 +872,12 @@ export function reconnectTerminal(id, wsUrl) {
     if (!state || (state.ended && state.wsUrl === wsUrl)) {
         return state?.generation ?? 0;
     }
+    if (state.wsUrl !== wsUrl) {
+        state.title = "";
+        state.workingDirectory = null;
+        state.workingDirectoryUri = null;
+        state.progress = { state: "none", percentage: null };
+    }
     state.wsUrl = wsUrl;
     state.ended = false;
     state.attempts = 0;
@@ -600,6 +899,8 @@ export function disposeTerminal(id) {
         cancelAnimationFrame(state.toolbarFrame);
     }
     state.observer.disconnect();
+    state.themeObserver.disconnect();
+    state.footerObserver.disconnect();
     state.listeners.abort();
     releaseClient(state);
     state.dotNetRef = null;
@@ -643,10 +944,10 @@ export function setAutoFit(id, autoFit) {
 
 export function dismissError(id) {
     const state = terminals.get(id);
-    if (!state || (state.error !== "input-failed" && state.error !== "sizing-failed")) {
+    if (!state || !["input-failed", "sizing-failed", "palette-failed"].includes(state.error)) {
         return;
     }
-    // Clipboard/input and sizing failures are local actions, not transport failures.
+    // Clipboard/input, sizing and palette failures are local actions, not transport failures.
     state.error = null;
     requestFocus(state);
     applyPendingFocus(state);
@@ -714,7 +1015,13 @@ export function getToolbarState(id) {
         generation: state.generation,
         status: !connected ? "connecting" : isPrimary ? "primary" : state.peer.primaryId === null ? "no-primary" : "viewer",
         connected, isPrimary, canTakeControl,
+        title: state.title,
+        workingDirectory: state.workingDirectory,
+        workingDirectoryUri: state.workingDirectoryUri,
+        progressState: state.progress.state,
+        progressPercentage: state.progress.percentage,
         sizeMode: state.sizing.mode === "auto" ? "font" : "fixed",
+        palette: state.palette,
         sizeKey: state.sizing.mode === "auto"
             ? state.geometry ? `${state.geometry.columns}x${state.geometry.rows}` : ""
             : `${state.sizing.columns}x${state.sizing.rows}`,

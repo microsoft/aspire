@@ -35,6 +35,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private IReadOnlyList<TerminalSizePreset> _sizePresets = [];
     private TerminalViewSession? _viewSession;
     private string? _sessionEndpoint;
+    private int _paletteResetVersion;
+    private static readonly string[] s_paletteChoices = ["light", "dark"];
 
     /// <summary>Gets or sets the display name of the resource that owns the terminal.</summary>
     [Parameter]
@@ -98,6 +100,9 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Gets the selected font size, or the initial preference before the first state notification.</summary>
     public int? FontSize => _state.FontPx > 0 ? _state.FontPx : InitialFontSize;
 
+    /// <summary>Gets the current presentation state for host-owned terminal chrome.</summary>
+    public TerminalToolbarState ToolbarState => _state;
+
     /// <summary>Gets or sets whether the footer offers fixed-resolution presets. Defaults to true.</summary>
     /// <remarks>The font stepper remains available on surfaces sized by a splitter or dialog.</remarks>
     [Parameter]
@@ -108,7 +113,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool AutoFit { get; set; }
 
-    /// <summary>Raised when the terminal's role, dimensions, font or connection state changes.</summary>
+    /// <summary>Raised when the terminal's metadata, role, dimensions, font or connection state changes.</summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
@@ -361,6 +366,34 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Fits the terminal grid to its container without changing the selected font size.</summary>
     public Task FitToContainerAsync() => InvokeTerminalAsync("fitToContainer");
 
+    private async Task SetPaletteAsync(string? palette)
+    {
+        if (palette is null || _disposed || _jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            if (!await _jsModule.InvokeAsync<bool>("setPaletteFromHost", _terminalId, palette))
+            {
+                // Fluent updates its browser selection before ValueChanged. Recreate only after failure
+                // because assigning the unchanged saved Value doesn't restore the displayed choice.
+                _paletteResetVersion++;
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+            // Expected when the browser leaves this page.
+        }
+    }
+
+    private string GetPaletteLabel(string palette) => Loc[palette switch
+    {
+        "light" => nameof(Resources.TerminalStrings.TerminalPaletteLight),
+        "dark" => nameof(Resources.TerminalStrings.TerminalPaletteDark),
+        _ => throw new ArgumentException("Unknown terminal palette.", nameof(palette))
+    }];
+
     private IReadOnlyList<TerminalSizePreset> DisplayedSizePresets => _state.Cols > 0 && _state.Rows > 0 &&
         !_sizePresets.Any(p => p.Value == _state.SizeKey)
         ? [new(_state.SizeKey, $"{_state.Cols}\u00d7{_state.Rows}", _state.Cols, _state.Rows), .. _sizePresets]
@@ -419,6 +452,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         "disconnected" => nameof(Resources.TerminalStrings.TerminalDisconnected),
         "input-failed" => nameof(Resources.TerminalStrings.TerminalInputFailed),
         "sizing-failed" => nameof(Resources.TerminalStrings.TerminalSizingFailed),
+        "palette-failed" => nameof(Resources.TerminalStrings.TerminalPaletteSaveFailed),
         _ => nameof(Resources.TerminalStrings.TerminalMountFailed)
     }];
 
@@ -532,7 +566,7 @@ public sealed record TerminalViewOptions
     public required string FocusControlsHint { get; init; }
 }
 
-/// <summary>A generation-tagged snapshot of terminal role, sizing and connection state.</summary>
+/// <summary>A generation-tagged snapshot of terminal metadata, role, sizing and connection state.</summary>
 public sealed record TerminalToolbarState
 {
     /// <summary>The unique JS-side view identifier.</summary>
@@ -543,6 +577,16 @@ public sealed record TerminalToolbarState
     public string Status { get; init; } = "connecting";
     /// <summary>Whether a connected frame has been presented.</summary>
     public bool Connected { get; init; }
+    /// <summary>The workload-reported title, or empty when unset.</summary>
+    public string Title { get; init; } = string.Empty;
+    /// <summary>The decoded working directory reported by the shell, or null when unset.</summary>
+    public string? WorkingDirectory { get; init; }
+    /// <summary>The original working directory URI, displayed as text only.</summary>
+    public string? WorkingDirectoryUri { get; init; }
+    /// <summary>The reported progress state: none, normal, error, indeterminate or warning.</summary>
+    public string ProgressState { get; init; } = "none";
+    /// <summary>The reported percentage, or null for hidden or indeterminate progress.</summary>
+    public int? ProgressPercentage { get; init; }
     /// <summary>Whether this view owns resize authority.</summary>
     public bool IsPrimary { get; init; }
     /// <summary>Whether requesting resize authority is available.</summary>
@@ -551,6 +595,8 @@ public sealed record TerminalToolbarState
     public string SizeMode { get; init; } = "font";
     /// <summary>The selected preset key, or auto.</summary>
     public string SizeKey { get; init; } = "auto";
+    /// <summary>The saved palette preference: light or dark.</summary>
+    public string Palette { get; init; } = "dark";
     /// <summary>The font size in CSS pixels.</summary>
     public int FontPx { get; init; }
     /// <summary>Whether font controls are available.</summary>

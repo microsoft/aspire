@@ -45,6 +45,60 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string TerminalProgress {
+            get {
+                return ResourceManager.GetString("TerminalProgress", resourceCulture);
+            }
+        }
+
+        public static string TerminalPalette {
+            get {
+                return ResourceManager.GetString("TerminalPalette", resourceCulture);
+            }
+        }
+
+        public static string TerminalPaletteLight {
+            get {
+                return ResourceManager.GetString("TerminalPaletteLight", resourceCulture);
+            }
+        }
+
+        public static string TerminalPaletteDark {
+            get {
+                return ResourceManager.GetString("TerminalPaletteDark", resourceCulture);
+            }
+        }
+
+        public static string TerminalPaletteSaveFailed {
+            get {
+                return ResourceManager.GetString("TerminalPaletteSaveFailed", resourceCulture);
+            }
+        }
+
+        public static string TerminalCopyWorkingDirectory {
+            get {
+                return ResourceManager.GetString("TerminalCopyWorkingDirectory", resourceCulture);
+            }
+        }
+
+        public static string TerminalCopyTitle {
+            get {
+                return ResourceManager.GetString("TerminalCopyTitle", resourceCulture);
+            }
+        }
+
+        public static string TerminalProgressError {
+            get {
+                return ResourceManager.GetString("TerminalProgressError", resourceCulture);
+            }
+        }
+
+        public static string TerminalProgressWarning {
+            get {
+                return ResourceManager.GetString("TerminalProgressWarning", resourceCulture);
+            }
+        }
+
         public static string TerminalTitle {
             get {
                 return ResourceManager.GetString("TerminalTitle", resourceCulture);

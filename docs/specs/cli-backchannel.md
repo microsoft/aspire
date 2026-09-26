@@ -38,13 +38,17 @@ privileged administrators.
 
 Process-backed AppHost terminals (both docked and interaction prompts) also configure
 Hex1b's Windows PTY helper socket directory before creating the deferred workload. Aspire
-secures `%USERPROFILE%\.aspire\pty` and sets `HEX1B_PTY_SHIM_SOCKET_DIR` in the AppHost's
-process environment. An existing override is preserved, normalized to an absolute path,
+secures `%USERPROFILE%\.aspire\pty` and supplies a unique explicit
+`WindowsPtyProxySocketPath` to each workload. An existing `HEX1B_PTY_SHIM_SOCKET_DIR`
+override is read without changing the process environment, normalized to an absolute path,
 and validated with the same override policy; unsafe directories or permission failures prevent
-terminal creation. Hex1b may additionally grant Windows SYSTEM access to this directory.
-The override remains set for the process lifetime because Hex1b reads it at PTY startup,
-not when the process-options callback runs. Setting only the child process environment
-would not control this socket. Linux and macOS use direct PTYs and need no such override.
+terminal creation. Socket paths are checked against the native endpoint length limit
+before creating directories. Sockets live in an Aspire-owned `proxy` subdirectory
+so Hex1b's startup ACL enforcement does not rewrite the override directory's permissions.
+The shorter unique filenames keep paths within the previous allocation's length budget.
+Hex1b snapshots the explicit path before deferred startup,
+so later parent or child environment changes cannot redirect it. Hex1b owns socket cleanup.
+Linux and macOS use direct PTYs and need no socket path.
 
 ## Philosophy
 

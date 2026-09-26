@@ -20,8 +20,8 @@
     min-width: 0;
     min-height: 0;
     box-sizing: border-box;
-    background: #0d1117;
-    border: 2px solid #3a4250;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+    border: 2px solid var(--colorNeutralStroke1);
     border-radius: 6px;
     overflow: hidden;
 }
@@ -63,10 +63,27 @@
     margin-inline-start: auto;
 }
 
-.terminal-size-select {
-    width: auto;
+.terminal-controls ::deep .toolbar-button {
+    width: var(--aspire-control-height);
+    min-width: var(--aspire-control-height);
+    padding: 0;
+}
+
+.terminal-controls ::deep .toolbar-button svg {
+    height: 16px;
+}
+
+/* The select's field wrapper has an empty grid row that otherwise offsets its visible border. */
+.terminal-controls ::deep .toolbar-button,
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
     height: var(--aspire-control-height);
     min-height: var(--aspire-control-height);
+}
+
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
+    width: auto;
 }
 
 .terminal-font-size {
@@ -88,6 +105,7 @@
 }
 
 .terminal-titlebar {
+    --terminal-titlebar-border-color: var(--colorNeutralStroke1);
     display: flex;
     align-items: center;
     flex: 0 0 30px;
@@ -95,18 +113,10 @@
     padding: 0 14px;
     padding-inline-end: 8px;
     box-sizing: border-box;
-    background: linear-gradient(180deg, #1a2029 0%, #161b22 100%);
-    border-bottom: 1px solid #30363d;
-    color: #8b949e;
-    font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-}
-
-.terminal-title {
-    flex: 1;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    background: var(--colorNeutralBackground2);
+    border-bottom: 1px solid var(--terminal-titlebar-border-color);
+    color: var(--colorNeutralForeground2);
+    font: var(--fontSizeBase200) var(--fontFamilyBase);
 }
 
 .terminal-titlebar ::deep .terminal-open-window {
@@ -121,7 +131,7 @@
     flex: 0 0 auto;
     margin-inline-start: 12px;
     padding-inline-start: 12px;
-    border-inline-start: 1px solid #30363d;
+    border-inline-start: 1px solid var(--colorNeutralStroke1);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -136,6 +146,9 @@
 }
 
 .terminal-container {
+    /* Tint a muted neutral base with brand purple without competing with terminal content. */
+    --terminal-focus-neutral-color: color-mix(in srgb, var(--colorNeutralForeground3) 60%, var(--colorNeutralStroke1));
+    --terminal-focus-color: color-mix(in srgb, #7455dd 25%, var(--terminal-focus-neutral-color));
     position: relative;
     isolation: isolate;
     width: 100%;
@@ -154,9 +167,9 @@
     pointer-events: none;
 }
 
-.terminal-container ::deep ::part(selection-highlight) {
-    background: var(--colorBrandBackground);
-    opacity: 0.3;
+.terminal-container:focus-within::after {
+    outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
+    outline-offset: calc(-1 * var(--strokeWidthThick));
 }
 
 .terminal-view ::deep .terminal-selection-actions {
@@ -193,10 +206,15 @@
     cursor: progress;
 }
 
+@media (prefers-contrast: more) {
+    .terminal-container {
+        --terminal-focus-color: var(--colorStrokeFocus1);
+    }
+}
+
 @media (forced-colors: active) {
-    .terminal-container ::deep ::part(selection-highlight) {
-        background: Highlight;
-        forced-color-adjust: none;
+    .terminal-container {
+        --terminal-focus-color: Highlight;
     }
 }
 

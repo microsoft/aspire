@@ -3,16 +3,18 @@
 
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const dashboard = new URL("../../../src/Aspire.Dashboard/", import.meta.url);
 const assets = new URL("wwwroot/js/hex1b-web-terminal/", dashboard);
-const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE } = await import(new URL("dist/index.js", assets));
+const { WebTerminal, MIN_FONT_SIZE, MAX_FONT_SIZE, defaultDarkPalette, defaultLightPalette } = await import(new URL("dist/index.min.js", assets));
 const source = await readFile(new URL("Components/Controls/TerminalView.razor.js", dashboard), "utf8");
 // Remap the public browser asset import to its checked-in location for Node,
 // without changing the adapter implementation under test.
 const terminal = await import(`data:text/javascript;base64,${Buffer.from(source.replace(
-    '"../../js/hex1b-web-terminal/dist/index.js"', JSON.stringify(new URL("dist/index.js", assets).href)
+    '"../../js/hex1b-web-terminal/dist/index.min.js"', JSON.stringify(new URL("dist/index.min.js", assets).href)
 )).toString("base64")}`);
 
 let attempts;
@@ -24,6 +26,8 @@ let snapshots;
 let serial;
 const globals = new Map();
 let originalMount;
+let themeObservers;
+let mediaQueries;
 
 function setGlobal(name, value) {
     globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
@@ -40,10 +44,48 @@ beforeEach(() => {
     ids = [];
     snapshots = [];
     serial = 0;
-    setGlobal("window", { isSecureContext: true });
+    themeObservers = [];
+    mediaQueries = new Map();
+    const storage = new Map();
+    setGlobal("localStorage", {
+        getItem: key => storage.get(key) ?? null,
+        setItem: (key, value) => storage.set(key, value),
+        removeItem: key => storage.delete(key),
+        clear: () => storage.clear(),
+    });
+    setGlobal("window", Object.assign(new EventTarget(), { isSecureContext: true, matchMedia(query) {
+        if (!mediaQueries.has(query)) {
+            mediaQueries.set(query, Object.assign(new EventTarget(), { matches: false }));
+        }
+        return mediaQueries.get(query);
+    } }));
     setGlobal("navigator", { gpu: {} });
-    setGlobal("document", { activeElement: null, body: {}, hasFocus: () => true, visibilityState: "visible" });
-    setGlobal("getComputedStyle", element => ({ visibility: element.visibility ?? "visible" }));
+    setGlobal("document", {
+        activeElement: null,
+        body: { append() {} },
+        documentElement: { dataset: { theme: "dark" } },
+        createElement: tag => tag === "canvas"
+            ? { getContext: () => ({ fillStyle: "" }) }
+            : { style: {}, remove() {} },
+        hasFocus: () => true,
+        visibilityState: "visible",
+    });
+    setGlobal("getComputedStyle", element => ({
+        visibility: element.visibility ?? "visible", color: "rgb(100, 100, 100)",
+        getPropertyValue: name => ({
+            "--terminal-background": "#0d1117",
+            "--colorNeutralForeground1": "#ffffff",
+        })[name] ?? "none",
+    }));
+    setGlobal("MutationObserver", class {
+        constructor(callback) {
+            this.callback = callback;
+            this.disconnected = false;
+            themeObservers.push(this);
+        }
+        observe(element, options) { this.element = element; this.options = options; }
+        disconnect() { this.disconnected = true; }
+    });
     setGlobal("requestAnimationFrame", callback => {
         frames.set(++serial, callback);
         return serial;
@@ -66,14 +108,30 @@ beforeEach(() => {
     originalMount = WebTerminal.mount;
     WebTerminal.mount = (element, options) => {
         const ready = Promise.withResolvers();
+        const status = {
+            textContent: "", dataset: { level: "info" }, attributes: new Set(),
+            toggleAttribute(name, enabled) {
+                if (enabled) this.attributes.add(name);
+                else this.attributes.delete(name);
+            },
+        };
+        const shadow = {
+            styles: [],
+            querySelector: selector => selector === ".inspection-message" ? status : {},
+            append(style) { this.styles.push(style.textContent); },
+        };
         const client = {
-            element: { parentElement: element, contains: value => value === client.element },
+            element: { parentElement: element, shadowRoot: shadow, dataset: {}, contains: value => value === client.element },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
             sizing: { ...options.sizing },
             readOnly: options.readOnly,
             readOnlyCalls: [],
+            colorMode: options.colorMode,
+            colorModeCalls: [],
+            scrollbar: options.scrollbar,
+            scrollbarCalls: [],
             sizingCalls: [],
             primaryRequests: 0,
             focusCalls: 0,
@@ -92,6 +150,14 @@ beforeEach(() => {
             setReadOnly(readOnly) {
                 this.readOnly = readOnly;
                 this.readOnlyCalls.push(readOnly);
+            },
+            setScrollbar(scrollbar) {
+                this.scrollbar = scrollbar;
+                this.scrollbarCalls.push(scrollbar);
+            },
+            setColorMode(colorMode) {
+                this.colorMode = colorMode;
+                this.colorModeCalls.push(colorMode);
             },
             focus() { this.focusCalls++; document.activeElement = this.element; },
             clearSelection() {
@@ -179,12 +245,13 @@ function selectionEvent(attempt, overrides = {}) {
 }
 
 function mount({ visible = true, dotNetRef, options = {} } = {}) {
-    const element = {
+    const view = { style: { setProperty(name, value) { this[name] = value; } } };
+    const element = Object.assign(new EventTarget(), {
         clientWidth: visible ? 800 : 0,
         clientHeight: visible ? 600 : 0,
         contains: value => value === element || value?.parentElement === element,
-        closest: () => null,
-    };
+        closest: selector => selector === ".terminal-view" ? view : null,
+    });
     const controls = [];
     const template = { firstElementChild: { cloneNode() {
         const control = selectionControl();
@@ -198,6 +265,7 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         focus() { document.activeElement = this; },
     }));
     const footer = Object.assign(new EventTarget(), {
+        querySelector: () => null,
         querySelectorAll: () => footerControls,
         focus() { document.activeElement = this; },
     });
@@ -209,9 +277,7 @@ function mount({ visible = true, dotNetRef, options = {} } = {}) {
         } },
         { label: "Localized terminal input", ...options, viewId }, template, footer);
     ids.push(id);
-    return {
-        id, element, controls, footer, footerControls, viewId,
-    };
+    return { id, element, view, controls, footer, footerControls, viewId };
 }
 
 async function settle() {
@@ -232,6 +298,42 @@ function retry() {
     callback();
     return delay;
 }
+
+test("pointer focus styling ends on keyboard input without changing terminal focus", async () => {
+    const { element } = mount();
+    const { client } = attempts[0];
+    attempts[0].resolve();
+    await settle();
+    const focusCalls = client.focusCalls;
+    const pointer = new Event("pointerdown", { cancelable: true });
+    element.dispatchEvent(pointer);
+    assert.equal(client.element.dataset.aspirePointerInput, "true");
+    assert.equal(pointer.defaultPrevented, false);
+
+    const keyboard = new Event("keydown", { cancelable: true });
+    element.dispatchEvent(keyboard);
+    assert.equal(client.element.dataset.aspirePointerInput, undefined);
+    assert.equal(keyboard.defaultPrevented, false);
+    assert.equal(client.focusCalls, focusCalls);
+});
+
+test("pointer focus listeners follow replacement clients and are removed on disposal", async () => {
+    const { id, element } = mount();
+    attempts[0].resolve();
+    await settle();
+    const original = attempts[0].client;
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other&replica=1");
+    attempts[1].resolve();
+    await settle();
+    const replacement = attempts[1].client;
+    element.dispatchEvent(new Event("pointerdown"));
+    assert.equal(original.element.dataset.aspirePointerInput, undefined);
+    assert.equal(replacement.element.dataset.aspirePointerInput, "true");
+
+    terminal.disposeTerminal(id);
+    element.dispatchEvent(new Event("keydown"));
+    assert.equal(replacement.element.dataset.aspirePointerInput, "true");
+});
 
 for (const [name, rects, position] of [
     ["single line", [{ left: 20, top: 10, width: 60, height: 20 }], { left: "86px", top: "36px" }],
@@ -275,6 +377,297 @@ for (const [name, ranges, text, visible] of [
         assert.equal(attempts[0].client.selectionClears, 0);
     });
 }
+
+for (const [theme, background] of [["light", "#d5d0df"], ["dark", "#312e3c"]]) {
+    test(`terminal mounts with the Aspire ${theme} palette and unchanged neutral and selection colors`, async () => {
+        document.documentElement.dataset.theme = theme;
+        terminal.setTerminalPalette(theme);
+        const { view } = mount();
+        const attempt = attempts[0];
+        assert.equal(attempt.options.colorMode, theme);
+        for (const [palette, defaults] of [
+            [attempt.options.lightModePalette, defaultLightPalette],
+            [attempt.options.darkModePalette, defaultDarkPalette],
+        ]) {
+            const { ansi, background: paletteBackground, ...unchanged } = palette;
+            const { ansi: defaultAnsi, background: defaultBackground, ...defaultUnchanged } = defaults;
+            assert.deepEqual(unchanged, defaultUnchanged);
+            assert.equal(ansi.length, 16);
+            for (const index of [0, 7, 8, 15]) {
+                assert.equal(ansi[index], defaultAnsi[index]);
+            }
+            for (const color of [paletteBackground, ...ansi]) {
+                assert.match(color, /^#[0-9a-f]{6}$/);
+            }
+        }
+        assert.equal(view.style["--terminal-background"], background);
+        attempt.resolve();
+        await settle();
+        assert.equal(attempt.client.colorMode, theme);
+    });
+}
+
+test("chromatic ANSI text meets contrast targets on both Aspire backgrounds", () => {
+    // WCAG relative luminance uses linearized sRGB, not perceptual OKLCH lightness.
+    // https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+    const luminance = hex => {
+        const channels = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255)
+            .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    mount();
+    for (const palette of [attempts[0].options.lightModePalette, attempts[0].options.darkModePalette]) {
+        const background = luminance(palette.background);
+        for (const index of [1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14]) {
+            const foreground = luminance(palette.ansi[index]);
+            const contrast = (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+            assert.ok(contrast >= (index < 8 ? 5 : 6),
+                `ANSI ${index} on ${palette.background} has contrast ${contrast}`);
+        }
+    }
+});
+
+for (const [preference, pageTheme] of [["dark", "light"], ["light", "dark"]]) {
+    test(`saved ${preference} palette overrides ${pageTheme} Dashboard on mount and theme changes`, async () => {
+        terminal.setTerminalPalette(preference);
+        assert.equal(localStorage.getItem("Aspire.TerminalPalette"), JSON.stringify(preference));
+        assert.equal(terminal.getTerminalPalette(), preference);
+        document.documentElement.dataset.theme = pageTheme;
+        mount();
+        const attempt = attempts[0];
+        assert.equal(attempt.options.colorMode, preference);
+        attempt.resolve();
+        await settle();
+        for (const theme of ["light", "dark"]) {
+            document.documentElement.dataset.theme = theme;
+            themeObservers[0].callback();
+            assert.equal(attempt.client.colorMode, preference);
+        }
+    });
+}
+
+test("palette override updates every view including pending and hidden mounts without disrupting input", async () => {
+    const first = mount();
+    const pending = mount();
+    const hidden = mount({ visible: false });
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    const focus = client.focusCalls;
+    const selection = client.selection;
+    terminal.setTerminalPalette("light");
+    attempts[1].resolve();
+    await settle();
+    assert.equal(client.colorMode, "light");
+    assert.equal(attempts[1].client.colorMode, "light");
+    assert.equal(hidden.view.style["--terminal-background"], attempts[0].options.lightModePalette.background);
+    assert.equal(client.focusCalls, focus);
+    assert.equal(client.selection, selection);
+    assert.equal(client.selectionClears, 0);
+    assert.deepEqual(client.sizingCalls, []);
+    assert.equal(attempts.length, 2);
+    terminal.setTerminalPalette("dark");
+    assert.equal(client.colorMode, "dark");
+    terminal.reconnectTerminal(first.id, "wss://dashboard/api/terminal?resource=app&replica=1");
+    assert.equal(attempts[2].options.colorMode, "dark");
+    assert.equal(document.documentElement.dataset.theme, "dark");
+});
+
+test("cross-window storage changes and cleared preferences update palettes and stop after disposal", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const client = attempts[0].client;
+    const changed = (key, storageArea = localStorage) => {
+        const event = new Event("storage");
+        Object.assign(event, { key, storageArea });
+        window.dispatchEvent(event);
+    };
+    localStorage.setItem("Aspire.TerminalPalette", '"light"');
+    changed("another-setting");
+    changed("Aspire.TerminalPalette", {});
+    assert.equal(client.colorMode, "dark");
+    changed("Aspire.TerminalPalette");
+    assert.equal(client.colorMode, "light");
+    localStorage.clear();
+    changed(null);
+    assert.equal(client.colorMode, "dark");
+    terminal.disposeTerminal(id);
+    const calls = [...client.colorModeCalls];
+    localStorage.setItem("Aspire.TerminalPalette", '"light"');
+    changed("Aspire.TerminalPalette");
+    terminal.setTerminalPalette("dark");
+    assert.deepEqual(client.colorModeCalls, calls);
+});
+
+for (const stored of [null, '"dashboard"']) {
+    test(`missing or former theme-following preference (${stored}) uses Dark independently of site theme`, async () => {
+        if (stored !== null) {
+            localStorage.setItem("Aspire.TerminalPalette", stored);
+        }
+        document.documentElement.dataset.theme = "light";
+        const { id } = mount();
+        attempts[0].resolve();
+        await settle();
+        assert.equal(terminal.getToolbarState(id).palette, "dark");
+        assert.equal(attempts[0].client.colorMode, "dark");
+        for (const theme of ["dark", "light"]) {
+            document.documentElement.dataset.theme = theme;
+            themeObservers[0].callback();
+            assert.equal(attempts[0].client.colorMode, "dark");
+        }
+        assert.equal(console.warn.mock.calls.length, 0);
+    });
+}
+
+test("unavailable or corrupt palette storage logs a warning and uses Dark", () => {
+    for (const value of ["invalid-json", '"unknown"', "null", "1"]) {
+        localStorage.setItem("Aspire.TerminalPalette", value);
+        assert.equal(terminal.getTerminalPalette(), "dark");
+    }
+    mock.method(localStorage, "getItem", () => { throw new Error("Storage disabled"); });
+    assert.equal(terminal.getTerminalPalette(), "dark");
+    assert.equal(console.warn.mock.calls.length, 5);
+});
+
+test("failed or invalid palette writes do not change the mounted palette", async () => {
+    mount();
+    attempts[0].resolve();
+    await settle();
+    assert.throws(() => terminal.setTerminalPalette("invalid"), TypeError);
+    assert.throws(() => terminal.setTerminalPalette("dashboard"), TypeError);
+    mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    assert.throws(() => terminal.setTerminalPalette("light"), /Storage disabled/);
+    assert.equal(attempts[0].client.colorMode, "dark");
+});
+
+test("footer labels the asynchronously generated palette combobox and disconnects its observer", () => {
+    const { id, footer } = mount();
+    const button = { setAttribute: mock.fn() };
+    footer.querySelector = () => ({
+        getAttribute: () => "Terminal palette",
+        querySelector: () => button,
+    });
+    const observer = themeObservers.find(o => o.element === footer);
+    observer.callback();
+    assert.deepEqual(button.setAttribute.mock.calls[0].arguments, ["aria-label", "Terminal palette"]);
+    terminal.disposeTerminal(id);
+    assert.equal(observer.disconnected, true);
+});
+
+test("footer palette changes update toolbar selections even for read-only and disconnected views", async () => {
+    const first = mount({ readOnly: true });
+    const second = mount({ visible: false });
+    terminal.setPaletteFromHost(first.id, "light");
+    assert.equal(terminal.getToolbarState(first.id).palette, "light");
+    assert.equal(terminal.getToolbarState(second.id).palette, "light");
+    assert.equal(attempts.length, 1);
+    assert.deepEqual(attempts[0].client.sizingCalls, []);
+    assert.equal(localStorage.getItem("Aspire.TerminalPalette"), '"light"');
+});
+
+test("footer palette save failure preserves selection, surfaces a dismissible error and allows retry", () => {
+    const { id } = mount();
+    const setter = mock.method(localStorage, "setItem", () => { throw new Error("Storage disabled"); });
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).palette, "dark");
+    assert.equal(terminal.getToolbarState(id).error, "palette-failed");
+    terminal.dismissError(id);
+    assert.equal(terminal.getToolbarState(id).error, null);
+    terminal.setPaletteFromHost(id, "light");
+    setter.mock.restore();
+    terminal.setPaletteFromHost(id, "light");
+    assert.equal(terminal.getToolbarState(id).palette, "light");
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(attempts.length, 1);
+});
+
+test("palette, theme and contrast changes replace the complete overlay without reconnecting", async () => {
+    const { id, view } = mount();
+    const attempt = attempts[0];
+    const initial = attempt.options.scrollbar;
+    assert.equal(initial.placement, "overlay");
+    assert.equal(initial.markers, true);
+    assert.equal(typeof initial.render, "function");
+    assert.equal(themeObservers[0].element, document.documentElement);
+    assert.deepEqual(themeObservers[0].options, { attributes: true, attributeFilter: ["data-theme"] });
+
+    // Include a theme change before the asynchronous mount has returned its handle.
+    document.documentElement.dataset.theme = "light";
+    themeObservers[0].callback();
+    terminal.setTerminalPalette("light");
+    attempt.resolve();
+    await settle();
+    assert.notEqual(attempt.client.scrollbar.render, initial.render);
+    assert.equal(attempt.options.colorMode, "dark");
+    assert.equal(attempt.client.colorMode, "light");
+    assert.equal(view.style["--terminal-background"], attempt.options.lightModePalette.background);
+    const focusCalls = attempt.client.focusCalls;
+    const selection = attempt.client.selection;
+    for (const [theme, palette] of [["dark", attempt.options.darkModePalette], ["light", attempt.options.lightModePalette]]) {
+        terminal.setTerminalPalette(theme);
+        document.documentElement.dataset.theme = theme;
+        themeObservers[0].callback();
+        assert.equal(attempt.client.colorMode, theme);
+        assert.equal(view.style["--terminal-background"], palette.background);
+    }
+    for (const query of ["(forced-colors: active)", "(prefers-contrast: more)"]) {
+        const previous = attempt.client.scrollbar;
+        const media = mediaQueries.get(query);
+        media.matches = true;
+        media.dispatchEvent(new Event("change"));
+        assert.notEqual(attempt.client.scrollbar.render, previous.render);
+        assert.equal(attempt.client.scrollbar.placement, "overlay");
+        assert.equal(attempt.client.scrollbar.markers, true);
+        assert.equal(attempt.client.colorMode, "light");
+    }
+    assert.equal(attempts.length, 1);
+    assert.deepEqual(attempt.client.sizingCalls, []);
+    assert.equal(attempt.client.selectionClears, 0);
+    assert.equal(attempt.client.selection, selection);
+    assert.equal(attempt.client.focusCalls, focusCalls);
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=app&replica=1");
+    assert.equal(attempts[1].options.scrollbar, attempt.client.scrollbar);
+    assert.equal(attempts[1].options.colorMode, "light");
+    assert.deepEqual(attempts[1].options.lightModePalette, attempt.options.lightModePalette);
+    assert.deepEqual(attempts[1].options.darkModePalette, attempt.options.darkModePalette);
+    attempts[1].resolve();
+    await settle();
+    attempts[1].close(1006);
+    retry();
+    assert.equal(attempts[2].options.colorMode, "light");
+});
+
+test("a hidden terminal mounts with the latest selected palette when revealed", () => {
+    const { element, view } = mount({ visible: false });
+    document.documentElement.dataset.theme = "light";
+    terminal.setTerminalPalette("light");
+    themeObservers[0].callback();
+    assert.equal(attempts.length, 0);
+    assert.equal(view.style["--terminal-background"], "#d5d0df");
+    element.clientWidth = 800;
+    element.clientHeight = 600;
+    observers[0].callback();
+    assert.equal(attempts[0].options.colorMode, "light");
+});
+
+test("theme observers and accessibility listeners are released on disposal", async () => {
+    const { id } = mount();
+    const attempt = attempts[0];
+    attempt.resolve();
+    await settle();
+    terminal.disposeTerminal(id);
+    const calls = attempt.client.scrollbarCalls.length;
+    const colorModeCalls = [...attempt.client.colorModeCalls];
+    assert.equal(themeObservers[0].disconnected, true);
+    themeObservers[0].callback();
+    for (const media of mediaQueries.values()) {
+        media.dispatchEvent(new Event("change"));
+    }
+    assert.equal(attempt.client.scrollbarCalls.length, calls);
+    assert.deepEqual(attempt.client.colorModeCalls, colorModeCalls);
+    assert.equal(attempt.client.disposed, true);
+});
 
 test("selection copy control follows the single-cell threshold in both directions", () => {
     const { controls } = mount();
@@ -488,12 +881,103 @@ test("reconnect removes selection controls, listeners and stale clipboard callba
     assert.equal(controls[1].actions.removed, true);
 });
 
+test("metadata before mount completion is coalesced and updates read-only views", async () => {
+    const { id } = mount({ options: { readOnly: true } });
+    const { options } = attempts[0];
+    options.onTitleChange("build <app>");
+    options.onWorkingDirectoryChange({ uri: "file://host/work/my%20app", host: "host", path: "/work/my app" });
+    options.onProgressChange({ state: "normal", percentage: 42 });
+    attempts[0].resolve();
+    await settle();
+    assert.equal(snapshots.length, 1);
+    assert.equal(snapshots[0].title, "build <app>");
+    assert.equal(snapshots[0].workingDirectory, "/work/my app");
+    assert.equal(snapshots[0].workingDirectoryUri, "file://host/work/my%20app");
+    assert.equal(snapshots[0].progressState, "normal");
+    assert.equal(snapshots[0].progressPercentage, 42);
+    for (const progress of [
+        { state: "indeterminate", percentage: null },
+        { state: "error", percentage: 30 },
+        { state: "warning", percentage: 50 },
+        { state: "none", percentage: null },
+    ]) {
+        options.onProgressChange(progress);
+        await settle();
+        assert.equal(snapshots.at(-1).progressState, progress.state);
+        assert.equal(snapshots.at(-1).progressPercentage, progress.percentage);
+    }
+    options.onTitleChange("");
+    options.onWorkingDirectoryChange({ uri: null, host: null, path: null });
+    await settle();
+    assert.equal(terminal.getToolbarState(id).title, "");
+    assert.equal(terminal.getToolbarState(id).workingDirectory, null);
+    assert.equal(attempts[0].client.primaryRequests, 0);
+});
+
+test("metadata survives transport loss but not endpoint replacement or stale callbacks", async () => {
+    const { id } = mount();
+    const old = attempts[0];
+    old.options.onTitleChange("old title");
+    old.options.onWorkingDirectoryChange({ uri: "file:///old", host: "", path: "/old" });
+    old.options.onProgressChange({ state: "normal", percentage: 20 });
+    old.resolve();
+    await settle();
+    old.close(1006);
+    await settle();
+    assert.equal(terminal.getToolbarState(id).title, "old title");
+    assert.equal(terminal.getToolbarState(id).connected, false);
+    terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=new");
+    const expected = terminal.getToolbarState(id);
+    assert.equal(expected.title, "");
+    assert.equal(expected.workingDirectory, null);
+    assert.equal(expected.progressState, "none");
+    old.options.onTitleChange("stale title");
+    old.options.onWorkingDirectoryChange({ uri: "file:///stale", host: "", path: "/stale" });
+    old.options.onProgressChange({ state: "error", percentage: 99 });
+    assert.deepEqual(terminal.getToolbarState(id), expected);
+    terminal.disposeTerminal(id);
+    attempts[1].options.onTitleChange("disposed");
+    assert.equal(terminal.getToolbarState(id), null);
+});
+
+test("history chrome suppression preserves errors and selection feedback and disconnects on release", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    const shadow = attempts[0].client.element.shadowRoot;
+    const status = shadow.querySelector(".inspection-message");
+    const observer = themeObservers.find(observer => observer.element === status);
+    assert.ok(observer);
+    assert.match(shadow.styles[0], /\.return-live \{ display: none !important; \}/);
+    for (const [text, level, hidden] of [
+        ["42 rows above live", "info", true],
+        ["0 rows above live", "info", true],
+        ["Selection copied", "info", false],
+        ["Navigation rejected", "error", false],
+        ["42 rows above live", "error", false],
+        ["", "info", false],
+    ]) {
+        status.textContent = text;
+        status.dataset.level = level;
+        observer.callback();
+        assert.equal(status.attributes.has("data-aspire-history-position"), hidden);
+    }
+    terminal.reconnectTerminal(id, attempts[0].options.url);
+    assert.equal(observer.disconnected, true);
+    attempts[1].resolve();
+    await settle();
+    const replacement = themeObservers.at(-1);
+    terminal.disposeTerminal(id);
+    assert.equal(replacement.disconnected, true);
+});
+
 test("init returns an id while mount waits for its first connected frame", async () => {
     const { id } = mount();
     assert.equal(terminal.getToolbarState(id).connected, false);
     assert.equal(attempts[0].options.label, "Localized terminal input");
     assert.equal(attempts[0].options.url, "wss://dashboard/api/terminal?resource=app&replica=1");
     assert.equal(attempts[0].options.renderer, "auto");
+    assert.equal(attempts[0].options.padding, 3);
     attempts[0].options.onStatus("Socket open", "ready");
     attempts[0].role(false);
     await settle();
@@ -502,7 +986,10 @@ test("init returns an id while mount waits for its first connected frame", async
     await settle();
     assert.deepEqual(snapshots.at(-1), {
         terminalId: id, generation: 1, status: "viewer", connected: true,
+        title: "", workingDirectory: null, workingDirectoryUri: null,
+        progressState: "none", progressPercentage: null,
         isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
+        palette: "dark",
         fontPx: 13, fontControlsEnabled: true, sizeSelectEnabled: true,
         fitEnabled: true,
         canDecreaseFontSize: true, canIncreaseFontSize: true,
@@ -514,6 +1001,41 @@ test("init returns an id while mount waits for its first connected frame", async
     assert.equal(attempts[0].options.actions, undefined);
     assert.equal(attempts[0].options.readOnly, false);
 });
+
+test("web link detection requires modifier clicks and preserves default OSC 8 handling", () => {
+    mount();
+    const links = attempts[0].options.links;
+    assert.equal(links.osc8, undefined);
+    assert.equal(links.detection.activation, "modifierClick");
+    assert.equal(links.detection.rules.length, 1);
+    assert.equal(links.detection.rules[0].builtin, "url");
+});
+
+for (const target of ["https://aspire.dev/docs?view=terminal#links", "http://localhost:5000/"]) {
+    test(`detected web link opens safely: ${target}`, () => {
+        mount();
+        const opened = [];
+        window.open = (...args) => opened.push(args);
+        attempts[0].options.links.detection.rules[0].action({}, {
+            source: "detected", ruleId: "web", kind: "uri", text: target, target,
+            ranges: [{ row: 0, startColumn: 0, endColumn: target.length }], revision: 1,
+        });
+        assert.deepEqual(opened, [[target, "_blank", "noopener,noreferrer"]]);
+    });
+}
+
+for (const target of ["javascript:alert(1)", "data:text/html,test", "file:///tmp/test", "/relative", "custom://host", "mailto:test@example.com"]) {
+    test(`detected web link rejects non-web destination: ${target}`, () => {
+        mount();
+        const opened = [];
+        window.open = (...args) => opened.push(args);
+        assert.throws(() => attempts[0].options.links.detection.rules[0].action({}, {
+            source: "detected", ruleId: "web", kind: "uri", text: target, target,
+            ranges: [{ row: 0, startColumn: 0, endColumn: target.length }], revision: 1,
+        }));
+        assert.deepEqual(opened, []);
+    });
+}
 
 test("opening a terminal focuses input after the first frame without taking primary", async () => {
     document.activeElement = { tagName: "BUTTON" };
@@ -1503,18 +2025,18 @@ test("disposing a view ignores later native close callbacks", async () => {
     assert.equal(attempts.length, 1);
 });
 
-test("frontend manifest, lockfile, vendored package and backend use the exact paired version", async () => {
+test("frontend manifest, lockfile, minified bundle and backend use the exact paired version", async () => {
     const manifest = JSON.parse(await readFile(new URL("package.json", dashboard), "utf8"));
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
-    const vendored = JSON.parse(await readFile(new URL("package.json", assets), "utf8"));
+    const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.168.0");
-    assert.equal(vendored.version, version);
+    assert.equal(version, "0.172.0-alpha.1787.1.f01b043");
+    assert.ok(bundle.startsWith(`// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.\n`));
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.168.0" />
+    //   <PackageVersion Include="Hex1b" Version="0.172.0-alpha.1787.1.f01b043" />
     // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");
@@ -1527,39 +2049,45 @@ test("frontend manifest, lockfile, vendored package and backend use the exact pa
     assert.equal(backendVersion[1], version);
 });
 
-test("checked-in deployment includes the worker and licensed font without npm installation", async () => {
-    for (const name of [
-        "dist/index.js",
-        "dist/terminal-worker.js",
-        "dist/webgpu-backend.js",
-        "dist/webgl2-backend.js",
-        "dist/hyperlinks.js",
+test("checked-in deployment contains only the minified bundle, font and required licenses without npm installation", async () => {
+    const entries = await readdir(assets, { recursive: true, withFileTypes: true });
+    const files = entries.filter(entry => entry.isFile())
+        .map(entry => relative(fileURLToPath(assets), join(entry.parentPath, entry.name)).split(sep).join("/"))
+        .sort();
+    assert.deepEqual(files, [
+        "LICENSE",
         "dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2",
         "dist/fonts/cascadia-mono-nf/LICENSE.txt",
-        "dist/fonts/cascadia-mono-nf/README.md",
-        "LICENSE",
-        "README.md",
-    ]) {
+        "dist/index.min.js",
+    ]);
+    for (const name of files) {
         assert.ok((await readFile(new URL(name, assets))).length > 0, `Missing or empty vendored asset: ${name}`);
     }
 });
 
-test("entry, module worker and bundled font URLs preserve PathBase and same origin", async () => {
+test("entry, both bundled module workers and font URLs preserve PathBase and same origin", async () => {
     // Inspect the emitted forms:
-    //   import { WebTerminal, ... } from "../../js/.../dist/index.js";
-    //   new Worker(new URL("./terminal-worker.js", import.meta.url), ...);
-    //   new URL("./fonts/.../CascadiaMonoNF.woff2", import.meta.url).href;
+    //   import { WebTerminal, ... } from "../../js/.../dist/index.min.js";
+    //   new URL(import.meta.url); t.hash=`hex1b-${e}-worker`;
+    //   new URL("./fonts/.../CascadiaMonoNF.woff2",import.meta.url).href;
+    // Minification renames local functions and parameters, not these URL shapes.
     // Keeping these module-relative URLs avoids both PathBase escapes and
     // blob/cross-origin worker URLs that require relaxing the dashboard CSP.
     const entryReference = source.match(/from "([^"]+)"/)[1];
     const entryUrl = new URL(entryReference, "https://dashboard.example/nested/aspire/Components/Controls/TerminalView.razor.js");
-    assert.equal(entryUrl.href, "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.js");
-    const clientSource = await readFile(new URL("dist/web-terminal.js", assets), "utf8");
-    const workerReference = clientSource.match(/new Worker\(new URL\("([^"]+)", import\.meta\.url\)/)[1];
-    assert.equal(new URL(workerReference, entryUrl).href,
-        "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/terminal-worker.js");
-    const fontSource = await readFile(new URL("dist/terminal-font.js", assets), "utf8");
-    const fontReference = fontSource.match(/new URL\("([^"]+)", import\.meta\.url\)/)[1];
+    assert.equal(entryUrl.href, "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.min.js");
+    const clientSource = await readFile(new URL("dist/index.min.js", assets), "utf8");
+    assert.match(clientSource, /new URL\(import\.meta\.url\)/);
+    assert.match(clientSource, /\.hash=`hex1b-\$\{[\w$]+\}-worker`/);
+    assert.match(clientSource, /globalThis instanceof DedicatedWorkerGlobalScope/);
+    for (const kind of ["terminal", "link-detection"]) {
+        assert.match(clientSource, new RegExp(`case\\s*"#hex1b-${kind}-worker":`));
+        const workerUrl = new URL(`${entryUrl.href}?v=alpha`);
+        workerUrl.hash = `hex1b-${kind}-worker`;
+        assert.equal(workerUrl.href,
+            `https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/index.min.js?v=alpha#hex1b-${kind}-worker`);
+    }
+    const fontReference = clientSource.match(/new URL\("([^"]+\.woff2)",import\.meta\.url\)/)[1];
     assert.equal(new URL(fontReference, entryUrl).href,
         "https://dashboard.example/nested/aspire/js/hex1b-web-terminal/dist/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2");
 });

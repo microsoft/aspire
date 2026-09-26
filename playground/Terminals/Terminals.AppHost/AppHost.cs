@@ -1,13 +1,28 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-// WithTerminal() is currently experimental (ASPIRETERMINAL001). Suppressed here
-// because this playground project intentionally exercises the experimental API.
-#pragma warning disable ASPIRETERMINAL001
+// This playground intentionally exercises the experimental terminal and file-based app APIs.
+#pragma warning disable ASPIRETERMINAL001, ASPIRECSHARPAPPS001
 
 using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
+
+builder.AddCSharpApp("palette-test", "Scripts/pallete-test.cs")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 50;
+        options.ShowTerminalHost = true;
+    });
+
+builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 32;
+        options.ShowTerminalHost = true;
+    });
 
 builder.AddPostgres("postgres").WithRepl();
 builder.AddRedis("redis").WithRepl();
