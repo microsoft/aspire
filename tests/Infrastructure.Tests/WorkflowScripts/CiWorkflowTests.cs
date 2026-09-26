@@ -2,11 +2,34 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
 public sealed class CiWorkflowTests
 {
+    [Fact]
+    public void DeploymentTestsDisableNpmAuditOnlyForTestExecution()
+    {
+        var workflow = ReadWorkflow("deployment-tests.yml");
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(workflow));
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var jobs = Assert.IsType<YamlMappingNode>(root.Children["jobs"]);
+        var job = Assert.IsType<YamlMappingNode>(jobs.Children["deploy-test"]);
+        var steps = Assert.IsType<YamlSequenceNode>(job.Children["steps"]);
+        var runStep = Assert.Single(steps.Children.Cast<YamlMappingNode>(), step =>
+            step.Children.TryGetValue("id", out var id) && id.ToString() == "run_tests");
+        var environment = Assert.IsType<YamlMappingNode>(runStep.Children["env"]);
+
+        Assert.Equal("false", environment.Children["npm_config_audit"].ToString());
+        Assert.Contains(
+            "./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj",
+            runStep.Children["run"].ToString());
+        // Keep the override at this step, not at workflow/job scope or in setup/build steps.
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(workflow, @"(?im)^\s*npm_config_audit\s*:").Cast<System.Text.RegularExpressions.Match>());
+    }
+
     [Theory]
     [InlineData("prepare_winget_installer_artifacts")]
     [InlineData("prepare_homebrew_installer_artifacts")]

@@ -347,7 +347,7 @@ internal sealed class TypeScriptAppHostMigration : IMigration
 
             var success = await _interactionService.ShowStatusAsync(
                 MigrationStrings.RegeneratingStatus,
-                async () => await guestProject.BuildAndGenerateSdkAsync(appHostDirectory, cancellationToken: cancellationToken),
+                async () => await guestProject.BuildAndGenerateSdkAsync(appHostDirectory, updateDependencies: true, cancellationToken: cancellationToken),
                 emoji: KnownEmojis.Gear);
 
             if (!success)

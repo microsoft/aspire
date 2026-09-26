@@ -571,6 +571,10 @@ jobs:
       - name: Run deployment test (${{ matrix.shortname }})
         id: run_tests
         env:
+          # These tests exercise deployment, not npm's advisory service. Keep its outages from
+          # exhausting command timeouts; do not change the CLI's audit-enabled product default.
+          # https://github.com/microsoft/aspire/issues/19927
+          npm_config_audit: 'false'
           GITHUB_PR_NUMBER: ${{ inputs.pr_number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ github.sha }}
           AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}

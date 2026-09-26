@@ -232,6 +232,16 @@
         <target state="translated">'{0}' istemi için giriş gerekli ancak sağlanmadı.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NpmAuditRetryHint">
+        <source>If this failure is caused by an unavailable npm audit service, set the environment variable npm_config_audit=false only for a break-glass retry of the Aspire command. This disables vulnerability auditing. Remove the variable and run 'npm audit' once the service recovers. Other npm errors still need to be fixed.</source>
+        <target state="new">If this failure is caused by an unavailable npm audit service, set the environment variable npm_config_audit=false only for a break-glass retry of the Aspire command. This disables vulnerability auditing. Remove the variable and run 'npm audit' once the service recovers. Other npm errors still need to be fixed.</target>
+        <note>Do not translate 'npm_config_audit=false', 'Aspire', or 'npm audit'.</note>
+      </trans-unit>
+      <trans-unit id="NpmInstallTimedOut">
+        <source>'npm {0}' did not complete within {1} minutes and was stopped. Check the npm output for package download, lifecycle script, or audit service problems.</source>
+        <target state="new">'npm {0}' did not complete within {1} minutes and was stopped. Check the npm output for package download, lifecycle script, or audit service problems.</target>
+        <note>{0} is the npm command, either 'install' or 'ci'. {1} is the timeout in minutes. Do not translate 'npm'.</note>
+      </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>
         <target state="translated">Proje bir derleme hatası nedeniyle analiz edilemedi. {0} adresinde günlüklere bakın</target>

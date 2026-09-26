@@ -129,6 +129,20 @@ dotnet test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Te
 
 ## CI/CD
 
+### npm auditing
+
+The deployment workflow explicitly sets `npm_config_audit=false` only for its
+`Run deployment test` step. The test process, terminal sessions, and Aspire-managed
+npm installs inherit this setting, so an unavailable advisory service cannot stall
+dependency installation past the tests' command timeouts
+([#19927](https://github.com/microsoft/aspire/issues/19927)).
+
+Deployment E2E tests verify deployment behavior, not dependency vulnerability reports.
+This test-only override does not change Aspire's audit-enabled product default, local
+test runs, dependency installation errors, or lockfile validation. See
+[npm dependency restoration and audit recovery](../../docs/specs/polyglot-apphost.md#npm-dependency-restoration-and-audit-recovery)
+for the explicit user recovery procedure.
+
 ### Polyglot provisioning SDK scenarios
 
 These TypeScript deployment scenarios exercise opt-in `Aspire.Hosting.Azure.Provisioning.*`

@@ -1445,6 +1445,76 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
     }
 
+    [Theory]
+    [InlineData(false, 0, true)]
+    [InlineData(true, 0, true)]
+    [InlineData(false, 23, false)]
+    [InlineData(true, 23, false)]
+    public async Task BuildAndGenerateSdkAsync_UsesInstallIntentAndPropagatesFailure(bool updateDependencies, int npmExitCode, bool expectedSuccess)
+    {
+        await File.WriteAllTextAsync(Path.Combine(_workspace.Path, "package-lock.json"), "{}");
+        var toolsDirectory = _workspace.CreateDirectory("tools");
+        var npmPath = Path.Combine(toolsDirectory.FullName, OperatingSystem.IsWindows() ? "npm.cmd" : "npm");
+        var expectedCommand = updateDependencies ? "install" : "ci";
+        var script = OperatingSystem.IsWindows()
+            ? $"""
+              @echo off
+              echo npm %1
+              if not "%1"=="{expectedCommand}" exit /b 99
+              exit /b {npmExitCode}
+              """
+            : $"""
+              #!/bin/sh
+              echo "npm $1"
+              [ "$1" = "{expectedCommand}" ] || exit 99
+              exit {npmExitCode}
+              """;
+        await File.WriteAllTextAsync(npmPath, script);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(npmPath, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        }
+
+        var runtimeSpec = new RuntimeSpec
+        {
+            Language = KnownLanguageId.TypeScript,
+            DisplayName = "TypeScript (Node.js)",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] },
+            InstallDependencies = new CommandSpec
+            {
+                Command = "npm",
+                Args = ["install"],
+                EnvironmentVariables = new Dictionary<string, string> { ["PATH"] = toolsDirectory.FullName }
+            }
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            Session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec })
+        };
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var interactionService = new TestInteractionService();
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+
+        var success = await project.BuildAndGenerateSdkAsync(_workspace.WorkspaceRoot, updateDependencies, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(expectedSuccess, success);
+        if (!expectedSuccess)
+        {
+            Assert.Equal(
+                [(OutputLineStream.StdOut, $"npm {expectedCommand}"), (OutputLineStream.StdErr, ErrorStrings.NpmAuditRetryHint)],
+                interactionService.DisplayedLines);
+        }
+    }
+
     [Fact]
     public async Task RunAsync_SignalsBuildCompletionAfterGuestAppHostLaunches()
     {

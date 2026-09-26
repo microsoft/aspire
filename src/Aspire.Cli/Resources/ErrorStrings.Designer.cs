@@ -53,6 +53,22 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string NpmInstallTimedOut
+        {
+            get
+            {
+                return ResourceManager.GetString("NpmInstallTimedOut", resourceCulture);
+            }
+        }
+
+        public static string NpmAuditRetryHint
+        {
+            get
+            {
+                return ResourceManager.GetString("NpmAuditRetryHint", resourceCulture);
+            }
+        }
+
         public static string MinimumSdkVersionNotMet
         {
             get
