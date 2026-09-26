@@ -88,15 +88,7 @@ function scrollbarConfiguration(state) {
                 Object.assign(element.style, tooltipStyle);
                 return element;
             },
-            render(frame) {
-                // Hex1b paints a thumb outline after pointer release because the scrollbar
-                // retains focus. Suppress only that paint; its DOM :focus-visible outline
-                // still identifies keyboard focus, and real interaction state is unchanged.
-                return renderScrollbar({
-                    ...frame,
-                    interaction: { ...frame.interaction, focused: false },
-                });
-            },
+            render: renderScrollbar,
         };
     } finally {
         probe.remove();

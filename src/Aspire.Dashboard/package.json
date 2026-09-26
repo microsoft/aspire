@@ -8,7 +8,7 @@
     "test": "node --test ../../tests/Aspire.Dashboard.Components.Tests/JavaScript/*.test.mjs"
   },
   "dependencies": {
-    "@hex1b/web-terminal": "0.172.0-alpha.1785.1.d253961"
+    "@hex1b/web-terminal": "0.172.0-alpha.1787.1.f01b043"
   },
   "devDependencies": {
     "terser": "5.51.2"
