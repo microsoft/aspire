@@ -1,0 +1,208 @@
+{
+  "run_id": 36201574198,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/36201574198",
+  "run_scope": "main",
+  "analyzed_at": "2026-09-26T00:37:12Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20472,
+    "title": "Avoid JSDisconnectedException telemetry during dashboard layout initialization",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/dashboard-layout-disconnect-telemetry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20472",
+    "merged_at": "2026-09-25T23:34:51Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "1c37c50d93f938bc85f7031c4d08fb577b40e655",
+    "failed_sha": "0bffdd8458defda8f7300c1308408738bac74999",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "38247de8eee27525ca0cc892112aa1160a547408",
+        "message": "Update Aspire.Cli to target net11.0 (#20436) ## Description This retargets the Aspire CLI from `net10.0` to `net11.0`, with only the changes needed to build, publish Native AOT, package, and pass tests. Follow-up PRs will start using new .NET 11 features. ### User-facing impact - **Nothing changes in behavior for users of the native `aspire` binary.** - **The `Aspire.Cli` dotnet tool package layout changes.** The platform-specific packages (`Aspire.Cli.<rid>`) now put the binary under `tools/any",
+        "html_url": "https://github.com/microsoft/aspire/commit/38247de8eee27525ca0cc892112aa1160a547408",
+        "pull_request": {
+          "number": 20436,
+          "title": "Update Aspire.Cli to target net11.0",
+          "url": "https://github.com/microsoft/aspire/pull/20436",
+          "merged_at": "2026-09-25T17:57:29Z"
+        }
+      },
+      {
+        "sha": "f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "message": "Remove redundant experimental annotations from Azure Sandboxes (#20482) ## Description Consumers should not need to suppress `ASPIREAZURE001` to use Azure Sandboxes: the entire `Aspire.Hosting.Azure.Sandboxes` package is already prerelease. Remove the `Experimental` attributes for `ASPIREAZURE001` from the sandbox resource, extension methods, options, and enums. Remove obsolete warning suppressions and unused imports, including the suppression in the README and generated deployment-test AppHost.",
+        "html_url": "https://github.com/microsoft/aspire/commit/f03a257eefa74620fa178cadb0e8cc9a6a9aa7ad",
+        "pull_request": {
+          "number": 20482,
+          "title": "Remove redundant experimental annotations from Azure Sandboxes",
+          "url": "https://github.com/microsoft/aspire/pull/20482",
+          "merged_at": "2026-09-25T17:58:02Z"
+        }
+      },
+      {
+        "sha": "ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "message": "[ci] Fix internal builds (#20455) ## Description **Official internal builds are broken because the `Template Tests` stage now needs about 25 minutes, but the test session is terminated after 20 minutes.** The completed tests pass; the pipeline fails because Microsoft.Testing.Platform aborts the still-running session. In [build 3086035](https://dev.azure.com/dnceng/internal/_build/results?buildId=3086035&view=results), 129 tests passed with no failures before the deadline: ```text Test run summar",
+        "html_url": "https://github.com/microsoft/aspire/commit/ecb0fc13b512451c18c033db2f827cadc7858d53",
+        "pull_request": {
+          "number": 20455,
+          "title": "[ci] Fix internal builds",
+          "url": "https://github.com/microsoft/aspire/pull/20455",
+          "merged_at": "2026-09-25T18:12:28Z"
+        }
+      },
+      {
+        "sha": "d32787cddecffe27c071c0742afedceb8ac258c8",
+        "message": "Bump the GitHub Actions group to current major versions (#20382) ## Description Updates the root `.github/workflows/*.yml` GitHub Actions group from the CAO task to the requested target versions and immutable SHAs: - `actions/create-github-app-token` 3.1.1 -> 3.2.0 - `github/gh-aw-actions/setup` and `setup-cli` 0.88.8 -> 0.89.15 - `actions/checkout` 6.x -> 7.0.1 - `actions/upload-artifact` 7.0.0 -> 7.0.1 - `actions/setup-node` 6.3.0 -> 7.0.0 - `actions/setup-dotnet` 5.2.0 -> 6.0.0 - `actions/set",
+        "html_url": "https://github.com/microsoft/aspire/commit/d32787cddecffe27c071c0742afedceb8ac258c8",
+        "pull_request": {
+          "number": 20382,
+          "title": "Bump the GitHub Actions group to current major versions",
+          "url": "https://github.com/microsoft/aspire/pull/20382",
+          "merged_at": "2026-09-25T19:24:01Z"
+        }
+      },
+      {
+        "sha": "e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "message": "Bump the github-actions group across 1 directory with 2 updates (#20489) Bumps the github-actions group with 2 updates in the / directory: [github/gh-aw-actions/setup](https://github.com/github/gh-aw-actions) and [github/gh-aw-actions/setup-cli](https://github.com/github/gh-aw-actions). Updates `github/gh-aw-actions/setup` from 0.89.15 to 0.89.16 <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/github/gh-aw-actions/releases\">github/gh-aw-actions/setup's ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e9a633024ede5187200bc9d392180a90e2d1fe86",
+        "pull_request": {
+          "number": 20489,
+          "title": "Bump the github-actions group across 1 directory with 2 updates",
+          "url": "https://github.com/microsoft/aspire/pull/20489",
+          "merged_at": "2026-09-25T20:48:27Z"
+        }
+      },
+      {
+        "sha": "733a9e23fe842e8b921cd9fa606cf7118ac36219",
+        "message": "Remove Experimental attributes from Aspire.Hosting.Dotnet (#20490) ## Description `Aspire.Hosting.Dotnet` is already a prerelease package, so consumers should not also need to suppress `ASPIREDOTNETPROJECT001` to use its APIs. Remove the `Experimental` attributes from `DotnetProjectResource`, the public extension methods, and the internal polyglot exports without changing runtime behavior or the package's prerelease status. Remove obsolete suppressions within the integration and its tests, updat",
+        "html_url": "https://github.com/microsoft/aspire/commit/733a9e23fe842e8b921cd9fa606cf7118ac36219",
+        "pull_request": {
+          "number": 20490,
+          "title": "Remove Experimental attributes from Aspire.Hosting.Dotnet",
+          "url": "https://github.com/microsoft/aspire/pull/20490",
+          "merged_at": "2026-09-25T21:01:08Z"
+        }
+      },
+      {
+        "sha": "f48a7b1251d339b21856497f10b36d227a5e57cc",
+        "message": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests (#20466) Four repeat failures remained in the Outerloop workflow: ```text The SDK 'Aspire.AppHost.Sdk/14.0.0-ci' specified could not be found. ``` ```text Watch task over Kubernetes ContainerExec resources terminated unexpectedly. Polly.Timeout.TimeoutRejectedException: The operation didn't complete within the allowed timeout of '00:01:00'. ``` ```text Expected rows not found: apiservice, webfrontend, cache ``` ```text ScrollButto",
+        "html_url": "https://github.com/microsoft/aspire/commit/f48a7b1251d339b21856497f10b36d227a5e57cc",
+        "pull_request": {
+          "number": 20466,
+          "title": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests",
+          "url": "https://github.com/microsoft/aspire/pull/20466",
+          "merged_at": "2026-09-25T21:35:11Z"
+        }
+      },
+      {
+        "sha": "9272b28a8a767175dd89f3e7b0e6a8ae8f8978d0",
+        "message": "Add deterministic CI validation for agentic workflows (#20458) ## What was missing **Agentic-only changes could bypass deterministic compilation, generated-file drift checks, lint, and repository contracts.** Stale executable workflows, edited action-pin output, or shell errors could reach main without a blocking validation job. The main CI skip gate intentionally excludes agentic Markdown sources and generated locks, but those files lacked a dedicated validation path. Compile-time lint diagnost",
+        "html_url": "https://github.com/microsoft/aspire/commit/9272b28a8a767175dd89f3e7b0e6a8ae8f8978d0",
+        "pull_request": {
+          "number": 20458,
+          "title": "Add deterministic CI validation for agentic workflows",
+          "url": "https://github.com/microsoft/aspire/pull/20458",
+          "merged_at": "2026-09-25T22:08:33Z"
+        }
+      },
+      {
+        "sha": "84af5257c01c79de475ee01c734494b383769099",
+        "message": "Update Arcade to 10.0.0-beta.26472.2 (#20395) ## Description Keep Aspire's build infrastructure aligned with the latest Arcade build on the `.NET 10 Eng` channel. Ran `darc update-dependencies -c '.NET 10 Eng'` in an isolated worktree. This updates the seven Arcade toolset dependencies from `10.0.0-beta.26423.1` to `10.0.0-beta.26472.2` (build `20260922.2`, dotnet/arcade commit `614293a9b3aa17dda9dc7e69c4dfcd576f59741a`), updates the corresponding SDK/package pins, and synchronizes the generated",
+        "html_url": "https://github.com/microsoft/aspire/commit/84af5257c01c79de475ee01c734494b383769099",
+        "pull_request": {
+          "number": 20395,
+          "title": "Update Arcade to 10.0.0-beta.26472.2",
+          "url": "https://github.com/microsoft/aspire/pull/20395",
+          "merged_at": "2026-09-25T22:39:55Z"
+        }
+      },
+      {
+        "sha": "0bffdd8458defda8f7300c1308408738bac74999",
+        "message": "Avoid JSDisconnectedException telemetry during dashboard layout initialization (#20472) ## Description Disconnecting from the dashboard while its layout restores browser state can raise `JSDisconnectedException` from local storage and report an unhandled circuit error. This is a commonly reported exception in telemetry. Protected and unprotected browser-storage reads now return failed results without emitting telemetry when the circuit disconnects. Other read errors are logged at Information lev",
+        "html_url": "https://github.com/microsoft/aspire/commit/0bffdd8458defda8f7300c1308408738bac74999",
+        "pull_request": {
+          "number": 20472,
+          "title": "Avoid JSDisconnectedException telemetry during dashboard layout initialization",
+          "url": "https://github.com/microsoft/aspire/pull/20472",
+          "merged_at": "2026-09-25T23:34:51Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "id": 108292006615,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36201574198/job/108292006615",
+      "classification": "flaky-test",
+      "reason": "Test MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages(topologyChange: None) failed waiting for MongoDB replica set 'rs0' to become healthy; matches known recurring MongoDB replica-set health flakiness pattern for this test class, unrelated to candidate merge changes.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "id": 108295202561,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36201574198/job/108295202561",
+      "classification": "flaky-test",
+      "reason": "Test 'Aspire dynamic debug configuration E2E re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces' timed out waiting for a debug session to stop after 10 seconds; timing-sensitive VS Code debug-session teardown, unrelated to candidate merge changes.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 108295202819,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/36201574198/job/108295202819",
+      "classification": "flaky-test",
+      "reason": "Test 'Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone' timed out waiting for the pwa-msedge child debug session for the Blazor WASM root; matches known recurring VS Code Blazor browser-debugger timeout flakiness.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages(topologyChange: None)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.MongoDB.Tests, Hosting.MongoDB, Hosting.MongoDB, tests/... / Hosting.MongoDB (ubuntu-latest)",
+      "error": "Aspire.Hosting.DistributedApplicationException : Stopped waiting for resource 'rs0' to become healthy because it failed to start.",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 266\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceHealthyAsync(String resourceName, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 206\n   at Aspire.Hosting.MongoDB.Tests.MongoDbReplicaSetFunctionalTests.VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages(TopologyChange topologyChange) in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.MongoDB.Tests/ReplicaSet/MongoDbReplicaSetFunctionalTests.cs:line 303\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-09-25T23:55:50] Aspire.Hosting.DeveloperCertificateService Debug: Developer certificate HTTPS/TLS termination support: True\n| [2026-09-25T23:55:50] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 14.0.0-ci\n| [2026-09-25T23:55:50] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-09-25T23:55:50] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-09-25T23:55:50] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-09-25T23:55:50] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-09-25T23:55:50] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-09-25T23:55:50] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIlX61lYMf.5977\n| [2026-09-25T23:55:50] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIlX61lYMf.5977\n| [2026-09-25T23:55:50] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint FFB96F5C5802D648F56A9F756FA425F8779C6A57.\n| [2026-09-25T23:55:50] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcpOWGXP1\n| [2026-09-25T23:55:50] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 5977 --detach --kubeconfig \"/tmp/aspire-dcpOWGXP1/kubeconfig\" --tls-cert-thumbprint \"FFB96F5C5802D648F56A9F756FA425F8779C6A57\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/7F9074D83B71ED46B2839561FBA08802B26508852463D5CF2F80D3CE50C903AB.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/7F9074D83B71ED46B2839561FBA08802B26508852463D5CF2F80D3CE50C903AB.key\"\n| [2026-09-25T23:55:50] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-09-25T23:55:50] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource mongo1/mongo1-tjmtygdu update published: ResourceType = Container, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { mongo1_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-09-25T23:55:50] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource mongo2/mongo2-zsauwwad update published: ResourceType = Container, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { mongo2_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-09-25T23:55:50] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource mongo3/mongo3-fnkhdjws update published: ResourceType = Container, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { mongo3_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-09-25T23:55:50] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource rs0/rs0 update published: ResourceType = MongoDB Replica Set, CreationTimeStamp = 2026-09-25T23:55:50, State = { Text = Waiting, Style = (null) }, IsHidden = Fa",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same MongoDB replica-set health-wait failure signature seen repeatedly for this test class across different topology parameters; the merged main changes (CLI net11 retarget, Azure Sandboxes/Dotnet obsolete cleanup, Arcade bump, CI workflow changes) do not touch MongoDB hosting code."
+    },
+    {
+      "name": "Aspire dynamic debug configuration E2E re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "error": "Failed to apply E2E control revision 1790381417006: Error: Timed out after 10 seconds waiting for debug session 'Aspire: Launch default AppHost (src: file:///c%3A/Users/runneradmin/AppData/Local/Temp/aev-87CDYF/.e2e-dynamic-debug-1/second)' to stop.\n\tat Timeout._onTimeout (c:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-87CDYF\\extensions\\microsoft-aspire.aspire-vscode-1.23.0\\dist\\extension.js:2:877870)\n\tat listOnTimeout (node:internal/timers:605:17)\n\tat process.processTimers (node:internal/timers:541:7)",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790381417006: Error: Timed out after 10 seconds waiting for debug session 'Aspire: Launch default AppHost (src: file:///c%3A/Users/runneradmin/AppData/Local/Temp/aev-87CDYF/.e2e-dynamic-debug-1/second)' to stop.\n\tat Timeout._onTimeout (c:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-87CDYF\\extensions\\microsoft-aspire.aspire-vscode-1.23.0\\dist\\extension.js:2:877870)\n\tat listOnTimeout (node:internal/timers:605:17)\n\tat process.processTimers (node:internal/timers:541:7)\n    at applyE2eControl (out\\test-e2e\\test-e2e\\helpers\\assertions.js:355:15)\n    at async executeE2eControlCommand (out\\test-e2e\\test-e2e\\helpers\\fixtures.js:168:12)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\dynamicDebugConfiguration.e2e.test.js:123:9)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing-sensitive VS Code debug-session stop wait in an E2E workspace-alias scenario on Windows; this failure family (dynamic-debug-configuration E2E timing issues) is already known to be flaky, and no candidate merge touches the VS Code extension dynamic debug configuration code."
+    },
+    {
+      "name": "Aspire Blazor browser debugger E2E hits a managed breakpoint for standalone",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "error": "Failed to apply E2E control revision 1790381439183: Error: Timed out after 295040ms waiting for pwa-msedge child session for Blazor WASM root '64ad0480-5d30-4ed6-b732-0a39266ea699'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"0dfb17a5-2c72-4c8a-b4b0-f4ee4c75a6cf\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":59158,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\",
+      "stack_trace": "Error: Failed to apply E2E control revision 1790381439183: Error: Timed out after 295040ms waiting for pwa-msedge child session for Blazor WASM root '64ad0480-5d30-4ed6-b732-0a39266ea699'. Last error: <none>. State: {\"debugSessions\":[{\"id\":\"0dfb17a5-2c72-4c8a-b4b0-f4ee4c75a6cf\",\"type\":\"monovsdbg_wasm\",\"name\":\"Wasm Managed Debugger\",\"configuration\":{\"name\":\"Wasm Managed Debugger\",\"type\":\"monovsdbg_wasm\",\"request\":\"launch\",\"args\":\"<redacted>\",\"cwd\":\"C:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\",\"cascadeTerminateToConfigurations\":[\"JavaScript Debugger\",\".NET Application Server\",\"Debug Blazor Web Assembly in Browser\"],\"monoDebuggerOptions\":{\"ip\":\"127.0.0.1\",\"port\":59158,\"platform\":\"browser\",\"isServer\":true,\"assetsPath\":\"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\\\\HostedPerPage\\\\HostedPerPage.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\\\\HostedGlobal\\\\HostedGlobal.Client\\\\bin\\\\Debug\\\\net11.0\\\\;c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-lrtOue\\\\workspace\\\\StandaloneClient\\\\bin\\\\Debug\\\\net11.0\\\\\"},\"stopAtEntry\":false,\"justMyCode\":true,\"requireExactSource\":true,\"enableStepFiltering\":true,\"logging\":{\"exceptions\":true,\"moduleLoad\":true,\"programOutput\":true,\"browserStdOut\":true,\"elapsedTiming\":false,\"threadExit\":false,\"processExit\":true,\"engineLogging\":false,\"diagnosticsLog\":{\"protocolMessages\":false,\"dispatcherMessages\":\"none\",\"debugEngineAPITracing\":\"none\",\"debugRuntimeEventTracing\":false,\"expressionEvaluationTracing\":false,\"startDebuggingTracing\":false},\"consoleUsageMessage\":true},\"suppressJITOptimizations\":false,\"symbolOptions\":{\"searchPaths\":[],\"searchMicrosoftSymbolServer\":false,\"searchNuGetOrgSymbolServer\":false,\"cachePath\":\"\",\"moduleFilter\":{\"mode\":\"loadAllButExcluded\",\"excludedModules\":[],\"includedModules\":[],\"includeSymbolsNextToModules\":true,\"includeSymbolsOnDemand\":true}},\"expressionEvaluationOptions\":{\"allowImplicitFuncEval\":true,\"allowToString\":true,\"allowF",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause vscode-extension-e2e-blazordebugger-standalone-timeout-windows: intermittent failure to attach the pwa-msedge child debug session for the Blazor WASM standalone scenario, unrelated to candidate merge changes."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-mongodb-replicaset-withdata-notopology-flaky",
+    "vscode-e2e-windows-dynamic-debug-duplicate-alias-stop-timeout",
+    "vscode-extension-e2e-blazordebugger-standalone-timeout-windows"
+  ]
+}

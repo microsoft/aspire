@@ -67,6 +67,13 @@
       "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
       "pr_number": 0,
       "observed_at": "2026-09-25T23:12:02Z"
+    },
+    {
+      "run_id": 36201574198,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/36201574198",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "pr_number": 0,
+      "observed_at": "2026-09-26T00:37:12Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20423"

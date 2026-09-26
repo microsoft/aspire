@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-windows-dynamic-debug-duplicate-alias-stop-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, dynamic-debug-configuration) times out waiting for debug session to stop in duplicate-alias workspace scenario",
+  "test_name": "Aspire dynamic debug configuration E2E re-resolves the selected AppHost by dynamic configuration name in duplicate-alias workspaces",
+  "error_pattern": "Failed to apply E2E control revision: Error: Timed out after 10 seconds waiting for debug session 'Aspire: Launch default AppHost (src: .../second)' to stop.",
+  "occurrences": [
+    {
+      "run_id": 36201574198,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/36201574198",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, dynamic-debug-configuration)",
+      "pr_number": 0,
+      "observed_at": "2026-09-26T00:37:12Z"
+    }
+  ]
+}
