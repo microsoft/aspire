@@ -1,0 +1,39 @@
+{
+  "id": "service.http",
+  "safeFailFirstMax": 4,
+  "entries": [
+    {
+      "weight": 0.40,
+      "kind": "error",
+      "status": 500,
+      "contentType": "application/json",
+      "body": "{\"error\":\"Internal Server Error\"}"
+    },
+    {
+      "weight": 0.25,
+      "kind": "error",
+      "status": 503,
+      "contentType": "application/json",
+      "headers": { "Retry-After": "${retryAfterSeconds}" },
+      "paramRanges": { "retryAfterSeconds": [1, 3] },
+      "body": "{\"error\":\"Service Unavailable\"}"
+    },
+    {
+      "weight": 0.15,
+      "kind": "error",
+      "status": 504,
+      "contentType": "application/json",
+      "body": "{\"error\":\"Gateway Timeout\"}"
+    },
+    {
+      "weight": 0.15,
+      "kind": "latency",
+      "minMs": 200,
+      "maxMs": 1500
+    },
+    {
+      "weight": 0.05,
+      "kind": "dropResponse"
+    }
+  ]
+}

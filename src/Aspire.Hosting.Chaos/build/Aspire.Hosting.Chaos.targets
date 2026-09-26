@@ -1,0 +1,37 @@
+<Project>
+
+  <!--
+    Ships INSIDE the Aspire.Hosting.Chaos NuGet package at build/, so NuGet imports it
+    automatically into any project that adds a PackageReference to Aspire.Hosting.Chaos.
+
+    Why this file has to exist:
+
+    AddChaosProxy() calls ResolveContainerSourcePath(), which locates the docker build
+    context by looking for a `container/` directory NEXT TO THE ASSEMBLY, then hands it
+    to Aspire's WithDockerfile(). For a ProjectReference that works for free — the
+    project's own <None ... CopyToOutputDirectory> copies container/ into bin/.
+
+    For a PackageReference it does NOT. The assembly is restored into the global NuGet
+    cache (~/.nuget/packages/...), not the consumer's bin/, so nothing puts container/
+    beside it. Marking the files Pack="true" alone is therefore insufficient: they land
+    in the .nupkg but never reach the consumer's output directory, and AddChaosProxy
+    throws DirectoryNotFoundException at AppHost startup.
+
+    This targets file closes that gap by projecting the packaged container/ source into
+    the consuming project's output directory, reproducing the ProjectReference layout
+    that ResolveContainerSourcePath expects. No change to the runtime lookup is needed.
+
+    Set ExcludeChaosProxyContainerSource=true to opt out (e.g. when a consumer supplies
+    a prebuilt image instead of building from source).
+  -->
+
+  <ItemGroup Condition="'$(ExcludeChaosProxyContainerSource)' != 'true'">
+    <None Include="$(MSBuildThisFileDirectory)..\container\**\*">
+      <Link>container\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+      <Pack>false</Pack>
+    </None>
+  </ItemGroup>
+
+</Project>
