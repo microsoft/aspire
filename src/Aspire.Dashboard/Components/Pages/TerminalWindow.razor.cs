@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -39,6 +40,10 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     private string? _windowRegistrationId;
     private bool _windowReady = true;
     private bool _windowTrackingFailed;
+    private string? _windowKey;
+
+    internal static string GetResourceWindowKey(string resourceName, int replicaIndex)
+        => $"resource:{resourceName}:{replicaIndex.ToString(CultureInfo.InvariantCulture)}";
 
     /// <summary>
     /// Gets or sets the id of an AppHost-owned dock terminal to attach to.
@@ -100,7 +105,8 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         var generation = ++_watchGeneration;
         _ended = false;
         _windowTrackingFailed = false;
-        _windowReady = terminalId is null || (WindowOwner is null && WindowGeneration is null);
+        _windowKey = terminalId ?? (resourceName is not null ? GetResourceWindowKey(resourceName, replicaIndex) : null);
+        _windowReady = WindowOwner is null && WindowGeneration is null;
         _endpoint = terminalId is not null ? $"api/apphost-terminal?terminalId={Uri.EscapeDataString(terminalId)}" : null;
         _title = terminalId ?? (resourceName is not null
             ? replicaIndex > 0 ? $"{resourceName} #{replicaIndex}" : resourceName
@@ -135,9 +141,9 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         {
             await StopWindowTrackingAsync(release: true);
         }
-        else if (!_windowReady && !_windowTrackingFailed && _windowRegistrationTask is null && TerminalId is { } terminalId)
+        else if (!_windowReady && !_windowTrackingFailed && _windowRegistrationTask is null && _windowKey is { } key)
         {
-            _windowRegistrationTask = RegisterWindowAsync(terminalId, _watchGeneration);
+            _windowRegistrationTask = RegisterWindowAsync(key, _watchGeneration);
             await _windowRegistrationTask;
         }
     }

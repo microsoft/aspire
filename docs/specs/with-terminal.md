@@ -21,6 +21,27 @@ exposes the same session as `aspire terminal agent --replica 0`.
 All terminal APIs share the experimental diagnostic `ASPIRETERMINAL001`,
 including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
 
+## Resource terminals in the dashboard dock
+
+Opening the terminal dock lists visible resources with terminal support alongside
+AppHost-owned terminals, with a separate tab for each replica. Resource discovery
+does not open the dock or connect a terminal viewer. Select a resource tab and
+choose **Show terminal** to attach its terminal inside the dock.
+
+Resource tabs remain available while the resource advertises terminal support.
+They have no close button: the dock does not own or stop resource processes.
+Once shown, a viewer stays mounted across tab switches and dock collapse.
+Only the visible, active pane fits the terminal to its available space.
+
+Shown resource terminals can be popped out into a separate window. The dock
+replaces its viewer with **Focus window** and **Return to panel** controls.
+Returning or closing the window restores the dock viewer; reloading the dashboard
+recovers detached windows before mounting viewers that could compete for sizing
+control. Removing a resource releases its dock viewer and coordinated window,
+without stopping the resource process.
+
+Resource terminals remain accessible on their resource pages and through the CLI.
+
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use

@@ -98,6 +98,10 @@ public partial class TerminalWindowButton : ComponentBase, IAsyncDisposable
             return;
         }
 
+        // A resource can disappear and later return with the same name/replica. Check that identity
+        // again rather than treating an earlier adoption as permission to mount its new viewer.
+        _processedKeys.IntersectWith(WindowKeysToAdopt);
+
         // A replacement dock must discover surviving windows before it mounts a viewer, so its listener can
         // register without a font or enabled launch button. Actual clicks still require complete metadata.
         if (_launcher is null && (WindowKeysToAdopt.Length > 0 ||

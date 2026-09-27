@@ -268,7 +268,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to App host code can open terminals here. Resource terminals are shown separately on their resource pages..
+        ///   Looks up a localized string similar to App host code can open terminals here. Resources with terminal support also appear here when available..
         /// </summary>
         public static string TerminalDockPanelBody {
             get {
@@ -295,11 +295,11 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Resource terminals:.
+        ///   Looks up a localized string similar to Show terminal.
         /// </summary>
-        public static string TerminalDockResourceTerminals {
+        public static string TerminalDockShowTerminal {
             get {
-                return ResourceManager.GetString("TerminalDockResourceTerminals", resourceCulture);
+                return ResourceManager.GetString("TerminalDockShowTerminal", resourceCulture);
             }
         }
 

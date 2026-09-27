@@ -350,6 +350,12 @@ function newId() {
 }
 
 function terminalPath(baseUri, key) {
+    // Resource keys have the shape "resource:shell:with:colons:2". Only the final colon separates
+    // the replica; the entire resource name is escaped as one route segment. AppHost IDs are GUIDs.
+    const resource = /^resource:(.+):(\d+)$/.exec(key);
+    if (resource) {
+        return new URL(`terminal-window/resource/${encodeURIComponent(resource[1])}/${resource[2]}`, baseUri).pathname;
+    }
     return new URL(`terminal-window/apphost/${encodeURIComponent(key)}`, baseUri).pathname;
 }
 

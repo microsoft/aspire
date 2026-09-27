@@ -213,7 +213,7 @@
     <value>Terminals</value>
   </data>
   <data name="TerminalDockPanelBody" xml:space="preserve">
-    <value>App host code can open terminals here. Resource terminals are shown separately on their resource pages.</value>
+    <value>App host code can open terminals here. Resources with terminal support also appear here when available.</value>
   </data>
   <data name="TerminalDockPanelHeading" xml:space="preserve">
     <value>No docked terminals</value>
@@ -221,9 +221,9 @@
   <data name="TerminalDockPanelHint" xml:space="preserve">
     <value>Press the backtick key (`) to hide this panel.</value>
   </data>
-  <data name="TerminalDockResourceTerminals" xml:space="preserve">
-    <value>Resource terminals:</value>
-    <comment>Label before a comma-separated list of links to resource terminal pages in the empty terminal dock.</comment>
+  <data name="TerminalDockShowTerminal" xml:space="preserve">
+    <value>Show terminal</value>
+    <comment>Connects the selected resource terminal in the dock.</comment>
   </data>
   <data name="TerminalDockMoreInformation" xml:space="preserve">
     <value>More information</value>

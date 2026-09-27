@@ -70,14 +70,15 @@ public partial class TerminalDockTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll(".terminal-dock.visible"));
-            Assert.Equal(["Renamed", "second"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+            Assert.Equal(["Renamed", "second", "first-resource", "second-resource"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
             Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
         });
 
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
         await processed.Reader.ReadAsync().AsTask().DefaultTimeout();
         cut.WaitForAssertion(() => Assert.Equal(["first-resource", "second-resource"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
+        Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal(1, client.ResourceSubscriptionCount);
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);

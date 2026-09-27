@@ -21,7 +21,7 @@
                 {
                     <TerminalWindowButton Class="terminal-open-window"
                                           Label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarOpenInWindow)]"
-                                          TerminalKey="@($"resource:{ResourceName}:{ReplicaIndex}")"
+                                          TerminalKey="@Aspire.Dashboard.Components.Pages.TerminalWindow.GetResourceWindowKey(ResourceName, ReplicaIndex)"
                                           Url="@($"terminal-window/resource/{Uri.EscapeDataString(ResourceName)}/{ReplicaIndex}")"
                                           FontSize="@FontSize" />
                 }

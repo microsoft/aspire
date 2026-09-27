@@ -27,7 +27,7 @@ public partial class TerminalDockTests : DashboardTestContext
     [Theory]
     [InlineData("")]
     [InlineData("/aspire/nested")]
-    public async Task EmptyDock_ListsResourceTerminalsWithReplicaAndPathBaseAwareLinks(string pathBase)
+    public async Task ResourceTabs_ConnectOnlyOnRequestWithReplicaAndPathBaseAwareEndpoints(string pathBase)
     {
         var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         var database = TerminalSetupHelpers.CreateTerminalResource("database-id", displayName: "database");
@@ -56,25 +56,47 @@ public partial class TerminalDockTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var links = cut.FindAll(".terminal-dock-resource-links a");
-            Assert.Equal(
-                [
-                    ("database", $"https://dashboard.example{pathBase}/consolelogs/resource/database"),
-                    ("shell #1/?%+", $"https://dashboard.example{pathBase}/consolelogs/resource/shell%20%231%2F%3F%25%2B"),
-                    ("worker-a", $"https://dashboard.example{pathBase}/consolelogs/resource/worker-a"),
-                    ("worker-b", $"https://dashboard.example{pathBase}/consolelogs/resource/worker-b")
-                ],
-                links.Select(link => (link.TextContent, link.GetAttribute("href"))));
-            var text = string.Join(' ', cut.Find(".terminal-dock-resource-links").TextContent
-                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-            Assert.Equal("Resource terminals: database, shell #1/?%+, worker-a, worker-b", text);
-            Assert.Empty(cut.FindAll("[role=tab]"));
+            Assert.Equal(["database", "shell #1/?%+", "worker-a", "worker-b"],
+                cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+            Assert.Equal(4, cut.FindAll(".terminal-dock-show-terminal").Count);
+            Assert.Empty(cut.FindAll(".terminal-dock-tab-close"));
             Assert.Empty(cut.FindComponents<TerminalView>());
         });
+        await cut.FindAll("[role=tab]")[1].ClickAsync(new());
+        var selectedTab = cut.Find("[role=tab][aria-selected=true]");
+        Assert.EndsWith("-tab-resource%3Ashell%20%231%2F%3F%25%2B%3A0", selectedTab.Id);
+        Assert.Equal(selectedTab.Id, cut.Find(".terminal-dock-pane.active").GetAttribute("aria-labelledby"));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.True(cut.FindComponent<TerminalWindowButton>().Instance.Disabled);
+        await cut.Find(".terminal-dock-pane.active .terminal-dock-show-terminal").ClickAsync(new());
+        cut.WaitForAssertion(() => TerminalSetupHelpers.AssertSingleTerminalConnection(this,
+            $"wss://dashboard.example{pathBase}/api/terminal?resource=shell%20%231%2F%3F%25%2B&replica=0"));
+        var view = cut.FindComponent<TerminalView>().Instance;
+        Assert.True(view.Chromeless);
+        Assert.False(view.ShowDimensionsPicker);
+        Assert.True(view.AutoFit);
+
+        await cut.FindAll("[role=tab]")[3].ClickAsync(new());
+        Assert.False(view.AutoFit);
+        await cut.Find(".terminal-dock-pane.active .terminal-dock-show-terminal").ClickAsync(new());
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
+            var replica = cut.FindComponents<TerminalView>()[1].Instance;
+            Assert.Equal("worker", replica.ResourceName);
+            Assert.Equal(1, replica.ReplicaIndex);
+            Assert.True(replica.AutoFit);
+        });
+        var views = cut.FindComponents<TerminalView>().Select(v => v.Instance).ToArray();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        Assert.All(views, v => Assert.False(v.AutoFit));
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        Assert.Equal(views, cut.FindComponents<TerminalView>().Select(v => v.Instance));
+        Assert.Empty(client.ClosedTerminals);
     }
 
     [Fact]
-    public async Task ResourceUpdates_RefreshLinksAndStopOnDisposal()
+    public async Task ResourceUpdates_RefreshTabsAndStopOnDisposal()
     {
         var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         var terminals = Channel.CreateUnbounded<WatchTerminalsUpdate>();
@@ -92,7 +114,7 @@ public partial class TerminalDockTests : DashboardTestContext
         var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         cut.WaitForAssertion(() => Assert.Equal(["first"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
 
         var second = TerminalSetupHelpers.CreateTerminalResource("second-a", displayName: "second");
         await resources.Writer.WriteAsync([
@@ -100,26 +122,26 @@ public partial class TerminalDockTests : DashboardTestContext
             new(ResourceViewModelChangeType.Upsert, second)
         ]);
         cut.WaitForAssertion(() => Assert.Equal(["second"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
 
         var replica = TerminalSetupHelpers.CreateTerminalResource("second-b", 1, 2, "second");
         await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, replica)]);
         cut.WaitForAssertion(() => Assert.Equal(["second-a", "second-b"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
 
         await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, replica)]);
         cut.WaitForAssertion(() => Assert.Equal(["second"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
 
         await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, second)]);
-        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".terminal-dock-resource-links")));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[role=tab]")));
 
         await terminals.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("docked"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
         await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, first)]);
         await terminals.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
         cut.WaitForAssertion(() => Assert.Equal(["first"],
-            cut.FindAll(".terminal-dock-resource-links a").Select(link => link.TextContent)));
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
 
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
         await resourcesStopped.Task.DefaultTimeout();
@@ -145,6 +167,54 @@ public partial class TerminalDockTests : DashboardTestContext
 
         cut.WaitForAssertion(() => TerminalSetupHelpers.AssertSingleTerminalConnection(this,
             $"wss://dashboard.example{pathBase}/api/apphost-terminal?terminalId={escapedTerminalId}"));
+    }
+
+    [Fact]
+    public async Task MixedTabs_PreserveResourceSelectionAndResetRemovedResourceViewer()
+    {
+        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var processed = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var resource = TerminalSetupHelpers.CreateTerminalResource("shell-id", displayName: "shell");
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: () => resources, terminalChannelProvider: () => updates)
+        {
+            OnTerminalUpdateProcessed = update => processed.Writer.TryWrite(update)
+        };
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-show-terminal")));
+        await cut.Find(".terminal-dock-show-terminal").ClickAsync(new());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        var resourceView = cut.FindComponent<TerminalView>().Instance;
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("apphost"));
+        await processed.Reader.ReadAsync().AsTask().DefaultTimeout();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(["apphost", "shell"], cut.FindAll("[role=tab]").Select(t => t.TextContent.Trim()));
+            Assert.Equal("shell", cut.Find("[role=tab][aria-selected=true]").TextContent.Trim());
+            Assert.Same(resourceView, cut.FindComponents<TerminalView>()[1].Instance);
+            Assert.Single(cut.FindAll(".terminal-dock-tab-close"));
+        });
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
+        await processed.Reader.ReadAsync().AsTask().DefaultTimeout();
+        cut.WaitForAssertion(() => Assert.Same(resourceView, cut.FindComponent<TerminalView>().Instance));
+
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, resource)]);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("[role=tab]"));
+            Assert.Empty(cut.FindComponents<TerminalView>());
+        });
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, resource)]);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-show-terminal")));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        await cut.Find(".terminal-dock-show-terminal").ClickAsync(new());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        Assert.NotSame(resourceView, cut.FindComponent<TerminalView>().Instance);
+        Assert.Empty(client.ClosedTerminals);
     }
 
     [Theory]

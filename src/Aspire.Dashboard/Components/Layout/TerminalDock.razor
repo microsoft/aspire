@@ -49,15 +49,18 @@
                                     @onclick="@(() => Activate(terminal.TerminalId))">
                                 <span class="terminal-dock-tab-title">@terminal.Title</span>
                             </button>
-                            <FluentButton Appearance="ButtonAppearance.Transparent"
-                                          IconOnly="true"
-                                          Class="aspire-icon-button terminal-dock-tab-close"
-                                          Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
-                                          aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
-                                          tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
-                                          OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
-                                <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
-                            </FluentButton>
+                            @if (!terminal.IsResource)
+                            {
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
+                                              IconOnly="true"
+                                              Class="aspire-icon-button terminal-dock-tab-close"
+                                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                              aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                              tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                              OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
+                                    <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
+                                </FluentButton>
+                            }
                         </div>
                     }
                 </div>
@@ -74,7 +77,8 @@
                                   Url="@ActiveTerminalWindowUrl"
                                   FontSize="@ActiveTerminalFontSize"
                                   FocusGroup="@_elementIdPrefix"
-                                  Disabled="@(!_isVisible || IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId))"
+                                  Disabled="@(!_isVisible || IsPanelVisible || _activeTerminalId is null || _detachedTerminalIds.Contains(_activeTerminalId) ||
+                                      (ActiveTerminal is { IsResource: true } && !_shownResourceTerminalIds.Contains(_activeTerminalId)))"
                                   WindowKeysToAdopt="@(_terminals.Select(t => t.TerminalId).ToArray())"
                                   OnWindowsAdopted="@OnWindowsAdopted"
                                   OnWindowTrackingFailed="@OnWindowTrackingFailed"
@@ -125,12 +129,24 @@
                             </div>
                         </div>
                     }
+                    else if (terminal.IsResource && !_shownResourceTerminalIds.Contains(terminal.TerminalId))
+                    {
+                        <div class="terminal-dock-detached">
+                            <FluentButton Appearance="ButtonAppearance.Primary"
+                                          Class="aspire-button terminal-dock-show-terminal"
+                                          OnClick="@(() => ShowResourceTerminal(terminal.TerminalId))">
+                                @Loc[nameof(Resources.TerminalStrings.TerminalDockShowTerminal)]
+                            </FluentButton>
+                        </div>
+                    }
                     else if (_windowTrackingReadyIds.Contains(terminal.TerminalId))
                     {
                         @* Check browser-owned handles before mounting, including after component replacement:
                            even a briefly mounted auto-fit viewer could resize a still-detached terminal. *@
                         <TerminalView @ref="_terminalViews[terminal.TerminalId]"
-                                      EndpointPathAndQuery="@BuildEndpoint(terminal.TerminalId)"
+                                      ResourceName="@terminal.ResourceName"
+                                      ReplicaIndex="@terminal.ReplicaIndex"
+                                      EndpointPathAndQuery="@(terminal.IsResource ? null : BuildEndpoint(terminal.TerminalId))"
                                       Chromeless="true"
                                       ShowDimensionsPicker="false"
                                       AutoFit="@(_isVisible && IsPaneActive(terminal.TerminalId))"
@@ -146,21 +162,6 @@
                         <FluentIcon Class="terminal-dock-panel-icon" Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default" />
                         <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHeading)]</h3>
                         <p class="terminal-dock-panel-body">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelBody)]</p>
-                        @if (_resourceTerminalLinks.Length > 0)
-                        {
-                            <p class="terminal-dock-panel-body terminal-dock-resource-links">
-                                @Loc[nameof(Resources.TerminalStrings.TerminalDockResourceTerminals)]@(" ")
-                                @for (var i = 0; i < _resourceTerminalLinks.Length; i++)
-                                {
-                                    if (i > 0)
-                                    {
-                                        <text>, </text>
-                                    }
-                                    var link = _resourceTerminalLinks[i];
-                                    <a class="aspire-link-button" href="@link.Url">@link.Name</a>
-                                }
-                            </p>
-                        }
                         <a class="aspire-link-button terminal-dock-panel-more-info" href="https://aka.ms/aspire/dashboard-terminal" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.TerminalStrings.TerminalDockMoreInformation)]</a>
                         <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHint)]</p>
                     </div>

@@ -20,19 +20,25 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public class TerminalWindowTests : DashboardTestContext
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task CoordinatedWindow_ChecksGenerationBeforeMountingAndDoesNotRevokeOnDisposal(bool stillDetached)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task CoordinatedWindow_ChecksGenerationBeforeMountingAndDoesNotRevokeOnDisposal(bool stillDetached, bool resource)
     {
         TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var registration = module.Setup<bool>("registerDetachedTerminalWindow", _ => true);
         Services.GetRequiredService<NavigationManager>().NavigateTo(
-            "terminal-window/apphost/terminal?fontSize=23&windowOwner=owner&windowGeneration=generation");
-        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+            $"terminal-window/{(resource ? "resource/shell/2" : "apphost/terminal")}?fontSize=23&windowOwner=owner&windowGeneration=generation");
+        var cut = Render<TerminalWindow>(builder => builder
+            .Add(p => p.TerminalId, resource ? null : "terminal")
+            .Add(p => p.ResourceName, resource ? "shell" : null)
+            .Add(p => p.ReplicaIndex, resource ? 2 : 0));
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
         Assert.Single(registration.Invocations);
+        Assert.Equal(resource ? "resource:shell:2" : "terminal", registration.Invocations.Single().Arguments[1]);
 
         registration.SetResult(stillDetached);
         cut.WaitForAssertion(() =>

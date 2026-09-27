@@ -55,7 +55,7 @@ public enum TerminalWindowOpenResult
 /// <para>
 /// Whether the in-page view keeps rendering while a window is open is the caller's policy, not this type's. The
 /// terminal dock replaces the pane with a placeholder because a dock tab and its window are the same viewport in
-/// two places; a resource terminal keeps rendering inline, because seeing it in both is the point.
+/// two places; the resource page keeps rendering inline, because seeing it in both is the point.
 /// </para>
 /// </remarks>
 public sealed class TerminalWindowLauncher : IAsyncDisposable

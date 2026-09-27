@@ -16,16 +16,16 @@ using FluentMessageIntent = Microsoft.FluentUI.AspNetCore.Components.MessageBarI
 namespace Aspire.Dashboard.Components.Layout;
 
 /// <summary>
-/// A collapsible, tabbed dock of terminals owned by the AppHost process, toggled with <c>`</c>.
+/// A collapsible, tabbed dock of AppHost and resource terminals, toggled with <c>`</c>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The dock's chrome (visible/collapsed, which tab is selected) is per-browser-circuit, but the terminals
-/// themselves live in the AppHost. Two browsers therefore see the same tabs and the same output, and closing
+/// themselves belong to the application. Two browsers therefore see the same tabs and the same output, and closing
 /// the dock in one browser does not disturb the other or stop any workload.
 /// </para>
 /// <para>
-/// Distinct from resource terminals, which are DCP-owned and reached through the terminal host.
+/// Resource terminals are DCP-owned and connect through the terminal host only after the user shows their viewer.
 /// </para>
 /// </remarks>
 public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener, IAsyncDisposable
@@ -36,9 +36,9 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private const string UserTrigger = "User";
     private const string AppHostTrigger = "AppHost";
 
-    private readonly List<TerminalDescriptor> _terminals = [];
+    private readonly List<DockTerminal> _terminals = [];
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private ResourceTerminalLink[] _resourceTerminalLinks = [];
+    private readonly HashSet<string> _shownResourceTerminalIds = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TerminalView> _terminalViews = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cts = new();
     private readonly string _elementIdPrefix = $"terminal-dock-{Guid.NewGuid():N}";
@@ -63,7 +63,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     /// <summary>
     /// Terminals the user has popped out into their own window. The dock keeps the tab — the terminal is still
-    /// running and still AppHost-owned — but stops rendering a viewer for it, so the window is the only place it is
+    /// running independently — but stops rendering a viewer for it, so the window is the only place it is
     /// on screen. That is deliberate: a dock pane and a detached window are the same small viewport twice over, and
     /// two attached viewers would fight over the HMP1 primary role and therefore over the PTY's grid size.
     /// </summary>
@@ -118,7 +118,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             ShortcutManager.AddGlobalKeydownListener(this);
 
             // Keep only metadata watching eager: AspireTerminal.Show() must reveal the dock even before
-            // its first manual opening. Resource links, browser controls, and viewers can wait.
+            // its first manual opening. Resource tabs, browser controls, and viewers can wait.
             _watchTask = Task.Run(() => WatchTerminalsAsync(_cts.Token), _cts.Token);
         }
     }
@@ -260,16 +260,32 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         _activeTerminalId = terminalId;
     }
 
+    private void ShowResourceTerminal(string terminalId)
+    {
+        if (_terminals.Any(t => t.TerminalId == terminalId && t.IsResource))
+        {
+            _shownResourceTerminalIds.Add(terminalId);
+        }
+        else
+        {
+            Logger.LogDebug("Ignored activation of removed resource terminal {TerminalId}.", terminalId);
+        }
+    }
+
     private bool IsPanelVisible => _terminals.Count == 0;
 
     private bool IsPaneActive(string terminalId) => terminalId == _activeTerminalId;
 
-    private string GetTabId(string terminalId) => $"{_elementIdPrefix}-tab-{terminalId}";
+    private string GetTabId(string terminalId) => $"{_elementIdPrefix}-tab-{Uri.EscapeDataString(terminalId)}";
 
-    private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
+    private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{Uri.EscapeDataString(terminalId)}";
 
-    private string? ActiveTerminalWindowUrl => _activeTerminalId is { } id
-        ? $"terminal-window/apphost/{Uri.EscapeDataString(id)}"
+    private DockTerminal? ActiveTerminal => _terminals.Find(t => t.TerminalId == _activeTerminalId);
+
+    private string? ActiveTerminalWindowUrl => ActiveTerminal is { } terminal
+        ? terminal.ResourceName is { } resourceName
+            ? $"terminal-window/resource/{Uri.EscapeDataString(resourceName)}/{terminal.ReplicaIndex}"
+            : $"terminal-window/apphost/{Uri.EscapeDataString(terminal.TerminalId)}"
         : null;
 
     private int? ActiveTerminalFontSize => _activeTerminalId is { } id && _terminalViews.TryGetValue(id, out var view)
@@ -319,6 +335,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         _popupBlocked = result == TerminalWindowOpenResult.Blocked;
         if (result is TerminalWindowOpenResult.Opened or TerminalWindowOpenResult.Focused or TerminalWindowOpenResult.Adopted or TerminalWindowOpenResult.Recovering)
         {
+            ShowResourceTerminalIfPresent(terminalId);
             _detachedTerminalIds.Add(terminalId);
             _terminalViews.Remove(terminalId);
             if (result is TerminalWindowOpenResult.Recovering)
@@ -350,6 +367,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
         _detachedTerminalIds.Remove(terminalId);
         _recoveringWindowIds.Remove(terminalId);
+        ShowResourceTerminalIfPresent(terminalId);
         // Explicit return is also the escape hatch when unavailable/corrupt storage prevented passive recovery.
         _windowTrackingReadyIds.Add(terminalId);
         StateHasChanged();
@@ -367,6 +385,14 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             StateHasChanged();
         }
     });
+
+    private void ShowResourceTerminalIfPresent(string terminalId)
+    {
+        if (_terminals.Any(t => t.TerminalId == terminalId && t.IsResource))
+        {
+            _shownResourceTerminalIds.Add(terminalId);
+        }
+    }
 
     private async Task CloseTerminalAsync(string terminalId, string terminalTitle)
     {
@@ -400,6 +426,12 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
     }
 
+    private void AddAppHostTerminal(TerminalDescriptor descriptor)
+    {
+        var firstResource = _terminals.FindIndex(t => t.IsResource);
+        _terminals.Insert(firstResource >= 0 ? firstResource : _terminals.Count, DockTerminal.FromAppHost(descriptor));
+    }
+
     private async Task WatchTerminalsAsync(CancellationToken cancellationToken)
     {
         try
@@ -419,8 +451,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
                     {
                         var previousActiveIndex = _terminals.FindIndex(t => t.TerminalId == _activeTerminalId);
+                        var resources = _terminals.Where(t => t.IsResource).ToArray();
                         _terminals.Clear();
-                        _terminals.AddRange(update.Snapshot.Terminals);
+                        _terminals.AddRange(update.Snapshot.Terminals.Select(DockTerminal.FromAppHost));
+                        _terminals.AddRange(resources);
                         if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
                         {
                             // Snapshots can also remove the active tab; use the same adjacent fallback as removal.
@@ -485,7 +519,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         try
         {
             var (snapshot, subscription) = await ResourceRepository.SubscribeResourcesAsync(cancellationToken).ConfigureAwait(false);
-            await InvokeAsync(() =>
+            await InvokeAsync(async () =>
             {
                 if (_disposed)
                 {
@@ -496,13 +530,13 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 {
                     _resourceByName[resource.Name] = resource;
                 }
-                UpdateResourceTerminalLinks();
+                await UpdateResourceTerminalsAsync();
             }).ConfigureAwait(false);
 
             await foreach (var changes in subscription.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 // Resource notifications arrive off the renderer thread, just like terminal notifications.
-                await InvokeAsync(() =>
+                await InvokeAsync(async () =>
                 {
                     if (_disposed)
                     {
@@ -520,7 +554,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                             _resourceByName.Remove(resource.Name);
                         }
                     }
-                    UpdateResourceTerminalLinks();
+                    await UpdateResourceTerminalsAsync();
                 }).ConfigureAwait(false);
             }
         }
@@ -534,29 +568,56 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
     }
 
-    private void UpdateResourceTerminalLinks()
+    private async Task UpdateResourceTerminalsAsync()
     {
-        var links = _resourceByName.Values
+        var terminals = _resourceByName.Values
             .Where(resource => !resource.IsResourceHidden(showHiddenResources: false) &&
                 resource.HasTerminal() && resource.TryGetTerminalReplicaInfo(out _, out _))
             .OrderBy(resource => resource, ResourceViewModelNameComparer.Instance)
             .Select(resource =>
             {
-                // Use the same resource identity as the console/terminal page so replicas remain distinct.
-                var name = ResourceViewModel.GetResourceName(resource, _resourceByName);
-                var url = NavigationManager.ToAbsoluteUri(DashboardUrls.ConsoleLogsUrl(name).TrimStart('/')).AbsoluteUri;
-                return new ResourceTerminalLink(name, url);
+                resource.TryGetTerminalReplicaInfo(out var replicaIndex, out _);
+                return new DockTerminal(
+                    TerminalWindow.GetResourceWindowKey(resource.DisplayName, replicaIndex),
+                    ResourceViewModel.GetResourceName(resource, _resourceByName),
+                    resource.DisplayName,
+                    replicaIndex);
             })
             .ToArray();
 
-        // Health and other property updates must not rerender terminal viewers when the links are unchanged.
-        if (!_resourceTerminalLinks.SequenceEqual(links))
+        // Health updates do not change tab identity and must not remount an attached viewer.
+        if (_terminals.Where(t => t.IsResource).SequenceEqual(terminals))
         {
-            _resourceTerminalLinks = links;
-            if (_hasBeenOpened && IsPanelVisible)
-            {
-                StateHasChanged();
-            }
+            return;
+        }
+
+        var previousActiveIndex = _terminals.FindIndex(t => t.TerminalId == _activeTerminalId);
+        var removed = _terminals.Where(t => t.IsResource && !terminals.Any(next => next.TerminalId == t.TerminalId)).ToArray();
+        _terminals.RemoveAll(t => t.IsResource);
+        _terminals.AddRange(terminals);
+        if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
+        {
+            _activeTerminalId = _terminals.Count > 0
+                ? _terminals[Math.Clamp(previousActiveIndex, 0, _terminals.Count - 1)].TerminalId
+                : null;
+        }
+
+        foreach (var terminal in removed)
+        {
+            _shownResourceTerminalIds.Remove(terminal.TerminalId);
+            _terminalViews.Remove(terminal.TerminalId);
+            _windowTrackingReadyIds.Remove(terminal.TerminalId);
+            _recoveringWindowIds.Remove(terminal.TerminalId);
+            _detachedTerminalIds.Remove(terminal.TerminalId);
+        }
+        if (_hasBeenOpened)
+        {
+            StateHasChanged();
+        }
+        foreach (var terminal in removed)
+        {
+            // Also revoke pending adoption/open notifications for the removed identity.
+            await CloseDetachedWindowAsync(terminal.TerminalId);
         }
     }
 
@@ -573,11 +634,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             case TerminalChangeType.Added or TerminalChangeType.Retitled:
                 if (index >= 0)
                 {
-                    _terminals[index] = descriptor;
+                    _terminals[index] = DockTerminal.FromAppHost(descriptor);
                 }
                 else
                 {
-                    _terminals.Add(descriptor);
+                    AddAppHostTerminal(descriptor);
                 }
                 _activeTerminalId ??= descriptor.TerminalId;
                 break;
@@ -601,7 +662,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                 // Raised by AspireTerminal.Show() in the AppHost, so AppHost code can reveal its own terminal.
                 if (index < 0)
                 {
-                    _terminals.Add(descriptor);
+                    AddAppHostTerminal(descriptor);
                 }
                 _activeTerminalId = descriptor.TerminalId;
                 Show(AppHostTrigger);
@@ -672,7 +733,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             {
                 if (_windowButton is { } button)
                 {
-                    // Leaves independent windows and their AppHost-owned producers running.
+                    // Leaves independent windows and their producers running.
                     await button.DisposeAsync().ConfigureAwait(true);
                 }
             }
@@ -724,5 +785,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
     }
 
-    private sealed record ResourceTerminalLink(string Name, string Url);
+    private sealed record DockTerminal(string TerminalId, string Title, string? ResourceName, int ReplicaIndex)
+    {
+        public bool IsResource => ResourceName is not null;
+
+        public static DockTerminal FromAppHost(TerminalDescriptor descriptor)
+            => new(descriptor.TerminalId, descriptor.Title, null, 0);
+    }
 }
