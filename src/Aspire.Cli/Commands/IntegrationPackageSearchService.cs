@@ -17,13 +17,14 @@ internal sealed class IntegrationPackageSearchService(
     IProjectLocator projectLocator,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IAppHostProjectFactory projectFactory)
+    IAppHostProjectFactory projectFactory,
+    IConfigurationService configurationService)
 {
     private const double FuzzyMatchThreshold = 0.3;
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, string? source, CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, cancellationToken);
+        var channels = await GetSearchChannelsAsync(workingDirectory, configuredChannel, source, cancellationToken);
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
@@ -52,9 +53,9 @@ internal sealed class IntegrationPackageSearchService(
     /// Resolving both lists together avoids re-resolving the channel set and lets each channel's integration
     /// search and its <c>tags:polyglot</c> lookup run concurrently, rather than as two serial discovery passes.
     /// </remarks>
-    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, string? source, CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, cancellationToken);
+        var channels = await GetSearchChannelsAsync(workingDirectory, configuredChannel, source, cancellationToken);
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var polyglotIds = new HashSet<string>(StringComparers.NuGetPackageId);
@@ -78,7 +79,7 @@ internal sealed class IntegrationPackageSearchService(
         return (packages, polyglotIds);
     }
 
-    private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(string? configuredChannel, CancellationToken cancellationToken)
+    private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, string? source, CancellationToken cancellationToken)
     {
         // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
         // as `requestedChannelName` so PackagingService can synthesize the staging channel
@@ -104,12 +105,24 @@ internal sealed class IntegrationPackageSearchService(
         // emulated identity (stable/daily/staging), not a local-build name — participates in the
         // search instead of being filtered out, which would silently fall back to nuget.org.
         var hasHives = executionContext.GetHiveCount() > 0 || executionContext.IdentityPackagesDirectory is not null;
-        return hasHives || !string.IsNullOrEmpty(configuredChannel)
+        var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return channels;
+        }
+
+        var resolvedSource = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workingDirectory);
+        var mappings = PackageSourceOverrideMappings.CreateForTemplateOperations(resolvedSource);
+        return channels.Select(channel => channel.WithMappings(mappings));
     }
 
-    public async Task<(DirectoryInfo WorkingDirectory, string? ConfiguredChannel, string? LanguageId, int? ExitCode)> GetPackageSearchContextAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    public async Task<(DirectoryInfo WorkingDirectory, string? ConfiguredChannel, string? ConfiguredSource, string? LanguageId, int? ExitCode)> GetPackageSearchContextAsync(
+        FileInfo? passedAppHostProjectFile,
+        string? invocationConfiguredSource,
+        CancellationToken cancellationToken)
     {
         FileInfo? appHostProjectFile;
         if (passedAppHostProjectFile is not null)
@@ -129,13 +142,88 @@ internal sealed class IntegrationPackageSearchService(
 
         if (appHostProjectFile is null)
         {
-            return (executionContext.WorkingDirectory, ConfiguredChannel: null, LanguageId: null, ExitCode: null);
+            var sourceWithOrigin = await configurationService.GetConfigurationFromDirectoryWithOriginAsync(
+                AspireConfigFile.NuGetSourceKey,
+                executionContext.WorkingDirectory,
+                cancellationToken: cancellationToken);
+            var source = sourceWithOrigin is null
+                ? NormalizeSource(invocationConfiguredSource)
+                : ResolveSource(sourceWithOrigin.Value, sourceWithOrigin.BaseDirectory);
+
+            return (
+                executionContext.WorkingDirectory,
+                ConfiguredChannel: null,
+                ConfiguredSource: source,
+                LanguageId: null,
+                ExitCode: null);
         }
 
         var project = projectFactory.GetProject(appHostProjectFile);
         var (configuredChannel, exitCode) = GetConfiguredChannel(appHostProjectFile, project);
-        return (appHostProjectFile.Directory!, configuredChannel, project.LanguageId, exitCode);
+        var configuredSource = await GetConfiguredNuGetSourceAsync(
+            appHostProjectFile,
+            appHostWasExplicitlyPassed: passedAppHostProjectFile is not null,
+            invocationConfiguredSource,
+            cancellationToken);
+        return (appHostProjectFile.Directory!, configuredChannel, configuredSource, project.LanguageId, exitCode);
     }
+
+    public async Task<string?> GetConfiguredNuGetSourceAsync(
+        FileInfo appHostProjectFile,
+        bool appHostWasExplicitlyPassed,
+        string? invocationConfiguredSource,
+        CancellationToken cancellationToken)
+    {
+        var selectingSource = await configurationService.GetConfigurationFromDirectoryWithOriginAsync(
+            AspireConfigFile.NuGetSourceKey,
+            executionContext.WorkingDirectory,
+            cancellationToken: cancellationToken);
+        var targetSource = await configurationService.GetConfigurationFromDirectoryWithOriginAsync(
+            AspireConfigFile.NuGetSourceKey,
+            appHostProjectFile.Directory!,
+            cancellationToken: cancellationToken);
+        var invocationSource = NormalizeSource(invocationConfiguredSource);
+
+        if (appHostWasExplicitlyPassed)
+        {
+            if (targetSource is not null)
+            {
+                return ResolveSource(targetSource.Value, targetSource.BaseDirectory);
+            }
+
+            // Environment and command-host providers still outrank files, but a local
+            // config from the invocation workspace must not leak into an explicit target.
+            return invocationSource is not null && selectingSource is null
+                    ? ResolveSource(invocationSource, executionContext.WorkingDirectory)
+                    : null;
+        }
+
+        if (selectingSource is { IsGlobal: false })
+        {
+            return ResolveSource(selectingSource.Value, selectingSource.BaseDirectory);
+        }
+
+        if (invocationSource is not null && selectingSource is null)
+        {
+            return ResolveSource(invocationSource, executionContext.WorkingDirectory);
+        }
+
+        if (targetSource is { IsGlobal: false })
+        {
+            return ResolveSource(targetSource.Value, targetSource.BaseDirectory);
+        }
+
+        var globalSource = targetSource ?? selectingSource;
+        return globalSource is null
+            ? null
+            : ResolveSource(globalSource.Value, globalSource.BaseDirectory);
+    }
+
+    private static string? NormalizeSource(string? source)
+        => string.IsNullOrWhiteSpace(source) ? null : source;
+
+    private static string ResolveSource(string source, DirectoryInfo workingDirectory)
+        => PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workingDirectory);
 
     public (string? ConfiguredChannel, int? ExitCode) GetConfiguredChannel(FileInfo appHostProjectFile, IAppHostProject project)
     {

@@ -43,6 +43,7 @@ internal interface IDotNetCliRunner
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<(int ExitCode, string[] Sources)> GetNuGetSourcesAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProject, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -1681,6 +1682,52 @@ internal sealed class DotNetCliRunner(
         {
             return (exitCode, stdoutLines.ToArray());
         }
+    }
+
+    public async Task<(int ExitCode, string[] Sources)> GetNuGetSourcesAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+
+        string[] cliArgs = ["nuget", "list", "source", "--format", "short"];
+
+        var sources = new List<string>();
+        var existingStandardOutputCallback = options.StandardOutputCallback;
+        options.StandardOutputCallback = line =>
+        {
+            // `dotnet nuget list source --format short` emits one source per line:
+            //   E https://api.nuget.org/v3/index.json
+            //   D /path/to/disabled/feed
+            // Additional flags can be appended to the status token, such as EM for an
+            // enabled machine-wide source or EO for an enabled official source.
+            // Only status tokens beginning with E participate in restore.
+            foreach (var sourceLine in line.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                var separatorIndex = sourceLine.IndexOfAny([' ', '\t']);
+                if (separatorIndex > 0 && sourceLine[0] == 'E')
+                {
+                    sources.Add(sourceLine[(separatorIndex + 1)..].Trim());
+                }
+            }
+
+            existingStandardOutputCallback?.Invoke(line);
+        };
+
+        var exitCode = await ExecuteAsync(
+            args: cliArgs,
+            env: null,
+            projectFile: null,
+            workingDirectory: workingDirectory,
+            backchannelCompletionSource: null,
+            options: options,
+            cancellationToken: cancellationToken);
+
+        if (exitCode != 0)
+        {
+            logger.LogError("Failed to get enabled NuGet sources. Exit code was: {ExitCode}.", exitCode);
+            return (exitCode, []);
+        }
+
+        return (exitCode, [.. sources]);
     }
 
     public async Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken)

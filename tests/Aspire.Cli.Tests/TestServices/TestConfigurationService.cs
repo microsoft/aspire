@@ -8,7 +8,7 @@ namespace Aspire.Cli.Tests.TestServices;
 /// <summary>
 /// Test implementation of IConfigurationService that tracks SetConfigurationAsync, DeleteConfigurationAsync, and GetConfigurationAsync calls.
 /// </summary>
-public sealed class TestConfigurationService : IConfigurationService
+internal sealed class TestConfigurationService : IConfigurationService
 {
     public Action<string, string, bool>? OnSetConfiguration { get; set; }
     public Action<string, bool>? OnDeleteConfiguration { get; set; }
@@ -57,7 +57,23 @@ public sealed class TestConfigurationService : IConfigurationService
         return Task.FromResult(result);
     }
 
+    public Task<ConfigurationValueWithOrigin?> GetConfigurationFromDirectoryWithOriginAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    {
+        if (OnGetConfigurationFromDirectoryWithOrigin is not null)
+        {
+            return Task.FromResult(OnGetConfigurationFromDirectoryWithOrigin.Invoke(key, startDirectory));
+        }
+
+        var result = OnGetConfigurationFromDirectory is not null
+            ? OnGetConfigurationFromDirectory.Invoke(key, startDirectory)
+            : OnGetConfiguration?.Invoke(key);
+        return Task.FromResult(result is null
+            ? null
+            : new ConfigurationValueWithOrigin(result, startDirectory, IsGlobal: false));
+    }
+
     public Func<string, DirectoryInfo, string?>? OnGetConfigurationFromDirectory { get; set; }
+    public Func<string, DirectoryInfo, ConfigurationValueWithOrigin?>? OnGetConfigurationFromDirectoryWithOrigin { get; set; }
 
     public string SettingsFilePath { get; set; } = string.Empty;
 

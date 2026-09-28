@@ -734,6 +734,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
+    private static string[] GetPackageSources(string outputPath)
+    {
+        var doc = XDocument.Load(Path.Combine(outputPath, "nuget.config"));
+        return doc.Root!.Element("packageSources")!
+            .Elements("add")
+            .Select(element => (string)element.Attribute("value")!)
+            .ToArray();
+    }
+
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
     {
         var packageSourceMapping = doc.Root!.Element("packageSourceMapping");
@@ -1183,6 +1192,137 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(KnownLanguageId.TypeScript, scaffoldedLanguageId);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.mts")));
+    }
+
+    [Theory]
+    [InlineData(null, "https://configured.example/v3/index.json")]
+    [InlineData("https://explicit.example/v3/index.json", "https://explicit.example/v3/index.json")]
+    public async Task NewCommandUsesConfiguredSourceForDiscoveryButPersistsOnlyExplicitSource(string? explicitSource, string expectedSource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string configuredSource = "https://configured.example/v3/index.json";
+        string? discoveryAspireSource = null;
+        string? discoveryFallbackSource = null;
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, nugetConfig, _) =>
+            {
+                Assert.NotNull(nugetConfig);
+
+                var sourceMappings = XDocument.Load(nugetConfig.FullName).Root!
+                    .Element("packageSourceMapping")!
+                    .Elements("packageSource")
+                    .ToArray();
+                discoveryAspireSource = (string?)sourceMappings
+                    .Single(source => source
+                        .Elements("package")
+                        .Any(package => (string?)package.Attribute("pattern") == "Aspire*"))
+                    .Attribute("key");
+                discoveryFallbackSource = (string?)sourceMappings
+                    .Single(source => source
+                        .Elements("package")
+                        .Any(package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages))
+                    .Attribute("key");
+
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = expectedSource, Version = "9.2.0" }]);
+            }
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [
+                new PackageMapping("Aspire*", "https://channel.example/v3/index.json"),
+                new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+            ],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.ConfigurationCallback += config => config[AspireConfigFile.NuGetSourceKey] = configuredSource;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var sourceArgument = explicitSource is null ? string.Empty : $" --source {explicitSource}";
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --channel staging{sourceArgument}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(expectedSource, discoveryAspireSource);
+        Assert.Equal(expectedSource, discoveryFallbackSource);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        if (explicitSource is null)
+        {
+            Assert.Equal(
+                [PackageSources.NuGetOrg, "https://channel.example/v3/index.json"],
+                GetPackageSources(outputPath).Order(StringComparer.Ordinal));
+        }
+        else
+        {
+            AssertSourceOverrideNuGetConfig(outputPath, expectedSource);
+        }
+    }
+
+    [Fact]
+    public async Task NewCommandResolvesRelativeGlobalSourceFromGlobalSettingsDirectory()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        string expectedSource;
+        var probeServices = CreateServiceCollection(workspace);
+        using (var probeProvider = probeServices.BuildServiceProvider())
+        {
+            var globalSettingsPath = probeProvider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
+            var globalSettingsDirectory = Directory.CreateDirectory(Path.GetDirectoryName(globalSettingsPath)!);
+            expectedSource = Path.Combine(globalSettingsDirectory.FullName, "global-feed");
+            var nestedDirectory = Directory.CreateDirectory(Path.Combine(expectedSource, "aspire.projecttemplates", "9.2.0"));
+            File.WriteAllText(Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.9.2.0.nupkg"), string.Empty);
+            await File.WriteAllTextAsync(
+                globalSettingsPath,
+                """
+                {
+                  "nugetSource": "global-feed"
+                }
+                """);
+        }
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Stable,
+            [new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)],
+            cache,
+            new TestFeatures(),
+            NullLogger.Instance);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --channel staging");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(
+            [PackageSources.NuGetOrg],
+            GetPackageSources(Path.Combine(workspace.WorkspaceRoot.FullName, "output")));
     }
 
     [Fact]

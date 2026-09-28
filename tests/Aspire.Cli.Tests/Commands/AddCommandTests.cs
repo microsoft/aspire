@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -193,6 +195,408 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(integrations, i => i.Name == "azure-redis" && i.Package == "Aspire.Hosting.Azure.Redis" && i.Version == "9.2.0");
         Assert.Contains(integrations, i => i.Name == "docker" && i.Package == "Aspire.Hosting.Docker" && i.Version == "9.2.0");
         Assert.Contains(integrations, i => i.Name == "redis" && i.Package == "Aspire.Hosting.Redis" && i.Version == "9.3.0");
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandUsesConfiguredNuGetSource()
+    {
+        const string configuredSource = "https://configured.example/v3/index.json";
+        string? searchSource = null;
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += config => config[AspireConfigFile.NuGetSourceKey] = configuredSource;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, nugetConfigFile, _, _, _) =>
+                {
+                    searchSource = nugetConfigFile is null
+                        ? null
+                        : (string?)XDocument.Load(nugetConfigFile.FullName).Root!
+                            .Element("packageSources")!
+                            .Elements("add")
+                            .Single()
+                            .Attribute("value");
+                    return (0, new[] { CreatePackage("Aspire.Hosting.Redis", "9.2.0") });
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(configuredSource, searchSource);
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandResolvesRelativeConfiguredSourceFromDeclaringDirectoryWithoutAppHost()
+    {
+        const string configuredSource = "feeds/configured";
+        string? searchSource = null;
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var invocationDirectory = workspace.CreateDirectory("src/client");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{configuredSource}}"
+            }
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.WorkingDirectory = invocationDirectory;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, nugetConfigFile, _, _, _) =>
+                {
+                    searchSource = nugetConfigFile is null
+                        ? null
+                        : (string?)XDocument.Load(nugetConfigFile.FullName).Root!
+                            .Element("packageSources")!
+                            .Elements("add")
+                            .Single()
+                            .Attribute("value");
+                    return (0, new[] { CreatePackage("Aspire.Hosting.Redis", "9.2.0") });
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "feeds", "configured"), searchSource);
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandUsesExplicitAppHostNuGetSourceBeforeGlobalSource()
+    {
+        const string globalSource = "https://global.example/v3/index.json";
+        const string appHostSource = "https://apphost.example/v3/index.json";
+        string? searchSource = null;
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("target");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{appHostSource}}"
+            }
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += config => config[AspireConfigFile.NuGetSourceKey] = globalSource;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, nugetConfigFile, _, _, _) =>
+                {
+                    searchSource = nugetConfigFile is null
+                        ? null
+                        : (string?)XDocument.Load(nugetConfigFile.FullName).Root!
+                            .Element("packageSources")!
+                            .Elements("add")
+                            .Single()
+                            .Attribute("value");
+                    return (0, new[] { CreatePackage("Aspire.Hosting.Redis", "9.2.0") });
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration list --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(appHostSource, searchSource);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesSelectingWorkspaceBeforeImplicitlySelectedAppHost()
+    {
+        const string workspaceSource = "https://workspace.example/v3/index.json";
+        const string appHostSource = "https://apphost.example/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("target");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{appHostSource}}"
+            }
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += config => config[AspireConfigFile.NuGetSourceKey] = workspaceSource;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: false,
+            workspaceSource,
+            CancellationToken.None);
+
+        Assert.Equal(workspaceSource, source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesTargetAppHostBeforeGlobalSource()
+    {
+        const string globalSource = "https://global.example/v3/index.json";
+        const string appHostSource = "https://apphost.example/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("target");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{appHostSource}}"
+            }
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += config => config[AspireConfigFile.NuGetSourceKey] = globalSource;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var configurationService = provider.GetRequiredService<IConfigurationService>();
+        var globalSettingsPath = configurationService.GetSettingsFilePath(isGlobal: true);
+        Directory.CreateDirectory(Path.GetDirectoryName(globalSettingsPath)!);
+        await File.WriteAllTextAsync(
+            globalSettingsPath,
+            $$"""
+            {
+              "nugetSource": "{{globalSource}}"
+            }
+            """);
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: false,
+            globalSource,
+            CancellationToken.None);
+
+        Assert.Equal(appHostSource, source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionForExplicitAppHostDoesNotUseSelectingWorkspace()
+    {
+        const string workspaceSource = "https://workspace.example/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{workspaceSource}}"
+            }
+            """);
+        using var targetWorkspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = targetWorkspace.WorkspaceRoot;
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: true,
+            workspaceSource,
+            CancellationToken.None);
+
+        Assert.Null(source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesWorkspaceForRelativeSelectingSource()
+    {
+        const string workspaceSource = "feeds/local";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{workspaceSource}}"
+            }
+            """);
+        var appHostDirectory = workspace.CreateDirectory("target");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: false,
+            workspaceSource,
+            CancellationToken.None);
+
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "feeds", "local"), source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesLegacySettingsDirectoryForRelativeSource()
+    {
+        const string legacySource = "feeds/local";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var legacySettingsDirectory = workspace.CreateDirectory(".aspire");
+        await File.WriteAllTextAsync(
+            Path.Combine(legacySettingsDirectory.FullName, "settings.json"),
+            $$"""
+            {
+              "nugetSource": "{{legacySource}}"
+            }
+            """);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: false,
+            invocationConfiguredSource: null,
+            CancellationToken.None);
+
+        Assert.Equal(Path.Combine(legacySettingsDirectory.FullName, "feeds", "local"), source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesDeclaringDirectoryForRelativeSelectingSource()
+    {
+        const string workspaceSource = "feeds/local";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var invocationDirectory = workspace.CreateDirectory("src/client");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{workspaceSource}}"
+            }
+            """);
+        var appHostDirectory = workspace.CreateDirectory("target");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.WorkingDirectory = invocationDirectory;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: false,
+            workspaceSource,
+            CancellationToken.None);
+
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "feeds", "local"), source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesTargetForRelativeAppHostSource()
+    {
+        const string appHostSource = "feeds/target";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var targetWorkspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(targetWorkspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(targetWorkspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{appHostSource}}"
+            }
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: true,
+            invocationConfiguredSource: null,
+            CancellationToken.None);
+
+        Assert.Equal(Path.Combine(targetWorkspace.WorkspaceRoot.FullName, "feeds", "target"), source);
+    }
+
+    [Fact]
+    public async Task ConfiguredSourceResolutionUsesTargetOriginWhenTargetAndGlobalValuesMatch()
+    {
+        const string sourceValue = "feeds/shared";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var targetWorkspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(targetWorkspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(targetWorkspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+            {
+              "nugetSource": "{{sourceValue}}"
+            }
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var configurationService = provider.GetRequiredService<IConfigurationService>();
+        var globalSettingsPath = configurationService.GetSettingsFilePath(isGlobal: true);
+        Directory.CreateDirectory(Path.GetDirectoryName(globalSettingsPath)!);
+        await File.WriteAllTextAsync(
+            globalSettingsPath,
+            $$"""
+            {
+              "nugetSource": "{{sourceValue}}"
+            }
+            """);
+
+        var source = await provider.GetRequiredService<IntegrationPackageSearchService>().GetConfiguredNuGetSourceAsync(
+            appHostFile,
+            appHostWasExplicitlyPassed: true,
+            sourceValue,
+            CancellationToken.None);
+
+        Assert.Equal(Path.Combine(targetWorkspace.WorkspaceRoot.FullName, "feeds", "shared"), source);
     }
 
     [Theory]
@@ -1991,20 +2395,67 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("9.2.0", addedPackageVersion);
     }
 
-    [Fact]
-    public async Task AddCommandPreservesSourceArgumentInBothCommands()
+    [Theory]
+    [InlineData(null, "https://configured.example/v3/index.json", true, true, "https://configured.example/v3/index.json", null)]
+    [InlineData(null, "https://configured.example/v3/index.json", true, false, "https://configured.example/v3/index.json", "https://configured.example/v3/index.json")]
+    [InlineData(null, "https://configured.example/v3/index.json", false, false, "https://configured.example/v3/index.json", "https://configured.example/v3/index.json")]
+    [InlineData("https://explicit.example/v3/index.json", "https://configured.example/v3/index.json", true, true, "https://explicit.example/v3/index.json", "https://explicit.example/v3/index.json")]
+    [InlineData("https://explicit.example/v3/index.json", "https://configured.example/v3/index.json", false, false, "https://explicit.example/v3/index.json", "https://explicit.example/v3/index.json")]
+    [InlineData("https://configured.example/v3/index.json", "https://configured.example/v3/index.json", true, true, "https://configured.example/v3/index.json", "https://configured.example/v3/index.json")]
+    [InlineData(null, "   ", false, false, null, null)]
+    public async Task AddCommandUsesConfiguredSourceUnlessExplicitSourceIsProvided(
+        string? explicitSource,
+        string configuredSource,
+        bool projectHasSourceConfig,
+        bool sourceIsMappedForAspirePackages,
+        string? expectedSearchSource,
+        string? expectedAddSource)
     {
-        // Arrange
+        string? searchUsedSource = null;
         string? addUsedSource = null;
-        const string expectedSource = "https://custom-nuget-source.test/v3/index.json";
 
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        if (projectHasSourceConfig)
+        {
+            if (sourceIsMappedForAspirePackages)
+            {
+                await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+                    expectedSearchSource,
+                    channel: null,
+                    workspace.WorkspaceRoot.FullName,
+                    CancellationToken.None);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config"),
+                    $$"""
+                    <configuration>
+                      <packageSources>
+                        <clear />
+                        <add key="configured" value="{{configuredSource}}" />
+                      </packageSources>
+                      <packageSourceMapping>
+                        <packageSource key="configured">
+                          <package pattern="Other*" />
+                        </packageSource>
+                      </packageSourceMapping>
+                    </configuration>
+                    """);
+            }
+        }
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        var originalNuGetConfig = File.Exists(nugetConfigPath)
+            ? await File.ReadAllTextAsync(nugetConfigPath)
+            : null;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-
             // Makes it easier to isolate behavior in test case by disabling one
             // of the concurrent calls to the NuGetCache from the prefetcher.
             options.DisabledFeatures = [KnownFeatures.UpdateNotificationsEnabled];
+            options.ConfigurationCallback += config => config[AspireConfigFile.NuGetSourceKey] = configuredSource;
 
             options.AddCommandPrompterFactory = (sp) =>
             {
@@ -2012,13 +2463,24 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return new TestAddCommandPrompter(interactionService);
             };
 
-            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+            };
 
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
                 {
+                    searchUsedSource = nugetConfigFile is null
+                        ? null
+                        : (string?)XDocument.Load(nugetConfigFile.FullName).Root!
+                            .Element("packageSources")!
+                            .Elements("add")
+                            .Single()
+                            .Attribute("value");
                     var redisPackage = new NuGetPackage()
                     {
                         Id = "Aspire.Hosting.Redis",
@@ -2040,21 +2502,36 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                     // Simulate adding the package.
                     return 0; // Success.
                 };
+                runner.GetNuGetSourcesAsyncCallback = (workingDirectory, options, cancellationToken) =>
+                    (0, projectHasSourceConfig && expectedSearchSource is not null
+                        ? [expectedSearchSource]
+                        : []);
+                runner.GetNuGetConfigPathsAsyncCallback = (_, _, _) =>
+                    (0, File.Exists(nugetConfigPath) ? [nugetConfigPath] : []);
 
                 return runner;
             };
         });
         using var provider = services.BuildServiceProvider();
 
-        // Act
         var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse($"add redis --source {expectedSource}");
+        var sourceArgument = explicitSource is null ? string.Empty : $" --source {explicitSource}";
+        var result = command.Parse($"add redis{sourceArgument}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Assert
         Assert.Equal(0, exitCode);
-        Assert.Equal(expectedSource, addUsedSource);
+        Assert.Equal(expectedSearchSource, searchUsedSource);
+        Assert.Equal(expectedAddSource, addUsedSource);
+
+        if (originalNuGetConfig is not null)
+        {
+            Assert.Equal(originalNuGetConfig, await File.ReadAllTextAsync(nugetConfigPath));
+        }
+        else
+        {
+            Assert.False(File.Exists(nugetConfigPath));
+        }
     }
 
     [Fact]
@@ -2332,6 +2809,51 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Assert - should show 2 root choices: one for implicit channel, one submenu for explicit channel
         Assert.NotNull(displayedChoices);
         Assert.Equal(2, displayedChoices!.Count);
+    }
+
+    [Fact]
+    public async Task AddCommandPrompter_RedactsCredentialBearingSourceFromVersionLabels()
+    {
+        List<string>? displayedLabels = null;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, formatter, _) =>
+            {
+                var choiceList = choices.Cast<object>().ToList();
+                displayedLabels = choiceList.Select(formatter).ToList();
+                return choiceList.First();
+            }
+        };
+        var implicitChannel = PackageChannel.CreateImplicitChannel(
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance).WithMappings(
+                PackageSourceOverrideMappings.CreateForTemplateOperations(
+                    "https://user:secret@packages.example/v3/index.json?sig=credential"));
+        var explicitChannel = PackageChannel.CreateExplicitChannel(
+            "daily",
+            PackageChannelQuality.Prerelease,
+            [new PackageMapping("Aspire*", "https://daily.example/v3/index.json")],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance);
+        var packages = new[]
+        {
+            ("redis", CreatePackage("Aspire.Hosting.Redis", "13.5.0"), implicitChannel),
+            ("redis", CreatePackage("Aspire.Hosting.Redis", "13.6.0-preview.1"), explicitChannel)
+        };
+        var prompter = new AddCommandPrompter(interactionService);
+
+        await prompter.PromptForIntegrationVersionAsync(
+            packages,
+            configuredChannel: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(displayedLabels);
+        Assert.Collection(
+            displayedLabels,
+            label => Assert.Equal("13.5.0 (https://***@packages.example/v3/index.json)", label),
+            label => Assert.Equal("daily", label));
     }
 
     [Fact]

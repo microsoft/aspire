@@ -11,6 +11,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -20,6 +21,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 {
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
     private readonly IFeatures _features;
+    private readonly IConfiguration _configuration;
     private readonly OptionWithLegacy<FileInfo?> _appHostOption = new("--apphost", "--project", AddCommandStrings.IntegrationSearchAppHostOptionDescription);
     private readonly Option<OutputFormat> _formatOption = new("--format")
     {
@@ -34,11 +36,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         string name,
         string description,
         IntegrationPackageSearchService integrationPackageSearchService,
+        IConfiguration configuration,
         CommonCommandServices services)
         : base(name, description, services)
     {
         _integrationPackageSearchService = integrationPackageSearchService;
         _features = services.Features;
+        _configuration = configuration;
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
@@ -57,8 +61,12 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var passedAppHostProjectFile = parseResult.GetValue(_appHostOption);
             var format = parseResult.GetValue(_formatOption);
             var includeAllIntegrations = parseResult.GetValue(_allOption);
+            var invocationConfiguredSource = _configuration[AspireConfigFile.NuGetSourceKey];
 
-            var (workingDirectory, configuredChannel, languageId, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
+            var (workingDirectory, configuredChannel, source, languageId, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(
+                passedAppHostProjectFile,
+                invocationConfiguredSource,
+                cancellationToken);
             if (contextExitCode is { } exitCode)
             {
                 return CommandResult.FromExitCode(exitCode);
@@ -84,7 +92,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 // Resolve the integration list and the polyglot allow-list in a single discovery pass.
                 var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
                     AddCommandStrings.SearchingForAspirePackages,
-                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(workingDirectory, configuredChannel, cancellationToken));
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(workingDirectory, configuredChannel, source, cancellationToken));
                 packagesWithChannels = discoveredPackages.ToArray();
                 polyglotCompatibleIds = discoveredPolyglotIds;
             }
@@ -92,7 +100,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             {
                 packagesWithChannels = (await InteractionService.ShowStatusAsync(
                     AddCommandStrings.SearchingForAspirePackages,
-                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, source, cancellationToken)))
                     .ToArray();
             }
 
@@ -226,8 +234,9 @@ internal sealed class IntegrationListCommand : IntegrationDiscoveryCommand
 {
     public IntegrationListCommand(
         IntegrationPackageSearchService integrationPackageSearchService,
+        IConfiguration configuration,
         CommonCommandServices services)
-        : base("list", AddCommandStrings.IntegrationListDescription, integrationPackageSearchService, services)
+        : base("list", AddCommandStrings.IntegrationListDescription, integrationPackageSearchService, configuration, services)
     {
     }
 
@@ -244,8 +253,9 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
 
     public IntegrationSearchCommand(
         IntegrationPackageSearchService integrationPackageSearchService,
+        IConfiguration configuration,
         CommonCommandServices services)
-        : base("search", AddCommandStrings.IntegrationSearchDescription, integrationPackageSearchService, services)
+        : base("search", AddCommandStrings.IntegrationSearchDescription, integrationPackageSearchService, configuration, services)
     {
         Arguments.Add(_queryArgument);
     }
