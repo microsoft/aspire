@@ -30,6 +30,7 @@
 
     <!-- Timeout configuration -->
     <TestSessionTimeout>20m</TestSessionTimeout>
+    <TestSessionTimeout Condition="'$(RunOnlyBasicBuildTemplateTests)' == 'true'">30m</TestSessionTimeout>
     <TestHangTimeout>15m</TestHangTimeout>
 
     <!--

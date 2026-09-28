@@ -7,6 +7,7 @@ using System.Net;
 using System.Text;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Tests.Shared.Telemetry;
 using Aspire.TestUtilities;
 using Aspire.Templates.Tests;
@@ -74,6 +75,7 @@ public class NativeAotDashboardTests(ITestOutputHelper outputHelper)
                     Height = 844
                 }
             });
+            PlaywrightFixture.ConfigureTimeouts(context);
             var page = await context.NewPageAsync();
             var browserErrors = new ConcurrentQueue<string>();
             page.Console += (_, message) =>

@@ -9,6 +9,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
@@ -158,6 +159,81 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(DashboardRunStore.SchemaVersion, metadata.RootElement.GetProperty("SchemaVersion").GetInt32());
         Assert.Equal(DashboardRunStore.SchemaVersion, Assert.Single(runStore.GetRuns()).SchemaVersion);
+    }
+
+    [Theory]
+    [InlineData(null, "Aspire")]
+    [InlineData("", "Aspire")]
+    [InlineData(" ", "Aspire")]
+    [InlineData("Aspire", "Aspire")]
+    [InlineData("My Dashboard", "My Dashboard")]
+    public async Task RunMetadata_UsesEffectiveApplicationName(string? applicationName, string expectedName)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var runStore = CreateRunStore(CreateOptions(workspace, applicationName));
+        await InitializeAndPublishRunAsync(runStore);
+
+        using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(runStore.CurrentWorkingDirectory, "run.json")));
+
+        Assert.Equal(expectedName, metadata.RootElement.GetProperty("ApplicationName").GetString());
+        Assert.Equal(expectedName, runStore.GetCurrentRun().ApplicationName);
+    }
+
+    [Theory]
+    [InlineData(null, "Aspire")]
+    [InlineData("", "Aspire")]
+    [InlineData(" ", "Aspire")]
+    [InlineData("Aspire", "Aspire")]
+    [InlineData("My Dashboard", "My Dashboard")]
+    public async Task SelectedRun_ApplicationName_NormalizesLegacyMetadataAndPreservesCurrentClientName(string? applicationName, string expectedName)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace, expectedName);
+        var startedAt = new DateTimeOffset(2026, 7, 20, 12, 34, 56, TimeSpan.Zero);
+        string historicalRunId;
+        string metadataPath;
+
+        using (var historicalRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt)))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            metadataPath = Path.Combine(historicalRunStore.CurrentWorkingDirectory, "run.json");
+            await InitializeAndPublishRunAsync(historicalRunStore);
+        }
+
+        // Older run.json files store the raw configured name, e.g. {"ApplicationName": ""}, rather than "Aspire".
+        var metadata = JsonNode.Parse(File.ReadAllText(metadataPath))!.AsObject();
+        metadata["ApplicationName"] = applicationName;
+        File.WriteAllText(metadataPath, metadata.ToJsonString());
+
+        using var currentRunStore = CreateRunStore(options, new FixedTimeProvider(startedAt.AddSeconds(1)));
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, CreateRepositoryFactory(options));
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool);
+        using var activitySource = new DashboardActivitySource();
+        await using var currentClient = new DashboardClient(
+            activitySource,
+            NullLoggerFactory.Instance,
+            new ConfigurationManager(),
+            Options.Create(new DashboardOptions { ApplicationName = "Live application" }),
+            new MockKnownPropertyLookup(),
+            new TestStringLocalizer<Resources.Resources>(),
+            (IResourceRepositoryWriter)dataSource.ResourceRepository);
+        IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
+
+        Assert.Equal("Live application", selectedClient.ApplicationName);
+
+        dataSource.SelectRun(historicalRunId);
+
+        Assert.True(dataSource.IsReadOnly);
+        Assert.Equal(expectedName, dataSource.SelectedRun.ApplicationName);
+        Assert.Equal(expectedName, selectedClient.ApplicationName);
+        Assert.Equal(
+            BrowserStorageKeys.CollapsedResourceNamesKey(expectedName),
+            BrowserStorageKeys.CollapsedResourceNamesKey(selectedClient.ApplicationName));
+
+        dataSource.SelectRun(runId: null);
+
+        Assert.False(dataSource.IsReadOnly);
+        Assert.Equal("Live application", selectedClient.ApplicationName);
     }
 
     [Fact]
@@ -1526,7 +1602,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
     private static IOptions<DashboardOptions> CreateOptions(
         TemporaryWorkspace workspace,
-        string applicationName = "TestApp",
+        string? applicationName = "TestApp",
         DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Run)
     {
         return Options.Create(new DashboardOptions

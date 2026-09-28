@@ -36,8 +36,8 @@ public partial class TerminalDockTests
             // JS reports failed durable revocation after unconditionally releasing its live popup handle.
             module.SetupVoid("closeTerminalWindow", _ => true).SetException(new JSException("Storage denied"));
         }
-        var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalDock>();
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalDock>();
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("terminal"));
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
@@ -89,7 +89,7 @@ public partial class TerminalDockTests
         var client = TerminalSetupHelpers.CreateTerminalDashboardClient(terminalChannelProvider: () => updates);
         Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
         TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
-        var old = RenderComponent<TerminalDock>();
+        var old = Render<TerminalDock>();
         await old.InvokeAsync(old.Instance.ToggleAsync);
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("active", "inactive"));
         old.WaitForAssertion(() =>
@@ -119,7 +119,7 @@ public partial class TerminalDockTests
             }
         };
         TestJSObjectReference.SetupImport(this, $"{pathBase}/js/app-terminalwindow.js").SetResult(module);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         TerminalWindowLauncher launcher;
         try
         {
@@ -191,7 +191,7 @@ public partial class TerminalDockTests
             }
         };
         TestJSObjectReference.SetupImport(this, "/js/app-terminalwindow.js").SetResult(module);
-        var cut = RenderComponent<TerminalDock>();
+        var cut = Render<TerminalDock>();
         try
         {
             await cut.InvokeAsync(cut.Instance.ToggleAsync);

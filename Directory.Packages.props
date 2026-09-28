@@ -6,9 +6,8 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <!-- Set this to false when switching Microsoft.FluentUI.AspNetCore.Components to a release package. -->
-    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0-preview.26260.3</MicrosoftFluentUIAspNetCoreComponentsVersion>
-    <MicrosoftFluentUIAspNetCoreComponentsIsPreview>true</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
+    <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0</MicrosoftFluentUIAspNetCoreComponentsVersion>
+    <MicrosoftFluentUIAspNetCoreComponentsIsPreview>false</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
     <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
     <Npgsql8Version>8.0.9</Npgsql8Version>
     <Npgsql9Version>9.0.5</Npgsql9Version>
@@ -138,7 +137,7 @@
     <PackageVersion Include="Microsoft.Data.SqlClient.Extensions.Azure" Version="7.0.2" />
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="10.0.12" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="$(MicrosoftFluentUIAspNetCoreComponentsVersion)" />
-    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0-rc.6.26241.1" />
+    <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.0.0" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
     <PackageVersion Include="MongoDB.Driver" Version="3.9.0" />
@@ -169,15 +168,15 @@
     <!-- Open Telemetry -->
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="$(AzureMonitorOpenTelemetryExporterVersion)" />
     <PackageVersion Include="Npgsql.OpenTelemetry" Version="10.0.3" />
-    <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.18.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryExporterOpenTelemetryProtocolVersion)" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryInstrumentationExtensionsHostingVersion)" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryInstrumentationAspNetCoreVersion)" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.GrpcNetClient" Version="1.15.1-beta.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.GrpcNetClient" Version="1.18.0-beta.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OpenTelemetryInstrumentationHttpVersion)" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="$(OpenTelemetryInstrumentationRuntimeVersion)" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.SqlClient" Version="1.17.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.SqlClient" Version="1.18.0" />
     <!-- build dependencies -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="MicroBuild.Plugins.SwixBuild.Dotnet" Version="1.1.87-gba258badda" />

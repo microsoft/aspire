@@ -38,6 +38,10 @@
     height: 24px;
 }
 
+::deep.layout:has(a.logo:hover, a.application-name:hover, .page-header:hover) :is(a.logo, a.application-name) {
+    filter: brightness(var(--aspire-brand-hover-brightness));
+}
+
 ::deep.layout > header .header-button {
     --aspire-button-background: transparent;
     --aspire-button-border-color: currentColor;
@@ -260,6 +264,32 @@
     }
 
     ::deep.layout > .desktop-nav-rail .fluent-appbar-item > a:hover svg {
+        fill: var(--colorBrandForeground1) !important;
+    }
+
+    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item {
+        --appbar-item-height-adjustment: calc(var(--appbar-item-size) - 48px);
+        display: flex;
+        width: 100%;
+        min-width: 0;
+        height: 48px;
+        min-height: 48px;
+        flex: 0 0 48px;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item > .fluent-stack-vertical {
+        width: var(--desktop-nav-collapsed-width) !important;
+        height: 100% !important;
+        flex: 0 0 var(--desktop-nav-collapsed-width);
+    }
+
+    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item:hover {
+        background-color: var(--colorNeutralBackground3);
+    }
+
+    ::deep.layout > .desktop-nav-rail button.fluent-appbar-more-item:hover svg {
         fill: var(--colorBrandForeground1) !important;
     }
 

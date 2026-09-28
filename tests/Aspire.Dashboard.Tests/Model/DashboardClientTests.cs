@@ -24,6 +24,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -61,17 +62,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
         var sessions = new TerminalViewSessionRegistry();
         using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
-        using var server = new TestServer(new WebHostBuilder().Configure(app =>
-        {
-            app.UseWebSockets();
-            app.Run(context =>
-            {
-                context.Request.Scheme = "https";
-                context.Request.Host = new HostString("dashboard.example.com");
-                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
-            });
-        }));
-        var client = server.CreateWebSocketClient();
+        using var host = await BuildTerminalTestHostAsync(dashboardClient, sessions);
+        var client = host.GetTestServer().CreateWebSocketClient();
         client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
         using var socket = await client.ConnectAsync(
             new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}"), CancellationToken.None).DefaultTimeout();
@@ -189,17 +181,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         var dashboardClient = new TestDashboardClient(attachTerminal: (_, _) => Task.FromResult<Stream>(stream));
         var sessions = new TerminalViewSessionRegistry();
         using var session = sessions.Create("/api/apphost-terminal?terminalId=terminal", readOnly: false);
-        using var server = new TestServer(new WebHostBuilder().Configure(app =>
-        {
-            app.UseWebSockets();
-            app.Run(context =>
-            {
-                context.Request.Scheme = "https";
-                context.Request.Host = new HostString("dashboard.example.com");
-                return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
-            });
-        }));
-        var client = server.CreateWebSocketClient();
+        using var host = await BuildTerminalTestHostAsync(dashboardClient, sessions);
+        var client = host.GetTestServer().CreateWebSocketClient();
         client.ConfigureRequest = request => request.Headers.Origin = "https://dashboard.example.com";
         var uri = new Uri($"wss://dashboard.example.com/api/apphost-terminal?terminalId=terminal&viewId={session.Id}");
 
@@ -227,6 +210,24 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         await disposed.Task.DefaultTimeout();
         // The proxy classifies the RPC status; the stream never received an Ended frame.
         Assert.False(stream.TerminalEnded);
+    }
+
+    private static Task<IHost> BuildTerminalTestHostAsync(IDashboardClient dashboardClient, TerminalViewSessionRegistry sessions)
+    {
+        return new HostBuilder()
+            .ConfigureWebHost(webBuilder => webBuilder
+                .UseTestServer()
+                .Configure(app =>
+                {
+                    app.UseWebSockets();
+                    app.Run(context =>
+                    {
+                        context.Request.Scheme = "https";
+                        context.Request.Host = new HostString("dashboard.example.com");
+                        return TerminalWebSocketProxy.HandleAppHostTerminalAsync(context, dashboardClient, sessions, NullLogger.Instance, "test");
+                    });
+                }))
+            .StartAsync();
     }
 
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
@@ -567,6 +568,21 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         await instance.WhenConnected.DefaultTimeout();
 
         await instance.InteractionWatchCompleteTask.DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData("", null, "Aspire")]
+    [InlineData(" \t", "Configured", "Configured")]
+    [InlineData("", " ", "Aspire")]
+    [InlineData("Service", "Configured", "Service")]
+    public async Task ApplicationName_ServiceNameFallsBackToConfiguredName(string serviceName, string? configuredName, string expected)
+    {
+        await using var instance = CreateResourceServiceClient(applicationName: configuredName);
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { ApplicationName = serviceName });
+
+        await instance.WhenConnected.DefaultTimeout();
+
+        Assert.Equal(expected, instance.ApplicationName);
     }
 
     [Fact]
@@ -1031,6 +1047,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         public bool FailOnGetApplicationInformation { get; init; }
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
+        public string ApplicationName { get; init; } = "TestApplication";
         public string MinDashboardVersion { get; init; } = "";
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
         public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
@@ -1087,7 +1104,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             return new AsyncUnaryCall<ApplicationInformationResponse>(
                 Task.FromResult(new ApplicationInformationResponse
                 {
-                    ApplicationName = "TestApplication",
+                    ApplicationName = ApplicationName,
                     MinDashboardVersion = MinDashboardVersion
                 }),
                 Task.FromResult(new Metadata()),
@@ -1262,21 +1279,13 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
     private DashboardClient CreateResourceServiceClient(
         DashboardActivitySource? activitySource = null,
         IResourceRepositoryWriter? resourceRepositoryWriter = null,
-        ResourceServiceClientCertificateOptions? clientCertificate = null,
-        Action<SocketsHttpHandler>? configureHttpHandler = null)
-    {
-        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter, clientCertificate, configureHttpHandler);
-    }
-
-    private static DashboardClient CreateResourceServiceClient(
-        ILoggerFactory loggerFactory,
-        DashboardActivitySource? activitySource,
-        IResourceRepositoryWriter? resourceRepositoryWriter,
+        string? applicationName = null,
         ResourceServiceClientCertificateOptions? clientCertificate = null,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         var options = new DashboardOptions
         {
+            ApplicationName = applicationName,
             ResourceServiceClient =
             {
                 AuthMode = ResourceClientAuthMode.Unsecured,
@@ -1293,7 +1302,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
 
         return new DashboardClient(
             activitySource ?? new DashboardActivitySource(),
-            loggerFactory,
+            _loggerFactory,
             new ConfigurationManager(),
             Options.Create(options),
             new MockKnownPropertyLookup(),

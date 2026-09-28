@@ -63,6 +63,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
             targets: [CYCA]
           - paths: [src/outer/**]
             targets: [OUTER]
+          - paths: [eng/enumerate/**]
+            targets: [DOTNET_TESTS]
           - paths: [src/bogus/**]
             targets: [BOGUS, test:RealOne]
         derived_targets:
@@ -74,6 +76,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
             targets: [job:chain-job]
           - tests: [test:GrpTrigger]
             targets: [MIXED]
+          - tests: [test:DotnetOnlyDerived]
+            targets: [job:derived-from-dotnet-only]
           - tests: [test:DerCycA]
             targets: [test:DerCycB]
           - tests: [test:DerCycB]
@@ -98,7 +102,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
     private static readonly string[] s_matrix =
     [
         "Aspire.Hosting.Foo.Tests", "Foo.Tests", "Aspire.Hosting.Azure.Tests",
-        "Aspire.Hosting.Azure.Kusto.Tests", "GroupTest", "T1", "T2", "InstallerTests",
+        "Aspire.Hosting.Azure.Kusto.Tests", "GroupTest", "T1", "T2", "InstallerTests", "DotnetOnlyDerived",
         "CliTests", "CliTestsTwo", "ChainA", "ChainB", "RealOne", "GrpTrigger", "DerCycA", "DerCycB",
         "SelfProj", "Layer1Only",
     ];
@@ -452,6 +456,26 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.Contains("job:cli-starter", r.Jobs);
         Assert.Contains("job:group-job", r.Jobs);
         Assert.Contains("job:projjob", r.Jobs);
+    }
+
+    [Fact]
+    public void DotnetTestsTargetExpandsToFullMatrixWithoutSelectingJobs()
+    {
+        var r = Select(["eng/enumerate/action.yml"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.True(r.TestProjects.SetEquals(s_matrix));
+        Assert.Empty(r.Jobs);
+    }
+
+    [Fact]
+    public void DotnetTestsTargetDoesNotTriggerDerivedJobs()
+    {
+        var r = Select(["eng/enumerate/action.yml"]);
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("DotnetOnlyDerived", r.TestProjects);
+        Assert.DoesNotContain("job:derived-from-dotnet-only", r.Jobs);
     }
 
     [Fact]
@@ -828,6 +852,10 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded(".vscode/settings.json"));
         Assert.True(filter.IsExcluded("pyrightconfig.json"));
 
+        // Dev/AzDO-only inputs with no regular GitHub PR CI consumer.
+        Assert.True(filter.IsExcluded(".config/dotnet-tools.json"));
+        Assert.True(filter.IsExcluded("eng/Version.Details.xml"));
+
         // Generated API/ATS baselines under src/*/api/: no PR CI is needed when these are the only
         // changed files.
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.cs"));
@@ -842,7 +870,8 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
         // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), root
         // launch/task files are validated by extension tests, root .gitignore controls discovery of the
-        // Java extension E2E workspace, and .editorconfig / .gitattributes affect the build and checkout.
+        // Java extension E2E workspace, and .editorconfig affects the build. `.gitattributes` is kept
+        // visible to the selector so its repo-wide checkout behavior routes through the trigger map.
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/ts-starter/.gitignore"));
         Assert.False(filter.IsExcluded(".gitignore"));
         Assert.False(filter.IsExcluded(".vscode/launch.json"));

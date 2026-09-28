@@ -30,6 +30,20 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             result.Output.Contains("PARAMETERS", StringComparison.OrdinalIgnoreCase),
             "Output should contain 'DESCRIPTION' or 'PARAMETERS'");
         Assert.Contains("Aspire CLI", result.Output);
+        Assert.Contains("-SkipCompletions", result.Output);
+    }
+
+    [Fact]
+    public async Task SkipCompletions_WhatIf_DoesNotGenerateOrRegister()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-WhatIf", "-SkipPath", "-SkipCompletions");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping shell completions due to -SkipCompletions", result.Output);
+        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire")));
     }
 
     [Fact]

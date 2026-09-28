@@ -418,7 +418,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them..
+        ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version..
         /// </summary>
         public static string CodegenVersionSkewWarning {
             get {

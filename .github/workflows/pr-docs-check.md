@@ -113,7 +113,7 @@ jobs:
       contents: read
     steps:
       - name: Check out outcome validator
-        uses: actions/checkout@v6.0.3
+        uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
           sparse-checkout: |
@@ -128,7 +128,7 @@ jobs:
       - name: Mint aspire-bot token (microsoft/aspire.dev)
         id: aspire-dev-token
         if: needs.safe_outputs.outputs.created_pr_url != ''
-        uses: actions/create-github-app-token@v3.1.1
+        uses: actions/create-github-app-token@v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -179,7 +179,7 @@ safe-outputs:
   steps:
     - name: Check out safe-output target resolver
       if: contains(needs.agent.outputs.output_types, 'create_pull_request')
-      uses: actions/checkout@v6.0.3
+      uses: actions/checkout@v7.0.1
       with:
         path: _resolver
         persist-credentials: false
@@ -266,7 +266,7 @@ safe-outputs:
           type: string
       steps:
         - name: Check out outcome validator
-          uses: actions/checkout@v6.0.3
+          uses: actions/checkout@v7.0.1
           with:
             persist-credentials: false
             path: _validator
@@ -277,7 +277,7 @@ safe-outputs:
         - name: Mint aspire-bot token (microsoft/aspire.dev)
           id: aspire-dev-token
           if: needs.safe_outputs.outputs.created_pr_url != ''
-          uses: actions/create-github-app-token@v3.1.1
+          uses: actions/create-github-app-token@v3.2.0
           with:
             client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -320,7 +320,7 @@ safe-outputs:
             --write-side-effect-outcome "${RUNNER_TEMP}/pr-docs-check-side-effect-outcome.json"
         - name: Mint aspire-bot token (microsoft/aspire)
           id: aspire-token
-          uses: actions/create-github-app-token@v3.1.1
+          uses: actions/create-github-app-token@v3.2.0
           with:
             client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
             private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -541,7 +541,7 @@ pre-agent-steps:
     # For a merged pull_request:closed event, the default `ref` is the updated
     # base branch; for workflow_dispatch, it is the dispatcher-selected ref.
     # Both select the helper version associated with the workflow being run.
-    uses: actions/checkout@v6.0.2
+    uses: actions/checkout@v7.0.1
     with:
       persist-credentials: false
       repository: microsoft/aspire
@@ -563,7 +563,7 @@ pre-agent-steps:
   # token with the same two repos here.
   - name: Mint app token for target-branch resolver
     id: resolve-target-app-token
-    uses: actions/create-github-app-token@v3.1.1
+    uses: actions/create-github-app-token@v3.2.0
     with:
       client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}

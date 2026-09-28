@@ -169,6 +169,7 @@ public sealed class TestSelector
         // attribution surfaced in the PR comment / step summary.
         var testCauses = new Dictionary<string, List<Cause>>(StringComparer.Ordinal);
         var jobCauses = new Dictionary<string, List<Cause>>(StringComparer.Ordinal);
+        var dotnetTestsCauses = new List<Cause>();
         var unmatchedFiles = new HashSet<string>(StringComparer.Ordinal);
         var selectsAll = false;
         string? reason = null;
@@ -210,7 +211,7 @@ public sealed class TestSelector
             {
                 if (rule.Paths.Any(g => TriggerMap.GlobMatches(g, file)))
                 {
-                    ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                    ApplyTargets(rule.Targets, map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                         new Cause(CauseKind.PathRule, file, rule.Reason));
                     fileMatched = true;
                 }
@@ -286,7 +287,7 @@ public sealed class TestSelector
             var matchedProject = affectedProductionProjects.FirstOrDefault(name => rule.Projects.Any(p => TriggerMap.ProjectNameMatches(p, name)));
             if (matchedProject is not null)
             {
-                ApplyTargets(rule.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                ApplyTargets(rule.Targets, map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                     new Cause(CauseKind.AffectedProject, matchedProject, rule.Reason));
             }
         }
@@ -299,11 +300,19 @@ public sealed class TestSelector
         // derived_targets: a selected test project (from Layer 1 or Layer 2) can pull in extra
         // jobs/tests. Iterate to a fixpoint so a test->test edge whose target has its own derived
         // rule is followed; a no-growth pass terminates (cycle-safe).
-        ApplyDerivedTargets(map, testCauses, jobCauses, ref selectsAll, ref reason);
+        ApplyDerivedTargets(map, _allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason);
 
         if (selectsAll)
         {
             return SelectsAllResult(reason, unmatchedFiles);
+        }
+
+        foreach (var dotnetTestsCause in dotnetTestsCauses)
+        {
+            foreach (var testProject in _allTestProjects)
+            {
+                AddCause(testCauses, testProject, dotnetTestsCause);
+            }
         }
 
         return new SelectionResult(
@@ -382,8 +391,10 @@ public sealed class TestSelector
     // ends the loop (so cycles such as A->B, B->A terminate).
     private static void ApplyDerivedTargets(
         TriggerMap map,
+        IReadOnlyCollection<string> allTestProjects,
         Dictionary<string, List<Cause>> testCauses,
         Dictionary<string, List<Cause>> jobCauses,
+        List<Cause> dotnetTestsCauses,
         ref bool selectsAll,
         ref string? reason)
     {
@@ -407,7 +418,7 @@ public sealed class TestSelector
                     .FirstOrDefault(testCauses.ContainsKey);
                 if (triggeringTest is not null)
                 {
-                    ApplyTargets(derived.Targets, map, testCauses, jobCauses, ref selectsAll, ref reason,
+                    ApplyTargets(derived.Targets, map, allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason,
                         new Cause(CauseKind.DerivedFromTest, triggeringTest, derived.Reason));
                 }
             }
@@ -419,8 +430,10 @@ public sealed class TestSelector
     private static void ApplyTargets(
         IEnumerable<string> targets,
         TriggerMap map,
+        IReadOnlyCollection<string> allTestProjects,
         Dictionary<string, List<Cause>> testCauses,
         Dictionary<string, List<Cause>> jobCauses,
+        List<Cause> dotnetTestsCauses,
         ref bool selectsAll,
         ref string? reason,
         Cause cause)
@@ -430,7 +443,7 @@ public sealed class TestSelector
 
         foreach (var target in targets)
         {
-            AddTarget(target, map, testCauses, jobCauses, ref localSelectsAll, ref localReason, cause, visitedGroups: null);
+            AddTarget(target, map, allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref localSelectsAll, ref localReason, cause, visitedGroups: null);
         }
 
         selectsAll = localSelectsAll;
@@ -443,8 +456,10 @@ public sealed class TestSelector
     private static void AddTarget(
         string target,
         TriggerMap map,
+        IReadOnlyCollection<string> allTestProjects,
         Dictionary<string, List<Cause>> testCauses,
         Dictionary<string, List<Cause>> jobCauses,
+        List<Cause> dotnetTestsCauses,
         ref bool selectsAll,
         ref string? reason,
         Cause cause,
@@ -454,6 +469,10 @@ public sealed class TestSelector
         {
             selectsAll = true;
             reason ??= $"a rule matching '{cause.Trigger}' selects ALL";
+        }
+        else if (target == "DOTNET_TESTS")
+        {
+            dotnetTestsCauses.Add(cause);
         }
         else if (map.Groups.TryGetValue(target, out var members))
         {
@@ -466,7 +485,7 @@ public sealed class TestSelector
 
             foreach (var member in members)
             {
-                AddTarget(member, map, testCauses, jobCauses, ref selectsAll, ref reason, cause, visitedGroups);
+                AddTarget(member, map, allTestProjects, testCauses, jobCauses, dotnetTestsCauses, ref selectsAll, ref reason, cause, visitedGroups);
             }
         }
         else if (target.StartsWith("test:", StringComparison.Ordinal))

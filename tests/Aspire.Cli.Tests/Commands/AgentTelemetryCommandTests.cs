@@ -8,11 +8,149 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
 
 public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("""{"toolName":"bash","toolArgs":{"command":"echo hello"}}""")]
+    [InlineData("""{"toolName":"Read","tool_input":{"file_path":"/skills/unrelated/SKILL.md"}}""")]
+    [InlineData("{malformed")]
+    public async Task NativeHook_UsesNormalDispatchWithoutInitializingTelemetryForUnrelatedInput(string payload)
+    {
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var input = new StringReader(payload);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.TelemetryFactory = _ => fixture.Telemetry;
+        });
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        services.AddSingleton(CreateConsole(input, output, error));
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<TelemetryManager>();
+        var result = provider.GetRequiredService<RootCommand>().Parse(["agent", "telemetry", "--hook"]);
+
+        Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
+        Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.False(manager.IsInitialized);
+        Assert.False(await manager.TryShutdownAsync());
+        Assert.Empty(await fixture.TagsSource.TagsTask);
+        Assert.Null(fixture.CapturedActivity);
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Equal("", error.ToString());
+    }
+
+    [Theory]
+    [InlineData("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""", "skill_invocation", TelemetryConstants.Tags.AgentSkillName, "aspire")]
+    [InlineData("""{"toolName":"aspire-list_resources"}""", "tool_invocation", TelemetryConstants.Tags.AgentToolName, "aspire-list_resources")]
+    [InlineData("""{"toolName":"view","toolArgs":{"path":"/skills/aspire-deployment/references/azure.md"}}""",
+        "reference_file_read", TelemetryConstants.Tags.AgentFileReference, "aspire-deployment/references/azure.md")]
+    public async Task NativeHook_InitializesOnDemandAndPreservesEvents(string payload, string eventType, string dimension, string value)
+    {
+        using var fixture = new TelemetryFixture(initialize: false, telemetryConfiguration: new TelemetryConfiguration
+        {
+            ReportedTelemetryEnabled = true,
+            EmitInternalMicrosoftDiagnostics = false
+        });
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var input = new StringReader(payload);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.TelemetryFactory = _ => fixture.Telemetry;
+        });
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        services.AddSingleton(CreateConsole(input, output, error));
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<TelemetryManager>();
+        var result = provider.GetRequiredService<RootCommand>().Parse(["agent", "telemetry", "--hook"]);
+        Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
+        Assert.False(manager.IsInitialized);
+        Assert.Empty(await fixture.TagsSource.TagsTask);
+
+        Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
+
+        Assert.True(manager.IsInitialized);
+        Assert.NotEmpty(await fixture.TagsSource.TagsTask);
+        var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
+        Assert.Equal(TelemetryConstants.Activities.AgentTelemetry, activity.OperationName);
+        Assert.Equal(eventType, activity.GetTagItem(TelemetryConstants.Tags.AgentEventType));
+        Assert.Equal(value, activity.GetTagItem(dimension));
+        Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
+        Assert.Equal("", error.ToString());
+    }
+
+    [Theory]
+    [InlineData("--hook")]
+    [InlineData("--drain")]
+    [InlineData("--event-type")]
+    public async Task OptOut_UsesNormalDispatchWithoutInitializingProviders(string mode)
+    {
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var input = new StringReader("""{"toolName":"skill","toolArgs":{"skill":"aspire"}}""");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.TelemetryFactory = _ => fixture.Telemetry;
+        });
+        services.AddSingleton(CreateConsole(input, TextWriter.Null, TextWriter.Null));
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            [AspireCliTelemetry.TelemetryOptOutConfigKey] = "true"
+        }));
+        using var provider = services.BuildServiceProvider();
+        var manager = provider.GetRequiredService<TelemetryManager>();
+        var args = mode == "--event-type"
+            ? new[] { "agent", "telemetry", mode, "skill_invocation" }
+            : ["agent", "telemetry", mode];
+        var result = provider.GetRequiredService<RootCommand>().Parse(args);
+
+        Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
+        Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
+        Assert.False(manager.IsInitialized);
+        Assert.False(await manager.TryShutdownAsync());
+        Assert.Empty(await fixture.TagsSource.TagsTask);
+    }
+
+    [Fact]
+    public async Task OrdinaryCommands_StillInitializeProvidersBeforeEnrichment()
+    {
+        var order = new List<string>();
+        TelemetryManager? manager = null;
+        using var fixture = new TelemetryFixture(initialize: false, machineInfoProvider: new TelemetryFixture.TestMachineInformationProvider
+        {
+            GetDeviceIdCallback = () =>
+            {
+                order.Add(manager?.IsInitialized is true ? "initialized-before-enrichment" : "uninitialized");
+                return Task.FromResult<string?>("test-device");
+            }
+        });
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>().Parse(["doctor"]).CommandResult.Command;
+        Assert.True(Assert.IsAssignableFrom<BaseCommand>(command).InitializeTelemetryOnStartup);
+        manager = provider.GetRequiredService<TelemetryManager>();
+        Assert.False(manager.IsInitialized);
+        Program.InitializeCommandTelemetry(command, manager, fixture.Telemetry);
+        await fixture.TagsSource.TagsTask.DefaultTimeout();
+
+        Assert.True(manager.IsInitialized);
+        Assert.Equal(["initialized-before-enrichment"], order);
+        Assert.NotEmpty(await fixture.TagsSource.TagsTask);
+    }
+
+    private static ConsoleEnvironment CreateConsole(TextReader input, TextWriter output, TextWriter error)
+        => new(
+            AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(output), Ansi = AnsiSupport.No }),
+            AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(error), Ansi = AnsiSupport.No }),
+            input);
+
     [Fact]
     public async Task AgentTelemetry_EmitsReportedActivityWithProvidedTags()
     {

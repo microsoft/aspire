@@ -6,7 +6,7 @@ This tool creates the Aspire bundle layout for distribution. It assembles Aspire
 
 The bundle layout enables polyglot app hosts (TypeScript, Python, Go, etc.) to use Aspire without needing a .NET SDK installed. The bundle includes:
 
-- **Aspire.Managed** - Self-contained executable containing the AppHost server, NuGet helper, and terminal host
+- **Aspire.Managed** - Self-contained executable containing the AppHost server and terminal host
 - **Dashboard** - Native AOT compiled Blazor-based monitoring UI, native dependencies, and static assets
 - **DCP** - Developer Control Plane (orchestrator)
 
@@ -79,7 +79,7 @@ The tool creates the following layout:
 ```text
 {output}/
 ├── managed/
-│   └── aspire-managed[.exe] # AppHost server, NuGet helper, and terminal host
+│   └── aspire-managed[.exe] # AppHost server and terminal host
 ├── dashboard/
 │   ├── Aspire.Dashboard[.exe]
 │   ├── <SQLite native library>
@@ -90,7 +90,7 @@ The tool creates the following layout:
 
 ## How It Works
 
-1. **Copies aspire-managed** - Copies the self-contained AppHost server, NuGet helper, and terminal host executable
+1. **Copies aspire-managed** - Copies the self-contained AppHost server and terminal host executable
 2. **Copies Dashboard** - Copies the complete Native AOT Dashboard publish payload, including native libraries and `wwwroot` static assets, excluding `.pdb`, `.dbg`, and `.dSYM` debug symbols
 3. **Copies DCP** - Finds DCP binaries from NuGet package restore output
 4. **Creates Archive** - Optionally creates `aspire-{version}-{rid}.tar.gz` beside the output directory on all platforms, including Windows

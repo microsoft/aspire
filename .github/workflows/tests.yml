@@ -50,7 +50,7 @@ jobs:
       run_cli_starter_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation }}
       run_native_dashboard_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
         # .git/config where that code could read it. The select-tests base-commit fetch is
         # unauthenticated (public repo) and nothing here pushes, so dropping the credential is safe.
@@ -349,7 +349,7 @@ jobs:
       NIX_CONFIG: experimental-features = nix-command flakes
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Nix
         run: |
@@ -644,9 +644,9 @@ jobs:
         working-directory: ./extension
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup Node.js environment
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.x'
       - name: Install Corepack
@@ -754,7 +754,7 @@ jobs:
     ]
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Create test results directory
         shell: bash
@@ -780,7 +780,7 @@ jobs:
 
       - name: Upload test results
         if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: All-TestResults
           path: ${{ github.workspace }}/testresults/**/*.trx

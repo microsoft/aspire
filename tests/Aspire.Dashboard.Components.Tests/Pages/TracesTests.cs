@@ -38,7 +38,7 @@ public class TracesTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var cut = RenderComponent<Traces>(builder =>
+        var cut = Render<Traces>(builder =>
         {
             builder.AddCascadingValue(viewport);
         });
@@ -97,7 +97,7 @@ public class TracesTests : DashboardTestContext
         });
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
-        var cut = RenderComponent<Traces>(builder => builder.AddCascadingValue(viewport));
+        var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
         await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
 

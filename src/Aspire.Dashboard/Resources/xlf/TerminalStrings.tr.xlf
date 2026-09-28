@@ -67,11 +67,6 @@
         <target state="new">More information</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
-      <trans-unit id="TerminalDockPanelBody">
-        <source>App host code can open terminals here. Resource terminals are shown separately on their resource pages.</source>
-        <target state="new">App host code can open terminals here. Resource terminals are shown separately on their resource pages.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
         <source>No docked terminals</source>
         <target state="new">No docked terminals</target>
@@ -91,11 +86,6 @@
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
         <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
         <note />
-      </trans-unit>
-      <trans-unit id="TerminalDockResourceTerminals">
-        <source>Resource terminals:</source>
-        <target state="new">Resource terminals:</target>
-        <note>Label before a comma-separated list of links to resource terminal pages in the empty terminal dock.</note>
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>

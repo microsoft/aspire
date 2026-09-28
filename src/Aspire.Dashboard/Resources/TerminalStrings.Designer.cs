@@ -268,15 +268,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to App host code can open terminals here. Resource terminals are shown separately on their resource pages..
-        /// </summary>
-        public static string TerminalDockPanelBody {
-            get {
-                return ResourceManager.GetString("TerminalDockPanelBody", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to No docked terminals.
         /// </summary>
         public static string TerminalDockPanelHeading {
@@ -291,15 +282,6 @@ namespace Aspire.Dashboard.Resources {
         public static string TerminalDockPanelHint {
             get {
                 return ResourceManager.GetString("TerminalDockPanelHint", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Resource terminals:.
-        /// </summary>
-        public static string TerminalDockResourceTerminals {
-            get {
-                return ResourceManager.GetString("TerminalDockResourceTerminals", resourceCulture);
             }
         }
 

@@ -336,6 +336,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(noBuild);
             Assert.True(noRestore);
             Assert.False(options.NoLaunchProfile);
+            Assert.True(options.IsolateConsole);
+            Assert.False(options.KillOnParentExit);
             Assert.Equal("Development", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
@@ -1063,6 +1065,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(appHostCommand.FullName, command);
             Assert.Equal(runWorkingDirectory.FullName, workingDirectory.FullName);
             Assert.False(options.NoLaunchProfile);
+            Assert.True(options.IsolateConsole);
+            Assert.True(options.KillOnParentExit);
             Assert.Equal(
                 ["--from-msbuild", "two words", "--explicit", "1"],
                 args);

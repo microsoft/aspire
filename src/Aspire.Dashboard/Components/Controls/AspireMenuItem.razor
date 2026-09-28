@@ -1,0 +1,68 @@
+﻿@namespace Aspire.Dashboard.Components
+
+@if (Item.IsDivider)
+{
+    <FluentDivider />
+}
+else if (Item.IsHeader)
+{
+    @* Non-interactive label identifying what the menu is for (e.g. the resource a graph
+       context menu was opened on). role="presentation" keeps it out of the menu's item
+       semantics (matching the FluentDivider above) so it isn't announced as a menu item
+       or reached by keyboard navigation. *@
+    <div id="@Item.Id" class="aspire-menu-header" role="presentation">
+        @if (Item.Icon is not null)
+        {
+            <FluentIcon Value="@Item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Primary" />
+        }
+        <span class="aspire-menu-header-text" title="@Item.Text">@Item.Text</span>
+    </div>
+}
+else
+{
+    RenderFragment? nestedMenuItems = null;
+    if (Item.NestedMenuItems is { Count: > 0 } nestedItems)
+    {
+        nestedMenuItems = @<text>
+            @foreach (var nestedItem in nestedItems)
+            {
+                <AspireMenuItem @key="nestedItem.RenderKey"
+                                Item="nestedItem"
+                                OnItemActivated="OnItemActivated"
+                                OnSecondaryActionClicked="OnSecondaryActionClicked" />
+            }
+        </text>;
+    }
+
+    <FluentMenuItem Id="@Item.Id"
+                    Class="@Item.Class"
+                    OnClick="HandleItemClicked"
+                    CheckedChanged="HandleItemCheckedChanged"
+                    Disabled="@Item.IsDisabled"
+                    Role="@Item.Role"
+                    Checked="@Item.Checked"
+                    AdditionalAttributes="@AdditionalMenuItemAttributes"
+                    Label="@Item.Text"
+                    MenuItems="@nestedMenuItems">
+        @if (Item.Icon is not null)
+        {
+            <span slot="@GetIconSlot(Item.Role)">
+                <FluentIcon Value="@Item.Icon" Style="vertical-align: text-bottom;" Width="16px" Color="Color.Primary" />
+            </span>
+        }
+        @if (Item.SecondaryActionIcon is not null)
+        {
+            <span class="aspire-menu-secondary-action-container" slot="end">
+                <FluentButton Id="@($"{Item.Id}-secondary-action")"
+                              Class="@($"aspire-menu-secondary-action{(Item.IsSecondaryActionSelected ? " selected" : null)}")"
+                              Appearance="ButtonAppearance.Transparent"
+                              Title="@Item.SecondaryActionAriaLabel"
+                              AriaLabel="@Item.SecondaryActionAriaLabel"
+                              aria-pressed="@(Item.IsSecondaryActionSelected ? "true" : "false")"
+                              @onclick="HandleSecondaryActionClicked">
+                    <FluentIcon Value="@Item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
+                </FluentButton>
+            </span>
+        }
+    </FluentMenuItem>
+}

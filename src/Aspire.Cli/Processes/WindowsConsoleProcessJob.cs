@@ -28,8 +28,11 @@ namespace Aspire.Cli.Processes;
 /// <para>
 /// The job is also configured with <c>JOB_OBJECT_LIMIT_BREAKAWAY_OK</c> so that DCP (and
 /// anything else that needs to outlive the CLI for its own cleanup) can opt out by spawning
-/// itself with <c>CREATE_BREAKAWAY_FROM_JOB</c>. Our job only grants permission to break
-/// away — the breakaway itself is the responsibility of the spawning code.
+/// itself with <c>CREATE_BREAKAWAY_FROM_JOB</c>, provided every nested job also permits
+/// breakaway. .NET AppHosts launched through <c>dotnet run</c> do not use this job because
+/// its process reaper creates a nested job that does not permit breakaway. Directly launched
+/// .NET AppHosts can use it because they have no intervening job. Our job only grants permission
+/// to break away — the breakaway itself is the responsibility of the spawning code.
 /// </para>
 /// <para>
 /// IMPORTANT: do NOT dispose this service during the normal shutdown ladder. The graceful

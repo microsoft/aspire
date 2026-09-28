@@ -204,4 +204,10 @@
   <data name="DashboardRunSelectIncompatibleTooltip" xml:space="preserve">
     <value>This run can't be viewed because it was created by an incompatible version of the dashboard.</value>
   </data>
+  <data name="DashboardRunSelectHelp" xml:space="preserve">
+    <value>Learn about runs</value>
+  </data>
+  <data name="DashboardRunSelectHelpTooltip" xml:space="preserve">
+    <value>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</value>
+  </data>
 </root>

@@ -10,23 +10,17 @@
                               @bind-Value="@_currentSetting"
                               @bind-Value:after="ThemeChangedAsync"
                               Orientation="Orientation.Vertical">
-                <FluentRadio Value="@ThemeManager.ThemeSettingSystem" Label="@Loc[nameof(Dialogs.SettingsDialogSystemTheme)]" />
-                <FluentRadio Value="@ThemeManager.ThemeSettingLight" Label="@Loc[nameof(Dialogs.SettingsDialogLightTheme)]" />
-                <FluentRadio Value="@ThemeManager.ThemeSettingDark" Label="@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]" />
+                <FluentRadio Value="@ThemeManager.ThemeSettingSystem" Label="@Loc[nameof(Dialogs.SettingsDialogSystemTheme)]" role="radio" aria-checked="@(_currentSetting == ThemeManager.ThemeSettingSystem ? "true" : "false")" />
+                <FluentRadio Value="@ThemeManager.ThemeSettingLight" Label="@Loc[nameof(Dialogs.SettingsDialogLightTheme)]" role="radio" aria-checked="@(_currentSetting == ThemeManager.ThemeSettingLight ? "true" : "false")" />
+                <FluentRadio Value="@ThemeManager.ThemeSettingDark" Label="@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]" role="radio" aria-checked="@(_currentSetting == ThemeManager.ThemeSettingDark ? "true" : "false")" />
             </FluentRadioGroup>
         </div>
 
         <div class="input-container">
-                @* Fluent's Label renders a standalone <label> that it does NOT associate with the
-                    underlying <fluent-dropdown> combobox, so the combobox has no programmatic accessible
-               name and fails axe's aria-input-field-name (WCAG 4.1.2). Pin the name explicitly with
-               aria-label so assistive tech announces the control; the visible Label stays for sighted
-               users. See AccessibilityTests.DashboardDialog_HasNoSeriousOrCriticalWcagViolations. *@
             <FluentSelect TOption="CultureInfo" TValue="CultureInfo"
                 ChangeOnEnterOnly="true"
                 Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
-                aria-label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
                 OptionText="@(c => c?.NativeName.Humanize())"
                 @bind-Value="@_selectedUiCulture"
@@ -44,7 +38,7 @@
                               Orientation="Orientation.Vertical">
                 @foreach (var format in Enum.GetValues<TimeFormat>())
                 {
-                    <FluentRadio Value="@format" Label="@FormatTimeFormatOption(format)" />
+                    <FluentRadio Value="@format" Label="@FormatTimeFormatOption(format)" role="radio" aria-checked="@(_timeFormat == format ? "true" : "false")" />
                 }
             </FluentRadioGroup>
         </div>

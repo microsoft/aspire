@@ -193,7 +193,7 @@
                 else
                 {
                     <div>
-                        <FluentCounterBadge Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                        <FluentCounterBadge Count="@(ViewModel.Filters.GetEnabledFilters().Count())" ShowEmpty="false" Appearance="BadgeAppearance.Filled">
                             <AnchorContent>
                                 <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                             </AnchorContent>

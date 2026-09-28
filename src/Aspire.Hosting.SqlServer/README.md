@@ -34,6 +34,39 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
    .withReference(db);
 ```
 
+## SQL REPL
+
+Call `WithRepl()` to opt into a **REPL** command on the SQL Server resource in the dashboard:
+
+```csharp
+builder.AddSqlServer("sqlserver").WithRepl();
+```
+
+```typescript
+await builder.addSqlServer("sqlserver").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell runs as `sa` and can execute server-side operating system commands when enabled.
+Sharing the dashboard through a tunnel, Codespaces, or VS Code remote development also exposes this
+capability to users who can execute resource commands.
+
+Use `QUIT` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `sqlcmd` running inside the container. Stopping the container also ends any remaining REPL processes.
+
+While the container is running, the command opens `sqlcmd` in the terminal dock. It connects inside the container as `sa` to the `master` database, using the configured password without putting it in command-line arguments. No local SQL client installation is required.
+
+Enter SQL statements followed by `GO` on its own line to execute a batch:
+
+```sql
+SELECT DB_NAME();
+GO
+```
+
+Use `USE [db];` followed by `GO` to switch databases, and `QUIT` to exit. The command trusts the local server's self-signed certificate, matching the integration's local connection string.
+
+The REPL supports both `/opt/mssql-tools18/bin/sqlcmd` in newer SQL Server images and `/opt/mssql-tools/bin/sqlcmd` in older images. Custom images must include one of these clients. This command is available only in run mode and uses the configured Docker or Podman runtime.
+
 ## Connection Properties
 
 When you reference a SQL Server resource using `WithReference`, the following connection properties are made available to the consuming project:

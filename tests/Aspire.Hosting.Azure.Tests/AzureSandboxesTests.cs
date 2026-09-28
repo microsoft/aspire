@@ -8,6 +8,7 @@
 #pragma warning disable ASPIREAZURE003
 #pragma warning disable ASPIREDOTNETPROJECT001
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -2547,6 +2548,61 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal("2000m", resources.Cpu);
         Assert.Equal("4096Mi", resources.Memory);
         Assert.Equal("40960Mi", resources.Disk);
+    }
+
+    [Theory]
+    [InlineData(AzureSandboxTier.ExtraSmall, "250m", "512Mi", "5120Mi")]
+    [InlineData(AzureSandboxTier.Small, "500m", "1024Mi", "10240Mi")]
+    [InlineData(AzureSandboxTier.Medium, "1000m", "2048Mi", "20480Mi")]
+    [InlineData(AzureSandboxTier.Large, "2000m", "4096Mi", "40960Mi")]
+    [InlineData(AzureSandboxTier.ExtraLarge, "4000m", "8192Mi", "81920Mi")]
+    public async Task SandboxTierMapsToExpectedResources(AzureSandboxTier tier, string expectedCpu, string expectedMemory, string expectedDisk)
+    {
+        var resources = await CreateSandboxResourcesForTierAsync(tier);
+
+        Assert.Equal(expectedCpu, resources.Cpu);
+        Assert.Equal(expectedMemory, resources.Memory);
+        Assert.Equal(expectedDisk, resources.Disk);
+    }
+
+    [Fact]
+    public async Task AllSandboxTiersRequestDiskWithinServiceTierMaximum()
+    {
+        // The Azure Dev Compute data plane rejects sandboxes whose disk exceeds cores x 20Gi with
+        // an InvalidResourceTier error. Iterate every enum value so newly added tiers are covered.
+        foreach (var tier in Enum.GetValues<AzureSandboxTier>())
+        {
+            var resources = await CreateSandboxResourcesForTierAsync(tier);
+
+            Assert.EndsWith("m", resources.Cpu);
+            Assert.EndsWith("Mi", resources.Disk);
+            var millicores = int.Parse(resources.Cpu[..^1], CultureInfo.InvariantCulture);
+            var diskMebibytes = int.Parse(resources.Disk[..^2], CultureInfo.InvariantCulture);
+            var maxDiskMebibytes = millicores * 20 * 1024 / 1000;
+
+            Assert.True(
+                diskMebibytes <= maxDiskMebibytes,
+                $"Tier '{tier}' requests disk '{resources.Disk}' which exceeds the tier maximum of {maxDiskMebibytes}Mi for CPU '{resources.Cpu}'.");
+        }
+    }
+
+    private async Task<AzureDevComputeSandboxResources> CreateSandboxResourcesForTierAsync(AzureSandboxTier tier)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
+            .PublishAsAzureSandbox(new AzureSandboxOptions { Tier = tier });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+        var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource);
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(deploymentTarget?.DeploymentTarget);
+
+        return AzureSandboxContainerDeployment.CreateSandboxResources(sandboxContainer);
     }
 
     [Fact]

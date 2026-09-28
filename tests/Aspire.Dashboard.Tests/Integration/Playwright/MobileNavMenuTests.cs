@@ -23,7 +23,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task MobileNavMenuClosesWhenFocusLeavesMenu()
     {
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress(),
@@ -60,7 +60,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task MobileNavFocusRemainsVisibleAtHighZoomViewport()
     {
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress(),

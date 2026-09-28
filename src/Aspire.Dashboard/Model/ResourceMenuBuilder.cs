@@ -186,20 +186,7 @@ public sealed class ResourceMenuBuilder
 
     private static MenuButtonItem CreateUrlMenuItem(DisplayedUrl url)
     {
-        // Opens the URL in a new window when clicked.
-        // It's important that this is done in the onclick event so the browser popup allows it.
-        return new MenuButtonItem
-        {
-            Text = url.Text,
-            Tooltip = url.Url,
-            Icon = s_linkIcon,
-            AdditionalAttributes = new Dictionary<string, object>
-            {
-                ["data-openbutton"] = "true",
-                ["data-url"] = url.Url!,
-                ["data-target"] = "_blank"
-            }
-        };
+        return MenuButtonItem.CreateExternalLink(url.Text, url.Url!, s_linkIcon, tooltip: url.Url);
     }
 
     private void AddTelemetryMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)

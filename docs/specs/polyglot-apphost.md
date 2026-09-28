@@ -277,6 +277,11 @@ The CLI passes the connection path via **environment variable**:
 |---------------------|-------------|---------|
 | `REMOTE_APP_HOST_SOCKET_PATH` | Unix socket path (or named pipe name on Windows) | `/tmp/aspire/host.sock` |
 
+The CLI normally allocates a randomized Unix socket path under `~/.aspire/cli/bch`.
+Explicit paths such as the example above are also supported. If the parent directory
+already exists on Unix, it must have mode `0700`; its permissions are not rewritten.
+A missing parent directory is created with mode `0700`.
+
 **Security:** The socket is protected by file system permissions (Unix: `0600`, Windows: current user ACL). Only processes running as the same user can connect.
 
 **Guest startup requirements:**
@@ -1364,6 +1369,32 @@ Configuration for polyglot app hosts:
 | `packages` | Package references added via `aspire add` |
 
 **Language persistence:** On first `aspire run`, if `language` is not set, the CLI detects it from file patterns and saves it to `settings.json`. Subsequent runs use the persisted value.
+
+### Project-local experimental language flags
+
+The experimental polyglot AppHost flags use the same flat naming pattern:
+`experimentalPolyglotJava`, `experimentalPolyglotGo`, `experimentalPolyglotPython`,
+and `experimentalPolyglotRust`. To enable Java for a single AppHost, run this from
+its project directory:
+
+```console
+aspire config set features.experimentalPolyglotJava true
+```
+
+This writes a single key in the `features` dictionary of `aspire.config.json`:
+
+```json
+{
+  "features": {
+    "experimentalPolyglotJava": "true"
+  }
+}
+```
+
+The configuration reader accepts both `"true"` and `true` for feature values.
+Existing project or global configurations using `experimentalPolyglot:java`,
+`experimentalPolyglot:go`, `experimentalPolyglot:python`, or
+`experimentalPolyglot:rust` must rename those keys to the flat names above.
 
 ### Application settings
 

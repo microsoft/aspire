@@ -6,7 +6,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.14</version>
+		<version>3.5.15</version>
 		<relativePath/>
 	</parent>
 
@@ -17,6 +17,12 @@
 	<properties>
 		<java.version>21</java.version>
 		<opentelemetry-javaagent.version>2.24.0</opentelemetry-javaagent.version>
+		<!--
+			Boot's managed Tomcat predates the security fixes in 10.1.60, including the
+			CVE-2026-41293 fix regression. Keep all embedded modules aligned until Boot catches up.
+			https://tomcat.apache.org/security-10.html
+		-->
+		<tomcat.version>10.1.60</tomcat.version>
 	</properties>
 
 	<dependencies>

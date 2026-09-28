@@ -229,7 +229,7 @@ ASPIRE_E2E_ARCHIVE=/tmp/aspire-localrelease.tar.gz \
 
 These tests **skip** unless the CLI was installed from a `LocalHive` archive *and* that archive is
 stable-shaped (no prerelease suffix). In default CI the archive is a prerelease `LocalArchive`, so they
-skip and add zero CI cost — CI relies on `--ignore-exit-code 8` (set in `eng/Testing.props`
+skip and add zero CI cost — CI relies on `--ignore-exit-code 8` (set in `eng/Testing.targets`
 `MtpBaseArgs`) so an all-skipped class job still passes. The test also registers the hive as an
 **ambient** NuGet source (`dotnet nuget add source`) because MSBuild resolves the apphost's
 `Aspire.AppHost.Sdk` before restore from nuget.config sources only, ignoring `ASPIRE_CLI_PACKAGES`.

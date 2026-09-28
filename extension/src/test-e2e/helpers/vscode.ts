@@ -75,28 +75,114 @@ export async function observeVisibleSideBarSectionTitles(durationMs = 2000): Pro
 }
 
 export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
-    return await VSBrowser.instance.driver.wait(async () => {
-        try {
-            const item = await section.findItem(label, 4);
-            if (item) {
-                return item;
-            }
-        }
-        catch (error) {
-            throwIfWebDriverSessionFailure(error);
-        }
-
-        try {
-            const sections = await new SideBarView().getContent().getSections();
-            const sectionTitles = await Promise.all(sections.map(section => section.getTitle()));
-            const currentSection = sections.find((_, index) => sectionTitles[index] === aspireAppHostsSectionTitle);
-            return currentSection ? await currentSection.findItem(label, 4) ?? false : false;
-        }
-        catch (error) {
-            throwIfWebDriverSessionFailure(error);
+    let lastLabel: string | undefined;
+    const findMatchingItem = async (candidateSection: TreeSection): Promise<TreeItem | false> => {
+        const item = await candidateSection.findItem(label, 4);
+        if (!item) {
             return false;
         }
-    }, timeoutMs, `Timed out waiting for tree item '${label}'.`);
+
+        // Monaco can recycle the row after ExTester matched it but before findItem returns.
+        lastLabel = await item.getLabel();
+        return lastLabel === label ? item : false;
+    };
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                const item = await findMatchingItem(section);
+                if (item) {
+                    return item;
+                }
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+            }
+
+            try {
+                const sections = await new SideBarView().getContent().getSections();
+                const sectionTitles = await Promise.all(sections.map(section => section.getTitle()));
+                const currentSection = sections.find((_, index) => sectionTitles[index] === aspireAppHostsSectionTitle);
+                return currentSection ? await findMatchingItem(currentSection) : false;
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+                return false;
+            }
+        }, timeoutMs, `Timed out waiting for tree item '${label}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last observed tree item label: ${JSON.stringify(lastLabel)}`]);
+    }
+}
+
+export async function waitForAppHostsTreePath(labels: readonly string[], timeoutMs = 30000): Promise<string[]> {
+    if (labels.length === 0) {
+        throw new Error('An AppHosts tree path must contain at least one label.');
+    }
+
+    let lastRows: { label: string; level: number; index: number }[] = [];
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                // Read labels and hierarchy in one browser turn. Returning a live TreeItem then
+                // calling getLabel/findChildItem leaves another row-recycling race (#20335).
+                lastRows = await VSBrowser.instance.driver.executeScript<typeof lastRows>(`
+                    const titles = Array.from(document.querySelectorAll('.part.sidebar .pane > .pane-header > .title'));
+                    const title = titles.find(candidate => candidate.textContent?.trim() === arguments[0]);
+                    const pane = title?.closest('.pane');
+                    if (!pane || pane.getClientRects().length === 0) {
+                        return [];
+                    }
+
+                    return Array.from(pane.querySelectorAll('.monaco-list-row'))
+                        .filter(row => row.getClientRects().length > 0)
+                        .map(row => ({
+                            label: row.querySelector('.monaco-highlighted-label')?.textContent ?? '',
+                            level: Number(row.getAttribute('aria-level') ?? '0'),
+                            index: Number(row.getAttribute('data-index') ?? '-1'),
+                        }))
+                        .filter(row => Number.isInteger(row.level) && row.level > 0
+                            && Number.isInteger(row.index) && row.index >= 0)
+                        .sort((left, right) => left.index - right.index);
+                `, aspireAppHostsSectionTitle);
+            }
+            catch (error) {
+                if (error instanceof webDriverError.StaleElementReferenceError) {
+                    return false;
+                }
+                throw error;
+            }
+
+            // Monaco rows are flattened: aria-level describes depth and data-index describes
+            // tree order, which can differ from DOM order when virtualized rows are recycled.
+            const ancestors: typeof lastRows = [];
+            let previousIndex = -1;
+            for (const row of lastRows) {
+                // A gap may contain another parent that has scrolled out of the rendered rows.
+                if (row.index !== previousIndex + 1) {
+                    ancestors.length = 0;
+                }
+                previousIndex = row.index;
+                while (ancestors.length > 0 && ancestors[ancestors.length - 1].level >= row.level) {
+                    ancestors.pop();
+                }
+                if (ancestors.length > 0 && ancestors[ancestors.length - 1].level !== row.level - 1) {
+                    ancestors.length = 0;
+                }
+                ancestors.push(row);
+
+                const path = ancestors.slice(-labels.length).map(ancestor => ancestor.label);
+                if (path.length === labels.length && path.every((label, index) => label === labels[index])) {
+                    return path;
+                }
+            }
+            return false;
+        }, timeoutMs, `Timed out waiting for AppHosts tree path ${labels.map(label => JSON.stringify(label)).join(' > ')}.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last observed AppHosts tree rows: ${JSON.stringify(lastRows)}`]);
+    }
 }
 
 export async function waitForChildTreeItem(parent: TreeItem, label: string, timeoutMs = 30000): Promise<TreeItem> {

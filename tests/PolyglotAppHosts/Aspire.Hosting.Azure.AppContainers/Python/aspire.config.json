@@ -4,7 +4,7 @@
     "language": "python"
   },
   "features": {
-    "experimentalPolyglot:python": true
+    "experimentalPolyglotPython": true
   },
   "packages": {
     "Aspire.Hosting.Azure.Provisioning.AppContainers": "",

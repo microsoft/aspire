@@ -419,7 +419,7 @@ extends:
           jobs:
           - job: TemplateTests
             displayName: Template Tests
-            timeoutInMinutes: 30
+            timeoutInMinutes: 45
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64

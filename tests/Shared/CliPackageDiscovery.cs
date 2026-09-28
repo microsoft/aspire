@@ -19,6 +19,16 @@ internal static partial class CliPackageDiscovery
         return VersionPattern().IsMatch(version);
     }
 
+    internal static string GetHiveLabel(string? version)
+    {
+        if (version is not null && PullRequestVersionPattern().Match(version) is { Success: true } match)
+        {
+            return $"pr-{match.Groups[1].Value}";
+        }
+
+        return "local";
+    }
+
     internal static CliPackageInfo FindAspireCliPointerPackage(string packageDirectory)
     {
         return TryFindAspireCliPointerPackage(packageDirectory)
@@ -95,6 +105,9 @@ internal static partial class CliPackageDiscovery
 
     [GeneratedRegex(@"^[0-9A-Za-z.\-]+$")]
     private static partial Regex VersionPattern();
+
+    [GeneratedRegex(@"-pr\.([0-9]+)\.[0-9a-g]+$")]
+    private static partial Regex PullRequestVersionPattern();
 
     [GeneratedRegex(@"^Aspire\.Cli\.(win|linux|linux-musl|osx)-(x64|arm64)\.", RegexOptions.IgnoreCase)]
     private static partial Regex RidSpecificPackagePattern();

@@ -37,8 +37,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private const string AppHostTrigger = "AppHost";
 
     private readonly List<TerminalDescriptor> _terminals = [];
-    private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private ResourceTerminalLink[] _resourceTerminalLinks = [];
     private readonly Dictionary<string, TerminalView> _terminalViews = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _cts = new();
     private readonly string _elementIdPrefix = $"terminal-dock-{Guid.NewGuid():N}";
@@ -51,7 +49,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private int _heightPx = DefaultHeightPx;
     private int _maximumHeightPx = MaximumHeightPx;
     private Task? _watchTask;
-    private Task? _resourceWatchTask;
     private bool _jsInitializationStarted;
     private Task? _jsInitializationTask;
     private bool _resizeHandleRegistrationStarted;
@@ -83,9 +80,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
-    public required IResourceRepository ResourceRepository { get; init; }
-
-    [Inject]
     public required ShortcutManager ShortcutManager { get; init; }
 
     [Inject]
@@ -103,9 +97,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     [Inject]
     public required IJSRuntime JS { get; init; }
 
-    [Inject]
-    public required NavigationManager NavigationManager { get; init; }
-
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
         AspireKeyboardShortcut.ToggleTerminalDock
@@ -118,7 +109,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             ShortcutManager.AddGlobalKeydownListener(this);
 
             // Keep only metadata watching eager: AspireTerminal.Show() must reveal the dock even before
-            // its first manual opening. Resource links, browser controls, and viewers can wait.
+            // its first manual opening. Browser controls and viewers can wait.
             _watchTask = Task.Run(() => WatchTerminalsAsync(_cts.Token), _cts.Token);
         }
     }
@@ -129,11 +120,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     /// <summary>
     /// Shows the dock, or hides it if it is already showing.
     /// </summary>
-    /// <remarks>
-    /// Public so the header button can drive the dock. The keyboard shortcut alone is not enough: <c>`</c> is
-    /// suppressed whenever focus is in a terminal or any other text input, because it types <c>`</c> there, so the
-    /// dock needs an affordance that works regardless of where focus happens to be.
-    /// </remarks>
     public Task ToggleAsync() => InvokeAsync(() =>
     {
         if (_disposed || !DashboardClient.IsEnabled || DashboardClient.IsReadOnly)
@@ -168,12 +154,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger))], Logger);
         _hasBeenOpened = true;
         _isVisible = true;
-        if (_resourceWatchTask is null && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly)
-        {
-            // The initial snapshot supplies resources accumulated before opening. Keep watching after collapse
-            // so reopening preserves the existing dock state without restarting its subscriptions.
-            _resourceWatchTask = Task.Run(() => WatchResourceTerminalsAsync(_cts.Token), _cts.Token);
-        }
     }
 
     protected override Task OnAfterRenderAsync(bool firstRender)
@@ -480,86 +460,6 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         }
     }
 
-    private async Task WatchResourceTerminalsAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            var (snapshot, subscription) = await ResourceRepository.SubscribeResourcesAsync(cancellationToken).ConfigureAwait(false);
-            await InvokeAsync(() =>
-            {
-                if (_disposed)
-                {
-                    return;
-                }
-
-                foreach (var resource in snapshot)
-                {
-                    _resourceByName[resource.Name] = resource;
-                }
-                UpdateResourceTerminalLinks();
-            }).ConfigureAwait(false);
-
-            await foreach (var changes in subscription.WithCancellation(cancellationToken).ConfigureAwait(false))
-            {
-                // Resource notifications arrive off the renderer thread, just like terminal notifications.
-                await InvokeAsync(() =>
-                {
-                    if (_disposed)
-                    {
-                        return;
-                    }
-
-                    foreach (var (changeType, resource) in changes)
-                    {
-                        if (changeType == ResourceViewModelChangeType.Upsert)
-                        {
-                            _resourceByName[resource.Name] = resource;
-                        }
-                        else if (changeType == ResourceViewModelChangeType.Delete)
-                        {
-                            _resourceByName.Remove(resource.Name);
-                        }
-                    }
-                    UpdateResourceTerminalLinks();
-                }).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // The component is going away or the circuit disconnected.
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Terminal dock resource watch stream ended unexpectedly.");
-        }
-    }
-
-    private void UpdateResourceTerminalLinks()
-    {
-        var links = _resourceByName.Values
-            .Where(resource => !resource.IsResourceHidden(showHiddenResources: false) &&
-                resource.HasTerminal() && resource.TryGetTerminalReplicaInfo(out _, out _))
-            .OrderBy(resource => resource, ResourceViewModelNameComparer.Instance)
-            .Select(resource =>
-            {
-                // Use the same resource identity as the console/terminal page so replicas remain distinct.
-                var name = ResourceViewModel.GetResourceName(resource, _resourceByName);
-                var url = NavigationManager.ToAbsoluteUri(DashboardUrls.ConsoleLogsUrl(name).TrimStart('/')).AbsoluteUri;
-                return new ResourceTerminalLink(name, url);
-            })
-            .ToArray();
-
-        // Health and other property updates must not rerender terminal viewers when the links are unchanged.
-        if (!_resourceTerminalLinks.SequenceEqual(links))
-        {
-            _resourceTerminalLinks = links;
-            if (_hasBeenOpened && IsPanelVisible)
-            {
-                StateHasChanged();
-            }
-        }
-    }
-
     /// <summary>
     /// Applies a change from the watch stream. Returns the id of a terminal whose detached window should be closed
     /// because the terminal itself has ended, or <see langword="null"/> when there is nothing to close.
@@ -643,11 +543,11 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         await _cts.CancelAsync().ConfigureAwait(true);
         try
         {
-            await Task.WhenAll(_watchTask ?? Task.CompletedTask, _resourceWatchTask ?? Task.CompletedTask).ConfigureAwait(true);
+            await (_watchTask ?? Task.CompletedTask).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
-            // Expected when stopping the watches.
+            // Expected when stopping the watch.
         }
 
         if (_jsInitializationTask is { } initialization)
@@ -723,6 +623,4 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             _selfRef = null;
         }
     }
-
-    private sealed record ResourceTerminalLink(string Name, string Url);
 }

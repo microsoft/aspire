@@ -22,7 +22,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
-    public static void SetupResourceDetails(TestContext context)
+    public static void SetupResourceDetails(BunitContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
@@ -43,7 +43,12 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentUIComponents(context);
     }
 
-    public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
+    public static void SetupResourcesPage(
+        BunitContext context,
+        ViewportInformation viewport,
+        IDashboardClient? dashboardClient = null,
+        ILocalStorage? localStorage = null,
+        ISessionStorage? sessionStorage = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
@@ -57,7 +62,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentOverflow(context);
         FluentUISetupHelpers.SetupFluentMenu(context);
 
-        FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
+        FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage, sessionStorage: sessionStorage);
         context.JSInterop.SetupVoid("focusElement", _ => true);
         context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);

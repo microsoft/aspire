@@ -109,7 +109,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _logger = logger;
         _timeProvider = timeProvider;
         _deleteRunDirectory = deleteRunDirectory;
-        var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
+        var applicationName = options.Value.GetApplicationNameOrDefault();
         _applicationMarkerFileName = GetApplicationDirectoryName(applicationName);
         var startedAt = timeProvider.GetUtcNow();
         // A millisecond timestamp collision is very unlikely. The exclusive run lock below also ensures that if two
@@ -201,7 +201,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             SchemaVersion = SchemaVersion,
             RunId = runId,
             StartedAtUtc = startedAt,
-            ApplicationName = options.Value.ApplicationName,
+            ApplicationName = applicationName,
             DatabaseFileName = Path.GetFileName(DatabasePath)
         };
         _runs = new(LoadRuns);
@@ -602,7 +602,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             metadata.StartedAtUtc,
             metadata.EndedAtUtc,
             metadata.CleanShutdown,
-            metadata.ApplicationName,
+            // Older runs can contain an unset or blank name despite using the default application's disk key.
+            DashboardOptions.GetApplicationNameOrDefault(metadata.ApplicationName),
             Path.Combine(runDirectory, metadata.DatabaseFileName),
             isCurrent)
         {

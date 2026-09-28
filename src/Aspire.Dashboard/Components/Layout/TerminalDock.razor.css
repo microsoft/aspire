@@ -43,6 +43,13 @@
     transform: translateY(0);
 }
 
+/* The dock is mounted for the first time already visible, so it needs a starting transform to slide in. */
+@starting-style {
+    .terminal-dock.visible {
+        transform: translateY(100%);
+    }
+}
+
 .terminal-dock.collapsed {
     transform: translateY(100%);
     pointer-events: none;
@@ -148,7 +155,6 @@
     font-weight: 600;
 }
 
-.terminal-dock-panel-body,
 .terminal-dock-panel-hint {
     margin: 0;
     font-size: 12px;
@@ -156,19 +162,32 @@
 }
 
 .terminal-dock-panel-hint {
-    /* Dimmer than the body copy, but not below the 4.5:1 AA floor against #0d1117 (#6e7681 measured 4.12:1). */
+    /* Keep the hint above the 4.5:1 AA floor against #0d1117 (#6e7681 measured 4.12:1). */
     color: #7d8590;
 }
 
+.terminal-dock-panel-more-info {
+    color: #58a6ff;
+    text-decoration: none;
+}
+
+.terminal-dock-panel-more-info:hover {
+    text-decoration: underline;
+}
+
+.terminal-dock-panel-more-info:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
 /* Respond to the dock's available space, not just the browser viewport. Keep the heading,
-   then the keyboard hint, then documentation, ahead of supplementary text and decoration. */
+   then the keyboard hint, then documentation, ahead of decoration. */
 @container terminal-dock-panel (max-height: 240px) or ((max-width: 500px) and (max-height: 360px)) {
     .terminal-dock-panel-card {
         gap: 4px;
         padding: 8px;
     }
 
-    .terminal-dock-panel-body,
     .terminal-dock-panel-card ::deep .terminal-dock-panel-icon {
         display: none;
     }

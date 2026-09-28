@@ -88,8 +88,8 @@ internal sealed class ProcessInvocationOptions
     /// When <c>true</c>, the child is bound to the CLI's Windows kill-on-close job so the OS terminates
     /// it when the CLI exits unexpectedly (crash / SIGKILL), even if the child does not react 
     /// to cancellation request. This is an OS-level, Windows-only crash-time safety net
-    /// for background helpers that must never outlive their parent — the <c>aspire-managed</c> NuGet
-    /// helper, the standalone dashboard, and the profiling collector — and, unlike
+    /// for background helpers that must never outlive their parent — such as the standalone dashboard
+    /// and profiling collector — and, unlike
     /// <see cref="IsolateConsole"/>, it does not give the child a new console group.
     /// </summary>
     /// <remarks>
@@ -638,7 +638,7 @@ internal sealed class DotNetCliRunner(
         }
 
         // Users often invoke the dogfood CLI through a symlink such as
-        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net11.0/aspire. Resolve the
         // link before forwarding so a symlinked raw build cannot stamp stale
         // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
         var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);

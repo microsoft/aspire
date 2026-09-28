@@ -77,8 +77,8 @@ card shows are driven by its lane and its signal pills:
   their API calls are routed to that host's GraphQL/REST endpoints.
 - **Editable watched repos** — per account; defaults to the public Aspire team set,
   except the `msft.ghe.com` enterprise account, which defaults to the Proxima
-  `coreai/aspire-1p` repo. Defaults only fill in accounts you haven't configured —
-  they never overwrite an explicit repo list.
+  `coreai/aspire-1p` and `coreai/sisyphus` repos. Defaults only fill in accounts
+  you haven't configured — they never overwrite an explicit repo list.
 
 ## Health mode
 

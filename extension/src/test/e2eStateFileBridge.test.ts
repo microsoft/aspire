@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vm from 'vm';
@@ -8,7 +10,7 @@ import WebSocket from 'ws';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { registerTreeViewCommands } from '../activation/registerTreeViewCommands';
-import { getCsharpBlazorWasmDebuggingSupport, useCsharpExtensionVersionProviderForTests } from '../capabilities';
+import { csharpExtensionId, getCsharpBlazorWasmDebuggingSupport, useCsharpExtensionVersionProviderForTests } from '../capabilities';
 import { AppHostDataRepository, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { executeE2eControlCommand, isBrowserDebugSessionType } from '../testing/e2eStateFileBridge';
@@ -21,7 +23,7 @@ import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as workspaceModule from '../utils/workspace';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 
-import { createWorkspaceFolder } from './testHelpers';
+import { createMockExtension, createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 
 function createLaunchService(): AppHostLaunchService {
     return new AppHostLaunchService({
@@ -31,13 +33,17 @@ function createLaunchService(): AppHostLaunchService {
 
 suite('E2E state file bridge', () => {
     let sandbox: sinon.SinonSandbox;
+    let runRoot: string;
 
     setup(() => {
         sandbox = sinon.createSandbox();
+        runRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-e2e-bridge-'));
+        sandbox.stub(process, 'env').value({ ...process.env, ASPIRE_EXTENSION_E2E_RUN_ROOT: runRoot });
     });
 
     teardown(() => {
         sandbox.restore();
+        removeDirectorySafely(runRoot);
     });
 
     test('routes every AppHost action through the exact secondary tree element', async () => {
@@ -223,6 +229,114 @@ suite('E2E state file bridge', () => {
         assert.strictEqual(isBrowserDebugSessionType('msedge'), true);
         assert.strictEqual(isBrowserDebugSessionType('firefox'), false);
         assert.strictEqual(isBrowserDebugSessionType('coreclr'), false);
+    });
+
+    test('isolates consecutive Blazor proofs from a profile lock left by the previous browser', async () => {
+        const profiles: string[] = [];
+        const harness = createBlazorProofHarness(sandbox, {
+            beforeBrowserLaunch: configuration => {
+                // js-debug defaults to one workspace profile and refuses another launch when its
+                // platform lock exists, even if the previous VS Code sessions have terminated.
+                const profile = typeof configuration.userDataDir === 'string'
+                    ? configuration.userDataDir
+                    : path.join(runRoot, '.shared-profile');
+                const lock = path.join(profile, 'SingletonLock');
+                if (fs.existsSync(lock)) {
+                    throw new Error('It looks like a browser is already running from an old debug session.');
+                }
+                fs.mkdirSync(profile, { recursive: true });
+                fs.writeFileSync(lock, '');
+                profiles.push(profile);
+            },
+        });
+
+        for (let iteration = 0; iteration < 2; iteration++) {
+            await dispatchControlCommand(
+                harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider);
+        }
+
+        assert.strictEqual(profiles.length, 2);
+        assert.notStrictEqual(profiles[0], profiles[1]);
+        for (const profile of profiles) {
+            assert.strictEqual(path.dirname(profile), runRoot);
+            assert.strictEqual(fs.existsSync(path.join(profile, 'SingletonLock')), true);
+        }
+    });
+
+    test('requires an owned run root before creating a Blazor browser profile', async () => {
+        const harness = createBlazorProofHarness(sandbox);
+        delete process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT;
+
+        await assert.rejects(
+            dispatchControlCommand(
+                harness.command, harness.repository, harness.launchService, harness.provider, harness.terminalProvider),
+            /requires an absolute ASPIRE_EXTENSION_E2E_RUN_ROOT/);
+        assert.strictEqual(harness.executeCommand.called, false);
+    });
+
+    for (const bridgeInstalled of [false, true]) {
+        test(`reports C# bridge readiness after activation when installed=${bridgeInstalled}`, async () => {
+            const extensionPath = path.join(runRoot, 'csharp');
+            const bridgeDirectory = path.join(extensionPath, '.vswebassemblybridge');
+            fs.mkdirSync(bridgeDirectory, { recursive: true });
+            if (bridgeInstalled) {
+                fs.writeFileSync(path.join(bridgeDirectory, 'Microsoft.Diagnostics.BrowserDebugHost.dll'), '');
+            }
+            let finishActivation!: (api: object) => void;
+            const activated = new Promise<object>(resolve => { finishActivation = resolve; });
+            const extension = createMockExtension(csharpExtensionId, extensionPath, {});
+            const activate = sandbox.stub(extension, 'activate').returns(activated);
+            sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
+            let completed = false;
+
+            const preparation = dispatchControlCommand(
+                { name: 'prepareBlazorWasmDebugger' },
+                createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider)
+                .then(result => { completed = true; return result; });
+            await Promise.resolve();
+            assert.strictEqual(completed, false);
+            finishActivation({});
+
+            assert.strictEqual(await preparation, bridgeInstalled ? 'ready' : 'missing-bridge');
+            assert.strictEqual(activate.calledOnce, true);
+        });
+    }
+
+    test('rejects a missing C# extension before probing debugger dependencies', async () => {
+        sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(undefined);
+
+        await assert.rejects(dispatchControlCommand(
+            { name: 'prepareBlazorWasmDebugger' },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider),
+        /ms-dotnettools\.csharp is required/);
+    });
+
+    test('checks installed bridge dependencies without waiting for project import', async () => {
+        const bridgeDirectory = path.join(runRoot, '.vswebassemblybridge');
+        fs.mkdirSync(bridgeDirectory);
+        fs.writeFileSync(path.join(bridgeDirectory, 'Microsoft.Diagnostics.BrowserDebugHost.dll'), '');
+        const initializationFinished = sandbox.stub().rejects(new Error('Project import is not ready'));
+        const extension = createMockExtension(csharpExtensionId, runRoot, { initializationFinished });
+        sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
+
+        const status = await dispatchControlCommand(
+            { name: 'prepareBlazorWasmDebugger' },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider);
+
+        assert.strictEqual(status, 'ready');
+        assert.strictEqual(initializationFinished.called, false);
+    });
+
+    test('does not misclassify a C# activation failure as a missing component', async () => {
+        const error = new Error('C# activation failed');
+        const extension = createMockExtension(csharpExtensionId, runRoot, {});
+        sandbox.stub(extension, 'activate').rejects(error);
+        sandbox.stub(vscode.extensions, 'getExtension').withArgs(csharpExtensionId).returns(extension);
+
+        await assert.rejects(dispatchControlCommand(
+            { name: 'prepareBlazorWasmDebugger' },
+            createRepository([]), createLaunchService(), {} as AspireAppHostTreeProvider, {} as AspireTerminalProvider),
+        caught => caught === error);
     });
 
     for (const closeMode of ['explicit', 'natural'] as const) {
@@ -700,6 +814,7 @@ interface BlazorProofHarnessOptions {
     rootType?: 'chrome' | 'pwa-chrome';
     breakpointLine?: number;
     browserLaunchFailure?: boolean;
+    beforeBrowserLaunch?: (configuration: vscode.DebugConfiguration) => void;
 }
 
 function createBlazorProofHarness(sandbox: sinon.SinonSandbox, options: BlazorProofHarnessOptions = {}) {
@@ -942,6 +1057,7 @@ function createBlazorProofHarness(sandbox: sinon.SinonSandbox, options: BlazorPr
             browserCommandState = 'Disabled';
             await configurationProvider?.resolveDebugConfiguration?.(
                 createWorkspaceFolder('repo', workspaceRoot), rootSession.configuration);
+            options.beforeBrowserLaunch?.(rootSession.configuration);
             for (const session of [rootSession, browserSession, managedSession]) {
                 if (session === browserSession && options.browserLaunchFailure) {
                     continue;

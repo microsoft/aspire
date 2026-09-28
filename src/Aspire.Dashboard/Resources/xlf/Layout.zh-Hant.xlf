@@ -12,6 +12,16 @@
         <target state="new">Live run</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardRunSelectHelp">
+        <source>Learn about runs</source>
+        <target state="new">Learn about runs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectHelpTooltip">
+        <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
+        <target state="new">Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunSelectIncompatibleTooltip">
         <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
         <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>

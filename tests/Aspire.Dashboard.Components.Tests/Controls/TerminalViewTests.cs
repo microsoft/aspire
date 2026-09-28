@@ -32,7 +32,7 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var initialization = module.Setup<int>("initTerminal", _ => true);
         initialization.SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.ResourceName, "shell")
             .Add(p => p.SizeMemoryKey, "dock:shell"));
 
@@ -58,7 +58,7 @@ public class TerminalViewTests : DashboardTestContext
     public void ChromeAndFooter_RespectSurfaceParameters(bool chromeless, bool showDimensions)
     {
         TerminalSetupHelpers.SetupTerminalView(this);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.ResourceName, "shell")
             .Add(p => p.Chromeless, chromeless)
             .Add(p => p.ShowDimensionsPicker, showDimensions));
@@ -83,7 +83,7 @@ public class TerminalViewTests : DashboardTestContext
     {
         TerminalSetupHelpers.SetupTerminalView(this);
         TerminalSetupHelpers.SetupTerminalWindows(this);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.ResourceName, "shell")
             .Add(p => p.Chromeless, chromeless)
             .Add(p => p.ShowOpenInWindow, showOpenInWindow));
@@ -92,7 +92,7 @@ public class TerminalViewTests : DashboardTestContext
         {
             Assert.True(cut.Find(".terminal-open-window").HasAttribute("disabled"));
         }
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ResourceName, null));
+        cut.Render(builder => builder.Add(p => p.ResourceName, null));
         Assert.Empty(cut.FindAll(".terminal-open-window"));
         if (!chromeless)
         {
@@ -105,7 +105,7 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.ResourceName, "shell")
             .Add(p => p.InitialFontSize, 19));
         Assert.Equal(19, cut.Instance.FontSize);
@@ -117,7 +117,7 @@ public class TerminalViewTests : DashboardTestContext
         {
             TerminalId = 1, Generation = 1, Connected = true, FontPx = 21
         }));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.InitialFontSize, 17));
+        cut.Render(builder => builder.Add(p => p.InitialFontSize, 17));
         Assert.Equal(21, cut.Instance.FontSize);
         Assert.Single(module.Invocations, i => i.Identifier == "initTerminal");
     }
@@ -127,7 +127,7 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
         Assert.True(cut.Find(".terminal-fit").HasAttribute("disabled"));
 
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
@@ -156,14 +156,14 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.ResourceName, "shell").Add(p => p.AutoFit, true));
         Assert.True(Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).AutoFit);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.AutoFit, false));
+        cut.Render(builder => builder.Add(p => p.AutoFit, false));
         init.SetResult(1);
         cut.WaitForAssertion(() => Assert.Equal(new object?[] { 1, false },
             Assert.Single(module.Invocations, i => i.Identifier == "setAutoFit").Arguments));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.AutoFit, true));
+        cut.Render(builder => builder.Add(p => p.AutoFit, true));
         Assert.Equal(["initTerminal", "getSizePresets", "setAutoFit", "setAutoFit"], module.Invocations.Select(i => i.Identifier));
     }
 
@@ -173,7 +173,7 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var initialization = module.Setup<int>("initTerminal", _ => true);
         initialization.SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell <worker>"));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell <worker>"));
         Assert.Equal("shell <worker>", cut.Find(".terminal-title").TextContent);
         Assert.Empty(cut.FindAll(".terminal-dimensions"));
 
@@ -210,7 +210,7 @@ public class TerminalViewTests : DashboardTestContext
     public async Task TerminalError_DisplaysLocalizedAlert(string error, string resourceKey)
     {
         TerminalSetupHelpers.SetupTerminalView(this);
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1, Generation = 1, Error = error
@@ -230,7 +230,7 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "shell"));
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1, Generation = 1, Connected = true, Error = error
@@ -258,7 +258,7 @@ public class TerminalViewTests : DashboardTestContext
         init.SetResult(1);
         var update = module.SetupVoid("setReadOnly", _ => true);
         update.SetVoidResult();
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=terminal")
             .Add(p => p.ReadOnly, initialReadOnly));
         Assert.Equal(initialReadOnly, Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).ReadOnly);
@@ -268,10 +268,10 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Equal(initialReadOnly, session.ReadOnly);
         Assert.Empty(update.Invocations);
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, !initialReadOnly));
+        cut.Render(builder => builder.Add(p => p.ReadOnly, !initialReadOnly));
         Assert.Equal(!initialReadOnly, session.ReadOnly);
         cut.WaitForAssertion(() => Assert.Equal(new object?[] { 1, !initialReadOnly }, Assert.Single(update.Invocations).Arguments));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, initialReadOnly));
+        cut.Render(builder => builder.Add(p => p.ReadOnly, initialReadOnly));
         Assert.Equal(initialReadOnly, session.ReadOnly);
         cut.WaitForAssertion(() => Assert.Collection(update.Invocations,
             invocation => Assert.Equal(new object?[] { 1, !initialReadOnly }, invocation.Arguments),
@@ -287,16 +287,16 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
         var update = module.SetupVoid("setReadOnly", _ => true);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=terminal"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, true));
+        cut.Render(builder => builder.Add(p => p.ReadOnly, true));
         var viewId = Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).ViewId;
         Assert.True(Services.GetRequiredService<TerminalViewSessionRegistry>().TryGet(
             viewId, "/api/apphost-terminal?terminalId=terminal", out var session));
         Assert.True(session.ReadOnly, "Authoritative policy must update before JS initialization returns");
         init.SetResult(1);
         cut.WaitForAssertion(() => Assert.Single(update.Invocations));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, false));
+        cut.Render(builder => builder.Add(p => p.ReadOnly, false));
         update.SetVoidResult();
         cut.WaitForAssertion(() => Assert.Collection(update.Invocations,
             invocation => Assert.Equal(new object?[] { 1, true }, invocation.Arguments),
@@ -310,8 +310,8 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
         module.SetupVoid("setReadOnly", _ => true).SetException(new JSException("Unsupported live input policy"));
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ReadOnly, true));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
+        cut.Render(builder => builder.Add(p => p.ReadOnly, true));
         cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalMountFailed, cut.Find("[role=alert]").TextContent));
         Assert.Equal(["initTerminal", "getSizePresets", "setReadOnly"], module.Invocations.Select(i => i.Identifier));
     }
@@ -324,15 +324,15 @@ public class TerminalViewTests : DashboardTestContext
         var initialization = module.Setup<int>("initTerminal", _ => failed);
         initialization.SetException(new JSException("Worker unavailable"));
         var retry = module.Setup<int>("initTerminal", _ => !failed);
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
         cut.WaitForAssertion(() => Assert.Equal(Resources.TerminalStrings.TerminalMountFailed, cut.Find("[role=alert]").TextContent));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ResourceName, "app"));
+        cut.Render(builder => builder.Add(p => p.ResourceName, "app"));
         Assert.Single(initialization.Invocations);
 
         failed = false;
         var retrying = cut.Find(".terminal-error fluent-button").ClickAsync(new MouseEventArgs());
         cut.WaitForAssertion(() => Assert.Single(retry.Invocations));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.ResourceName, "app"));
+        cut.Render(builder => builder.Add(p => p.ResourceName, "app"));
         Assert.Single(retry.Invocations);
         retry.SetResult(1);
         await retrying;
@@ -345,9 +345,9 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=first"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, updatedEndpoint));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, updatedEndpoint));
         init.SetResult(1);
         cut.WaitForAssertion(() =>
         {
@@ -373,13 +373,13 @@ public class TerminalViewTests : DashboardTestContext
         var failed = true;
         module.Setup<int>("initTerminal", _ => failed).SetException(new JSException("Worker unavailable"));
         var retry = module.Setup<int>("initTerminal", _ => !failed);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=first"));
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[role=alert]")));
         failed = false;
         var retrying = cut.Find(".terminal-error fluent-button").ClickAsync(new MouseEventArgs());
         cut.WaitForAssertion(() => Assert.Single(retry.Invocations));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, updatedEndpoint));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, updatedEndpoint));
         retry.SetResult(1);
         await retrying;
         cut.WaitForAssertion(() =>
@@ -403,9 +403,9 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
         init.SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=first"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, null));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, null));
         await cut.InvokeAsync(() => cut.Instance.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1, Generation = 2, Error = "disconnected"
@@ -420,13 +420,13 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
         init.SetResult(1);
-        var cut = RenderComponent<TerminalView>();
+        var cut = Render<TerminalView>();
         Assert.Empty(init.Invocations);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=first"));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=first"));
         cut.WaitForAssertion(() => Assert.Single(init.Invocations));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, null));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, null));
         cut.WaitForAssertion(() => Assert.Single(module.Invocations, i => i.Identifier == "disposeTerminal"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=second"));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=second"));
         cut.WaitForAssertion(() => Assert.Equal(2, init.Invocations.Count));
     }
 
@@ -439,7 +439,7 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, modulePath);
         var init = module.Setup<int>("initTerminal", _ => true);
         init.SetResult(1);
-        RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app & name").Add(p => p.ReplicaIndex, 2));
+        Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "app & name").Add(p => p.ReplicaIndex, 2));
         var invocation = Assert.Single(init.Invocations);
         var options = Assert.IsType<TerminalViewOptions>(invocation.Arguments[3]);
         Assert.Equal($"{socketUrl}&viewId={options.ViewId}", invocation.Arguments[1]);
@@ -454,7 +454,7 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/aspire/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
         init.SetResult(1);
-        RenderComponent<TerminalView>(builder => builder.Add(p => p.EndpointPathAndQuery, endpoint));
+        Render<TerminalView>(builder => builder.Add(p => p.EndpointPathAndQuery, endpoint));
         var invocation = Assert.Single(init.Invocations);
         var options = Assert.IsType<TerminalViewOptions>(invocation.Arguments[3]);
         Assert.Equal($"wss://dashboard.example{expectedPathAndQuery}&viewId={options.ViewId}", invocation.Arguments[1]);
@@ -467,7 +467,7 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
-        var cut = RenderComponent<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
+        var cut = Render<TerminalView>(builder => builder.Add(p => p.ResourceName, "app"));
         cut.WaitForAssertion(() => Assert.Single(init.Invocations));
         var disposing = cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
         Assert.False(disposing.IsCompleted);
@@ -483,13 +483,13 @@ public class TerminalViewTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
         init.SetResult(1);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=first"));
         var firstId = Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).ViewId;
         var registry = Services.GetRequiredService<TerminalViewSessionRegistry>();
         Assert.True(registry.TryGet(firstId, "/api/apphost-terminal?terminalId=first", out var firstSession));
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=second"));
+        cut.Render(builder => builder.Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=second"));
         cut.WaitForAssertion(() => Assert.Single(module.Invocations, i => i.Identifier == "reconnectTerminal"));
         var secondUrl = new Uri(Assert.IsType<string>(Assert.Single(module.Invocations, i => i.Identifier == "reconnectTerminal").Arguments[1]));
         var secondId = QueryHelpers.ParseQuery(secondUrl.Query)["viewId"].ToString();
@@ -504,7 +504,7 @@ public class TerminalViewTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalViewModule(this, "/Components/Controls/TerminalView.razor.js");
         var init = module.Setup<int>("initTerminal", _ => true);
-        var cut = RenderComponent<TerminalView>(builder => builder
+        var cut = Render<TerminalView>(builder => builder
             .Add(p => p.EndpointPathAndQuery, "/api/apphost-terminal?terminalId=terminal"));
         var viewId = Assert.IsType<TerminalViewOptions>(Assert.Single(init.Invocations).Arguments[3]).ViewId;
         Assert.True(Services.GetRequiredService<TerminalViewSessionRegistry>().TryGet(

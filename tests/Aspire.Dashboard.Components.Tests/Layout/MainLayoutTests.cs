@@ -65,7 +65,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -102,7 +102,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -138,7 +138,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
 
         // Act
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -183,7 +183,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         SetupMainLayoutServices(localStorage: localStorage);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -194,6 +194,35 @@ public partial class MainLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Contains(storedExpanded ? "nav-collapsed" : "nav-expanded", cut.Find(".layout").ClassList));
         Assert.Equal(!storedExpanded, Assert.IsType<bool>(persistedValue));
+    }
+
+    [Theory]
+    [InlineData(BrowserStorageKeys.NavMenuExpanded)]
+    [InlineData(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey)]
+    public void OnInitialize_BrowserStorageReadFails_ContinuesInitialization(string failedKey)
+    {
+        var readKeys = new List<string>();
+        var localStorage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key =>
+            {
+                readKeys.Add(key);
+                return key == failedKey ? (false, false) : (true, key == BrowserStorageKeys.NavMenuExpanded);
+            }
+        };
+        SetupMainLayoutServices(localStorage: localStorage);
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Equal(
+            [BrowserStorageKeys.NavMenuExpanded, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey],
+            readKeys);
+        Assert.Contains(failedKey == BrowserStorageKeys.NavMenuExpanded ? "nav-collapsed" : "nav-expanded", cut.Find(".layout").ClassList);
+        var messageBarProvider = _messageBarProvider!;
+        messageBarProvider.WaitForAssertion(() => Assert.Single(messageBarProvider.FindComponents<DashboardMessageBar>()));
     }
 
     [Theory]
@@ -214,7 +243,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dialogService: dialogService);
         JSInterop.SetupVoid("focusElement", _ => true);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -255,7 +284,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         SetupMainLayoutServices();
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -295,7 +324,7 @@ public partial class MainLayoutTests : DashboardTestContext
             historicalRun
         ]);
         SetupMainLayoutServices(dashboardRunStore: runStore);
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(
                 component => component.ViewportInformation,
@@ -306,9 +335,15 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelect = cut.FindComponent<DashboardRunSelect>();
         runSelect.Find("fluent-button").Click();
 
-        var menuItem = Assert.Single(runSelect.FindComponent<AspireMenu>().Instance.Items);
-        Assert.Equal("Live run", menuItem.Text);
-        Assert.True(menuItem.Checked);
+        Assert.Collection(
+            runSelect.FindComponent<AspireMenu>().Instance.Items,
+            item =>
+            {
+                Assert.Equal("Live run", item.Text);
+                Assert.True(item.Checked);
+            },
+            item => Assert.True(item.IsDivider),
+            item => Assert.Equal("Learn about runs", item.Text));
     }
 
     [Fact]
@@ -349,7 +384,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var expectedRunText = FormatHelpers.FormatTimeWithOptionalDate(
             Services.GetRequiredService<BrowserTimeProvider>(),
             incompatibleRun.StartedAtUtc.UtcDateTime);
-        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        var cut = Render<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
             builder.Add(component => component.SelectedRunIsCurrent, true);
@@ -403,7 +438,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(
                 component => component.ViewportInformation,
@@ -452,7 +487,7 @@ public partial class MainLayoutTests : DashboardTestContext
         JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var initializedCount = 0;
         var disposedCount = 0;
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(component => component.Body, bodyBuilder =>
@@ -501,10 +536,37 @@ public partial class MainLayoutTests : DashboardTestContext
                 Assert.IsType<Icons.Regular.Size16.Pin>(item.SecondaryActionIcon);
                 Assert.Equal("Pin run", item.SecondaryActionAriaLabel);
                 Assert.False(item.IsSecondaryActionSelected);
+            },
+            item => Assert.True(item.IsDivider),
+            item =>
+            {
+                Assert.Equal("Learn about runs", item.Text);
+                Assert.Equal(
+                    "Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.",
+                    item.Tooltip);
+                Assert.IsType<Icons.Regular.Size16.QuestionCircle>(item.Icon);
+                Assert.NotNull(item.AdditionalAttributes);
+                Assert.Collection(
+                    item.AdditionalAttributes.OrderBy(attribute => attribute.Key),
+                    attribute =>
+                    {
+                        Assert.Equal("data-openbutton", attribute.Key);
+                        Assert.Equal("true", attribute.Value);
+                    },
+                    attribute =>
+                    {
+                        Assert.Equal("data-target", attribute.Key);
+                        Assert.Equal("_blank", attribute.Value);
+                    },
+                    attribute =>
+                    {
+                        Assert.Equal("data-url", attribute.Key);
+                        Assert.Equal("https://aka.ms/aspire/run-persistence", attribute.Value);
+                    });
             });
 
         var menuItems = cut.WaitForElements("fluent-menu-item");
-        Assert.Single(cut.FindAll("fluent-divider"));
+        Assert.Equal(2, cut.FindAll("fluent-divider").Count);
         Assert.Empty(menuItems[0].QuerySelectorAll("span[slot='start']"));
         Assert.Empty(menuItems[1].QuerySelectorAll("span[slot='start']"));
         Assert.Single(menuItems[0].QuerySelectorAll("[slot='indicator']"));
@@ -571,9 +633,11 @@ public partial class MainLayoutTests : DashboardTestContext
             {
                 Assert.True(item.Checked);
                 Assert.IsType<Icons.Regular.Size16.Checkmark>(item.Icon);
-            });
+            },
+            item => Assert.True(item.IsDivider),
+            item => Assert.Equal("Learn about runs", item.Text));
         menuItems = cut.WaitForElements("fluent-menu-item");
-        Assert.Single(cut.FindAll("fluent-divider"));
+        Assert.Equal(2, cut.FindAll("fluent-divider").Count);
         Assert.Empty(menuItems[0].QuerySelectorAll("span[slot='start']"));
         Assert.Empty(menuItems[1].QuerySelectorAll("span[slot='start']"));
         menuItems[0].TriggerEvent("onmenuitemchange", new MenuItemEventArgs { Id = menuItems[0].Id, Text = menuItems[0].TextContent, Checked = true });
@@ -634,7 +698,7 @@ public partial class MainLayoutTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(component => component.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
@@ -688,7 +752,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var testSink = new TestSink();
         Services.AddSingleton<ILogger<DashboardRunSelect>>(new TestLogger<DashboardRunSelect>(new TestLoggerFactory(testSink, enabled: true)));
         SetupMainLayoutServices(dashboardRunStore: runStore);
-        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        var cut = Render<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
             builder.Add(component => component.SelectedRunIsCurrent, true);
@@ -739,7 +803,7 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public void DashboardRunSelect_SortsHistoricalRunsByPinnedThenDateDescendingAndUpdatesOrderWhenPinned()
+    public void DashboardRunSelect_SortsHistoricalRunsAndRestoresPinFocusAfterReordering()
     {
         var currentRun = new DashboardRunDescriptor(
             RunId: "current",
@@ -767,7 +831,7 @@ public partial class MainLayoutTests : DashboardTestContext
             .ThenByDescending(run => run.StartedAtUtc)
             .Select(run => FormatHelpers.FormatTimeWithOptionalDate(browserTimeProvider, run.StartedAtUtc.UtcDateTime))
             .ToArray();
-        var cut = RenderComponent<DashboardRunSelect>(builder =>
+        var cut = Render<DashboardRunSelect>(builder =>
         {
             builder.Add(component => component.SelectedRunId, currentRun.RunId);
             builder.Add(component => component.SelectedRunIsCurrent, true);
@@ -781,12 +845,19 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.IsType<Icons.Regular.Size16.Pin>(items[0].SecondaryActionIcon);
         Assert.False(items[0].IsSecondaryActionSelected);
         Assert.True(items[1].IsDivider);
-        Assert.Equal(expectedHistoricalTexts, items.Skip(2).Select(item => item.Text));
+        Assert.Equal(expectedHistoricalTexts, items.Skip(2).Take(historicalRuns.Length).Select(item => item.Text));
         Assert.All(items.Skip(2).Take(2), item => Assert.True(item.IsSecondaryActionSelected));
-        Assert.All(items.Skip(4), item => Assert.False(item.IsSecondaryActionSelected));
+        Assert.All(items.Skip(4).Take(2), item => Assert.False(item.IsSecondaryActionSelected));
+        Assert.True(items[^2].IsDivider);
+        Assert.Equal("Learn about runs", items[^1].Text);
 
         var menuItems = cut.WaitForElements("fluent-menu-item");
-        Assert.Single(menuItems[3].QuerySelectorAll("fluent-button")).Click();
+        var pinButton = Assert.Single(menuItems[3].QuerySelectorAll("fluent-button"));
+        var pinId = pinButton.Id;
+        var pinMenuItemId = Assert.IsType<string>(menuItems[3].Id);
+        var pinMenuItem = cut.FindComponents<FluentMenuItem>().Single(item => item.Instance.Id == pinMenuItemId).Instance;
+        var priorFirstPinnedId = Assert.Single(menuItems[1].QuerySelectorAll("fluent-button")).Id;
+        pinButton.Click();
 
         expectedHistoricalTexts = historicalRuns
             .OrderByDescending(run => run.IsPinned)
@@ -794,9 +865,34 @@ public partial class MainLayoutTests : DashboardTestContext
             .Select(run => FormatHelpers.FormatTimeWithOptionalDate(browserTimeProvider, run.StartedAtUtc.UtcDateTime))
             .ToArray();
         items = cut.FindComponent<AspireMenuButton>().Instance.Items;
-        Assert.Equal(expectedHistoricalTexts, items.Skip(2).Select(item => item.Text));
+        Assert.Equal(expectedHistoricalTexts, items.Skip(2).Take(historicalRuns.Length).Select(item => item.Text));
         Assert.All(items.Skip(2).Take(3), item => Assert.True(item.IsSecondaryActionSelected));
         Assert.False(items[5].IsSecondaryActionSelected);
+
+        menuItems = cut.WaitForElements("fluent-menu-item");
+        Assert.Same(pinMenuItem, cut.FindComponents<FluentMenuItem>().Single(item => item.Instance.Id == pinMenuItemId).Instance);
+        Assert.True(cut.FindComponent<AspireMenu>().Instance.Open);
+        Assert.Equal(pinId, Assert.Single(menuItems[1].QuerySelectorAll("fluent-button")).Id);
+        Assert.Equal(priorFirstPinnedId, Assert.Single(menuItems[2].QuerySelectorAll("fluent-button")).Id);
+        Assert.Equal(
+            [pinId],
+            JSInterop.Invocations.Where(invocation => invocation.Identifier == "focusElement")
+                .Select(invocation => Assert.IsType<string>(Assert.Single(invocation.Arguments))));
+
+        Assert.Single(menuItems[1].QuerySelectorAll("fluent-button")).Click();
+
+        items = cut.FindComponent<AspireMenuButton>().Instance.Items;
+        Assert.Equal(
+            ["pinned-b", "pinned-a", "unpinned-b", "unpinned-a"],
+            DashboardRunSelect.GetSortedRuns(runStore.GetRuns()).Skip(1).Select(run => run.RunId));
+        Assert.All(items.Skip(2).Take(2), item => Assert.True(item.IsSecondaryActionSelected));
+        Assert.All(items.Skip(4).Take(2), item => Assert.False(item.IsSecondaryActionSelected));
+        Assert.True(cut.FindComponent<AspireMenu>().Instance.Open);
+        Assert.Equal(pinId, Assert.Single(cut.WaitForElements("fluent-menu-item")[3].QuerySelectorAll("fluent-button")).Id);
+        Assert.Equal(
+            [pinId, pinId],
+            JSInterop.Invocations.Where(invocation => invocation.Identifier == "focusElement")
+                .Select(invocation => Assert.IsType<string>(Assert.Single(invocation.Arguments))));
     }
 
     [Fact]
@@ -823,7 +919,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(p => p.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
@@ -839,7 +935,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         runSelect.Find("fluent-button").Click();
 
-        Assert.Single(cut.WaitForElements("fluent-menu-item"));
+        Assert.Equal(2, cut.WaitForElements("fluent-menu-item").Count);
         Assert.Equal(getRunsCallCount + 1, runStore.GetRunsCallCount);
 
         await cut.InvokeAsync(() => runSelectionSource.SetResult((false, null)));
@@ -877,7 +973,7 @@ public partial class MainLayoutTests : DashboardTestContext
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(p => p.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
@@ -942,7 +1038,7 @@ public partial class MainLayoutTests : DashboardTestContext
             }
         };
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -993,7 +1089,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -1033,7 +1129,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dialogService: dialogService);
         JSInterop.SetupVoid("focusElement", _ => true);
 
-        var cut = RenderComponent<CascadingValue<ViewportInformation>>(builder =>
+        var cut = Render<CascadingValue<ViewportInformation>>(builder =>
         {
             builder.Add(p => p.Value, new ViewportInformation(IsDesktop: initialIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.AddChildContent<MainLayout>();
@@ -1057,7 +1153,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.NotNull(capturedParameters);
         Assert.Equal(expectedDialogId, capturedParameters.Id);
 
-        cut.SetParametersAndRender(parameters =>
+        cut.Render(parameters =>
         {
             parameters.Add(p => p.Value, new ViewportInformation(IsDesktop: closingIsDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
             parameters.AddChildContent<MainLayout>();
@@ -1090,7 +1186,7 @@ public partial class MainLayoutTests : DashboardTestContext
         SetupMainLayoutServices(dialogService: dialogService);
         JSInterop.SetupVoid("focusElement", _ => true);
 
-        var cut = RenderComponent<MainLayout>(builder =>
+        var cut = Render<MainLayout>(builder =>
         {
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -1109,6 +1205,26 @@ public partial class MainLayoutTests : DashboardTestContext
                 invocation.Arguments.Count == 1 &&
                 string.Equals((string?)invocation.Arguments[0], launchButtonId, StringComparison.Ordinal));
         });
+    }
+
+    [Theory]
+    [InlineData(AspireKeyboardShortcut.GoToResources)]
+    [InlineData(AspireKeyboardShortcut.GoToConsoleLogs)]
+    public async Task ResourceServiceShortcut_WhenResourceServiceIsDisabled_DoesNotNavigate(AspireKeyboardShortcut shortcut)
+    {
+        SetupMainLayoutServices(dashboardClient: new TestDashboardClient(isEnabled: false));
+
+        var cut = Render<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        var initialUri = navigationManager.Uri;
+
+        await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(shortcut));
+
+        Assert.False(cut.Instance.SubscribedShortcuts.Contains(shortcut));
+        Assert.Equal(initialUri, navigationManager.Uri);
     }
 
     private void SetupMainLayoutServices(
@@ -1157,7 +1273,7 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentKeyCode(this);
 
-        _messageBarProvider = RenderComponent<FluentMessageBarProvider>(builder =>
+        _messageBarProvider = Render<FluentMessageBarProvider>(builder =>
         {
             builder.Add(p => p.Section, DashboardUIHelpers.MessageBarSection);
         });

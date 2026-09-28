@@ -836,12 +836,12 @@ function resolveCliPath() {
 
   const candidatePaths = process.platform === 'win32'
     ? [
-      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net10.0', 'aspire.exe'),
-      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire.exe'),
+      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net11.0', 'aspire.exe'),
+      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net11.0', 'aspire.exe'),
     ]
     : [
-      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net10.0', 'aspire'),
-      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire'),
+      path.join(repoRoot, 'artifacts', 'bin', 'aspire', 'Debug', 'net11.0', 'aspire'),
+      path.join(repoRoot, 'artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net11.0', 'aspire'),
     ];
 
   const candidatePath = candidatePaths.find(p => fs.existsSync(p));
@@ -2124,7 +2124,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ...(enableJavaE2E ? {
       ASPIRE_REPO_ROOT: repoRoot,
       features__polyglotSupportEnabled: 'true',
-      features__experimentalPolyglot__java: 'true',
+      features__experimentalPolyglotJava: 'true',
     } : {}),
     ...extraEnv,
   };

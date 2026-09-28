@@ -36,12 +36,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public required bool IsAgentHelpEnabled { get; set; }
 
     [Parameter, EditorRequired]
-    public required bool IsTerminalDockEnabled { get; set; }
-
-    [Parameter, EditorRequired]
-    public required Func<Task> ToggleTerminalDockAsync { get; set; }
-
-    [Parameter, EditorRequired]
     public required Func<Task> LaunchNotificationsAsync { get; set; }
 
     [Parameter, EditorRequired]
@@ -55,9 +49,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.TerminalStrings> TerminalLoc { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
@@ -211,15 +202,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
                 Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
                 LaunchAIAgentsAsync,
                 new Icons.Regular.Size24.BotSparkle()
-            );
-        }
-
-        if (IsTerminalDockEnabled)
-        {
-            yield return new MobileNavMenuEntry(
-                TerminalLoc[nameof(Resources.TerminalStrings.TerminalTitle)],
-                ToggleTerminalDockAsync,
-                new Icons.Regular.Size20.WindowConsole()
             );
         }
 

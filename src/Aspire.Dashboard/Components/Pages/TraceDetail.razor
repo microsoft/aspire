@@ -50,7 +50,7 @@
                     @if (PageViewModel.Filters.Count > 0)
                     {
                         <div>
-                            <FluentCounterBadge Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                            <FluentCounterBadge Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" ShowEmpty="false" Appearance="BadgeAppearance.Filled">
                                 <AnchorContent>
                                     <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                                 </AnchorContent>
@@ -395,7 +395,7 @@
                     else
                     {
                         <div>
-                            <FluentCounterBadge Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                            <FluentCounterBadge Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" ShowEmpty="false" Appearance="BadgeAppearance.Filled">
                                 <AnchorContent>
                                     <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                                 </AnchorContent>

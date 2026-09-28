@@ -69,10 +69,14 @@ internal static class EnumerableGridItemsProvider
     public static IEnumerable<TItem> ApplySorting<TItem>(IEnumerable<TItem> items, GridItemsProviderRequest<TItem> request)
     {
         request.CancellationToken.ThrowIfCancellationRequested();
-        return request.SortByColumn?.SortBy switch
+        if (request.SortColumns is not [var sortColumn, ..])
         {
-            null => items,
-            EnumerableGridSort<TItem> sort => sort.Apply(items, request.SortByAscending),
+            return items;
+        }
+
+        return sortColumn.Column.SortBy switch
+        {
+            EnumerableGridSort<TItem> sort => sort.Apply(items, sortColumn.Ascending),
             _ => throw new InvalidOperationException("In-memory grid columns must use EnumerableGridSort.")
         };
     }

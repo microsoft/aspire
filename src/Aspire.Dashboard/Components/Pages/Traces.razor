@@ -71,7 +71,7 @@
                 else
                 {
                     <div>
-                        <FluentCounterBadge Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" Appearance="BadgeAppearance.Filled">
+                        <FluentCounterBadge Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" ShowEmpty="false" Appearance="BadgeAppearance.Filled">
                             <AnchorContent>
                                 <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
                             </AnchorContent>

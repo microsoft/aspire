@@ -37,7 +37,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var registration = module.SetupVoid("registerTerminalWindowButton", _ => true);
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.Disabled, disabled)
             .Add(p => p.TerminalKey, key)
@@ -50,7 +50,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
             Equals(invocation.Arguments[0], "/js/app-terminalwindow.js")));
         Assert.Empty(module.Invocations);
 
-        cut.SetParametersAndRender(builder => builder
+        cut.Render(builder => builder
             .Add(p => p.Disabled, false)
             .Add(p => p.TerminalKey, "terminal")
             .Add(p => p.Url, "terminal-window/apphost/terminal")
@@ -62,8 +62,8 @@ public class TerminalWindowButtonTests : DashboardTestContext
         registration.SetVoidResult();
         cut.WaitForAssertion(() => Assert.False(cut.FindComponent<FluentButton>().Instance.Disabled));
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.Disabled, true));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.Disabled, false));
+        cut.Render(builder => builder.Add(p => p.Disabled, true));
+        cut.Render(builder => builder.Add(p => p.Disabled, false));
         Assert.Single(registration.Invocations);
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
         Assert.Single(module.Invocations, invocation => invocation.Identifier == "unregisterTerminalWindowButton");
@@ -73,7 +73,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
     public async Task Disposal_BeforeLaunchingIsAvailable_DoesNotLoadJavaScript()
     {
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder.Add(p => p.Label, "Open"));
+        var cut = Render<TerminalWindowButton>(builder => builder.Add(p => p.Label, "Open"));
 
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
 
@@ -88,7 +88,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
         Services.AddSingleton<NavigationManager>(new TestNavigationManager("http://localhost/aspire/nested/"));
         var module = TerminalSetupHelpers.SetupTerminalWindows(this, "/aspire/nested");
         var registration = module.SetupVoid("registerTerminalWindowButton", _ => true);
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open in new window")
             .Add(p => p.TerminalKey, "first")
             .Add(p => p.Url, "terminal-window/apphost/first")
@@ -96,7 +96,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
 
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
         Assert.False(cut.FindComponent<FluentButton>().Instance.OnClick.HasDelegate);
-        cut.SetParametersAndRender(builder => builder
+        cut.Render(builder => builder
             .Add(p => p.TerminalKey, "second #1/?%+")
             .Add(p => p.Url, "terminal-window/apphost/second%20%231%2F%3F%25%2B")
             .Add(p => p.FontSize, 23));
@@ -108,16 +108,16 @@ public class TerminalWindowButtonTests : DashboardTestContext
             cut.Find("fluent-button").GetAttribute("data-terminal-window-url"));
         Assert.Single(registration.Invocations);
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.FontSize, null));
+        cut.Render(builder => builder.Add(p => p.FontSize, null));
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
         Assert.Null(cut.Find("fluent-button").GetAttribute("data-terminal-window-url"));
-        cut.SetParametersAndRender(builder => builder.Add(p => p.FontSize, 17).Add(p => p.Disabled, true));
+        cut.Render(builder => builder.Add(p => p.FontSize, 17).Add(p => p.Disabled, true));
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.Disabled, false).Add(p => p.TerminalKey, null));
+        cut.Render(builder => builder.Add(p => p.Disabled, false).Add(p => p.TerminalKey, null));
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.TerminalKey, "second").Add(p => p.Url, null));
+        cut.Render(builder => builder.Add(p => p.TerminalKey, "second").Add(p => p.Url, null));
         Assert.True(cut.FindComponent<FluentButton>().Instance.Disabled);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.Url, "terminal-window/apphost/second"));
+        cut.Render(builder => builder.Add(p => p.Url, "terminal-window/apphost/second"));
         Assert.False(cut.FindComponent<FluentButton>().Instance.Disabled);
     }
 
@@ -127,7 +127,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var opened = new List<(string Key, TerminalWindowOpenResult Result)>();
         var closed = new List<string>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.TerminalKey, "first")
             .Add(p => p.Url, "terminal-window/apphost/first")
@@ -135,7 +135,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
             .Add(p => p.OnWindowOpened, launch => opened.Add(launch))
             .Add(p => p.OnWindowClosed, key => closed.Add(key)));
         var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
-        cut.SetParametersAndRender(builder => builder.Add(p => p.TerminalKey, "second"));
+        cut.Render(builder => builder.Add(p => p.TerminalKey, "second"));
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("first", "opened"));
         await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync("first", "focused"));
         await cut.InvokeAsync(() => launcher.OnTerminalWindowClosedAsync("first"));
@@ -159,7 +159,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var registration = module.SetupVoid("registerTerminalWindowButton", _ => true);
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.TerminalKey, "terminal")
             .Add(p => p.Url, "terminal-window/apphost/terminal")
@@ -180,8 +180,8 @@ public class TerminalWindowButtonTests : DashboardTestContext
     public async Task BrowserFailure_ShowsActionableToast(string result, string resourceKey)
     {
         TerminalSetupHelpers.SetupTerminalWindows(this);
-        var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.TerminalKey, "terminal")
             .Add(p => p.Url, "terminal-window/apphost/terminal")
@@ -200,8 +200,8 @@ public class TerminalWindowButtonTests : DashboardTestContext
     {
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         module.SetupVoid("registerTerminalWindowButton", _ => true).SetException(new JSException("Module registration failed"));
-        var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.TerminalKey, "terminal")
             .Add(p => p.Url, "terminal-window/apphost/terminal")
@@ -222,7 +222,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
         var adoption = module.SetupVoid("adoptTerminalWindows", _ => true);
         var opened = new List<(string Key, TerminalWindowOpenResult Result)>();
         var checkedKeys = Channel.CreateUnbounded<string[]>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.Disabled, true)
             .Add(p => p.WindowKeysToAdopt, ["first", "inactive"])
@@ -254,7 +254,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
         adoption.SetVoidResult();
         Assert.Equal(["first", "inactive"], await checkedKeys.Reader.ReadAsync().AsTask().DefaultTimeout());
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.WindowKeysToAdopt, ["inactive", "new"]));
+        cut.Render(builder => builder.Add(p => p.WindowKeysToAdopt, ["inactive", "new"]));
         Assert.Equal(["new"], await checkedKeys.Reader.ReadAsync().AsTask().DefaultTimeout());
         Assert.Equal(2, adoption.Invocations.Count);
         Assert.Equal(["new"], Assert.IsType<string[]>(adoption.Invocations.Last().Arguments[1]));
@@ -268,7 +268,7 @@ public class TerminalWindowButtonTests : DashboardTestContext
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var adoption = module.SetupVoid("adoptTerminalWindows", _ => true);
         var checkedKeys = new List<string[]>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.WindowKeysToAdopt, ["terminal"])
             .Add(p => p.OnWindowsAdopted, keys => checkedKeys.Add(keys)));
@@ -290,8 +290,8 @@ public class TerminalWindowButtonTests : DashboardTestContext
         var adoption = module.SetupVoid("adoptTerminalWindows", _ => true);
         adoption.SetException(new JSException("Window reconciliation failed"));
         var checkedKeys = new List<string[]>();
-        var toasts = RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.WindowKeysToAdopt, ["terminal"])
             .Add(p => p.OnWindowsAdopted, keys => checkedKeys.Add(keys)));
@@ -313,15 +313,15 @@ public class TerminalWindowButtonTests : DashboardTestContext
         failure.SetException(new JSException("Browser storage unavailable"));
         var failedKeys = Channel.CreateUnbounded<string[]>();
         var checkedKeys = new List<string[]>();
-        RenderComponent<FluentToastProvider>();
-        var cut = RenderComponent<TerminalWindowButton>(builder => builder
+        Render<FluentToastProvider>();
+        var cut = Render<TerminalWindowButton>(builder => builder
             .Add(p => p.Label, "Open")
             .Add(p => p.WindowKeysToAdopt, ["first"])
             .Add(p => p.OnWindowsAdopted, keys => checkedKeys.Add(keys))
             .Add(p => p.OnWindowTrackingFailed, keys => { failedKeys.Writer.TryWrite(keys); }));
         Assert.Equal(["first"], await failedKeys.Reader.ReadAsync().AsTask().DefaultTimeout());
 
-        cut.SetParametersAndRender(builder => builder.Add(p => p.WindowKeysToAdopt, ["first", "new"]));
+        cut.Render(builder => builder.Add(p => p.WindowKeysToAdopt, ["first", "new"]));
         Assert.Equal(["new"], await failedKeys.Reader.ReadAsync().AsTask().DefaultTimeout());
         cut.Render();
         Assert.False(failedKeys.Reader.TryPeek(out _));

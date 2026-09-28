@@ -9,4 +9,14 @@ namespace Aspire.Hosting.Postgres;
 /// Represents a container resource for PGAdmin.
 /// </summary>
 /// <param name="name">The name of the container resource.</param>
-public sealed class PgAdminContainerResource(string name) : ContainerResource(name);
+public sealed class PgAdminContainerResource(string name) : ContainerResource(name)
+{
+    internal const string PrimaryEndpointName = "http";
+
+    private EndpointReference? _primaryEndpoint;
+
+    /// <summary>
+    /// Gets the primary endpoint for pgAdmin.
+    /// </summary>
+    public EndpointReference PrimaryEndpoint => _primaryEndpoint ??= new(this, PrimaryEndpointName);
+}

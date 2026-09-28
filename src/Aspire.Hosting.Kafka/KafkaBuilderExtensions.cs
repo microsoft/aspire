@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Confluent.Kafka;
 using HealthChecks.Kafka;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,6 +101,7 @@ public static class KafkaBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existingKafkaUIResource);
             configureContainer?.Invoke(builderForExistingResource);
+            builderForExistingResource.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
             return builder;
         }
         else
@@ -111,8 +113,26 @@ public static class KafkaBuilderExtensions
                 .WithImage(KafkaContainerImageTags.KafkaUiImage, KafkaContainerImageTags.KafkaUiTag)
                 .WithImageRegistry(KafkaContainerImageTags.Registry)
                 .WithIconName("WindowDatabase")
-                .WithHttpEndpoint(targetPort: KafkaUIPort)
+                .WithHttpEndpoint(targetPort: KafkaUIPort, name: KafkaUIContainerResource.PrimaryEndpointName)
                 .ExcludeFromManifest();
+
+            kafkaUiBuilder.WithHidden();
+            builder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+            {
+                foreach (var kafkaResource in @event.Model.Resources.OfType<KafkaServerResource>())
+                {
+                    kafkaUiBuilder.WithRelationship(kafkaResource, KnownRelationshipTypes.Manages);
+#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
+                    builder.ApplicationBuilder.CreateResourceBuilder(kafkaResource).WithUrlForEndpoint(kafkaUi.PrimaryEndpoint, url =>
+                    {
+                        url.DisplayText = "Manage";
+                        url.DisplayOrder = 1;
+                    });
+#pragma warning restore CS0618
+                }
+
+                return Task.CompletedTask;
+            });
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(kafkaUi, (e, ct) =>
             {
@@ -132,6 +152,8 @@ public static class KafkaBuilderExtensions
             });
 
             configureContainer?.Invoke(kafkaUiBuilder);
+
+            kafkaUiBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }

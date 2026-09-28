@@ -50,6 +50,21 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Start_WithIsolatedConsole_RequestsKillOnParentExitForAppHostServer()
+    {
+        var project = new RecordingAppHostServerProject();
+
+        await using var session = CreateSession(
+            project,
+            CancellationToken.None,
+            isolateConsole: true);
+        await session.StartAsync();
+
+        Assert.True(project.ReceivedRunControl?.IsolateConsole);
+        Assert.True(project.ReceivedRunControl?.KillOnParentExit);
+    }
+
+    [Fact]
     public async Task Start_PropagatesProfilingContextToServerEnvironment()
     {
         var project = new RecordingAppHostServerProject();
@@ -565,11 +580,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     {
         var executionContext = TestExecutionContextFactory.CreateTestContext();
         var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            new TestEnvironment(),
-            NullLogger<BundleNuGetService>.Instance);
+            NullLogger<BundleNuGetService>.Instance,
+            new FakeNuGetClient());
 
         return new AppHostServerProjectFactory(
             new TestDotNetCliRunner(),
@@ -588,6 +600,8 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         public string AppDirectoryPath => Directory.GetCurrentDirectory();
 
         public Dictionary<string, string>? ReceivedEnvironmentVariables { get; private set; }
+
+        public AppHostServerRunControl? ReceivedRunControl { get; private set; }
 
         public IProcessExecution? StartedExecution { get; private set; }
 
@@ -611,6 +625,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             ReceivedEnvironmentVariables = environmentVariables is null
                 ? null
                 : new Dictionary<string, string>(environmentVariables);
+            ReceivedRunControl = runControl;
 
             var startInfo = new ProcessStartInfo("dotnet")
             {
