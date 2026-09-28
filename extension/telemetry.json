@@ -1,5 +1,34 @@
 {
   "events": {
+    "aspire/vscode/survey/invitation": {
+      "campaign_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed usefulness survey campaign identifier. Only is_microsoft_internal is inherited from Aspire common properties; employee alias/domain and AppHost properties are excluded. Standard VS Code metadata remains. Campaign remains disabled pending classification and ingestion approval."
+      },
+      "question_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed version of the Aspire usefulness question, not the question text."
+      }
+    },
+    "aspire/vscode/survey/result": {
+      "campaign_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed usefulness survey campaign identifier. Only is_microsoft_internal is inherited from Aspire common properties; employee alias/domain and AppHost properties are excluded. Standard VS Code metadata remains. Campaign remains disabled pending classification and ingestion approval."
+      },
+      "question_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed version of the Aspire usefulness question, not the question text."
+      },
+      "outcome": {
+        "classification": "PublicNonPersonalData",
+        "purpose": "FeatureInsight",
+        "comment": "One of yes, no, dismissed, or never_again. No free text. Classification requires approval before enabling the campaign."
+      }
+    },
     "aspire/vscode/extension/activated": {
       "workspace_open": {
         "classification": "SystemMetaData",

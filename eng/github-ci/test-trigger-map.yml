@@ -300,8 +300,9 @@ path_rules:
       - .vscode/tasks.json
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
       - .github/workflows/extension-unit-tests.yml
+      - .github/workflows/extension-e2e-tests.yml
     targets: [job:extension-unit]
-    reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
+    reason: extension tests validate workspace wiring and the E2E workflow contract; bootstrap builds validate the E2E bridge VSIX
   - paths:
       - extension/**
       - src/Aspire.AppHost.Sdk/**

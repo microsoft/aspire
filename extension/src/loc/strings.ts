@@ -5,6 +5,8 @@ export const noCsprojFound = vscode.l10n.t('No AppHost found in the current work
 export const errorMessage = (error: unknown) => vscode.l10n.t('Error: {0}', error instanceof Error ? error.message : String(error));
 export const yesLabel = vscode.l10n.t('Yes');
 export const noLabel = vscode.l10n.t('No');
+export const usefulnessSurveyPrompt = vscode.l10n.t('Does Aspire improve your development experience?');
+export const usefulnessSurveyNeverAgain = vscode.l10n.t("Don't ask again");
 export const directUrl = (url: string) => vscode.l10n.t('Direct: {0}', url);
 export const codespacesUrl = (url: string) => vscode.l10n.t('Codespaces: {0}', url);
 export const directLink = vscode.l10n.t('Open local URL');

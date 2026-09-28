@@ -1,4 +1,6 @@
 {
+  "aspire-vscode.strings.usefulnessSurveyPrompt": "Does Aspire improve your development experience?",
+  "aspire-vscode.strings.usefulnessSurveyNeverAgain": "Don't ask again",
   "extension.title": "Aspire",
   "extension.description": "Official Aspire extension for Visual Studio Code",
   "extension.debug.program": "Path to the AppHost to run",

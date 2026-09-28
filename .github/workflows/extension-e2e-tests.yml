@@ -349,7 +349,7 @@ jobs:
             useXvfb: true
           - name: Linux
             shardName: cli-path-rejection
-            spec: out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js
+            spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
             archivePattern: aspire-cli-linux-x64*.tar.gz
@@ -357,7 +357,7 @@ jobs:
             useXvfb: true
           - name: Windows
             shardName: cli-path-rejection
-            spec: out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js
+            spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
             runner: windows-latest
             rid: win-x64
             archivePattern: aspire-cli-win-x64*.zip
@@ -906,9 +906,8 @@ jobs:
         run: |
           corepack yarn compile
           corepack yarn compile-e2e
-          if (-not (Test-Path '${{ matrix.spec }}')) {
-            throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
-          }
+          # run-e2e.js validates compiled spec matches, including brace globs that
+          # PowerShell Test-Path does not expand.
 
       - name: Install Deno
         if: ${{ matrix.installDeno }}

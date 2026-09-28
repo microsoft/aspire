@@ -334,6 +334,12 @@
     <trans-unit id="aspire-vscode.strings.doYouWantToSetDefaultApphost">
       <source xml:lang="en">Do you want to set {0} as the default AppHost for this workspace?</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.usefulnessSurveyPrompt">
+      <source xml:lang="en">Does Aspire improve your development experience?</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.usefulnessSurveyNeverAgain">
+      <source xml:lang="en">Don&apos;t ask again</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDontShowAgain">
       <source xml:lang="en">Don&apos;t show again</source>
     </trans-unit>

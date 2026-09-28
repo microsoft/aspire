@@ -198,6 +198,7 @@ export interface AspireExtensionE2EControlPayload {
 }
 
 export type AspireExtensionE2EControlCommand =
+    | { name: 'probeUsefulnessSurvey'; reset: boolean }
     | { name: 'refreshAppHosts' }
     | { name: 'globalRefreshAppHosts' }
     | { name: 'switchToGlobalView' }

@@ -61,12 +61,21 @@ export type CommonTelemetryProperty =
  * Per-event schema. Each entry lists the event-specific properties and
  * measurements the event is permitted to carry. {@link CommonTelemetryProperty}
  * values are implicitly merged in by the {@link sendTelemetryEvent} wrapper
- * and need not be repeated here.
+ * and need not be repeated here. Survey events allow only the coarse internal
+ * cohort property from this bag, never employee alias/domain or AppHost context.
  *
  * Use `never` for `properties` or `measurements` when the event has no
  * event-specific entries of that kind.
  */
 export interface TelemetryEventSchema {
+    'aspire/vscode/survey/invitation': {
+        properties: 'campaign_id' | 'question_id';
+        measurements: never;
+    };
+    'aspire/vscode/survey/result': {
+        properties: 'campaign_id' | 'question_id' | 'outcome';
+        measurements: never;
+    };
     // ── Extension-emitted events ────────────────────────────────────────────
     'aspire/vscode/extension/activated': {
         properties: 'workspace_open' | 'extension_mode';
