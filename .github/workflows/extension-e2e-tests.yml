@@ -415,6 +415,7 @@ jobs:
             useXvfb: false
           - name: Linux
             shardName: browser-debugger
+            advisoryIssue: https://github.com/microsoft/aspire/issues/20184
             spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -425,6 +426,7 @@ jobs:
             installDotnetDebugger: true
           - name: Windows
             shardName: browser-debugger
+            advisoryIssue: https://github.com/microsoft/aspire/issues/20117
             spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
             runner: windows-latest
             rid: win-x64
