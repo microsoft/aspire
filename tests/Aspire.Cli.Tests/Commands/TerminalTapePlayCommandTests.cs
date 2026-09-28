@@ -14,6 +14,67 @@ namespace Aspire.Cli.Tests.Commands;
 public class TerminalTapePlayCommandTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("")]
+    [InlineData("Set TypingSpeed 0\nType \"docked\"")]
+    public async Task PlaysAgainstAppHostTerminalWithoutResourceSnapshot(string tape)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await using var host = await TerminalTapeTestHost.StartAsync(101, 37);
+        await host.WriteAsync("Dock ready");
+        var stdout = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateProvider(workspace, host.SocketPath, stdout, configure: backchannel =>
+        {
+            backchannel.ResourceSnapshots = [];
+            backchannel.GetTerminalInfoHandler = (selector, _) =>
+            {
+                Assert.Equal("dock-id", selector);
+                return Task.FromResult(new GetTerminalInfoResponse
+                {
+                    IsAvailable = true,
+                    AppHostTerminal = new() { TerminalId = selector, Title = "Dock", ConsumerUdsPath = host.SocketPath }
+                });
+            };
+        });
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "probe.tape"), tape);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse("terminal tape play dock-id --tape-file probe.tape");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        if (tape.Length > 0)
+        {
+            Assert.Equal("docked", await host.ReadInputAsync(6));
+        }
+        Assert.Equal(host.GetScreenText().TrimEnd(), string.Join('\n', stdout.Logs).TrimEnd());
+        Assert.Equal((101, 37), host.GetDimensions());
+        Assert.True(host.IsRunning);
+        await host.WriteAsync("Still running");
+    }
+
+    [Theory]
+    [InlineData("terminal attach dock-id --replica 0")]
+    [InlineData("terminal tape play dock-id --replica 0 --tape-file probe.tape")]
+    public async Task AppHostTerminalRejectsReplicaSelection(string command)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "probe.tape"), "");
+        using var errors = new StringWriter();
+        using var provider = CreateProvider(workspace, null, stderr: errors, configure: backchannel =>
+        {
+            backchannel.ResourceSnapshots = [];
+            backchannel.TerminalInfoResponse = new()
+            {
+                IsAvailable = true,
+                AppHostTerminal = new() { TerminalId = "dock-id", Title = "Dock", ConsumerUdsPath = "unused" }
+            };
+        });
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(command);
+
+        Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+        Assert.Contains("do not have replicas", errors.ToString());
+    }
+
+    [Theory]
     [InlineData("terminal tape --help", 0)]
     [InlineData("terminal tape play --help", 0)]
     [InlineData("terminal tape", 1)]

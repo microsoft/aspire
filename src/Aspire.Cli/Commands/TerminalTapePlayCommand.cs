@@ -16,7 +16,7 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Plays a tape against an existing resource terminal without owning its process or dimensions.
+/// Plays a tape against an existing terminal without owning its process or dimensions.
 /// </summary>
 internal sealed class TerminalTapePlayCommand : BaseCommand
 {
@@ -119,9 +119,9 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible, TerminalCommandStrings.TerminalIncompatible);
         }
 
-        var (canonicalName, replica) = await _terminalResolver.ResolveAsync(
+        var target = await _terminalResolver.ResolveAsync(
             connectionResult.Connection, resourceName, parseResult.GetValue(_replicaOption), cancellationToken).ConfigureAwait(false);
-        if (replica is null)
+        if (target is null)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
@@ -129,26 +129,29 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds), _timeProvider);
         using var playback = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         var disconnected = 0;
+        var replica = target.Replica;
+        var socketPath = target.ConsumerUdsPath;
         try
         {
             // A false IsAlive only means no producer is currently attached, not permanent exit.
             // DCP can attach after startup or a recycle, even when ExitCode describes a previous cycle.
             // Refresh the selected replica's endpoint without reprompting or resetting the playback budget.
-            while (!replica.IsAlive)
+            while (replica is { IsAlive: false })
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(100), _timeProvider, playback.Token).ConfigureAwait(false);
-                var info = await connectionResult.Connection.GetTerminalInfoAsync(canonicalName, playback.Token).ConfigureAwait(false);
+                var info = await connectionResult.Connection.GetTerminalInfoAsync(target.Name, playback.Token).ConfigureAwait(false);
                 if (info.IsAvailable && info.Replicas is { } replicas &&
                     Array.Find(replicas, r => r.ReplicaIndex == replica.ReplicaIndex) is { } refreshedReplica)
                 {
                     replica = refreshedReplica;
+                    socketPath = replica.ConsumerUdsPath;
                 }
             }
             playback.Token.ThrowIfCancellationRequested();
 
             await using var adapter = new Hmp1WorkloadAdapter(new Hmp1ClientOptions
             {
-                StreamFactory = async ct => await Hmp1Transports.ConnectUnixSocket(replica.ConsumerUdsPath, ct).ConfigureAwait(false),
+                StreamFactory = async ct => await Hmp1Transports.ConnectUnixSocket(socketPath, ct).ConfigureAwait(false),
                 DefaultRole = Hmp1Role.Secondary,
                 DisplayName = $"aspire-tape:{Environment.ProcessId}",
                 OnDisconnected = _ =>
@@ -218,7 +221,7 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
         }
         catch (Exception ex) when (ex is IOException or SocketException or TimeoutException)
         {
-            _logger.LogDebug(ex, "Terminal tape connection failed for {ResourceName}, replica {ReplicaIndex}.", canonicalName, replica.ReplicaIndex);
+            _logger.LogDebug(ex, "Terminal tape connection failed for {Terminal}.", target.Label);
             return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand,
                 string.Format(CultureInfo.CurrentCulture, TerminalCommandStrings.TapePlaybackFailed, ex.Message));
         }

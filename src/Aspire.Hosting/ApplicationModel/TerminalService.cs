@@ -7,6 +7,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
+using Aspire.Shared.TerminalHost;
 using Hex1b;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -51,6 +53,7 @@ public sealed class TerminalService : IAsyncDisposable
     private readonly HashSet<Hex1bAspireTerminal> _retiringTerminals = [];
     private readonly ILogger<TerminalService> _logger;
     private readonly int _dockUpdateBufferCapacity;
+    private readonly string? _socketDirectory;
     private readonly object _syncLock = new();
     private ImmutableHashSet<Channel<TerminalUpdate>> _outgoingChannels = [];
     private int _disposed;
@@ -59,6 +62,7 @@ public sealed class TerminalService : IAsyncDisposable
     internal TerminalService(ILogger<TerminalService> logger, IConfiguration configuration)
     {
         _logger = logger;
+        _socketDirectory = configuration[TerminalHostPaths.DirectoryOverrideConfigName];
         _dockUpdateBufferCapacity = configuration.GetValue(KnownConfigNames.TerminalWatchBufferCapacity, DefaultDockUpdateBufferCapacity);
         if (_dockUpdateBufferCapacity <= 0)
         {
@@ -75,6 +79,22 @@ public sealed class TerminalService : IAsyncDisposable
     /// AppHost terminals.
     /// </remarks>
     internal ResourceTerminalCatalog? ResourceTerminals { get; set; }
+
+    internal (AspireTerminal Terminal, string SocketPath)? GetConnectionInfo(string terminalId)
+    {
+        if (!_terminals.TryGetValue(terminalId, out var terminal))
+        {
+            return null;
+        }
+
+        var defaultDirectory = string.IsNullOrEmpty(_socketDirectory);
+        var directory = defaultDirectory
+            ? TerminalHostPaths.GetTrmnlDirectory(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
+            : _socketDirectory!;
+        SocketPermissionHelper.CreateDirectory(directory, repairExisting: defaultDirectory);
+        var path = terminal.GetSocketPath(directory);
+        return path is null ? null : (terminal.Handle, path);
+    }
 
     /// <summary>
     /// Creates a terminal. The workload does not start until something needs it: the first viewer attaching,

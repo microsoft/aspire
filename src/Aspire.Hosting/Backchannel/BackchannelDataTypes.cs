@@ -1579,12 +1579,12 @@ internal sealed class ResourceLogLine
 #region Terminal
 
 /// <summary>
-/// Request for getting terminal information for a resource.
+/// Request for getting terminal information for a resource name or AppHost terminal ID.
 /// </summary>
 internal sealed class GetTerminalInfoRequest : BackchannelRequest
 {
     /// <summary>
-    /// Gets the resource name.
+    /// Gets the resource name or exact AppHost terminal ID. Resource names take precedence.
     /// </summary>
     public required string ResourceName { get; init; }
 
@@ -1695,18 +1695,24 @@ internal sealed class TerminalPeerInfo
 }
 
 /// <summary>
-/// Response containing terminal information for a resource.
+/// Response containing terminal information for a resource or AppHost-owned terminal.
 /// </summary>
 internal sealed class GetTerminalInfoResponse
 {
     /// <summary>
-    /// Gets whether terminal access is available for this resource.
+    /// Gets the AppHost-owned terminal endpoint when the selector is a terminal ID, rather than a resource.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public AppHostTerminalEndpoint? AppHostTerminal { get; init; }
+
+    /// <summary>
+    /// Gets whether terminal access is available for the requested resource or terminal ID.
     /// </summary>
     public required bool IsAvailable { get; init; }
 
     /// <summary>
-    /// Gets the per-replica endpoint information when <see cref="IsAvailable"/> is true.
-    /// Null for older AppHosts that predate the
+    /// Gets the per-replica endpoints for a resource when <see cref="IsAvailable"/> is true.
+    /// Null for AppHost-owned terminals and older AppHosts that predate the
     /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
     /// </summary>
     public TerminalReplicaInfo[]? Replicas { get; init; }
@@ -1729,6 +1735,16 @@ internal sealed class GetTerminalInfoResponse
     /// negotiate a different size after attaching.
     /// </summary>
     public int Rows { get; init; }
+}
+
+/// <summary>
+/// Connection details for an AppHost-owned terminal. It has no resource replicas.
+/// </summary>
+internal sealed class AppHostTerminalEndpoint
+{
+    public required string TerminalId { get; init; }
+    public required string Title { get; init; }
+    public required string ConsumerUdsPath { get; init; }
 }
 
 /// <summary>

@@ -506,9 +506,9 @@ Console view non-empty for a `WithTerminal()` resource.
 
 ## CLI
 
-`aspire terminal attach <resource> [--replica N]` (`Aspire.Cli/Commands/TerminalAttachCommand.cs`)
+`aspire terminal attach <resource-or-terminal-id> [--replica N]` (`Aspire.Cli/Commands/TerminalAttachCommand.cs`)
 opens its own `Hmp1WorkloadAdapter` against the consumer UDS path
-returned by `IBackchannel.GetTerminalInfoAsync(resource, replica)` and
+returned by the auxiliary backchannel's `GetTerminalInfoAsync` and
 renders frames into the host terminal via Hex1b's `Hex1bTerminal`. When the
 resource has more than one replica and the CLI is interactive, it prompts
 for a selection; in non-interactive mode the `--replica` flag is required.
@@ -521,11 +521,34 @@ The CLI's `--format json` output combines both into one array with an `owner`
 discriminator. Terminal commands are gated by `features.terminalCommandsEnabled`;
 their experimental backchannel contract can change between builds.
 
+Use the exact AppHost terminal ID (not its title) to attach to a dock tab,
+interaction terminal, or automation-only terminal:
+
+```sh
+aspire terminal ps
+aspire terminal attach <terminal-id> --viewer
+aspire terminal tape play <terminal-id> --tape-file ./probe.tape
+```
+
+Resource names retain precedence over terminal IDs. `--replica` is only valid
+for resources. Both the CLI and Aspire.Hosting must support AppHost terminal
+attachment; older AppHosts report these targets as unavailable.
+
+AppHost terminal discovery creates an on-demand, user-private Unix domain socket.
+The first viewer starts the existing workload if needed; listing terminals and
+resolving endpoints do not start them.
+The socket serves the same HMP presentation adapter as the dashboard, preserving
+the screen and allowing multiple viewers. Detaching does not dispose the terminal.
+The socket and its clients are cleaned up when the workload ends or the terminal
+is disposed; ended AppHost terminals cannot be reattached.
+`--viewer` leaves the dashboard in control; without it, attachment takes primary
+control just as it does for a resource terminal.
+
 ### Tape playback
 
-`aspire terminal tape play <resource> --tape-file <path>` uses Hex1b's
+`aspire terminal tape play <resource-or-terminal-id> --tape-file <path>` uses Hex1b's
 `TapeParser` and `TapePlayer` to execute a VHS `.tape` script against an
-existing resource terminal. It requires the same `features.terminalCommandsEnabled` feature
+existing resource or AppHost terminal. It requires the same `features.terminalCommandsEnabled` feature
 flag as `terminal attach` and `terminal ps`.
 
 ```sh
@@ -560,7 +583,7 @@ continue after cancellation.
 An overall timeout returns exit code 17, and user cancellation returns 130.
 
 Playback connects as a secondary HMP peer. It does not request primary ownership,
-resize the producer, create a new shell, or stop the resource on completion or
+resize the producer, create a replacement shell, or stop the workload on completion or
 failure. Other viewers and input sources can remain attached; input is not
 exclusive, so coordinate playback with other users. A disconnected transport
 fails playback rather than retrying potentially non-idempotent input.

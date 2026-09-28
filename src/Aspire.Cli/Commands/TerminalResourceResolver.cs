@@ -9,11 +9,11 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Resolves resource names and replicas consistently for interactive and scripted terminal commands.
+/// Resolves resource replicas and AppHost terminal IDs for interactive and scripted terminal commands.
 /// </summary>
 internal sealed class TerminalResourceResolver(IInteractionService interactionService)
 {
-    public async Task<(string ResourceName, TerminalReplicaInfo? Replica)> ResolveAsync(
+    public async Task<ResolvedTerminal?> ResolveAsync(
         IAppHostAuxiliaryBackchannel connection,
         string resourceName,
         int? requestedReplica,
@@ -26,9 +26,21 @@ internal sealed class TerminalResourceResolver(IInteractionService interactionSe
         var matches = ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).ToList();
         if (matches.Count == 0)
         {
+            var terminalInfo = await connection.GetTerminalInfoAsync(resourceName, cancellationToken).ConfigureAwait(false);
+            if (terminalInfo is { IsAvailable: true, AppHostTerminal: { } terminal })
+            {
+                if (requestedReplica is not null)
+                {
+                    interactionService.DisplayError(TerminalCommandStrings.AppHostReplicaNotSupported);
+                    return null;
+                }
+
+                return new(terminal.TerminalId, terminal.Title, terminal.ConsumerUdsPath, null);
+            }
+
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
                 TerminalCommandStrings.ResourceNotFound, resourceName));
-            return (resourceName, null);
+            return null;
         }
 
         // Replicas share the parent DisplayName carrying WithTerminal(), rather than their individual names.
@@ -43,7 +55,7 @@ internal sealed class TerminalResourceResolver(IInteractionService interactionSe
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
                 TerminalCommandStrings.TerminalUnavailable, canonicalName));
-            return (canonicalName, null);
+            return null;
         }
 
         if (requestedReplica is { } index)
@@ -55,19 +67,19 @@ internal sealed class TerminalResourceResolver(IInteractionService interactionSe
                     TerminalCommandStrings.ReplicaNotFound, index, canonicalName,
                     string.Join(", ", replicas.Select(r => r.ReplicaIndex.ToString(CultureInfo.InvariantCulture)))));
             }
-            return (canonicalName, match);
+            return match is null ? null : FromReplica(canonicalName, match);
         }
 
         if (replicas.Length == 1)
         {
-            return (canonicalName, replicas[0]);
+            return FromReplica(canonicalName, replicas[0]);
         }
 
         if (Console.IsInputRedirected || Console.IsOutputRedirected)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
                 TerminalCommandStrings.ReplicaRequired, canonicalName, replicas.Length));
-            return (canonicalName, null);
+            return null;
         }
 
         var picked = await interactionService.PromptForSelectionAsync(
@@ -79,6 +91,12 @@ internal sealed class TerminalResourceResolver(IInteractionService interactionSe
                     r.Label, r.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return (canonicalName, picked);
+        return FromReplica(canonicalName, picked);
     }
+
+    private static ResolvedTerminal FromReplica(string name, TerminalReplicaInfo replica)
+        => new(name, string.Format(CultureInfo.InvariantCulture, "{0} (replica {1})", name, replica.ReplicaIndex),
+            replica.ConsumerUdsPath, replica);
 }
+
+internal sealed record ResolvedTerminal(string Name, string Label, string ConsumerUdsPath, TerminalReplicaInfo? Replica);

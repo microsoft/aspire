@@ -10,6 +10,31 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class BackchannelJsonSerializerContextTests
 {
     [Fact]
+    public void GetTerminalInfoResponse_DeserializesAppHostEndpoint()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var response = JsonSerializer.Deserialize<GetTerminalInfoResponse>(
+            """
+            {
+              "IsAvailable": true,
+              "AppHostTerminal": {
+                "TerminalId": "dock-id",
+                "Title": "Dock",
+                "ConsumerUdsPath": "/terminal/apphost.sock"
+              }
+            }
+            """, options);
+
+        Assert.NotNull(response);
+        Assert.True(response.IsAvailable);
+        Assert.Null(response.Replicas);
+        Assert.NotNull(response.AppHostTerminal);
+        Assert.Equal("dock-id", response.AppHostTerminal.TerminalId);
+        Assert.Equal("Dock", response.AppHostTerminal.Title);
+        Assert.Equal("/terminal/apphost.sock", response.AppHostTerminal.ConsumerUdsPath);
+    }
+
+    [Fact]
     public void JsonSerializerOptionsSerializeInteractionMessageActionTargetsAsAUnion()
     {
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();

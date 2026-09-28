@@ -13,8 +13,8 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Attaches the local terminal to an interactive PTY session for a resource that
-/// was registered with <c>WithTerminal()</c>.
+/// Attaches the local terminal to a resource registered with <c>WithTerminal()</c>
+/// or an AppHost-owned terminal selected by ID.
 /// </summary>
 /// <remarks>
 /// The command:
@@ -22,7 +22,8 @@ namespace Aspire.Cli.Commands;
 /// <item>Resolves the running AppHost via <see cref="AppHostConnectionResolver"/>.</item>
 /// <item>Verifies the AppHost advertises the <c>terminals.v1</c> capability.</item>
 /// <item>Looks up the resource (by Name or DisplayName) and asks the AppHost for the
-///   list of terminal replicas via <see cref="IAppHostAuxiliaryBackchannel.GetTerminalInfoAsync"/>.</item>
+///   list of terminal replicas, or resolves an AppHost terminal ID, via
+///   <see cref="IAppHostAuxiliaryBackchannel.GetTerminalInfoAsync"/>.</item>
 /// <item>Picks a replica (auto if 1; <c>--replica N</c> if specified; interactive prompt
 ///   otherwise; errors in non-interactive contexts when no <c>--replica</c> is given).</item>
 /// <item>Hands the local console off to <see cref="TerminalViewerApp"/>, which owns the
@@ -40,7 +41,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
     {
-        Description = "The name of the resource to attach a terminal to."
+        Description = TerminalCommandStrings.ResourceArgumentDescription
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption =
@@ -61,7 +62,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         TerminalResourceResolver terminalResolver,
         ILogger<TerminalAttachCommand> logger,
         CommonCommandServices services)
-        : base("attach", "Attach the local terminal to an interactive PTY session for a resource.", services)
+        : base("attach", "Attach the local terminal to a resource or AppHost terminal session.", services)
     {
         _interactionService = services.InteractionService;
         _logger = logger;
@@ -85,7 +86,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
 
         if (string.IsNullOrWhiteSpace(resourceName))
         {
-            _interactionService.DisplayError("A resource name is required.");
+            _interactionService.DisplayError(TerminalCommandStrings.ResourceRequired);
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
@@ -110,28 +111,27 @@ internal sealed class TerminalAttachCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible);
         }
 
-        var (canonicalName, replica) = await _terminalResolver.ResolveAsync(
+        var target = await _terminalResolver.ResolveAsync(
             connection, resourceName, requestedReplica, cancellationToken).ConfigureAwait(false);
-        if (replica is null)
+        if (target is null)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
-        if (!replica.IsAlive)
+        if (target.Replica is { IsAlive: false } replica)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning,
                 string.Format(CultureInfo.CurrentCulture,
                     "Replica {0} of '{1}' has exited (code {2}). Attaching to the historical buffer; no live input will be sent.",
                     replica.ReplicaIndex,
-                    canonicalName,
+                    target.Name,
                     replica.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"));
         }
 
         _interactionService.DisplayMessage(KnownEmojis.Information,
             string.Format(CultureInfo.CurrentCulture,
-                "Attaching to '{0}' replica {1}. Press Ctrl+B D to detach, Ctrl+B T to take control.",
-                canonicalName,
-                replica.ReplicaIndex));
+                TerminalCommandStrings.Attaching,
+                target.Label));
 
         try
         {
@@ -148,11 +148,9 @@ internal sealed class TerminalAttachCommand : BaseCommand
             // auto-takes primary on connect (preserving the single-head default
             // behaviour) and the "Take" InfoBar slot disappears in favour of
             // "(primary)".
-            var sessionLabel = string.Format(CultureInfo.InvariantCulture,
-                "{0} (replica {1})", canonicalName, replica.ReplicaIndex);
             var displayName = string.Format(CultureInfo.InvariantCulture,
                 "aspire-cli:{0}", Environment.ProcessId);
-            var viewerApp = new TerminalViewerApp(replica.ConsumerUdsPath, sessionLabel, displayName, viewerOnly, _logger);
+            var viewerApp = new TerminalViewerApp(target.ConsumerUdsPath, target.Label, displayName, viewerOnly, _logger);
             return CommandResult.FromExitCode(await viewerApp.RunAsync(cancellationToken).ConfigureAwait(false));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -161,19 +159,17 @@ internal sealed class TerminalAttachCommand : BaseCommand
         }
         catch (SocketException ex)
         {
-            _logger.LogDebug(ex, "Failed to connect to terminal at {Path}", replica.ConsumerUdsPath);
+            _logger.LogDebug(ex, "Failed to connect to terminal at {Path}", target.ConsumerUdsPath);
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
-                "Could not connect to terminal session for '{0}' (replica {1}). Is the AppHost still running?",
-                canonicalName, replica.ReplicaIndex));
+                TerminalCommandStrings.AttachFailed, target.Label));
             return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand);
         }
         catch (IOException ex) when (ex.InnerException is SocketException)
         {
-            _logger.LogDebug(ex, "Terminal session connection lost at {Path}", replica.ConsumerUdsPath);
+            _logger.LogDebug(ex, "Terminal session connection lost at {Path}", target.ConsumerUdsPath);
             _interactionService.DisplayMessage(KnownEmojis.Information,
                 string.Format(CultureInfo.CurrentCulture,
-                    "Terminal session for '{0}' (replica {1}) ended.",
-                    canonicalName, replica.ReplicaIndex));
+                    TerminalCommandStrings.SessionEnded, target.Label));
             return CommandResult.Success();
         }
     }

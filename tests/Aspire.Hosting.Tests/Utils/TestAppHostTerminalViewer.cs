@@ -15,16 +15,23 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
     private readonly CancellationTokenSource _attachmentCts = new();
     private readonly CancellationTokenSource _clientCts = new();
     private readonly TaskCompletionSource<IHmp1ConnectionHandle> _connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private readonly TestDuplexStream _serverStream;
-    private readonly TestDuplexStream _clientStream;
+    private readonly TestDuplexStream? _serverStream;
+    private readonly Stream _clientStream;
     private readonly Hex1bTerminal _client;
     private readonly Task _attachment;
     private readonly Task _run;
     private bool _disposed;
 
-    private TestAppHostTerminalViewer(TerminalService service, string terminalId)
+    private TestAppHostTerminalViewer(TerminalService service, string terminalId, Stream? clientStream)
     {
-        (_serverStream, _clientStream) = TestDuplexStream.CreatePair();
+        if (clientStream is null)
+        {
+            (_serverStream, _clientStream) = TestDuplexStream.CreatePair();
+        }
+        else
+        {
+            _clientStream = clientStream;
+        }
         _client = Hex1bTerminal.CreateBuilder()
             .WithHeadless()
             .WithReflow(GhosttyReflowStrategy.Instance)
@@ -40,16 +47,30 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
             })
             .Build();
 
-        _attachment = service.AttachAsync(terminalId, _serverStream, _ => Task.CompletedTask, _attachmentCts.Token);
+        _attachment = _serverStream is null
+            ? Task.CompletedTask
+            : service.AttachAsync(terminalId, _serverStream, _ => Task.CompletedTask, _attachmentCts.Token);
         _run = _client.RunAsync(_clientCts.Token);
     }
 
     public static async Task<TestAppHostTerminalViewer> ConnectAsync(TerminalService service, string terminalId)
     {
-        var viewer = new TestAppHostTerminalViewer(service, terminalId);
+        return await ConnectAsync(service, terminalId, null);
+    }
+
+    public static async Task<TestAppHostTerminalViewer> ConnectSocketAsync(TerminalService service, string terminalId, string socketPath)
+    {
+        var stream = await Hmp1Transports.ConnectUnixSocket(socketPath, CancellationToken.None).DefaultTimeout();
+        return await ConnectAsync(service, terminalId, stream);
+    }
+
+    private static async Task<TestAppHostTerminalViewer> ConnectAsync(TerminalService service, string terminalId, Stream? stream)
+    {
+        var viewer = new TestAppHostTerminalViewer(service, terminalId, stream);
         try
         {
-            var completed = await Task.WhenAny(viewer._connected.Task, viewer._run, viewer._attachment).DefaultTimeout();
+            var completed = await Task.WhenAny(viewer._connected.Task, viewer._run,
+                viewer._serverStream is null ? viewer._run : viewer._attachment).DefaultTimeout();
             await completed;
             Assert.True(viewer._connected.Task.IsCompletedSuccessfully, "The HMP1 connection ended before the handshake completed.");
             return viewer;
@@ -114,7 +135,7 @@ internal sealed class TestAppHostTerminalViewer : IAsyncDisposable
         finally
         {
             await StopClientAsync();
-            _serverStream.Dispose();
+            _serverStream?.Dispose();
             _clientStream.Dispose();
             _attachmentCts.Dispose();
             _clientCts.Dispose();

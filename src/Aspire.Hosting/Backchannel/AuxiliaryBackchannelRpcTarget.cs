@@ -424,7 +424,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Returns the discovery info needed to attach to a resource's terminal session(s). For a
+    /// Returns the discovery info needed to attach to a resource's terminal session(s) or an
+    /// AppHost-owned terminal by ID. AppHost endpoint discovery does not start the workload. For a
     /// resource configured with <c>WithTerminal()</c>, this enumerates the per-replica
     /// consumer-side UDS endpoints by asking each per-replica terminal host process over its
     /// control UDS in parallel. Returns <see cref="GetTerminalInfoResponse.IsAvailable"/> = false
@@ -441,6 +442,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         if (resource is null)
         {
+            if (serviceProvider.GetRequiredService<TerminalService>().GetConnectionInfo(request.ResourceName) is { } terminal)
+            {
+                return new GetTerminalInfoResponse
+                {
+                    IsAvailable = true,
+                    AppHostTerminal = new AppHostTerminalEndpoint
+                    {
+                        TerminalId = terminal.Terminal.Id,
+                        Title = terminal.Terminal.Title,
+                        ConsumerUdsPath = terminal.SocketPath
+                    }
+                };
+            }
+
             logger.LogDebug("GetTerminalInfo: resource '{ResourceName}' not found.", request.ResourceName);
             return new GetTerminalInfoResponse { IsAvailable = false };
         }

@@ -47,6 +47,30 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string AppHostReplicaNotSupported {
+            get {
+                return ResourceManager.GetString("AppHostReplicaNotSupported", resourceCulture);
+            }
+        }
+
+        public static string Attaching {
+            get {
+                return ResourceManager.GetString("Attaching", resourceCulture);
+            }
+        }
+
+        public static string AttachFailed {
+            get {
+                return ResourceManager.GetString("AttachFailed", resourceCulture);
+            }
+        }
+
+        public static string SessionEnded {
+            get {
+                return ResourceManager.GetString("SessionEnded", resourceCulture);
+            }
+        }
+
         public static string ResourceNotFound {
             get {
                 return ResourceManager.GetString("ResourceNotFound", resourceCulture);

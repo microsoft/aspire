@@ -2,6 +2,21 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../TerminalCommandStrings.resx">
     <body>
+      <trans-unit id="AppHostReplicaNotSupported">
+        <source>AppHost terminals do not have replicas. Omit --replica when selecting a terminal ID.</source>
+        <target state="new">AppHost terminals do not have replicas. Omit --replica when selecting a terminal ID.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AttachFailed">
+        <source>Could not connect to terminal session '{0}'. Is the AppHost still running?</source>
+        <target state="new">Could not connect to terminal session '{0}'. Is the AppHost still running?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Attaching">
+        <source>Attaching to '{0}'. Press Ctrl+B D to detach, Ctrl+B T to take control.</source>
+        <target state="new">Attaching to '{0}'. Press Ctrl+B D to detach, Ctrl+B T to take control.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DiscoveringSessions">
         <source>Discovering terminal sessions...</source>
         <target state="new">Discovering terminal sessions...</target>
@@ -38,23 +53,28 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
-        <source>The name of the resource whose terminal runs the tape.</source>
-        <target state="new">The name of the resource whose terminal runs the tape.</target>
+        <source>A resource name or an AppHost terminal ID from 'aspire terminal ps'.</source>
+        <target state="new">A resource name or an AppHost terminal ID from 'aspire terminal ps'.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
-        <source>Resource '{0}' was not found.</source>
-        <target state="new">Resource '{0}' was not found.</target>
+        <source>Resource or AppHost terminal '{0}' was not found or is no longer available. Use 'aspire terminal ps' to find a resource name or terminal ID. AppHost terminal attachment requires a compatible Aspire.Hosting version.</source>
+        <target state="new">Resource or AppHost terminal '{0}' was not found or is no longer available. Use 'aspire terminal ps' to find a resource name or terminal ID. AppHost terminal attachment requires a compatible Aspire.Hosting version.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceRequired">
-        <source>A resource name is required.</source>
-        <target state="new">A resource name is required.</target>
+        <source>A resource name or AppHost terminal ID is required.</source>
+        <target state="new">A resource name or AppHost terminal ID is required.</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectReplica">
         <source>Select a replica of '{0}' to attach to:</source>
         <target state="new">Select a replica of '{0}' to attach to:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SessionEnded">
+        <source>Terminal session '{0}' ended.</source>
+        <target state="new">Terminal session '{0}' ended.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeConnectionClosed">
@@ -63,8 +83,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TapeDescription">
-        <source>Run VHS tape scripts against resource terminals.</source>
-        <target state="new">Run VHS tape scripts against resource terminals.</target>
+        <source>Run VHS tape scripts against resource or AppHost terminals.</source>
+        <target state="new">Run VHS tape scripts against resource or AppHost terminals.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapeFileDescription">
@@ -78,8 +98,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TapePlayDescription">
-        <source>Play a VHS tape against a running resource terminal and print its final screen.</source>
-        <target state="new">Play a VHS tape against a running resource terminal and print its final screen.</target>
+        <source>Play a VHS tape against a resource or AppHost terminal and print its final screen.</source>
+        <target state="new">Play a VHS tape against a resource or AppHost terminal and print its final screen.</target>
         <note />
       </trans-unit>
       <trans-unit id="TapePlaybackFailed">

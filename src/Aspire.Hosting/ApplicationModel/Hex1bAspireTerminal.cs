@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared.TerminalHost;
 using Hex1b;
 using Hex1b.Automation;
 using Hex1b.Reflow;
@@ -43,6 +44,7 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
     private Task? _runTask;
     private Task? _stopTask;
     private bool _stopped;
+    private TerminalSocketListener? _socketListener;
 
     public Hex1bAspireTerminal(TerminalService owner, string id, string title, TerminalPlacement placement, Hex1bTerminalBuilder builder, int columns, int rows, ILogger logger)
     {
@@ -73,6 +75,24 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
     internal Task WorkloadEnded => _workloadEnded.Task;
 
     public void Start() => EnsureStarted();
+
+    internal string? GetSocketPath(string directory)
+    {
+        lock (_gate)
+        {
+            if (_stopped || _workloadEnded.Task.IsCompleted)
+            {
+                return null;
+            }
+
+            // Discovery must not launch a workload. The accepted viewer starts it through AttachAsync.
+            _socketListener ??= new TerminalSocketListener(
+                TerminalHostPaths.GetSocketPath(directory, TerminalHostPaths.CreateReplicaId(), "apphost"),
+                (stream, ct) => AttachAsync(stream, _ => Task.CompletedTask, ct),
+                _logger);
+            return _socketListener.Path;
+        }
+    }
 
     public void Show()
     {
@@ -273,6 +293,10 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
                     // Natural process exit must also cancel handshakes that have not sent ClientHello;
                     // those streams are not yet owned by the presentation adapter.
                     await _workloadCts.CancelAsync().ConfigureAwait(false);
+                    if (_socketListener is not null)
+                    {
+                        await _socketListener.DisposeAsync().ConfigureAwait(false);
+                    }
                     await Task.WhenAll(clients).ConfigureAwait(false);
                 }
                 finally
@@ -339,14 +363,34 @@ internal sealed class Hex1bAspireTerminal : ITerminalBackend
             _stopped = true;
             if (_runTask is null)
             {
-                // Registered but never started, so there is nothing to wind down.
-                _workloadCts.Dispose();
                 _workloadEnded.TrySetResult();
-                _sessionEnded.TrySetResult();
-                return _stopTask = _sessionEnded.Task;
+                return _stopTask = StopUnstartedAsync();
             }
 
             return _stopTask = StopCoreAsync();
+        }
+    }
+
+    private async Task StopUnstartedAsync()
+    {
+        // Endpoint discovery can create a listener without starting the workload.
+        await Task.Yield();
+        try
+        {
+            if (_socketListener is not null)
+            {
+                await _socketListener.DisposeAsync().ConfigureAwait(false);
+            }
+            _sessionEnded.TrySetResult();
+        }
+        catch (Exception ex)
+        {
+            _sessionEnded.TrySetException(ex);
+            throw;
+        }
+        finally
+        {
+            _workloadCts.Dispose();
         }
     }
 

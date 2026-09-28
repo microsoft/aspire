@@ -16,7 +16,7 @@
     <value>Looking up resource...</value>
   </data>
   <data name="ResourceNotFound" xml:space="preserve">
-    <value>Resource '{0}' was not found.</value>
+    <value>Resource or AppHost terminal '{0}' was not found or is no longer available. Use 'aspire terminal ps' to find a resource name or terminal ID. AppHost terminal attachment requires a compatible Aspire.Hosting version.</value>
   </data>
   <data name="DiscoveringSessions" xml:space="preserve">
     <value>Discovering terminal sessions...</value>
@@ -40,16 +40,16 @@
     <value>{0} (exited code={1})</value>
   </data>
   <data name="TapeDescription" xml:space="preserve">
-    <value>Run VHS tape scripts against resource terminals.</value>
+    <value>Run VHS tape scripts against resource or AppHost terminals.</value>
   </data>
   <data name="TapePlayDescription" xml:space="preserve">
-    <value>Play a VHS tape against a running resource terminal and print its final screen.</value>
+    <value>Play a VHS tape against a resource or AppHost terminal and print its final screen.</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource whose terminal runs the tape.</value>
+    <value>A resource name or an AppHost terminal ID from 'aspire terminal ps'.</value>
   </data>
   <data name="ResourceRequired" xml:space="preserve">
-    <value>A resource name is required.</value>
+    <value>A resource name or AppHost terminal ID is required.</value>
   </data>
   <data name="TapeFileDescription" xml:space="preserve">
     <value>The path to the VHS .tape file to play.</value>
@@ -80,5 +80,17 @@
   </data>
   <data name="TapeTimeoutInvalid" xml:space="preserve">
     <value>The timeout must be between 1 and {0} seconds.</value>
+  </data>
+  <data name="AppHostReplicaNotSupported" xml:space="preserve">
+    <value>AppHost terminals do not have replicas. Omit --replica when selecting a terminal ID.</value>
+  </data>
+  <data name="Attaching" xml:space="preserve">
+    <value>Attaching to '{0}'. Press Ctrl+B D to detach, Ctrl+B T to take control.</value>
+  </data>
+  <data name="AttachFailed" xml:space="preserve">
+    <value>Could not connect to terminal session '{0}'. Is the AppHost still running?</value>
+  </data>
+  <data name="SessionEnded" xml:space="preserve">
+    <value>Terminal session '{0}' ended.</value>
   </data>
 </root>

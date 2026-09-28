@@ -1,11 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Pipelines;
 using System.Net.Sockets;
+using System.Text;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.TerminalHost;
+using Hex1b;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +25,121 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
 {
     private readonly List<IAsyncDisposable> _toDispose = [];
     private readonly List<string> _tempDirs = [];
+
+    [Fact]
+    public async Task EndpointDiscoveryDoesNotStartWorkloadAndCleansUpWithoutViewer()
+    {
+        var directory = CreateShortTempDir();
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [TerminalHostPaths.DirectoryOverrideConfigName] = directory
+        }).Build();
+        await using var terminals = TestTerminalService.Create(configuration);
+        var workload = new GatedTerminalWorkloadAdapter();
+        workload.ReleaseDispose();
+        await using var terminal = terminals.CreateTerminal("Unstarted", TerminalPlacement.Dock,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 80, 24);
+
+        var connection = terminals.GetConnectionInfo(terminal.Id);
+
+        Assert.NotNull(connection);
+        Assert.True(File.Exists(connection.Value.SocketPath));
+        Assert.False(workload.ReadStarted.IsCompleted);
+        await terminal.DisposeAsync().AsTask().DefaultTimeout();
+        Assert.False(File.Exists(connection.Value.SocketPath));
+        Assert.False(workload.ReadStarted.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData(TerminalPlacement.Dock, false)]
+    [InlineData(TerminalPlacement.Dock, true)]
+    [InlineData(TerminalPlacement.Dialog, false)]
+    [InlineData(TerminalPlacement.None, false)]
+    public async Task AppHostTerminalEndpointSharesWorkloadWithDashboardAndSurvivesDisconnect(TerminalPlacement placement, bool endNaturally)
+    {
+        var directory = CreateShortTempDir();
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [TerminalHostPaths.DirectoryOverrideConfigName] = directory
+        }).Build();
+        await using var terminals = TestTerminalService.Create(configuration);
+        var output = new Pipe();
+        var input = new Pipe();
+        await using var outputReader = output.Reader.AsStream();
+        await using var outputWriter = output.Writer.AsStream();
+        await using var inputReader = input.Reader.AsStream();
+        await using var inputWriter = input.Writer.AsStream();
+        var workload = new StreamWorkloadAdapter(outputReader, inputWriter);
+        await using var terminal = terminals.CreateTerminal("Shared dock", placement,
+            Hex1bTerminal.CreateBuilder().WithWorkload(workload), 101, 37);
+        var services = new ServiceCollection();
+        services.AddSingleton(new DistributedApplicationModel(new ResourceCollection()));
+        services.AddSingleton(terminals);
+        await using var provider = services.BuildServiceProvider();
+        var target = CreateTarget(provider);
+
+        var listing = await target.ListTerminalsAsync().DefaultTimeout();
+        Assert.Equal(terminal.Id, Assert.Single(listing.AppHostTerminals).TerminalId);
+        Assert.Empty(Directory.GetFiles(directory));
+
+        var request = new GetTerminalInfoRequest { ResourceName = terminal.Id };
+        var info = await target.GetTerminalInfoAsync(request).DefaultTimeout();
+        Assert.True(info.IsAvailable);
+        Assert.Null(info.Replicas);
+        var endpoint = Assert.IsType<AppHostTerminalEndpoint>(info.AppHostTerminal);
+        Assert.Equal(terminal.Id, endpoint.TerminalId);
+        Assert.Equal("Shared dock", endpoint.Title);
+        Assert.True(File.Exists(endpoint.ConsumerUdsPath));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(endpoint.ConsumerUdsPath));
+        }
+
+        await using var dashboard = await TestAppHostTerminalViewer.ConnectAsync(terminals, terminal.Id).DefaultTimeout();
+        await dashboard.ResizeAsync(110, 40).DefaultTimeout();
+        await outputWriter.WriteAsync("shared screen"u8.ToArray());
+        await dashboard.WaitForTextAsync("shared screen").DefaultTimeout();
+
+        // A stalled handshake must not block another viewer or terminal teardown.
+        using var stalled = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await stalled.ConnectAsync(new UnixDomainSocketEndPoint(endpoint.ConsumerUdsPath)).DefaultTimeout();
+        await using (var cli = await TestAppHostTerminalViewer.ConnectSocketAsync(terminals, terminal.Id, endpoint.ConsumerUdsPath).DefaultTimeout())
+        {
+            await cli.WaitForTextAsync("shared screen").DefaultTimeout();
+            await cli.SendTextAsync("from-cli").DefaultTimeout();
+            var bytes = new byte[8];
+            await inputReader.ReadExactlyAsync(bytes).AsTask().DefaultTimeout();
+            Assert.Equal("from-cli", Encoding.UTF8.GetString(bytes));
+        }
+
+        var refreshed = await target.GetTerminalInfoAsync(request).DefaultTimeout();
+        Assert.Equal(endpoint.ConsumerUdsPath, refreshed.AppHostTerminal?.ConsumerUdsPath);
+        await terminal.SendTextAsync("alive").DefaultTimeout();
+        var after = new byte[5];
+        await inputReader.ReadExactlyAsync(after).AsTask().DefaultTimeout();
+        Assert.Equal("alive", Encoding.UTF8.GetString(after));
+        var screen = terminal.GetScreenText().Split('\n');
+        Assert.Equal(40, screen.Length);
+        Assert.All(screen, line => Assert.Equal(110, line.Length));
+
+        if (endNaturally)
+        {
+            workload.SignalDisconnected();
+            await Assert.IsType<Hex1bAspireTerminal>(terminal.Backend).WorkloadEnded.DefaultTimeout();
+            Assert.False((await target.GetTerminalInfoAsync(request).DefaultTimeout()).IsAvailable);
+        }
+        await terminal.DisposeAsync().AsTask().DefaultTimeout();
+        Assert.False(File.Exists(endpoint.ConsumerUdsPath));
+        Assert.False((await target.GetTerminalInfoAsync(request).DefaultTimeout()).IsAvailable);
+    }
 
     [Fact]
     public async Task ReturnsUnavailable_WhenResourceDoesNotExist()
