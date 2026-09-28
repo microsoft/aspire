@@ -154,6 +154,32 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
+    public async Task BuildAndGenerateSdkAsync_WritesCliIdentityVersion()
+    {
+        const string identityVersion = "13.6.0-preview.1.26100.1";
+        const string identityCommit = "abcdef0123456789";
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (appPath, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: factory,
+            serverSessionFactory: new FakeAppHostServerSessionFactory(),
+            identityVersion: identityVersion,
+            identityCommit: identityCommit);
+
+        var result = await project.BuildAndGenerateSdkAsync(_workspace.WorkspaceRoot);
+
+        Assert.True(result);
+        var versionPath = Path.Combine(
+            _workspace.WorkspaceRoot.FullName,
+            LanguageInfo.GeneratedFolderName,
+            GuestAppHostProject.CodeGenerationVersionFileName);
+        Assert.Equal($"{identityVersion}+{identityCommit}", await File.ReadAllTextAsync(versionPath));
+    }
+
+    [Fact]
     public void JavaIsTheOnlyLanguageThatPreservesUnchangedGeneratedFiles()
     {
         var languages = DefaultLanguageDiscovery.AllLanguages;
@@ -1819,7 +1845,9 @@ public class GuestAppHostProjectTests : IDisposable
         string languageId = "typescript/nodejs",
         IEnvironment? environment = null,
         DirectoryInfo? homeDirectory = null,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        string? identityVersion = null,
+        string? identityCommit = null)
     {
         var effectiveConfiguration = configuration ?? _configuration;
 
@@ -1837,7 +1865,9 @@ public class GuestAppHostProjectTests : IDisposable
             identityChannel: identityChannel,
             logFilePath: logFilePath,
             identityOverridden: identityOverridden,
-            homeDirectory: homeDirectory);
+            homeDirectory: homeDirectory,
+            identityVersion: identityVersion,
+            identityCommit: identityCommit);
 
         // Construct a real graceful-shutdown window so the contract matches production:
         // GuestAppHostProject requires it even when a test exits the Run path early

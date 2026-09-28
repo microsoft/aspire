@@ -5,13 +5,25 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { yesLabel } from '../loc/strings';
-import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireSettingsFiles } from '../utils/workspace';
+import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace, getCommonExcludeGlob, findAspireConfigFiles, findAspireSettingsFiles } from '../utils/workspace';
 import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 import { AppHostDiscoveryService, getWorkspaceAppHostProjectSearchResult } from '../utils/appHostDiscovery';
-import { getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
+import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob } from '../utils/workspaceFileSearch';
 import * as cliPathModule from '../utils/cliPath';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
+
+// Finds the sinon call to vscode.workspace.findFiles whose glob pattern (first argument, either a
+// raw string or a RelativePattern) contains the given substring. Used to pick out one specific
+// glob walk (e.g. the legacy .aspire/settings.json search) among several concurrent findFiles calls.
+function getFindFilesCallForPattern(findFilesStub: sinon.SinonStub, patternSubstring: string): sinon.SinonSpyCall | undefined {
+    return findFilesStub.getCalls().find(call => {
+        const include = call.args[0] as vscode.GlobPattern;
+        const pattern = typeof include === 'string' ? include : include.pattern;
+        return pattern.includes(patternSubstring);
+    });
+}
+
 suite('utils/workspace tests', () => {
     let sandbox: sinon.SinonSandbox;
 
@@ -108,6 +120,55 @@ suite('utils/workspace tests', () => {
             assert.ok(!filePath.includes('/obj/') && !filePath.includes('/Obj/'), `Result should not be in obj: ${filePath}`);
             assert.ok(!filePath.includes('/artifacts/'), `Result should not be in artifacts: ${filePath}`);
         }
+    });
+
+    test('findAspireSettingsFiles bounds the legacy .aspire/settings.json glob walk via maxResults', async () => {
+        sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
+
+        await findAspireSettingsFiles();
+
+        const legacyCall = getFindFilesCallForPattern(vscode.workspace.findFiles as sinon.SinonStub, '.aspire/settings.json');
+        assert.ok(legacyCall, 'expected a findFiles call for the legacy .aspire/settings.json glob');
+        assert.strictEqual(legacyCall!.args[2], appHostDiscoveryFindFilesMaxResults, 'legacy settings.json walk should be bounded by appHostDiscoveryFindFilesMaxResults');
+    });
+
+    suite('findAspireConfigFiles', () => {
+        test('bounds the aspire.config.json glob walk via maxResults', async () => {
+            const findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
+
+            await findAspireConfigFiles();
+
+            assert.strictEqual(findFilesStub.callCount, 1);
+            assert.strictEqual(findFilesStub.getCall(0).args[2], appHostDiscoveryFindFilesMaxResults, 'aspire.config.json walk should be bounded by appHostDiscoveryFindFilesMaxResults');
+        });
+
+        test('shares a single in-flight aspire.config.json glob walk across concurrent callers', async () => {
+            let resolveConfigFindFiles: ((uris: vscode.Uri[]) => void) | undefined;
+            const findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').callsFake((include: vscode.GlobPattern) => {
+                const pattern = typeof include === 'string' ? include : include.pattern;
+                if (!pattern.includes('aspire.config.json')) {
+                    return Promise.resolve([]);
+                }
+
+                return new Promise<vscode.Uri[]>(resolve => { resolveConfigFindFiles = resolve; });
+            });
+
+            // Mirrors extension.ts's activation sequence, where checkForExistingAppHostPathInWorkspace
+            // (-> findAspireSettingsFiles) and AspirePackageRestoreProvider.activate() (-> _restoreAll ->
+            // findAspireConfigFiles) both kick off discovery without awaiting one another first.
+            const callerA = findAspireConfigFiles();
+            const callerB = findAspireSettingsFiles();
+
+            assert.ok(resolveConfigFindFiles, 'the stubbed aspire.config.json findFiles call should have started synchronously');
+            resolveConfigFindFiles!([]);
+            await Promise.all([callerA, callerB]);
+
+            const configGlobCallCount = findFilesStub.getCalls().filter(call => {
+                const pattern = typeof call.args[0] === 'string' ? call.args[0] : (call.args[0] as vscode.RelativePattern).pattern;
+                return pattern.includes('aspire.config.json');
+            }).length;
+            assert.strictEqual(configGlobCallCount, 1, 'concurrent callers should share a single aspire.config.json glob walk instead of each starting their own');
+        });
     });
 
     test('getCommonExcludeGlob includes all expected directories', () => {
