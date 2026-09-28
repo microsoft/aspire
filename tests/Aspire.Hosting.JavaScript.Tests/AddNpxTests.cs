@@ -142,7 +142,7 @@ public class AddNpxTests
         }
         """;
 
-        Assert.Equal(expectedManifest.ReplaceLineEndings("\n"), manifest.ToString().ReplaceLineEndings("\n"));
+        Assert.Equal(expectedManifest, manifest.ToString());
     }
 }
 
