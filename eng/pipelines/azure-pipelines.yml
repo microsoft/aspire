@@ -699,6 +699,11 @@ extends:
                     Copy-Item -LiteralPath $package.FullName -Destination $shipping -Force
                   }
 
+                  $stagedPackages = @(Get-ChildItem -Path $shipping -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File)
+                  if ($stagedPackages.Count -ne 7) {
+                    throw "Expected 7 staged Native AOT Dashboard RID packages, found $($stagedPackages.Count)."
+                  }
+
                   $dashboardArchives = @(Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)" -Filter "aspire-dashboard-*.zip" -File -Recurse)
                   if ($dashboardArchives.Count -ne 7) {
                     throw "Expected 7 Native AOT Dashboard runtime archives, found $($dashboardArchives.Count): $($dashboardArchives.FullName -join ', ')"
@@ -708,17 +713,22 @@ extends:
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                  $packages = @(Get-ChildItem -Path $shipping -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File)
-                  if ($packages.Count -ne 7) {
-                    throw "Expected 7 staged Native AOT Dashboard RID packages, found $($packages.Count)."
+                  # Symbol packages share Shipping but are unsigned symbol-server
+                  # inputs, not NuGet release packages (see download_native_symbols.yml).
+                  $packages = @(Get-ChildItem -Path $shipping -Filter "*.nupkg" -File -Recurse |
+                    Where-Object { $_.Name -notlike "*.symbols.nupkg" } |
+                    Sort-Object FullName)
+                  if ($packages.Count -eq 0) {
+                    throw "No NuGet release packages were found in '$shipping'."
                   }
+                  Write-Host "Verifying signatures for $($packages.Count) NuGet release packages."
                   foreach ($package in $packages) {
                     & "$(Build.SourcesDirectory)/dotnet.cmd" nuget verify $package.FullName
                     if ($LASTEXITCODE -ne 0) {
-                      throw "Dashboard package signature verification failed: $($package.Name)"
+                      throw "NuGet package signature verification failed: $($package.Name)"
                     }
                   }
-                displayName: 🟣Verify Native AOT Dashboard package signatures
+                displayName: 🟣Verify NuGet package signatures
                 condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
               - pwsh: |

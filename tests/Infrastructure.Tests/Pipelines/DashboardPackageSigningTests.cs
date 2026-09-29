@@ -11,6 +11,7 @@ public sealed class DashboardPackageSigningTests(ITestOutputHelper output)
 {
     private const string StageLinuxStep = "🟣Stage Linux Native AOT Dashboard packages for signing";
     private const string StageRemainingStep = "🟣Stage Native AOT Dashboard packages";
+    private const string VerifyStep = "🟣Verify NuGet package signatures";
     private static readonly string[] s_rids =
     [
         "linux-arm64", "linux-musl-x64", "linux-x64", "osx-arm64", "osx-x64", "win-arm64", "win-x64"
@@ -28,7 +29,7 @@ public sealed class DashboardPackageSigningTests(ITestOutputHelper output)
         var stageLinuxIndex = FindStep(steps, StageLinuxStep);
         var signIndex = FindStep(steps, "🟣Sign npm package tarballs");
         var stageRemainingIndex = FindStep(steps, StageRemainingStep);
-        var verifyIndex = FindStep(steps, "🟣Verify Native AOT Dashboard package signatures");
+        var verifyIndex = FindStep(steps, VerifyStep);
         var publishIndex = FindStep(steps, "🟣Publish unified asset manifest");
         Assert.True(stageLinuxIndex < signIndex);
         Assert.True(signIndex < stageRemainingIndex);
@@ -74,6 +75,68 @@ public sealed class DashboardPackageSigningTests(ITestOutputHelper output)
         Assert.Empty(Directory.GetFiles(shipping));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [RequiresTools(["pwsh"])]
+    public async Task VerifiesAllReleasePackagesAndRejectsUnsignedNonDashboardPackage(bool unsignedManagedPackage)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var shipping = workspace.CreateDirectory("artifacts/packages/Release/Shipping").FullName;
+        var nested = workspace.CreateDirectory("artifacts/packages/Release/Shipping/managed").FullName;
+        File.WriteAllText(Path.Combine(shipping, PackageName("linux-x64")), "signed");
+        File.WriteAllText(Path.Combine(shipping, "Aspire.Cli.linux-x64.13.6.0.nupkg"), "signed");
+        File.WriteAllText(Path.Combine(shipping, "Aspire.Cli.linux-x64.13.6.0.symbols.nupkg"), "unsigned");
+        File.WriteAllText(Path.Combine(nested, "Aspire.Hosting.13.6.0.nupkg"), unsignedManagedPackage ? "unsigned" : "signed");
+        File.WriteAllText(Path.Combine(shipping, "microsoft-aspire-cli-13.6.0.tgz"), "npm");
+        File.WriteAllText(Path.Combine(workspace.Path, "dotnet.ps1"), """
+            param([string]$command, [string]$operation, [string]$package)
+            if ($command -ne 'nuget' -or $operation -ne 'verify') {
+              throw "Unexpected dotnet arguments: $command $operation"
+            }
+            Add-Content -LiteralPath "$PSScriptRoot/verified-packages.txt" -Value ([System.IO.Path]::GetFileName($package))
+            if ((Get-Content -LiteralPath $package -Raw) -eq 'unsigned') {
+              exit 1
+            }
+            exit 0
+            """);
+        var steps = ReadAssembleSteps();
+
+        var result = await RunStep(workspace, steps[FindStep(steps, VerifyStep)]);
+
+        Assert.Equal(
+            [
+                "Aspire.Cli.linux-x64.13.6.0.nupkg",
+                PackageName("linux-x64"),
+                "Aspire.Hosting.13.6.0.nupkg"
+            ],
+            File.ReadAllLines(Path.Combine(workspace.Path, "verified-packages.txt")));
+        if (unsignedManagedPackage)
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("NuGet package signature verification failed: Aspire.Hosting.13.6.0.nupkg", result.Output);
+        }
+        else
+        {
+            result.EnsureSuccessful();
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task VerificationRejectsShippingDirectoryWithOnlySymbolPackages()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var shipping = workspace.CreateDirectory("artifacts/packages/Release/Shipping").FullName;
+        File.WriteAllText(Path.Combine(shipping, "Aspire.Cli.linux-x64.13.6.0.symbols.nupkg"), "unsigned");
+        var steps = ReadAssembleSteps();
+
+        var result = await RunStep(workspace, steps[FindStep(steps, VerifyStep)]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("No NuGet release packages were found", result.Output);
+    }
+
     private static void CreateNativeArtifacts(TemporaryWorkspace workspace, IEnumerable<string> rids)
     {
         foreach (var rid in rids)
@@ -88,7 +151,10 @@ public sealed class DashboardPackageSigningTests(ITestOutputHelper output)
     private async Task<CommandResult> RunStep(TemporaryWorkspace workspace, YamlMappingNode step)
     {
         var script = ((YamlScalarNode)step.Children[new YamlScalarNode("pwsh")]).Value!;
-        script = script.Replace("$(Build.SourcesDirectory)", workspace.Path, StringComparison.Ordinal)
+        // Substitute only the Windows command wrapper so the verifier stub also runs
+        // on Linux; package discovery, command arguments, and exit handling stay real.
+        script = script.Replace("$(Build.SourcesDirectory)/dotnet.cmd", Path.Combine(workspace.Path, "dotnet.ps1"), StringComparison.Ordinal)
+            .Replace("$(Build.SourcesDirectory)", workspace.Path, StringComparison.Ordinal)
             .Replace("$(_BuildConfig)", "Release", StringComparison.Ordinal);
         var scriptPath = Path.Combine(workspace.Path, "step.ps1");
         await File.WriteAllTextAsync(scriptPath, script);
