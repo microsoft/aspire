@@ -593,7 +593,8 @@ extends:
               # signed upstream — including
               # Aspire.Hosting.Orchestration.<rid>.nupkg whose nested
               # manifest.cat would be re-submitted to ESRP. Keeping Shipping
-              # limited to native CLI staged content at sign time avoids that.
+              # limited to native CLI and unsigned Linux Dashboard packages at
+              # sign time avoids that.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
@@ -601,6 +602,21 @@ extends:
                     -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping" `
                     -RequireNpmPackages
                 displayName: 🟣Stage Native CLI Packages
+
+              # Linux native jobs skip signing ELF binaries, but their Dashboard
+              # nupkgs still need the same Windows package-signing pass as the CLI.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $sourceRoot = "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
+                  $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  $packages = @(Get-ChildItem -Path $sourceRoot -Filter "Aspire.Dashboard.Sdk.linux-*.nupkg" -File -Recurse)
+                  if ($packages.Count -ne 3) {
+                    throw "Expected 3 Linux Native AOT Dashboard RID packages, found $($packages.Count): $($packages.FullName -join ', ')"
+                  }
+                  foreach ($package in $packages) {
+                    Copy-Item -LiteralPath $package.FullName -Destination $shipping -Force
+                  }
+                displayName: 🟣Stage Linux Native AOT Dashboard packages for signing
 
               # Sign the npm tgz files now that they are staged in Shipping.
               # PackDotnetTool runs in eng/AfterSigning.targets — after Arcade's
@@ -668,9 +684,9 @@ extends:
                   artifact: aspire-vscode-extension
                   targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/vscode'
 
-              # Native jobs package the signed Dashboard executable for their RID.
-              # Stage those nupkgs only after the npm signing pass so Arcade does
-              # not reopen and re-sign their already-signed nested executable.
+              # Windows/macOS Dashboard packages are already signed by their native
+              # jobs. Stage them after signing, without overwriting the Linux packages
+              # we just signed with the unsigned copies from the native jobs.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $sourceRoot = "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
@@ -679,7 +695,7 @@ extends:
                   if ($packages.Count -ne 7) {
                     throw "Expected 7 Native AOT Dashboard RID packages, found $($packages.Count): $($packages.FullName -join ', ')"
                   }
-                  foreach ($package in $packages) {
+                  foreach ($package in $packages | Where-Object { $_.Name -notlike "Aspire.Dashboard.Sdk.linux-*.nupkg" }) {
                     Copy-Item -LiteralPath $package.FullName -Destination $shipping -Force
                   }
 
@@ -688,6 +704,22 @@ extends:
                     throw "Expected 7 Native AOT Dashboard runtime archives, found $($dashboardArchives.Count): $($dashboardArchives.FullName -join ', ')"
                   }
                 displayName: 🟣Stage Native AOT Dashboard packages
+
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  $packages = @(Get-ChildItem -Path $shipping -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File)
+                  if ($packages.Count -ne 7) {
+                    throw "Expected 7 staged Native AOT Dashboard RID packages, found $($packages.Count)."
+                  }
+                  foreach ($package in $packages) {
+                    & "$(Build.SourcesDirectory)/dotnet.cmd" nuget verify $package.FullName
+                    if ($LASTEXITCODE -ne 0) {
+                      throw "Dashboard package signature verification failed: $($package.Name)"
+                    }
+                  }
+                displayName: 🟣Verify Native AOT Dashboard package signatures
+                condition: and(succeeded(), eq(variables['_SignType'], 'real'))
 
               - pwsh: |
                   Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/packages" -File -Recurse |
