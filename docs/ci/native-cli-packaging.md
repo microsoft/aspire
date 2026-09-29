@@ -39,7 +39,7 @@ Linux native jobs do not sign ELF binaries in `build_sign_native`. For Linux, ex
 
 ## Native AOT Dashboard package signing
 
-Linux Dashboard SDK NuGet packages follow the Linux CLI package-signing path: `assemble` stages them in `Shipping` before its Windows signing pass. Windows and macOS Dashboard packages arrive signed from their native jobs and are staged afterward. This later staging must not overwrite the signed Linux packages with the unsigned originals. Assembly verifies every staged NuGet release package's signature before publishing the build artifacts, including Dashboard, CLI, and managed packages. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
+All seven Dashboard SDK NuGet packages follow the CLI package-signing path: `assemble` stages them together in `Shipping` before its Windows signing pass. There is no second Dashboard staging pass after signing. This ensures Linux packages receive NuGet signatures even though Linux native jobs skip ELF signing. Assembly verifies every staged NuGet release package's signature before publishing the build artifacts, including Dashboard, CLI, and managed packages. The unsigned `*.symbols.nupkg` files also staged in `Shipping` are excluded because they are symbol-server inputs, not NuGet release packages.
 
 ## Nix flake packaging
 

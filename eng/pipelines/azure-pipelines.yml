@@ -593,7 +593,7 @@ extends:
               # signed upstream — including
               # Aspire.Hosting.Orchestration.<rid>.nupkg whose nested
               # manifest.cat would be re-submitted to ESRP. Keeping Shipping
-              # limited to native CLI and unsigned Linux Dashboard packages at
+              # limited to native CLI and Dashboard packages at
               # sign time avoids that.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
@@ -603,20 +603,30 @@ extends:
                     -RequireNpmPackages
                 displayName: 🟣Stage Native CLI Packages
 
-              # Linux native jobs skip signing ELF binaries, but their Dashboard
-              # nupkgs still need the same Windows package-signing pass as the CLI.
+              # Stage every Dashboard RID alongside the CLI packages before signing.
+              # Linux native jobs skip ELF signing, but their nupkgs still need signing.
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   $sourceRoot = "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
                   $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                  $packages = @(Get-ChildItem -Path $sourceRoot -Filter "Aspire.Dashboard.Sdk.linux-*.nupkg" -File -Recurse)
-                  if ($packages.Count -ne 3) {
-                    throw "Expected 3 Linux Native AOT Dashboard RID packages, found $($packages.Count): $($packages.FullName -join ', ')"
+                  $packages = @(Get-ChildItem -Path $sourceRoot -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File -Recurse)
+                  if ($packages.Count -ne 7) {
+                    throw "Expected 7 Native AOT Dashboard RID packages, found $($packages.Count): $($packages.FullName -join ', ')"
                   }
                   foreach ($package in $packages) {
                     Copy-Item -LiteralPath $package.FullName -Destination $shipping -Force
                   }
-                displayName: 🟣Stage Linux Native AOT Dashboard packages for signing
+
+                  $stagedPackages = @(Get-ChildItem -Path $shipping -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File)
+                  if ($stagedPackages.Count -ne 7) {
+                    throw "Expected 7 staged Native AOT Dashboard RID packages, found $($stagedPackages.Count)."
+                  }
+
+                  $dashboardArchives = @(Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)" -Filter "aspire-dashboard-*.zip" -File -Recurse)
+                  if ($dashboardArchives.Count -ne 7) {
+                    throw "Expected 7 Native AOT Dashboard runtime archives, found $($dashboardArchives.Count): $($dashboardArchives.FullName -join ', ')"
+                  }
+                displayName: 🟣Stage Native AOT Dashboard packages
 
               # Sign the npm tgz files now that they are staged in Shipping.
               # PackDotnetTool runs in eng/AfterSigning.targets — after Arcade's
@@ -683,32 +693,6 @@ extends:
                 inputs:
                   artifact: aspire-vscode-extension
                   targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/vscode'
-
-              # Windows/macOS Dashboard packages are already signed by their native
-              # jobs. Stage them after signing, without overwriting the Linux packages
-              # we just signed with the unsigned copies from the native jobs.
-              - pwsh: |
-                  $ErrorActionPreference = 'Stop'
-                  $sourceRoot = "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
-                  $shipping = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                  $packages = @(Get-ChildItem -Path $sourceRoot -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File -Recurse)
-                  if ($packages.Count -ne 7) {
-                    throw "Expected 7 Native AOT Dashboard RID packages, found $($packages.Count): $($packages.FullName -join ', ')"
-                  }
-                  foreach ($package in $packages | Where-Object { $_.Name -notlike "Aspire.Dashboard.Sdk.linux-*.nupkg" }) {
-                    Copy-Item -LiteralPath $package.FullName -Destination $shipping -Force
-                  }
-
-                  $stagedPackages = @(Get-ChildItem -Path $shipping -Filter "Aspire.Dashboard.Sdk.*.nupkg" -File)
-                  if ($stagedPackages.Count -ne 7) {
-                    throw "Expected 7 staged Native AOT Dashboard RID packages, found $($stagedPackages.Count)."
-                  }
-
-                  $dashboardArchives = @(Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)" -Filter "aspire-dashboard-*.zip" -File -Recurse)
-                  if ($dashboardArchives.Count -ne 7) {
-                    throw "Expected 7 Native AOT Dashboard runtime archives, found $($dashboardArchives.Count): $($dashboardArchives.FullName -join ', ')"
-                  }
-                displayName: 🟣Stage Native AOT Dashboard packages
 
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
