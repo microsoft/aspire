@@ -1,9 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
@@ -18,6 +20,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestRuntime
 {
+    internal static TimeSpan NpmInstallTimeout => TimeSpan.FromMinutes(5);
+
     private readonly RuntimeSpec _spec;
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
@@ -131,13 +135,25 @@ internal sealed class GuestRuntime
     /// </summary>
     /// <param name="directory">The project directory.</param>
     /// <param name="environmentVariables">Environment variables inherited by each dependency installation command.</param>
+    /// <param name="updateDependencies">Whether dependency manifests may have changed during scaffolding or an intentional update.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A tuple containing the exit code and captured output from the dependency installation commands.</returns>
-    public async Task<(int ExitCode, OutputCollector Output)> InstallDependenciesAsync(
+    public Task<(int ExitCode, OutputCollector Output)> InstallDependenciesAsync(
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
+        bool updateDependencies,
+        CancellationToken cancellationToken)
+        => InstallDependenciesAsync(directory, environmentVariables, updateDependencies, CreateDefaultLauncher(), TimeProvider.System, cancellationToken);
+
+    internal async Task<(int ExitCode, OutputCollector Output)> InstallDependenciesAsync(
+        DirectoryInfo directory,
+        IDictionary<string, string> environmentVariables,
+        bool updateDependencies,
+        IGuestProcessLauncher launcher,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var outputCollector = new OutputCollector();
 
         if (_installDependencies is null or { Length: 0 })
@@ -146,12 +162,21 @@ internal sealed class GuestRuntime
             return (0, outputCollector);
         }
 
-        var launcher = CreateDefaultLauncher();
         OutputCollector lastOutput = outputCollector;
         foreach (var command in _installDependencies)
         {
             var args = ReplacePlaceholders(command.Args, null, directory, null);
             var mergedEnvironment = MergeEnvironmentVariables(environmentVariables, command);
+            var isNpmInstall = command.Command == "npm" && args is ["install" or "ci", ..];
+            if (isNpmInstall && args[0] == "install" && !updateDependencies &&
+                (File.Exists(Path.Combine(directory.FullName, "package-lock.json")) ||
+                 File.Exists(Path.Combine(directory.FullName, "npm-shrinkwrap.json"))))
+            {
+                // Only a lockfile in this project establishes a locked restore. A parent lockfile
+                // may belong to an unrelated package (including a brownfield application's root).
+                // npm ci rejects stale locks rather than rewriting them: https://docs.npmjs.com/cli/v11/commands/npm-ci
+                args[0] = "ci";
+            }
 
             using var activity = _profilingTelemetry.StartGuestInstallDependencies(
                 _spec.Language,
@@ -159,22 +184,52 @@ internal sealed class GuestRuntime
                 command.Command,
                 args,
                 directory);
-            var (exitCode, output) = await launcher.LaunchAsync(
-                command.Command,
-                args,
-                directory,
-                mergedEnvironment,
-                afterLaunchAsync: null,
-                options: null,
-                cancellationToken);
+            // npm waits for audit requests as well as package downloads. Bound the entire operation
+            // without disabling auditing or automatically retrying without it.
+            using var timeoutCts = new CancellationTokenSource(isNpmInstall ? NpmInstallTimeout : Timeout.InfiniteTimeSpan, timeProvider);
+            using var installCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+            int exitCode;
+            OutputCollector? output = null;
+            try
+            {
+                (exitCode, output) = await launcher.LaunchAsync(
+                    command.Command,
+                    args,
+                    directory,
+                    mergedEnvironment,
+                    afterLaunchAsync: null,
+                    options: null,
+                    installCts.Token);
+            }
+            catch (OperationCanceledException) when (installCts.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                exitCode = -1;
+            }
+
+            // ProcessGuestLauncher kills the process tree, drains output, and may return an exit code
+            // instead of throwing on cancellation. Never turn caller cancellation into a timeout error.
+            cancellationToken.ThrowIfCancellationRequested();
+            output ??= outputCollector;
+            if (timeoutCts.IsCancellationRequested)
+            {
+                exitCode = -1;
+                output.AppendError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.NpmInstallTimedOut, args[0], NpmInstallTimeout.TotalMinutes));
+            }
+
             activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
             {
                 activity.SetError($"{_spec.DisplayName} dependency installation exited with code {exitCode}.");
-                return (exitCode, output ?? outputCollector);
+                if (isNpmInstall && !MissingJavaScriptToolWarning.IsMatch(output.GetLines()))
+                {
+                    output.AppendError(ErrorStrings.NpmAuditRetryHint);
+                }
+
+                return (exitCode, output);
             }
 
-            lastOutput = output ?? outputCollector;
+            lastOutput = output;
         }
 
         return (0, lastOutput);

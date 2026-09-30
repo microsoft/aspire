@@ -449,6 +449,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         var (result, output) = await runtime.InstallDependenciesAsync(
             directory,
             new Dictionary<string, string>(),
+            updateDependencies: true,
             cancellationToken);
         if (result != 0)
         {

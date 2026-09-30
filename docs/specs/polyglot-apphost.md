@@ -1114,6 +1114,43 @@ Primitive type mapping:
 
 ## TypeScript Implementation
 
+### npm dependency restoration and audit recovery
+
+For npm-based TypeScript AppHosts, `aspire restore`, `aspire run`, and publishing use
+`npm ci` when the AppHost directory contains `package-lock.json` or `npm-shrinkwrap.json`.
+The lockfile must match `package.json`; a stale lock fails instead of silently changing
+dependency versions. Run `npm install` intentionally after editing dependencies and
+commit the updated lockfile. Projects without a local lockfile, initial scaffolding,
+migration, and `aspire add`/`aspire update` use `npm install`.
+
+Both commands leave [npm auditing enabled by default](https://docs.npmjs.com/cli/v11/commands/npm-ci#audit)
+and honor the user's npm configuration. Aspire stops an npm dependency installation
+after five minutes, preserving captured output and reporting the timeout. Installation
+failures include conditional audit-recovery guidance; they are not automatically retried
+or treated as success. Caller cancellation still cancels the operation.
+
+If an unavailable audit service is blocking installation, explicitly suppress auditing
+only for a break-glass retry. For example, in PowerShell (when the variable was not already set):
+
+```powershell
+$env:npm_config_audit = "false"
+try {
+    aspire restore
+} finally {
+    Remove-Item Env:npm_config_audit
+}
+```
+
+Or in a POSIX shell:
+
+```bash
+npm_config_audit=false aspire restore
+```
+
+This disables vulnerability auditing, not package installation errors or lockfile
+validation. Remove the override and run `npm audit` in the AppHost directory once the
+service recovers. Do not persist the override in project configuration.
+
 ### Generated SDK Usage
 
 ```typescript

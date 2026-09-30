@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -15,6 +16,7 @@ using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -737,6 +739,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var (exitCode, output) = await runtime.InstallDependenciesAsync(
             new DirectoryInfo("/tmp"),
             new Dictionary<string, string>(),
+            updateDependencies: false,
             CancellationToken.None);
 
         Assert.Equal(0, exitCode);
@@ -756,6 +759,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var (exitCode, output) = await runtime.InstallDependenciesAsync(
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
+            updateDependencies: false,
             CancellationToken.None);
 
         Assert.Equal(-1, exitCode);
@@ -826,6 +830,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
                     ["CHILD_VALUE"] = "from-child",
                     ["OVERRIDDEN_VALUE"] = "from-child"
                 },
+                updateDependencies: false,
                 CancellationToken.None);
 
             Assert.Equal(0, exitCode);
@@ -858,6 +863,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         var (exitCode, output) = await runtime.InstallDependenciesAsync(
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
+            updateDependencies: false,
             CancellationToken.None);
 
         Assert.Equal(-1, exitCode);
@@ -868,6 +874,215 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
                 Assert.Equal(OutputLineStream.StdErr, line.Stream);
                 Assert.Equal("npm is not installed or not found in PATH. Please install Node.js and try again.", line.Line);
             });
+    }
+
+    [Theory]
+    [InlineData(null, false, "install")]
+    [InlineData(null, true, "install")]
+    [InlineData("package-lock.json", false, "ci")]
+    [InlineData("npm-shrinkwrap.json", false, "ci")]
+    [InlineData("package-lock.json", true, "install")]
+    [InlineData("npm-shrinkwrap.json", true, "install")]
+    public async Task InstallDependenciesAsync_NpmSelectsLockedRestoreOnlyWhenNotUpdating(string? lockFile, bool updateDependencies, string expectedCommand)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        if (lockFile is not null)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, lockFile), "{}");
+        }
+
+        var install = new CommandSpec { Command = "npm", Args = ["install", "--ignore-scripts"] };
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: install));
+        var launcher = new RecordingLauncher();
+
+        var (exitCode, output) = await runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, new Dictionary<string, string>(), updateDependencies, launcher, TimeProvider.System, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(output.GetLines());
+        var call = Assert.Single(launcher.Calls);
+        Assert.Equal("npm", call.Command);
+        Assert.Equal([expectedCommand, "--ignore-scripts"], call.Args);
+        Assert.Empty(launcher.LastEnvironmentVariables);
+        Assert.Equal(["install", "--ignore-scripts"], install.Args);
+    }
+
+    [Fact]
+    public async Task InstallDependenciesAsync_NpmDoesNotUseUnrelatedParentLock()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "package-lock.json"), "{}");
+        var appHostDirectory = workspace.CreateDirectory("aspire-apphost");
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = "npm", Args = ["install"] }));
+        var launcher = new RecordingLauncher();
+
+        var (exitCode, _) = await runtime.InstallDependenciesAsync(
+            appHostDirectory, new Dictionary<string, string>(), updateDependencies: false, launcher, TimeProvider.System, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(["install"], Assert.Single(launcher.Calls).Args);
+    }
+
+    [Theory]
+    [InlineData("bun")]
+    [InlineData("pnpm")]
+    [InlineData("yarn")]
+    [InlineData("deno")]
+    public async Task InstallDependenciesAsync_OtherPackageManagersAreUnchanged(string command)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "package-lock.json"), "{}");
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = command, Args = ["install"] }));
+        var timeProvider = new FakeTimeProvider();
+        var launcher = new RecordingLauncher
+        {
+            OnLaunchAsync = token =>
+            {
+                timeProvider.Advance(GuestRuntime.NpmInstallTimeout);
+                Assert.False(token.IsCancellationRequested);
+                return Task.CompletedTask;
+            }
+        };
+        launcher.ExitCodes.Enqueue(23);
+        launcher.Output.AppendError("package manager error");
+
+        var (exitCode, output) = await runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, new Dictionary<string, string>(), updateDependencies: false, launcher, timeProvider, CancellationToken.None);
+
+        Assert.Equal(23, exitCode);
+        Assert.Equal(["install"], Assert.Single(launcher.Calls).Args);
+        Assert.Equal([(OutputLineStream.StdErr, "package manager error")], output.GetLines());
+    }
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    public async Task InstallDependenciesAsync_NpmHonorsExplicitAuditConfiguration(string audit)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = "npm", Args = ["install"] }));
+        var launcher = new RecordingLauncher();
+        var environment = new Dictionary<string, string> { ["npm_config_audit"] = audit };
+
+        var (exitCode, _) = await runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, environment, updateDependencies: true, launcher, TimeProvider.System, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(["install"], Assert.Single(launcher.Calls).Args);
+        Assert.Equal(environment, launcher.LastEnvironmentVariables);
+    }
+
+    [Theory]
+    [InlineData("npm error code ECONNREFUSED", 1)]
+    [InlineData("npm error code EUSAGE: package.json and package-lock.json are not in sync", 23)]
+    public async Task InstallDependenciesAsync_NpmFailurePreservesErrorAndDoesNotRetry(string error, int expectedExitCode)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "package-lock.json"), "{}");
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = "npm", Args = ["install"] }));
+        var launcher = new RecordingLauncher();
+        launcher.ExitCodes.Enqueue(expectedExitCode);
+        launcher.Output.AppendError(error);
+
+        var (exitCode, output) = await runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, new Dictionary<string, string>(), updateDependencies: false, launcher, TimeProvider.System, CancellationToken.None);
+
+        Assert.Equal(expectedExitCode, exitCode);
+        Assert.Equal(["ci"], Assert.Single(launcher.Calls).Args);
+        Assert.Equal(
+            [(OutputLineStream.StdErr, error), (OutputLineStream.StdErr, ErrorStrings.NpmAuditRetryHint)],
+            output.GetLines());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallDependenciesAsync_NpmTimeoutReportsAuditRecovery(bool launcherReturnsOnCancellation)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = "npm", Args = ["install"] }));
+        var timeProvider = new FakeTimeProvider();
+        var launcher = new RecordingLauncher
+        {
+            OnLaunchAsync = async token =>
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (launcherReturnsOnCancellation)
+                {
+                    // The process launcher returns captured output after killing the process tree.
+                }
+            }
+        };
+        launcher.Output.AppendError("npm is still waiting");
+
+        var install = runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, new Dictionary<string, string>(), updateDependencies: false, launcher, timeProvider, CancellationToken.None);
+        Assert.Single(launcher.Calls);
+        timeProvider.Advance(GuestRuntime.NpmInstallTimeout);
+        var (exitCode, output) = await install.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal(-1, exitCode);
+        var expectedLines = new List<(OutputLineStream, string)>();
+        if (launcherReturnsOnCancellation)
+        {
+            expectedLines.Add((OutputLineStream.StdErr, "npm is still waiting"));
+        }
+        expectedLines.Add((OutputLineStream.StdErr, string.Format(
+            System.Globalization.CultureInfo.CurrentCulture, ErrorStrings.NpmInstallTimedOut, "install", GuestRuntime.NpmInstallTimeout.TotalMinutes)));
+        expectedLines.Add((OutputLineStream.StdErr, ErrorStrings.NpmAuditRetryHint));
+        Assert.Equal(expectedLines, output.GetLines());
+        Assert.Single(launcher.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallDependenciesAsync_NpmPreservesCallerCancellation(bool launcherReturnsOnCancellation)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = "npm", Args = ["install"] }));
+        var launcher = new RecordingLauncher
+        {
+            OnLaunchAsync = async token =>
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                }
+                catch (OperationCanceledException) when (launcherReturnsOnCancellation)
+                {
+                }
+            }
+        };
+
+        var install = runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, new Dictionary<string, string>(), updateDependencies: false, launcher, new FakeTimeProvider(), cts.Token);
+        Assert.Single(launcher.Calls);
+        cts.Cancel();
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => install.WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Empty(launcher.Output.GetLines());
+    }
+
+    [Fact]
+    public async Task InstallDependenciesAsync_AlreadyCancelledDoesNotLaunch()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        var runtime = CreateRuntime(CreateTestSpec(installDependencies: new CommandSpec { Command = "npm", Args = ["install"] }));
+        var launcher = new RecordingLauncher();
+
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runtime.InstallDependenciesAsync(
+            workspace.WorkspaceRoot, new Dictionary<string, string>(), updateDependencies: false, launcher, TimeProvider.System, cts.Token));
+
+        Assert.Equal(cts.Token, exception.CancellationToken);
+        Assert.Empty(launcher.Calls);
     }
 
     [Fact]
@@ -1684,6 +1899,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         public string[] LastArgs { get; private set; } = [];
         public DirectoryInfo? LastWorkingDirectory { get; private set; }
         public IDictionary<string, string> LastEnvironmentVariables { get; private set; } = new Dictionary<string, string>();
+        public OutputCollector Output { get; } = new();
+        public Func<CancellationToken, Task>? OnLaunchAsync { get; init; }
 
         public async Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(
             string command,
@@ -1699,13 +1916,18 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             LastArgs = args;
             LastWorkingDirectory = workingDirectory;
             LastEnvironmentVariables = new Dictionary<string, string>(environmentVariables);
+            if (OnLaunchAsync is not null)
+            {
+                await OnLaunchAsync(cancellationToken);
+            }
+
             if (afterLaunchAsync is not null)
             {
                 await afterLaunchAsync().ConfigureAwait(false);
             }
 
             var exitCode = ExitCodes.Count > 0 ? ExitCodes.Dequeue() : 0;
-            return (exitCode, new OutputCollector());
+            return (exitCode, Output);
         }
     }
 
