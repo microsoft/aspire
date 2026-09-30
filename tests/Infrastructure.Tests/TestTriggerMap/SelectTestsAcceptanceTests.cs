@@ -885,8 +885,13 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
 
         // keep_routed carve-outs: listed by the patterns file but routed by the selector -> NOT dropped.
         Assert.False(filter.IsExcluded(".github/workflows/backport.yml"));
-        Assert.False(filter.IsExcluded("eng/pipelines/azure-pipelines-public.yml"));
+        Assert.False(filter.IsExcluded("eng/pipelines/release-publish-nuget.yml"));
+        Assert.False(filter.IsExcluded("docs/specs/npm-cli-package.md"));
         Assert.False(filter.IsExcluded("eng/github-ci/ci-skip-entirely-patterns.txt"));
+
+        // Pipeline files without a semantic Infrastructure.Tests consumer remain outside main CI.
+        Assert.True(filter.IsExcluded("eng/pipelines/azure-pipelines-public.yml"));
+        Assert.True(filter.IsExcluded("eng/pipelines/templates/BuildAndTest.yml"));
     }
 
     // A src/** file that no Layer 2 rule matches and that is not under a project directory normally hits

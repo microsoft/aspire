@@ -10,6 +10,7 @@ using Xunit;
 
 namespace Infrastructure.Tests;
 
+[Trait("Category", "AgenticWorkflow")]
 public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : IDisposable
 {
     private const string ValidationScriptRelativePath = ".github/workflows/analyze-ci-failure-validation.sh";

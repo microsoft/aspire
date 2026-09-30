@@ -16,8 +16,9 @@ namespace Aspire.SelectTests;
 // is a packed <None> item, so the graph would otherwise fan it out to the owning project's test closure).
 //
 // keep_routed (from the map's `prefilter` block) are carve-outs: files the patterns file lists but the
-// selector deliberately routes to a target (.github/workflows/** and eng/pipelines/** -> Infrastructure
-// .Tests, and the patterns file itself, which is a selector input). Those are never dropped.
+// selector deliberately routes to a target (.github/workflows/** and the exact source-traced pipeline
+// inputs -> Infrastructure.Tests, and the patterns file itself, which is a selector input). Those are
+// never dropped.
 //
 // Pattern semantics MUST match the check-changed-files action (.github/actions/check-changed-files), so
 // the selector's "excluded" set equals the gate's "skip" set. The action interprets each pattern with

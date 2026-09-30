@@ -25,7 +25,9 @@ jobs:
     name: Prepare for CI
     if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
-      skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
+      has_semantic_inputs: ${{ github.event_name == 'pull_request' && steps.classify_changes.outputs.has_semantic_inputs == 'true' }}
+      skip_workflow: ${{ github.event_name == 'pull_request' && steps.classify_changes.outputs.skip_workflow == 'true' }}
+      stabilization_required: ${{ github.event_name != 'pull_request' || steps.classify_changes.outputs.stabilization_required == 'true' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
       EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
 
@@ -42,6 +44,26 @@ jobs:
         uses: ./.github/actions/check-changed-files
         with:
           patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
+
+      - name: Check for semantic Infrastructure.Tests inputs
+        id: check_for_semantic_inputs
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: ./.github/actions/check-changed-files
+        with:
+          patterns_file: eng/github-ci/infrastructure-test-input-patterns.txt
+
+      - name: Classify CI and stabilization requirements
+        id: classify_changes
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          CHANGED_FILES_JSON: ${{ steps.check_for_changes.outputs.changed_files }}
+          SKIPPABLE_FILES_JSON: ${{ steps.check_for_changes.outputs.matched_files }}
+          SEMANTIC_FILES_JSON: ${{ steps.check_for_semantic_inputs.outputs.matched_files }}
+        run: |
+          ./eng/github-ci/classify-ci-changes.sh \
+            "$CHANGED_FILES_JSON" \
+            "$SKIPPABLE_FILES_JSON" \
+            "$SEMANTIC_FILES_JSON" >> "$GITHUB_OUTPUT"
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs
@@ -109,7 +131,10 @@ jobs:
     name: Stabilization Check
     runs-on: 8-core-ubuntu-latest
     needs: [prepare_for_ci]
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: >-
+      ${{ github.repository_owner == 'microsoft' &&
+          needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
+          needs.prepare_for_ci.outputs.stabilization_required == 'true' }}
     steps:
       # The actual stabilization work only makes sense for pull_request events. On push
       # (including push to release branches with StabilizePackageVersion=true) the build is
@@ -192,14 +217,15 @@ jobs:
 
     steps:
       - name: Fail if any of the dependent jobs failed
-        # Don't fail if the workflow is being skipped.
+        # Stabilization may be intentionally skipped for infrastructure-only PRs.
         if: >-
           ${{ always() &&
               needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                needs.tests.result != 'success' ||
-               needs.stabilization_check.result != 'success') }}
+               (needs.prepare_for_ci.outputs.stabilization_required == 'true' &&
+                needs.stabilization_check.result != 'success')) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

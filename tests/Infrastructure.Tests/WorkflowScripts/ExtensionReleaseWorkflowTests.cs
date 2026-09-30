@@ -9,6 +9,7 @@ using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
+[Trait("Category", "AgenticWorkflow")]
 public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
 {
     private static readonly string s_releaseWorkflowPath = Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-release.yml");

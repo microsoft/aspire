@@ -89,7 +89,15 @@ prefilter:
   patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
   keep_routed:
     - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
-    - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
+    - eng/pipelines/azure-pipelines.yml
+    - eng/pipelines/common-variables.yml
+    - eng/pipelines/release-publish-nuget.yml
+    - eng/pipelines/templates/build_sign_native.yml
+    - eng/pipelines/templates/prepare-npm-cli-packages.yml
+    - eng/pipelines/templates/prepare-winget-manifest.yml
+    - eng/pipelines/templates/publish-winget.yml
+    - docs/specs/npm-cli-package.md
+    - docs/release-process.md
     - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
 
 # Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
@@ -501,17 +509,26 @@ path_rules:
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
+      - eng/github-ci/infrastructure-test-input-patterns.txt
+      - eng/github-ci/classify-ci-changes.sh
       - .gitignore
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates the selector map, prefilter, and root ignore behavior
+    reason: Infrastructure.Tests validates selector routing, CI input classification, and root ignore behavior
   - paths:
       - .github/workflows/**
       - .github/actionlint.yaml
-      - eng/pipelines/**
+      - eng/pipelines/azure-pipelines.yml
+      - eng/pipelines/common-variables.yml
+      - eng/pipelines/release-publish-nuget.yml
+      - eng/pipelines/templates/build_sign_native.yml
+      - eng/pipelines/templates/prepare-npm-cli-packages.yml
+      - eng/pipelines/templates/prepare-winget-manifest.yml
+      - eng/pipelines/templates/publish-winget.yml
+      - docs/specs/npm-cli-package.md
+      - docs/release-process.md
       - eng/Signing.props
-      - eng/Publishing.props
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests WorkflowScripts/Pipelines assert on workflow & pipeline files; NpmCliPackageTests reads eng/Signing.props, and Publishing.props is AzDO-publish-only infra grouped with it (no GH-CI build/test path -> not ALL)
+    reason: Infrastructure.Tests reads these workflow, pipeline, release-alignment, and signing inputs directly
   - paths:
       - eng/Bundle.proj
       - tools/CreateLayout/**

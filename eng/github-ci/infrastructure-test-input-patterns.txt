@@ -1,0 +1,31 @@
+# Inputs with source-traced semantic consumers in Infrastructure.Tests.
+#
+# The CI classifier uses this list to override the broad skip-all gate and to avoid
+# stabilization for infrastructure-only changes. The normal test selector remains
+# responsible for choosing Infrastructure.Tests.
+
+# Workflow contracts inspect every handwritten root workflow. Generated agentic
+# lock and maintenance workflows are removed by the classifier because their
+# trait-filtered tests run in validate-agentic-workflows.yml.
+.github/workflows/*.yml
+.github/workflows/auto-rerun-transient-ci-failures.js
+.github/actionlint.yaml
+
+# Selector and classification inputs.
+.gitignore
+eng/github-ci/ci-skip-entirely-patterns.txt
+eng/github-ci/infrastructure-test-input-patterns.txt
+eng/github-ci/test-trigger-map.yml
+eng/github-ci/classify-ci-changes.sh
+
+# Azure DevOps pipeline and release-alignment inputs read directly by tests.
+eng/pipelines/azure-pipelines.yml
+eng/pipelines/common-variables.yml
+eng/pipelines/release-publish-nuget.yml
+eng/pipelines/templates/build_sign_native.yml
+eng/pipelines/templates/prepare-npm-cli-packages.yml
+eng/pipelines/templates/prepare-winget-manifest.yml
+eng/pipelines/templates/publish-winget.yml
+docs/specs/npm-cli-package.md
+docs/release-process.md
+eng/Signing.props

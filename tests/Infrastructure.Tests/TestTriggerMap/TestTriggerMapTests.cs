@@ -1420,19 +1420,15 @@ public sealed class TestTriggerMapTests
     public void PrefilterKeepRoutedGlobsAreLiveAndCoverSelectorRoutedDirs()
     {
         // keep_routed are the carve-outs: files the patterns file lists but the selector routes to a
-        // target, so they must NOT be dropped. Each must match a real file (catch typos), and the two
-        // selector-routed dirs must be covered so a workflow/pipeline change still runs Infrastructure
-        // .Tests in a mixed PR.
+        // target, so they must NOT be dropped. Each must match a real file (catch typos), and workflow
+        // inputs must remain covered so their semantic tests run in a mixed PR.
         Assert.NotNull(s_map.Prefilter);
         var keepRouted = s_map.Prefilter!.KeepRouted;
 
         var dead = keepRouted.Where(g => !GlobMatchesAnyTrackedFile(g)).Order(StringComparer.Ordinal).ToList();
         Assert.True(dead.Count == 0, $"prefilter.keep_routed globs matching no tracked file: {string.Join(", ", dead)}");
 
-        foreach (var required in new[] { ".github/workflows/**", "eng/pipelines/**" })
-        {
-            Assert.Contains(required, keepRouted);
-        }
+        Assert.Contains(".github/workflows/**", keepRouted);
     }
 
     [Fact]

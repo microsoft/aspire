@@ -252,7 +252,7 @@ public sealed class ExtensionWorkflowTests
     }
 
     [Fact]
-    public void CiRunsSelectorDrivenTestsAndStabilizationForEveryRequiredPr()
+    public void CiRunsSelectorDrivenTestsAndOnlyRequiredStabilization()
     {
         var normalTests = Mapping(s_ciJobs, "tests");
         Assert.Equal("./.github/workflows/tests.yml", Scalar(normalTests, "uses"));
@@ -260,13 +260,13 @@ public sealed class ExtensionWorkflowTests
             "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}",
             Scalar(normalTests, "if"));
 
-        Assert.Equal(
-            "${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}",
-            Scalar(Mapping(s_ciJobs, "stabilization_check"), "if"));
+        var stabilizationCondition = CollapseWhitespace(Scalar(Mapping(s_ciJobs, "stabilization_check"), "if"));
+        Assert.Contains("needs.prepare_for_ci.outputs.skip_workflow != 'true'", stabilizationCondition, StringComparison.Ordinal);
+        Assert.Contains("needs.prepare_for_ci.outputs.stabilization_required == 'true'", stabilizationCondition, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void FinalResultsRequireSelectorDrivenTestsAndStabilization()
+    public void FinalResultsRequireTestsAndOnlyRequiredStabilization()
     {
         var results = Mapping(s_ciJobs, "results");
         Assert.Equal(
@@ -274,11 +274,10 @@ public sealed class ExtensionWorkflowTests
             SequenceScalars(results, "needs"));
 
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any of the dependent jobs failed");
-        Assert.Equal(
-            "${{ always() && needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
-            "(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || " +
-            "needs.tests.result != 'success' || needs.stabilization_check.result != 'success') }}",
-            CollapseWhitespace(Scalar(failureStep, "if")));
+        var condition = CollapseWhitespace(Scalar(failureStep, "if"));
+        Assert.Contains("needs.tests.result != 'success'", condition, StringComparison.Ordinal);
+        Assert.Contains("needs.prepare_for_ci.outputs.stabilization_required == 'true'", condition, StringComparison.Ordinal);
+        Assert.Contains("needs.stabilization_check.result != 'success'", condition, StringComparison.Ordinal);
     }
 
     [Fact]

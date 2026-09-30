@@ -9,6 +9,7 @@ using Xunit;
 
 namespace Infrastructure.Tests;
 
+[Trait("Category", "AgenticWorkflow")]
 public sealed class PrDocsCheckWorkflowTests(ITestOutputHelper testOutput)
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
