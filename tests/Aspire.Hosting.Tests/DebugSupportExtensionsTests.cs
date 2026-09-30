@@ -115,6 +115,18 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CreateLaunchConfigurationUsesTheConfiguredBuildConfigurationForProjectResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null)
+            .WithConfiguration("Custom");
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(await CreateLaunchConfigurationForTestAsync(project.Resource, ExecutableLaunchMode.Debug));
+
+        Assert.Equal("Custom", launchConfiguration.BuildConfiguration);
+    }
+
+    [Fact]
     public async Task CreateLaunchConfigurationDisablesTheLaunchProfileWhenTheResourceExcludesIt()
     {
         // The producer registered by AddProject never sets DisableLaunchProfile; it is derived from

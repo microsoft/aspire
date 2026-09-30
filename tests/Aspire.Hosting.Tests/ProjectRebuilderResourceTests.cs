@@ -76,6 +76,34 @@ public class ProjectRebuilderResourceTests
             args);
     }
 
+    [Fact]
+    public async Task AddProjectRebuilderUsesConfigurationFromWithConfiguration()
+    {
+        using var builder = CreateBuilder();
+        UseDotnetSdkVersion(builder, "11.0.100-preview.7.25380.108");
+        var project = builder.AddProject<Projects.ServiceA>("servicea", options => options.ExcludeLaunchProfile = true)
+            .WithConfiguration("Custom");
+
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+
+        Assert.Equal(
+            [
+                "build",
+                project.Resource.GetProjectMetadata().ProjectPath,
+                "--configuration",
+                "Custom"
+            ],
+            args);
+    }
+
     private static IDistributedApplicationTestingBuilder CreateBuilder()
     {
         return TestDistributedApplicationBuilder.Create();

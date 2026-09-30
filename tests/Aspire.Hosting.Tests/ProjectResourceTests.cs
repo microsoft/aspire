@@ -7,6 +7,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIRECSHARPAPPS001
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Text;
 using System.Text.RegularExpressions;
@@ -576,6 +577,81 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var resource = Assert.Single(projectResources);
 
         Assert.Contains(resource.Annotations, a => a is DisableForwardedHeadersAnnotation);
+    }
+
+    [Fact]
+    public void WithConfigurationSetsProjectBuildConfiguration()
+    {
+        var appBuilder = CreateBuilder();
+
+        var project = appBuilder.AddProject<TestProject>("projectName", launchProfileName: null)
+            .WithConfiguration("Custom");
+
+        var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
+        Assert.Equal("Custom", launchDefaults.BuildConfiguration);
+    }
+
+    [Fact]
+    public void WithReleaseConfigurationSetsReleaseBuildConfiguration()
+    {
+        var appBuilder = CreateBuilder();
+
+        var project = appBuilder.AddProject<TestProject>("projectName", launchProfileName: null)
+            .WithReleaseConfiguration();
+        var app = appBuilder.AddCSharpApp("appName", "app-path", options => options.ExcludeLaunchProfile = true)
+            .WithReleaseConfiguration();
+
+        Assert.Equal("Release", Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>()).BuildConfiguration);
+        Assert.Equal("Release", Assert.Single(app.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>()).BuildConfiguration);
+    }
+
+    [Fact]
+    public void WithConfigurationReplacesPreviousConfiguration()
+    {
+        var appBuilder = CreateBuilder();
+
+        var project = appBuilder.AddProject<TestProject>("projectName", launchProfileName: null)
+            .WithReleaseConfiguration()
+            .WithConfiguration("Custom");
+
+        var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
+        Assert.Equal("Custom", launchDefaults.BuildConfiguration);
+    }
+
+    [Fact]
+    public void WithConfigurationThrowsForNullConfiguration()
+    {
+        var appBuilder = CreateBuilder();
+        var project = appBuilder.AddProject<TestProject>("projectName", launchProfileName: null);
+
+        var exception = Assert.Throws<ArgumentNullException>(() => project.WithConfiguration(null!));
+
+        Assert.Equal("configuration", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void WithConfigurationThrowsForEmptyOrWhiteSpaceConfiguration(string configuration)
+    {
+        var appBuilder = CreateBuilder();
+        var project = appBuilder.AddProject<TestProject>("projectName", launchProfileName: null);
+
+        var exception = Assert.Throws<ArgumentException>(() => project.WithConfiguration(configuration));
+
+        Assert.Equal("configuration", exception.ParamName);
+    }
+
+    [Fact]
+    public void WithConfigurationSetsBuildConfigurationOnDirectlyAddedProjectResource()
+    {
+        var appBuilder = CreateBuilder();
+        var project = appBuilder.AddResource(new ProjectResource("projectName"))
+            .WithAnnotation(new TestProject())
+            .WithReleaseConfiguration();
+
+        var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
+        Assert.Equal("Release", launchDefaults.BuildConfiguration);
     }
 
     [Theory]

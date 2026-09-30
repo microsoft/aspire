@@ -5551,6 +5551,51 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectResource_WithConfiguration_UsesConfiguration_InProcessMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<TestProject>("proj", launchProfileName: null)
+            .WithConfiguration("Custom")
+            .WithArgs("app-arg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal(
+            ["run", "--project", "TestProject", "--configuration", "Custom", "--no-launch-profile", "app-arg"],
+            exe.Spec.Args);
+    }
+
+    [Fact]
+    public async Task ProjectResource_AddedDirectly_UsesAppHostConfiguration_InProcessMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddResource(new ProjectResource("proj"))
+            .WithAnnotation(new TestProject())
+            .WithArgs("app-arg");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var executor = CreateAppExecutor(model, kubernetesService: kubernetes, distributedApplicationOptions: distributedApplicationOptions);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        AssertDefaultProjectProcessArgs(exe.Spec.Args, "app-arg");
+    }
+
+    [Fact]
     public async Task ProjectResource_WithLaunchToolArgsDebugSupport_WithholdsOwnedPrefix_InDebugSession()
     {
         // A ProjectResource can, via the generic WithLaunchToolArgs API, declare a tool

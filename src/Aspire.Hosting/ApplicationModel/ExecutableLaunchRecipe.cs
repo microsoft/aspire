@@ -445,11 +445,18 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         var workingDirectory = executableAnnotation?.WorkingDirectory ?? Path.GetDirectoryName(projectMetadata.ProjectPath) ?? string.Empty;
         var projectArguments = new List<string>();
 
+        // Launch defaults carry the per-project configuration (see WithConfiguration) shared with IDE launches and the
+        // rebuilder. ProjectResource always has the annotation, but its configuration is only populated by
+        // WithProjectDefaults or WithConfiguration, so resources added directly keep using the AppHost configuration.
+        var buildConfiguration =
+            (resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults) ? launchDefaults.BuildConfiguration : null)
+            ?? context.DistributedApplicationOptions.Configuration;
+
         if (context.Decision.Mechanism == ExecutableLaunchMechanism.Process)
         {
             if (launchOverride is not null)
             {
-                launchOverride.Apply(projectArguments, projectMetadata.ProjectPath, context.DistributedApplicationOptions.Configuration);
+                launchOverride.Apply(projectArguments, projectMetadata.ProjectPath, buildConfiguration);
             }
             else if (executableAnnotation is null)
             {
@@ -457,7 +464,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
                     projectArguments,
                     projectMetadata,
                     context.Configuration,
-                    context.DistributedApplicationOptions.Configuration);
+                    buildConfiguration);
             }
         }
 
@@ -512,7 +519,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
                 launchArguments,
                 dotnetProjectLaunchArgumentIndex,
                 executableArgumentStartIndex,
-                context.DistributedApplicationOptions.Configuration);
+                buildConfiguration);
         }
 
         projectArguments.AddRange(launchArguments.Where(static argument => argument.Executable).Select(static argument => argument.Value));

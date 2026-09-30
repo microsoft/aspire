@@ -966,6 +966,71 @@ public static class ProjectResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Configures the build configuration that is used to build and run the project.
+    /// </summary>
+    /// <param name="builder">The project resource builder.</param>
+    /// <param name="configuration">The MSBuild configuration, such as <c>Debug</c>, <c>Release</c>, or a custom configuration defined by the project.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException"><paramref name="configuration"/> is empty or consists only of white-space characters.</exception>
+    /// <remarks>
+    /// <para>
+    /// By default, a project is built and run with the same configuration as the app host. This method overrides that
+    /// configuration for this project only. The configuration is passed to <c>dotnet run --configuration</c>, to the IDE
+    /// when it launches the project, and to the <c>Rebuild</c> command.
+    /// </para>
+    /// <para>
+    /// The configuration only applies when the application is run. It does not change how the project is published.
+    /// </para>
+    /// <example>
+    /// Run a project with a custom build configuration.
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddProject&lt;Projects.InventoryService&gt;("inventoryservice")
+    ///        .WithConfiguration("Staging");
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Build configuration selection is not yet exposed to polyglot AppHosts.")]
+    public static IResourceBuilder<ProjectResource> WithConfiguration(this IResourceBuilder<ProjectResource> builder, string configuration)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configuration);
+
+        // Every ProjectResource carries this annotation from its constructor, including resources added directly.
+        builder.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>().Last().BuildConfiguration = configuration;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the project to be built and run with the <c>Release</c> configuration.
+    /// </summary>
+    /// <param name="builder">The project resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// This is equivalent to calling <see cref="WithConfiguration(IResourceBuilder{ProjectResource}, string)"/> with <c>Release</c>.
+    /// Use it for projects whose performance matters during local development, such as tools or load generators.
+    /// </para>
+    /// <example>
+    /// Run a project in the <c>Release</c> configuration.
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddProject&lt;Projects.InventoryService&gt;("inventoryservice")
+    ///        .WithReleaseConfiguration();
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Build configuration selection is not yet exposed to polyglot AppHosts.")]
+    public static IResourceBuilder<ProjectResource> WithReleaseConfiguration(this IResourceBuilder<ProjectResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithConfiguration("Release");
+    }
+
+    /// <summary>
     /// Set a filter that determines if environment variables are injected for a given endpoint.
     /// By default, all endpoints are included (if this method is not called).
     /// </summary>
