@@ -20,7 +20,7 @@ jobs:
   cleanup:
     if: >-
       github.event_name == 'schedule' &&
-      contains(format('{0},', 'dotnet,microsoft'), format('{0},', github.repository_owner))
+      contains(fromJSON('["dotnet", "microsoft"]'), github.repository_owner)
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -38,29 +38,31 @@ jobs:
               run_id: context.runId
             });
 
-            for await (const response of github.paginate.iterator(
+            const runIds = await github.paginate(
               github.rest.actions.listWorkflowRuns,
               {
                 owner,
                 repo,
                 workflow_id: currentRun.data.workflow_id,
-                status: 'completed'
-              }
-            )) {
-              for (const run of response.data) {
-                console.log(`Deleting workflow run ${run.id}`);
-                await github.rest.actions.deleteWorkflowRun({
-                  owner,
-                  repo,
-                  run_id: run.id
-                });
-              }
+                status: 'completed',
+                per_page: 100
+              },
+              response => response.data.map(run => run.id)
+            );
+
+            for (const runId of new Set(runIds)) {
+              console.log(`Deleting workflow run ${runId}`);
+              await github.rest.actions.deleteWorkflowRun({
+                owner,
+                repo,
+                run_id: runId
+              });
             }
 
   backport:
     if: >-
       github.event_name == 'issue_comment' &&
-      contains(format('{0},', 'dotnet,microsoft'), format('{0},', github.repository_owner)) &&
+      contains(fromJSON('["dotnet", "microsoft"]'), github.repository_owner) &&
       github.event.issue.pull_request != '' &&
       contains(github.event.comment.body, '/backport to')
     runs-on: ubuntu-latest
