@@ -972,6 +972,7 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="configuration">The MSBuild configuration, such as <c>Debug</c>, <c>Release</c>, or a custom configuration defined by the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="ArgumentException"><paramref name="configuration"/> is empty or consists only of white-space characters.</exception>
+    /// <exception cref="InvalidOperationException">Project defaults have not been applied to the resource.</exception>
     /// <remarks>
     /// <para>
     /// By default, a project is built and run with the same configuration as the app host. This method overrides that
@@ -997,8 +998,12 @@ public static class ProjectResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(configuration);
 
-        // Every ProjectResource carries this annotation from its constructor, including resources added directly.
-        builder.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>().Last().BuildConfiguration = configuration;
+        if (!builder.Resource.TryGetLastAnnotation<ProjectLaunchDefaultsAnnotation>(out var launchDefaults) || !launchDefaults.HasAppliedProjectDefaults)
+        {
+            throw new InvalidOperationException($"Project defaults have not been applied to resource '{builder.Resource.Name}'. Call {nameof(WithProjectDefaults)} before {nameof(WithConfiguration)}.");
+        }
+
+        launchDefaults.BuildConfiguration = configuration;
         return builder;
     }
 
@@ -1007,6 +1012,7 @@ public static class ProjectResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The project resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Project defaults have not been applied to the resource.</exception>
     /// <remarks>
     /// <para>
     /// This is equivalent to calling <see cref="WithConfiguration(IResourceBuilder{ProjectResource}, string)"/> with <c>Release</c>.

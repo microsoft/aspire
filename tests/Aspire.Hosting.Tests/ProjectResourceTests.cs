@@ -643,11 +643,25 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WithConfigurationSetsBuildConfigurationOnDirectlyAddedProjectResource()
+    public void WithConfigurationThrowsWhenProjectDefaultsHaveNotBeenApplied()
+    {
+        var appBuilder = CreateBuilder();
+        var project = appBuilder.AddResource(new ProjectResource("projectName"))
+            .WithAnnotation(new TestProject());
+
+        var exception = Assert.Throws<InvalidOperationException>(project.WithReleaseConfiguration);
+
+        Assert.Contains("projectName", exception.Message);
+        Assert.Contains(nameof(ProjectResourceBuilderExtensions.WithProjectDefaults), exception.Message);
+    }
+
+    [Fact]
+    public void WithConfigurationWorksAfterProjectDefaultsAreAppliedToDirectlyAddedProject()
     {
         var appBuilder = CreateBuilder();
         var project = appBuilder.AddResource(new ProjectResource("projectName"))
             .WithAnnotation(new TestProject())
+            .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true })
             .WithReleaseConfiguration();
 
         var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());

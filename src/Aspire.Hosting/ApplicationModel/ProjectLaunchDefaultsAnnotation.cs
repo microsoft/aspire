@@ -34,6 +34,8 @@ public sealed class ProjectLaunchDefaultsAnnotation : IResourceAnnotation
     /// </summary>
     internal bool HasKestrelEndpoints => KestrelEndpointAnnotationHosts.Count > 0;
 
+    internal bool HasAppliedProjectDefaults => _appliedProjectMetadata is not null;
+
     /// <summary>
     /// Gets or sets the build configuration used to launch and rebuild this project. Defaults to the AppHost build configuration.
     /// </summary>
