@@ -17,7 +17,7 @@ permissions:
 jobs:
   update-and-pr:
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository_owner == 'microsoft' && inputs.version != 'permission-probe' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -77,3 +77,148 @@ jobs:
             area-engineering-systems
           title: "[Automated] Update Aspire skills bundle"
           body: "Auto-generated update to refresh the embedded Aspire skills bundle fallback used by the Aspire CLI."
+
+  permission-probe:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' && inputs.version == 'permission-probe' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Generate metadata-only GitHub App token
+        id: metadata-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          permission-metadata: read
+
+      - name: Exercise public Aspire skills reads
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ steps.metadata-token.outputs.token }}
+        run: ./eng/scripts/update-aspire-skills-bundle.ps1
+
+      - name: Restore checkout after skills update
+        run: git restore --source=HEAD --staged --worktree .
+
+      - name: Generate read-content pull-request token
+        id: read-pr-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: write
+
+      - name: Generate write-content pull-request token
+        id: write-pr-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Exercise pull-request labels and assignees
+        shell: bash
+        env:
+          READ_TOKEN: ${{ steps.read-pr-token.outputs.token }}
+          WRITE_TOKEN: ${{ steps.write-pr-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          base_branch="$GITHUB_REF_NAME"
+          read_branch="ankj/permission-probe-read-${GITHUB_RUN_ID}"
+          write_branch="ankj/permission-probe-write-${GITHUB_RUN_ID}"
+          probe_label="permission-probe-${GITHUB_RUN_ID}"
+          read_pr=""
+          write_pr=""
+
+          cleanup() {
+            set +e
+            if [ -n "$read_pr" ]; then
+              GH_TOKEN="$WRITE_TOKEN" gh pr close "$read_pr" --repo "$GITHUB_REPOSITORY"
+            fi
+            if [ -n "$write_pr" ]; then
+              GH_TOKEN="$WRITE_TOKEN" gh pr close "$write_pr" --repo "$GITHUB_REPOSITORY"
+            fi
+            GH_TOKEN="$WRITE_TOKEN" gh label delete "$probe_label" --repo "$GITHUB_REPOSITORY" --yes
+            git switch --detach "$GITHUB_SHA"
+            git push origin --delete "$read_branch" "$write_branch"
+          }
+          trap cleanup EXIT
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          GH_TOKEN="$WRITE_TOKEN" gh auth setup-git
+
+          git switch -c "$read_branch"
+          git commit --allow-empty -m "Create read-token permission probe"
+          git push origin "$read_branch"
+
+          git switch "$base_branch"
+          git switch -c "$write_branch"
+          git commit --allow-empty -m "Create write-token permission probe"
+          git push origin "$write_branch"
+          git switch "$base_branch"
+
+          GH_TOKEN="$READ_TOKEN" gh label create "$probe_label" \
+            --repo "$GITHUB_REPOSITORY" \
+            --color BFD4F2 \
+            --description "Temporary GitHub App permission probe"
+          GH_TOKEN="$READ_TOKEN" gh label create "$probe_label" \
+            --repo "$GITHUB_REPOSITORY" \
+            --color BFD4F2 \
+            --description "Temporary GitHub App permission probe" \
+            --force
+
+          read_pr_url=$(GH_TOKEN="$READ_TOKEN" gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base "$base_branch" \
+            --head "$read_branch" \
+            --title "[permission probe] read-content token" \
+            --body "Temporary permission validation; this pull request will be closed automatically." \
+            --draft \
+            --label "$probe_label" \
+            --assignee radical)
+          read_pr="${read_pr_url##*/}"
+
+          GH_TOKEN="$READ_TOKEN" gh pr edit "$read_pr" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "$probe_label" \
+            --add-label "$probe_label" \
+            --remove-assignee radical \
+            --add-assignee radical
+          GH_TOKEN="$READ_TOKEN" gh pr view "$read_pr" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels,assignees > /tmp/read-pr.json
+          jq -e --arg label "$probe_label" \
+            '([.labels[].name] | index($label)) != null and ([.assignees[].login] | index("radical")) != null' \
+            /tmp/read-pr.json
+
+          write_pr_url=$(GH_TOKEN="$WRITE_TOKEN" gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base "$base_branch" \
+            --head "$write_branch" \
+            --title "[permission probe] write-content token" \
+            --body "Temporary permission validation; this pull request will be closed automatically." \
+            --draft \
+            --label "$probe_label" \
+            --assignee radical)
+          write_pr="${write_pr_url##*/}"
+
+          GH_TOKEN="$WRITE_TOKEN" gh pr edit "$write_pr" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "$probe_label" \
+            --add-label "$probe_label" \
+            --remove-assignee radical \
+            --add-assignee radical
+          GH_TOKEN="$WRITE_TOKEN" gh pr view "$write_pr" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels,assignees > /tmp/write-pr.json
+          jq -e --arg label "$probe_label" \
+            '([.labels[].name] | index($label)) != null and ([.assignees[].login] | index("radical")) != null' \
+            /tmp/write-pr.json
