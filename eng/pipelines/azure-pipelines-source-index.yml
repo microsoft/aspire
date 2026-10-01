@@ -10,12 +10,6 @@ schedules:
     - main
   always: true
 
-variables:
-  # TSA remains enabled from the official pipeline and requires this branch-restricted
-  # variable group. Source indexing only runs from main, so no other build variables are needed.
-  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
-    - group: SDL_Settings
-
 resources:
   repositories:
   - repository: 1ESPipelineTemplates
@@ -46,8 +40,6 @@ extends:
         os: windows
       tsa:
         enabled: true
-    customBuildTags:
-    - ES365AIMigrationTooling
     stages:
     - stage: source_index
       displayName: Source Index
