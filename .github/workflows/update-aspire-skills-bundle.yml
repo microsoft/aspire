@@ -154,6 +154,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local --unset-all http.https://github.com/.extraheader || true
           GH_TOKEN="$WRITE_TOKEN" gh auth setup-git
+          export GH_TOKEN="$WRITE_TOKEN"
 
           git switch -c "$read_branch"
           git commit --allow-empty -m "Create read-token permission probe"
