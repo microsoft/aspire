@@ -11,8 +11,10 @@ schedules:
   always: true
 
 variables:
-  - template: /eng/pipelines/common-variables.yml@self
-  - template: /eng/common/templates-official/variables/pool-providers.yml@self
+  # TSA remains enabled from the official pipeline and requires this branch-restricted
+  # variable group. Source indexing only runs from main, so no other build variables are needed.
+  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+    - group: SDL_Settings
 
 resources:
   repositories:
@@ -49,22 +51,11 @@ extends:
     stages:
     - stage: source_index
       displayName: Source Index
-      dependsOn: []
       jobs:
       - template: /eng/common/templates-official/jobs/jobs.yml@self
         parameters:
-          enableMicrobuild: false
-          enablePublishUsingPipelines: false
-          enablePublishBuildAssets: false
-          publishAssetsImmediately: false
-          enableTelemetry: true
-          enablePublishBuildArtifacts: false
-          enablePublishTestResults: false
           enableSourceIndex: true
           sourceIndexParams:
             # Use the repository wrapper so standalone restore receives its NuGet
             # audit warning policy; Arcade's default command bypasses that wrapper.
             sourceIndexBuildCommand: .\build.cmd -restore -build -binarylog -ci
-          workspace:
-            clean: all
-          jobs: []
