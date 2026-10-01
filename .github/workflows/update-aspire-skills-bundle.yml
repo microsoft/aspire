@@ -121,20 +121,33 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      - name: Generate issues control token
+        id: issues-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          permission-contents: read
+          permission-issues: write
+          permission-pull-requests: write
+
       - name: Exercise pull-request labels and assignees
         shell: bash
         env:
           READ_TOKEN: ${{ steps.read-pr-token.outputs.token }}
           WRITE_TOKEN: ${{ steps.write-pr-token.outputs.token }}
+          ISSUES_TOKEN: ${{ steps.issues-token.outputs.token }}
         run: |
           set -euo pipefail
 
           base_branch="$GITHUB_REF_NAME"
           read_branch="ankj/permission-probe-read-${GITHUB_RUN_ID}"
           write_branch="ankj/permission-probe-write-${GITHUB_RUN_ID}"
+          control_branch="ankj/permission-probe-control-${GITHUB_RUN_ID}"
           probe_label="permission-probe-${GITHUB_RUN_ID}"
           read_pr=""
           write_pr=""
+          control_pr=""
 
           cleanup() {
             set +e
@@ -144,6 +157,9 @@ jobs:
             if [ -n "$write_pr" ]; then
               GH_TOKEN="$WRITE_TOKEN" gh pr close "$write_pr" --repo "$GITHUB_REPOSITORY"
             fi
+            if [ -n "$control_pr" ]; then
+              GH_TOKEN="$WRITE_TOKEN" gh pr close "$control_pr" --repo "$GITHUB_REPOSITORY"
+            fi
             GH_TOKEN="$WRITE_TOKEN" gh label delete "$probe_label" --repo "$GITHUB_REPOSITORY" --yes
             GH_TOKEN="$WRITE_TOKEN" gh api \
               --method DELETE \
@@ -151,6 +167,9 @@ jobs:
             GH_TOKEN="$WRITE_TOKEN" gh api \
               --method DELETE \
               "repos/${GITHUB_REPOSITORY}/git/refs/heads/${write_branch}"
+            GH_TOKEN="$WRITE_TOKEN" gh api \
+              --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${control_branch}"
           }
           trap cleanup EXIT
 
@@ -186,6 +205,7 @@ jobs:
 
           create_probe_ref "$read_branch" "Create read-token permission probe"
           create_probe_ref "$write_branch" "Create write-token permission probe"
+          create_probe_ref "$control_branch" "Create issues-token permission control"
 
           GH_TOKEN="$READ_TOKEN" gh label create "$probe_label" \
             --repo "$GITHUB_REPOSITORY" \
@@ -217,9 +237,7 @@ jobs:
           GH_TOKEN="$READ_TOKEN" gh pr view "$read_pr" \
             --repo "$GITHUB_REPOSITORY" \
             --json labels,assignees > /tmp/read-pr.json
-          jq -e --arg label "$probe_label" \
-            '([.labels[].name] | index($label)) != null and ([.assignees[].login] | index("radical")) != null' \
-            /tmp/read-pr.json
+          jq -e '(.labels | length) == 0 and (.assignees | length) == 0' /tmp/read-pr.json
 
           write_pr_url=$(GH_TOKEN="$WRITE_TOKEN" gh pr create \
             --repo "$GITHUB_REPOSITORY" \
@@ -241,6 +259,28 @@ jobs:
           GH_TOKEN="$WRITE_TOKEN" gh pr view "$write_pr" \
             --repo "$GITHUB_REPOSITORY" \
             --json labels,assignees > /tmp/write-pr.json
+          jq -e '(.labels | length) == 0 and (.assignees | length) == 0' /tmp/write-pr.json
+
+          control_pr_url=$(GH_TOKEN="$ISSUES_TOKEN" gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
+            --base "$base_branch" \
+            --head "$control_branch" \
+            --title "[permission probe] issues control token" \
+            --body "Temporary permission validation; this pull request will be closed automatically." \
+            --draft \
+            --label "$probe_label" \
+            --assignee radical)
+          control_pr="${control_pr_url##*/}"
+
+          GH_TOKEN="$ISSUES_TOKEN" gh pr edit "$control_pr" \
+            --repo "$GITHUB_REPOSITORY" \
+            --remove-label "$probe_label" \
+            --add-label "$probe_label" \
+            --remove-assignee radical \
+            --add-assignee radical
+          GH_TOKEN="$ISSUES_TOKEN" gh pr view "$control_pr" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json labels,assignees > /tmp/control-pr.json
           jq -e --arg label "$probe_label" \
             '([.labels[].name] | index($label)) != null and ([.assignees[].login] | index("radical")) != null' \
-            /tmp/write-pr.json
+            /tmp/control-pr.json
