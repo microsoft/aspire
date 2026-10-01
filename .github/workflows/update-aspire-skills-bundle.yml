@@ -145,26 +145,47 @@ jobs:
               GH_TOKEN="$WRITE_TOKEN" gh pr close "$write_pr" --repo "$GITHUB_REPOSITORY"
             fi
             GH_TOKEN="$WRITE_TOKEN" gh label delete "$probe_label" --repo "$GITHUB_REPOSITORY" --yes
-            git switch --detach "$GITHUB_SHA"
-            git push origin --delete "$read_branch" "$write_branch"
+            GH_TOKEN="$WRITE_TOKEN" gh api \
+              --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${read_branch}"
+            GH_TOKEN="$WRITE_TOKEN" gh api \
+              --method DELETE \
+              "repos/${GITHUB_REPOSITORY}/git/refs/heads/${write_branch}"
           }
           trap cleanup EXIT
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config --local --unset-all http.https://github.com/.extraheader || true
-          GH_TOKEN="$WRITE_TOKEN" gh auth setup-git
-          export GH_TOKEN="$WRITE_TOKEN"
+          base_tree=$(GH_TOKEN="$WRITE_TOKEN" gh api \
+            "repos/${GITHUB_REPOSITORY}/git/commits/${GITHUB_SHA}" \
+            --jq '.tree.sha')
 
-          git switch -c "$read_branch"
-          git commit --allow-empty -m "Create read-token permission probe"
-          git push origin "$read_branch"
+          create_probe_ref() {
+            local branch="$1"
+            local message="$2"
+            local commit_sha
 
-          git switch "$base_branch"
-          git switch -c "$write_branch"
-          git commit --allow-empty -m "Create write-token permission probe"
-          git push origin "$write_branch"
-          git switch "$base_branch"
+            commit_sha=$(jq -n \
+              --arg message "$message" \
+              --arg tree "$base_tree" \
+              --arg parent "$GITHUB_SHA" \
+              '{message: $message, tree: $tree, parents: [$parent]}' |
+              GH_TOKEN="$WRITE_TOKEN" gh api \
+                --method POST \
+                "repos/${GITHUB_REPOSITORY}/git/commits" \
+                --input - \
+                --jq '.sha')
+
+            jq -n \
+              --arg ref "refs/heads/${branch}" \
+              --arg sha "$commit_sha" \
+              '{ref: $ref, sha: $sha}' |
+              GH_TOKEN="$WRITE_TOKEN" gh api \
+                --method POST \
+                "repos/${GITHUB_REPOSITORY}/git/refs" \
+                --input -
+          }
+
+          create_probe_ref "$read_branch" "Create read-token permission probe"
+          create_probe_ref "$write_branch" "Create write-token permission probe"
 
           GH_TOKEN="$READ_TOKEN" gh label create "$probe_label" \
             --repo "$GITHUB_REPOSITORY" \
