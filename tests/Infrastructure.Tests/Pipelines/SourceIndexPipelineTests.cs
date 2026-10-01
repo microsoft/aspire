@@ -30,4 +30,7 @@ public sealed class SourceIndexPipelineTests
         Assert.DoesNotContain("- stage: source_index", pipeline);
         Assert.DoesNotContain("enableSourceIndex: true", pipeline);
     }
+
+    private static Task<string> ReadRepoFileAsync(string relativePath)
+        => File.ReadAllTextAsync(Path.Combine(RepoRoot.Path, relativePath.Replace('/', Path.DirectorySeparatorChar)));
 }
