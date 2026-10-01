@@ -422,6 +422,78 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Assert.Equal(expectedMessage, emptyMessage.TextContent.Trim());
     }
 
+    [Fact]
+    public void UtcTimestampsMenuItem_HiddenWhenTimestampsDisabled_VisibleWhenTimestampsEnabled()
+    {
+        // Arrange
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        SetupConsoleLogsServices(dashboardClient);
+
+        var viewport = CreateViewport(isDesktop: true);
+        var cut = RenderConsoleLogsPage(viewport, testResource.Name);
+
+        // Wait for resource to be selected
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource?.Id?.InstanceId == testResource.Name);
+
+        // Act & Assert 1: When timestamps are enabled, UTC timestamps option should be visible
+        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        Assert.NotNull(settingsMenuButton);
+        settingsMenuButton.Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var menuItems = cut.FindAll("fluent-menu-item");
+            var utcTimestampsMenuItem = menuItems.FirstOrDefault(item =>
+            {
+                var text = item.TextContent;
+                return text.Contains(Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc);
+            });
+
+            Assert.NotNull(utcTimestampsMenuItem, "UTC timestamps option should be visible when timestamps are enabled");
+        });
+
+        // Close the menu
+        settingsMenuButton.Click();
+        cut.WaitForAssertion(() => Assert.False(cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ConsoleLogs.ConsoleLogsSettings)).Instance.Open));
+
+        // Act & Assert 2: When timestamps are disabled, UTC timestamps option should be hidden
+        // Click the "Hide timestamps" menu item
+        settingsMenuButton.Click();
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ConsoleLogs.ConsoleLogsSettings)).Instance.Open));
+
+        var hideTimestampMenuItem = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampHide)).Instance.Items
+            .First(i => i.Text == Resources.ConsoleLogs.ConsoleLogsTimestampHide);
+        Assert.NotNull(hideTimestampMenuItem.OnClick);
+        cut.InvokeAsync(hideTimestampMenuItem.OnClick);
+        cut.Render();
+
+        // Wait for menu to close
+        cut.WaitForAssertion(() => Assert.False(cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ConsoleLogs.ConsoleLogsSettings)).Instance.Open));
+
+        // Open menu again to verify UTC timestamps option is hidden
+        settingsMenuButton.Click();
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ConsoleLogs.ConsoleLogsSettings)).Instance.Open));
+
+        cut.WaitForAssertion(() =>
+        {
+            var menuItems = cut.FindAll("fluent-menu-item");
+            var utcTimestampsMenuItem = menuItems.FirstOrDefault(item =>
+            {
+                var text = item.TextContent;
+                return text.Contains(Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc);
+            });
+
+            Assert.Null(utcTimestampsMenuItem, "UTC timestamps option should be hidden when timestamps are disabled");
+        });
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
