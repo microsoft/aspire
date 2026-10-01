@@ -15,6 +15,27 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1000)]
+    public void WithEndpointPreservesDisplayOrder(int? displayOrder)
+    {
+        var endpoint = new EndpointReference(new ContainerResource("container"), "http");
+        var annotation = new ResourceUrlAnnotation
+        {
+            Url = "https://example.com",
+            DisplayOrder = displayOrder
+        };
+
+        var updatedAnnotation = annotation.WithEndpoint(endpoint);
+
+        Assert.Equal(displayOrder, updatedAnnotation.DisplayOrder);
+        Assert.Same(endpoint, updatedAnnotation.Endpoint);
+        Assert.Null(annotation.Endpoint);
+    }
+
     [Fact]
     public void WithUrlsAddsAnnotationForAsyncCallback()
     {
@@ -339,7 +360,6 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-#pragma warning disable CS0618 // This test intentionally verifies the obsolete DisplayOrder behavior.
         var projectA = builder.AddProject<ProjectA>("projecta")
             .WithHttpEndpoint(name: "test")
             .WithUrlForEndpoint("test", u =>
@@ -364,7 +384,6 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
             && u.DisplayText == "Link Text"
             && u.Endpoint?.EndpointName == "test"
             && u.DisplayOrder == 1000);
-#pragma warning restore CS0618
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
     }
