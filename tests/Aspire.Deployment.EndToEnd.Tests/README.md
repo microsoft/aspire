@@ -75,6 +75,14 @@ Common quota increase requests:
 
 ## Prerequisites
 
+### Deployment identity permissions
+
+The deployment service principal needs subscription **Owner** access for infrastructure and role-assignment management. Owner does not grant Foundry data-plane access. The workflow's `provision-subscription` job also ensures an unrestricted subscription-scoped **Foundry User** assignment (`53ca6127-db72-4b80-b1b0-d745d6d5456d`, formerly Azure AI User), which includes the agent read/write operations used by the Foundry tests. Subscription scope lets accounts and projects created later inherit this access; use a dedicated test subscription because the role grants broader Cognitive Services data-plane permissions.
+
+The job resolves the signed-in service principal from its Azure CLI ARM token without requiring Microsoft Graph directory-read permissions. Azure CLI reuses an existing matching assignment on subsequent runs. Failures are reported but, like other subscription preparation, do not block the rest of setup or the test matrix. Assignment confirmation does not guarantee immediate data-plane RBAC propagation; newly granted access can take several minutes to become effective.
+
+For local Foundry test runs, grant the same data-plane role to your deployment identity before testing. See [Foundry role-based access control](https://learn.microsoft.com/azure/foundry/concepts/rbac-foundry).
+
 ### For Local Development
 
 1. **Linux environment** - Hex1b requires a Linux terminal (WSL2 works on Windows)
