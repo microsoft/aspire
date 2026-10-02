@@ -16,7 +16,9 @@ public class TrayResourceHealthTests
     [InlineData("Building", null, null, null, "warning")]
     [InlineData("Waiting", null, null, null, "warning")]
     [InlineData("Stopping", null, null, null, "warning")]
-    [InlineData("NotStarted", null, null, null, "warning")]
+    [InlineData("NotStarted", null, null, null, null)]
+    [InlineData("NotStarted", "Unhealthy", null, null, "unhealthy")]
+    [InlineData("NotStarted", null, "warning", null, "warning")]
     [InlineData("ValueMissing", null, null, null, "warning")]
     [InlineData("Unknown", null, null, null, "warning")]
     [InlineData("FailedToStart", null, null, null, "unhealthy")]
@@ -96,5 +98,19 @@ public class TrayResourceHealthTests
 
         Assert.Equal("warning", TrayResourceHealth.Aggregate(resources.Take(2)));
         Assert.Equal("unhealthy", TrayResourceHealth.Aggregate(reverse ? resources.Reverse() : resources));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void IntentionallyUnstartedResourcesDoNotMaskRunningResourceHealth(bool reverse)
+    {
+        ResourceSnapshot[] resources =
+        [
+            new() { Name = "api", State = "Running", HealthStatus = "Healthy" },
+            new() { Name = "worker", State = "NotStarted" }
+        ];
+
+        Assert.Equal("healthy", TrayResourceHealth.Aggregate(reverse ? resources.Reverse() : resources));
     }
 }

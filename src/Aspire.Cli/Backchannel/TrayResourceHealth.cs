@@ -58,9 +58,10 @@ internal static class TrayResourceHealth
             return "warning";
         }
 
-        // The dashboard treats successful jobs and resources without a lifetime (such as
-        // resolved parameters) as neutral, not services waiting to become Running.
-        if (completed || ((string.IsNullOrEmpty(resource.State) || IsState(resource, KnownResourceStates.Active))
+        // Intentionally unstarted resources, successful jobs, and resources without a
+        // lifetime (such as resolved parameters) do not need to become Running.
+        if (completed || IsState(resource, KnownResourceStates.NotStarted)
+            || ((string.IsNullOrEmpty(resource.State) || IsState(resource, KnownResourceStates.Active))
             && resource.HealthStatus is null && resource.HealthReports.Length == 0))
         {
             return null;
