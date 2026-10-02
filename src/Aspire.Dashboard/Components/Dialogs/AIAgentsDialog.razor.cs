@@ -29,7 +29,7 @@ public partial class AIAgentsDialog
     public required IOptionsMonitor<DashboardOptions> Options { get; init; }
 
     private const string AppHostLearnMoreUrl = "https://aka.ms/aspire/ai-agents-apphost";
-    private const string StandaloneLearnMoreUrl = "https://aka.ms/aspire/dashboard-ai-standalone";
+    private const string StandaloneLearnMoreUrl = "https://aspire.dev/dashboard/ai-coding-agents/#standalone-mode";
     private const string InstallCliUrl = "https://aka.ms/aspire/install-cli";
 
     private string Description => DashboardClient.IsEnabled
