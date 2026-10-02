@@ -21,6 +21,10 @@ internal abstract class BaseCommand : Command
 
     protected virtual bool UpdateNotificationsEnabled { get; }
 
+    // Commands that only conditionally emit telemetry can defer provider creation and enrichment
+    // until they have work to report, rather than paying that startup cost on every invocation.
+    internal virtual bool InitializeTelemetryOnStartup => true;
+
     internal virtual bool PrefetchesTemplatePackageMetadata => false;
 
     internal bool PrefetchesTemplatePackageMetadataForInvocation
