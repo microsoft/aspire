@@ -10,7 +10,7 @@
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing" Version="1.1.4" />
     <PackageVersion Include="Microsoft.DotNet.RemoteExecutor" Version="$(MicrosoftDotNetRemoteExecutorVersion)" />
     <PackageVersion Include="Microsoft.DotNet.XUnitV3Extensions" Version="$(MicrosoftDotNetXUnitV3ExtensionsVersion)" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <PackageVersion Include="Testcontainers.Kafka" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.MongoDb" Version="$(TestcontainersPackageVersion)" />
     <PackageVersion Include="Testcontainers.MsSql" Version="$(TestcontainersPackageVersion)" />
@@ -24,7 +24,7 @@
     <PackageVersion Include="Testcontainers" Version="$(TestcontainersPackageVersion)" />
     <!-- 32.0.0 predates the maintenance-fee cutoff; later releases require a licensing review.
          https://github.com/VerifyTests/Verify/discussions/1731#discussioncomment-18176034 -->
-    <PackageVersion Include="Verify.XunitV3" Version="32.0.0" />
-    <PackageVersion Include="xunit.v3.extensibility.core" Version="$(XunitV3Version)" />
+    <PackageVersion Include="Verify.XunitV3" Version="33.2.0" />
+    <PackageVersion Include="xunit.v3.extensibility.core" Version="4.0.1" />
   </ItemGroup>
 </Project>
