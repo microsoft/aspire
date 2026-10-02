@@ -134,7 +134,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     {
         var version = await TryGetVersionAsync(
             workingDirectory,
-            GetDotnetExecutablePath(environmentVariables),
+            "dotnet",
             environmentVariables,
             cancellationToken).ConfigureAwait(false);
         return DotnetSdkUtils.SupportsMultiThreadedBuild(version);
@@ -147,7 +147,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     {
         var version = await TryGetVersionAsync(
             workingDirectory,
-            GetDotnetExecutablePath(environmentVariables),
+            "dotnet",
             environmentVariables,
             cancellationToken).ConfigureAwait(false);
         return DotnetSdkUtils.SupportsFileBasedMultiThreadedBuild(version);
@@ -195,22 +195,6 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
         }
 
         return $"{dotnetExecutablePath}\0{globalJsonContext}\0{GetEnvironmentFingerprint(environmentVariables)}";
-    }
-
-    private static string GetDotnetExecutablePath(IReadOnlyDictionary<string, string> environmentVariables)
-    {
-        var comparer = OperatingSystem.IsWindows()
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-        foreach (var (name, value) in environmentVariables)
-        {
-            if (comparer.Equals(name, "DOTNET_HOST_PATH") && value.Length > 0)
-            {
-                return value;
-            }
-        }
-
-        return "dotnet";
     }
 
     private static Dictionary<string, string> CreateProbeEnvironment(

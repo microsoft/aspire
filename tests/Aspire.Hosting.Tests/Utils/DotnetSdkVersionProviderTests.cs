@@ -129,6 +129,31 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SupportsMultiThreadedBuildAsyncUsesPathDotnetWhenDotnetHostPathConflicts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["10.0.401"]);
+        var provider = CreateProvider(processRunner);
+        var buildEnvironment = new Dictionary<string, string>
+        {
+            ["PATH"] = "sdk-10-dotnet-path",
+            ["DOTNET_HOST_PATH"] = "sdk-11-dotnet-host",
+        };
+
+        var supported = await provider.SupportsMultiThreadedBuildAsync(
+            workspace.Path,
+            buildEnvironment,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(supported);
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("dotnet", processSpec.ExecutablePath);
+        Assert.Equal("sdk-10-dotnet-path", processSpec.EnvironmentVariables["PATH"]);
+        Assert.Equal("sdk-11-dotnet-host", processSpec.EnvironmentVariables["DOTNET_HOST_PATH"]);
+    }
+
+    [Fact]
     public async Task SupportsFileBasedMultiThreadedBuildAsyncUsesBuildEnvironment()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -151,6 +176,31 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
         Assert.Equal("custom-dotnet-path", processSpec.EnvironmentVariables["PATH"]);
         Assert.Equal("false", processSpec.EnvironmentVariables["DOTNET_NOLOGO"]);
         Assert.Equal("true", processSpec.EnvironmentVariables["DOTNET_CLI_TELEMETRY_OPTOUT"]);
+    }
+
+    [Fact]
+    public async Task SupportsFileBasedMultiThreadedBuildAsyncUsesPathDotnetWhenDotnetHostPathConflicts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["10.0.401"]);
+        var provider = CreateProvider(processRunner);
+        var buildEnvironment = new Dictionary<string, string>
+        {
+            ["PATH"] = "sdk-10-dotnet-path",
+            ["DOTNET_HOST_PATH"] = "sdk-11-dotnet-host",
+        };
+
+        var supported = await provider.SupportsFileBasedMultiThreadedBuildAsync(
+            workspace.Path,
+            buildEnvironment,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(supported);
+        var processSpec = Assert.Single(processRunner.ProcessSpecs);
+        Assert.Equal("dotnet", processSpec.ExecutablePath);
+        Assert.Equal("sdk-10-dotnet-path", processSpec.EnvironmentVariables["PATH"]);
+        Assert.Equal("sdk-11-dotnet-host", processSpec.EnvironmentVariables["DOTNET_HOST_PATH"]);
     }
 
     [Fact]
