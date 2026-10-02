@@ -240,7 +240,7 @@ internal sealed unsafe partial class TrayApplication
         }
     }
 
-    private static uint AddAction(NativeMenu menu, nint parent, string title, ActionTarget target, bool enabled)
+    private uint AddAction(NativeMenu menu, nint parent, string title, ActionTarget target, bool enabled)
     {
         var id = (uint)menu.Commands.Count + 100;
         menu.Commands.Add(id, target);
@@ -257,7 +257,7 @@ internal sealed unsafe partial class TrayApplication
     private static void Append(nint menu, uint flags, nuint id, string? text)
         => NativeCallException.Require(NativeMethods.AppendMenu(menu, flags, id, Literal(text)) != 0, "AppendMenuW");
 
-    private static void UpdateAction(nint menu, uint id, string title, bool enabled)
+    private void UpdateAction(nint menu, uint id, string title, bool enabled)
     {
         if (id != 0)
         {
@@ -265,8 +265,18 @@ internal sealed unsafe partial class TrayApplication
         }
     }
 
-    private static void SetMenuBitmap(nint menu, uint item, nint bitmap, bool byPosition)
+    private void SetMenuBitmap(nint menu, uint item, nint bitmap, bool byPosition)
     {
+        var existing = new NativeMethods.MenuItemInfo
+        {
+            Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = 0x20 // MIIM_DATA.
+        };
+        NativeCallException.Require(NativeMethods.GetMenuItemInfo(menu, item, byPosition ? 1 : 0, ref existing) != 0, "GetMenuItemInfoW(bitmap data)");
+        if (_menuPaintItems.TryGetValue(existing.ItemData, out var painted))
+        {
+            painted.Bitmap = bitmap;
+            return;
+        }
         var info = new NativeMethods.MenuItemInfo
         {
             Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = NativeMethods.MiimBitmap, Bitmap = bitmap
@@ -279,13 +289,17 @@ internal sealed unsafe partial class TrayApplication
         NativeCallException.Require(NativeMethods.SetMenuDefaultItem(menu, command, 0) != 0, "SetMenuDefaultItem");
     }
 
-    private static void UpdateItem(nint menu, uint id, bool byPosition, string title, bool enabled)
+    private void UpdateItem(nint menu, uint id, bool byPosition, string title, bool enabled)
     {
         var previous = new NativeMethods.MenuItemInfo
         {
-            Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = NativeMethods.MiimState
+            Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = NativeMethods.MiimState | 0x20
         };
         NativeCallException.Require(NativeMethods.GetMenuItemInfo(menu, id, byPosition ? 1 : 0, ref previous) != 0, "GetMenuItemInfoW(update)");
+        if (_menuPaintItems.TryGetValue(previous.ItemData, out var painted))
+        {
+            painted.UpdateName(Literal(title)!);
+        }
         var wasDefault = (previous.State & 0x1000) != 0;
         if (wasDefault)
         {
@@ -336,6 +350,9 @@ internal sealed unsafe partial class TrayApplication
 
     private void TrackMenu(nint popup, NativeMethods.Point point)
     {
+        ClearMenuAppearance();
+        RefreshMenuPalette();
+        PrepareMenuAppearance(popup);
         var menu = _menu!;
         // Foreground activation is a request, not a prerequisite for owning a popup menu.
         // Background smoke runs can be denied activation by Windows' foreground lock.
@@ -364,6 +381,7 @@ internal sealed unsafe partial class TrayApplication
         finally
         {
             HideMenuTooltip();
+            ClearMenuAppearance();
             _menuOpen = false;
             _displayedState = null;
             if (!_quitRequested)
@@ -387,6 +405,7 @@ internal sealed unsafe partial class TrayApplication
         HideMenuTooltip();
         using var context = new NativeMenu(this);
         var command = AddAction(context, context.Handle, host.IsPinned ? "Unpin AppHost" : "Pin AppHost", new(ActionKind.TogglePin, host.Id), true);
+        PrepareMenuAppearance(context.Handle);
         NativeCallException.Require(NativeMethods.GetCursorPos(out var point) != 0, "GetCursorPos");
         Marshal.SetLastPInvokeError(0);
         var selected = NativeMethods.TrackPopupMenuEx(context.Handle,
@@ -450,6 +469,7 @@ internal sealed unsafe partial class TrayApplication
             if (!_disposed)
             {
                 _disposed = true;
+                owner.ReleaseMenuAppearance(Handle);
                 owner.Cleanup(NativeMethods.DestroyMenu(Handle) != 0, "DestroyMenu");
             }
         }
