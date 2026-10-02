@@ -101,6 +101,33 @@ public class TrayResourceHealthTests
     }
 
     [Theory]
+    [InlineData(null, null, null)]
+    [InlineData("Healthy", null, null)]
+    [InlineData("Degraded", null, "warning")]
+    [InlineData("Unhealthy", null, "unhealthy")]
+    [InlineData(null, "warning", "warning")]
+    [InlineData(null, "error", "unhealthy")]
+    public void UnstartedPendingHealthChecksAreNeutralUnlessExplicitlyUnhealthyOrWarning(string? otherStatus, string? style, string? expected)
+    {
+        var resource = new ResourceSnapshot
+        {
+            Name = "worker",
+            State = "NotStarted",
+            StateStyle = style,
+            HealthStatus = "Unhealthy",
+            HealthReports =
+            [
+                new() { Name = "pending", Status = null },
+                new() { Name = "other", Status = otherStatus }
+            ]
+        };
+
+        Assert.Equal(expected, TrayResourceHealth.Aggregate([resource]));
+        Assert.Equal(expected ?? "healthy", TrayResourceHealth.Aggregate(
+            [new() { Name = "api", State = "Running", HealthStatus = "Healthy" }, resource]));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void IntentionallyUnstartedResourcesDoNotMaskRunningResourceHealth(bool reverse)
