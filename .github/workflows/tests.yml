@@ -49,6 +49,45 @@ jobs:
       run_nix_package: ${{ fromJSON(steps.select_tests.outputs.selection).run_nix_package }}
       run_cli_starter_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation }}
       run_native_dashboard_validation: ${{ fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation }}
+      build_packages_required: >-
+        ${{ fromJSON(steps.split_matrix.outputs.tests_matrix_requires_nugets_linux).include[0] != null ||
+            fromJSON(steps.split_matrix.outputs.tests_matrix_requires_nugets_windows).include[0] != null ||
+            fromJSON(steps.split_matrix.outputs.tests_matrix_requires_nugets_macos).include[0] != null ||
+            fromJSON(steps.split_matrix.outputs.tests_matrix_requires_cli_archive).include[0] != null ||
+            fromJSON(steps.select_tests.outputs.selection).run_polyglot ||
+            fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_extension_e2e ||
+            fromJSON(steps.select_tests.outputs.selection).run_winget_installer ||
+            fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
+      build_cli_archive_linux_required: >-
+        ${{ fromJSON(steps.split_matrix.outputs.tests_matrix_requires_nugets_linux).include[0] != null ||
+            fromJSON(steps.split_matrix.outputs.tests_matrix_requires_cli_archive).include[0] != null ||
+            fromJSON(steps.select_tests.outputs.selection).run_polyglot ||
+            fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_extension_e2e }}
+      build_cli_archive_linux_arm64_required: >-
+        ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation }}
+      build_cli_archive_windows_required: >-
+        ${{ fromJSON(steps.split_matrix.outputs.tests_matrix_requires_nugets_windows).include[0] != null ||
+            fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_extension_e2e ||
+            fromJSON(steps.select_tests.outputs.selection).run_winget_installer }}
+      build_cli_archive_windows_arm64_required: >-
+        ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_winget_installer }}
+      build_cli_archive_macos_required: >-
+        ${{ fromJSON(steps.split_matrix.outputs.tests_matrix_requires_nugets_macos).include[0] != null ||
+            fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
+      build_cli_archive_macos_x64_required: >-
+        ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_native_dashboard_validation ||
+            fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
@@ -255,12 +294,16 @@ jobs:
   build_packages:
     name: Build packages
     uses: ./.github/workflows/build-packages.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_packages_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_cli_archive_linux_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "ubuntu-latest", "runner": "8-core-ubuntu-latest", "rids": "linux-x64"}]'
@@ -268,6 +311,8 @@ jobs:
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_cli_archive_linux_arm64_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "ubuntu-latest", "runner": "ubuntu-24.04-arm", "rids": "linux-arm64"}]'
@@ -279,6 +324,8 @@ jobs:
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_cli_archive_windows_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"}]'
@@ -286,6 +333,8 @@ jobs:
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_cli_archive_windows_arm64_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       # Use the newer VS 2026 ARM linker; the VS 2022 image fails on Aspire.Dashboard.obj with LNK1322.
@@ -294,6 +343,8 @@ jobs:
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_cli_archive_macos_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}]'
@@ -301,6 +352,8 @@ jobs:
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
     uses: ./.github/workflows/build-cli-native-archives.yml
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.build_cli_archive_macos_x64_required == 'true' }}
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       # Cross-compile osx-x64 on the Apple Silicon (arm64) macos-latest runner
@@ -828,11 +881,27 @@ jobs:
         #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
+        # - artifact producers: these jobs run only when setup_for_tests reports that a selected
+        #   downstream consumer requires their output.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
+               (needs.build_packages.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_packages_required == 'true') ||
+               (needs.build_cli_archive_linux.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_cli_archive_linux_required == 'true') ||
+               (needs.build_cli_archive_linux_arm64.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_cli_archive_linux_arm64_required == 'true') ||
+               (needs.build_cli_archive_windows.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_cli_archive_windows_required == 'true') ||
+               (needs.build_cli_archive_windows_arm64.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_cli_archive_windows_arm64_required == 'true') ||
+               (needs.build_cli_archive_macos.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_cli_archive_macos_required == 'true') ||
+               (needs.build_cli_archive_macos_x64.result == 'skipped' &&
+                needs.setup_for_tests.outputs.build_cli_archive_macos_x64_required == 'true') ||
                 (needs.setup_for_tests.outputs.run_native_dashboard_validation == 'true' &&
                  (needs.native_dashboard_validation_linux_x64.result == 'skipped' ||
                   needs.native_dashboard_validation_linux_arm64.result == 'skipped' ||
@@ -855,7 +924,6 @@ jobs:
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
-                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
@@ -878,7 +946,6 @@ jobs:
                   needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
-                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
