@@ -14,6 +14,12 @@ The CI test infrastructure uses a unified matrix generation system that:
 
 For how MTP diagnostic arguments (hang dump, crash dump, etc.) flow through this pipeline, see [MTP Args Pipeline](mtp-args-pipeline.md).
 
+Windows GitHub Actions jobs that restore or consume NuGet packages use
+`${{ github.workspace }}/.nuget/packages`. Multi-platform jobs set
+`NUGET_PACKAGES` through `GITHUB_ENV` only on Windows so restore, build, and test
+steps share the same cache. Steps that are the only NuGet consumer set the
+variable at step scope. Linux and macOS retain their existing cache behavior.
+
 ## Architecture
 
 ```text

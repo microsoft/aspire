@@ -160,6 +160,7 @@ jobs:
         run: |
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          echo "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "${{ github.workspace }}\.dotnet" >> $env:GITHUB_PATH
 
       - name: Checkout code
@@ -317,7 +318,6 @@ jobs:
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Skip default quarantine/outerloop exclusion filters so the target test can run
           SkipDefaultTestFilters: true

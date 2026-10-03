@@ -65,7 +65,7 @@ jobs:
         if: ${{ inputs.rid == 'win-x64' }}
         shell: pwsh
         env:
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
+          NUGET_PACKAGES: ${{ format('{0}/.nuget/packages', github.workspace) }}
         run: >
           ./dotnet.cmd test
           --project tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj
