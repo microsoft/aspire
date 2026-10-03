@@ -14,6 +14,10 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<JavaScript.BunAppResource> AddBunApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
 
         [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> AddDenoApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string runScriptName = "dev") { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -64,6 +68,75 @@ namespace Aspire.Hosting
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
         [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<TResource> WithDeno<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = false, string[]? installArgs = null)
+            where TResource : JavaScript.JavaScriptAppResource { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllow(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, JavaScript.DenoPermissionKind kind, params string[] values) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowAll(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, bool enabled = true) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoConfig(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string configFile) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDeny(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, JavaScript.DenoPermissionKind kind, params string[] values) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoImportMap(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string importMapFile) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoInspect(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, JavaScript.DenoInspectMode mode = JavaScript.DenoInspectMode.Inspect, string? hostPort = null) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoLock(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string lockFile) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoNodeModulesDir(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, JavaScript.DenoNodeModulesDirMode? mode = null) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoNoLock(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoRun(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoRuntimeArgs(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] args) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoScriptArgs(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] args) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoServe(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoTask(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string taskName) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoUnstable(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] features) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoWatch(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, bool hmr = false) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithNpm<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
@@ -94,6 +167,42 @@ namespace Aspire.Hosting.JavaScript
 
     public sealed partial record CopyFilePattern(string Source, string Destination)
     {
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class DenoAppResource : JavaScriptAppResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
+    {
+        public DenoAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum DenoInspectMode
+    {
+        Inspect = 0,
+        InspectBrk = 1,
+        InspectWait = 2
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum DenoNodeModulesDirMode
+    {
+        None = 0,
+        Auto = 1,
+        Manual = 2
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum DenoPermissionKind
+    {
+        Net = 0,
+        Read = 1,
+        Write = 2,
+        Run = 3,
+        Env = 4,
+        Import = 5,
+        Sys = 6,
+        Ffi = 7
     }
 
     [AspireExport(ExposeProperties = true)]
