@@ -119,8 +119,15 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Build args from typed options. These are added before unmatched tokens
         // so that raw pass-through arguments (unmatched tokens) take precedence.
         var unmatchedTokens = parseResult.UnmatchedTokens;
-        var allowAnonymous = parseResult.GetValue(s_allowAnonymousOption);
         AddOptionArgs(parseResult, dashboardArgs, unmatchedTokens, _environment);
+        dashboardArgs.AddRange(unmatchedTokens);
+
+        // Resolve the effective anonymous-access setting using the same precedence
+        // (forwarded arg, then unmatched token, then environment) that determines what
+        // actually reaches the child process, so credential generation below stays
+        // consistent with what AddOptionArgs just decided to forward.
+        var allowAnonymousValue = ResolveSettingValue(dashboardArgs, unmatchedTokens, _environment, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
+        var allowAnonymous = allowAnonymousValue is not null && bool.TryParse(allowAnonymousValue, out var parsedAllowAnonymous) && parsedAllowAnonymous;
 
         // Set a browser token for frontend auth unless anonymous access is enabled.
         // Tokens and keys are passed via environment variables (not command-line args)
@@ -133,7 +140,7 @@ internal sealed class DashboardRunCommand : BaseCommand
             ["Logging__LogLevel__Default"] = LogLevel.Debug.ToString()
         };
         layoutLease?.AddEnvironment(environmentVariables);
-        if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, _environment, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
+        if (!allowAnonymous)
         {
             if (!ConfigSettingHasValue(unmatchedTokens, _environment, DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName))
             {
@@ -154,8 +161,6 @@ internal sealed class DashboardRunCommand : BaseCommand
                 }
             }
         }
-
-        dashboardArgs.AddRange(unmatchedTokens);
 
         // Resolve URLs for the summary display.
         var dashboardInfo = ResolveDashboardInfo(dashboardArgs, unmatchedTokens, _environment, browserToken);
@@ -201,12 +206,14 @@ internal sealed class DashboardRunCommand : BaseCommand
     private static void AddStringOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
         IEnvironment environment, Option<string?> option, string envVarName, string? defaultValue)
     {
-        if (ConfigSettingHasValue(unmatchedTokens, environment, envVarName))
+        var explicitResult = parseResult.GetResult(option);
+
+        if (explicitResult is null && ConfigSettingHasValue(unmatchedTokens, environment, envVarName))
         {
             return;
         }
 
-        var value = parseResult.GetResult(option) is not null
+        var value = explicitResult is not null
             ? parseResult.GetValue(option)
             : defaultValue;
 
@@ -219,18 +226,18 @@ internal sealed class DashboardRunCommand : BaseCommand
     private static void AddBoolOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
         IEnvironment environment, Option<bool> option, string envVarName, bool? defaultValue = null)
     {
-        if (ConfigSettingHasValue(unmatchedTokens, environment, envVarName))
+        var result = parseResult.GetResult(option);
+        var isExplicit = result is not null && !result.Implicit;
+        if (!isExplicit && ConfigSettingHasValue(unmatchedTokens, environment, envVarName))
         {
             return;
         }
-
-        var result = parseResult.GetResult(option);
 
         // When the user explicitly specified the option, use their value.
         // When a defaultValue is provided and the user did not specify the option, use the default.
         // Without a defaultValue, skip when the result comes from the option's default value rather
         // than explicit user input, to avoid always emitting e.g. "--ALLOW_ANONYMOUS=false".
-        if (result is not null && !result.Implicit)
+        if (isExplicit)
         {
             var value = parseResult.GetValue(option);
             args.Add($"--{envVarName}={value.ToString().ToLowerInvariant()}");
@@ -295,41 +302,35 @@ internal sealed class DashboardRunCommand : BaseCommand
     /// </summary>
     internal static string? ResolveSettingValue(List<string> args, IReadOnlyList<string> unmatchedTokens, IEnvironment environment, string key)
     {
-        // First check --KEY=value in args (last-wins).
-        var result = ResolveArgValue(args, key);
-        if (result is not null)
-        {
-            return result;
-        }
+        var combined = new List<string>(args);
+        combined.AddRange(unmatchedTokens); // safe even if args already contains these — last-wins is idempotent under duplication
 
-        // Check unmatched tokens for space-separated form: --KEY value
+        string? result = null;
+        var equalsPrefix = $"--{key}=";
         var bareKey = $"--{key}";
-        for (var i = 0; i < unmatchedTokens.Count; i++)
+        for (var i = 0; i < combined.Count; i++)
         {
-            if (unmatchedTokens[i].Equals(bareKey, StringComparison.OrdinalIgnoreCase) && i + 1 < unmatchedTokens.Count)
+            var arg = combined[i];
+            if (arg.StartsWith(equalsPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                return unmatchedTokens[i + 1];
+                result = arg[equalsPrefix.Length..];
+            }
+            else if (arg.Equals(bareKey, StringComparison.OrdinalIgnoreCase))
+            {
+                if (i + 1 < combined.Count && !combined[i + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    result = combined[i + 1];
+                    i++;
+                }
+                else
+                {
+                    result = "true";
+                }
             }
         }
 
         // Fall back to environment variable.
-        return environment.GetEnvironmentVariable(key);
-    }
-
-    internal static string? ResolveArgValue(List<string> args, string key)
-    {
-        // Scan for --KEY=value (last-wins).
-        string? result = null;
-        var prefix = $"--{key}=";
-        foreach (var arg in args)
-        {
-            if (arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                result = arg.Substring(prefix.Length);
-            }
-        }
-
-        return result;
+        return result ?? environment.GetEnvironmentVariable(key);
     }
 
     internal sealed record DashboardInfo(string DashboardUrl, string OtlpGrpcUrl, string OtlpHttpUrl);
