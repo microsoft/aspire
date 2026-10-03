@@ -53,7 +53,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Sigstore;
 using Spectre.Console;
+using Tuf;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli;
@@ -578,6 +580,21 @@ public class Program
 
         // Npm and Playwright CLI operations.
         builder.Services.AddSingleton<INpmRunner, NpmRunner>();
+        builder.Services.AddSingleton<ITrustRootProvider>(serviceProvider =>
+        {
+            var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+            // Building the command tree resolves this provider even during completion.
+            // TUF initialization seeds the cache, so completion must use memory to avoid disk writes.
+            ITufCache cache = isCompletion
+                ? new InMemoryTufCache()
+                : new FileSystemTufCache(Path.Combine(executionContext.CacheDirectory.FullName, "tuf"));
+
+            return new TufTrustRootProvider(
+                TufTrustRootProvider.ProductionUrl,
+                new TufTrustRootProviderOptions { Cache = cache });
+        });
+        builder.Services.AddSingleton(serviceProvider =>
+            new SigstoreVerifier(serviceProvider.GetRequiredService<ITrustRootProvider>()));
         builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IAspireSkillsBundleProvider, AspireSkillsBundleProvider>();
