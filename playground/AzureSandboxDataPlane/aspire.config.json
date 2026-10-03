@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureSandboxDataPlane.AppHost/AzureSandboxDataPlane.AppHost.csproj"
+  }
+}
