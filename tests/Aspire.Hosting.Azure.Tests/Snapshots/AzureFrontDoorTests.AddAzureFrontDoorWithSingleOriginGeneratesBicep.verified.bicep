@@ -64,4 +64,6 @@ resource my_apiRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
   ]
 }
 
+output id string = frontdoor.id
+
 output my_api_endpointUrl string = 'https://${my_apiEndpoint.properties.hostName}'
