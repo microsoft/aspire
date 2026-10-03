@@ -23,11 +23,17 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureInternalLoadBalancerResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
+
+    /// <inheritdoc />
+    ReferenceExpression IAzureInternalLoadBalancerResource.DefaultDomain => ReferenceExpression.Create($"{ContainerAppDomain}");
+
+    /// <inheritdoc />
+    ReferenceExpression IAzureInternalLoadBalancerResource.StaticIp => ReferenceExpression.Create($"{ContainerAppStaticIp}");
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppEnvironmentResource"/> class.
@@ -285,6 +291,11 @@ public class AzureContainerAppEnvironmentResource :
     /// Gets the default domain associated with the Container App Environment.
     /// </summary>
     internal BicepOutputReference ContainerAppDomain => new("AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN", this);
+
+    /// <summary>
+    /// Gets the private static IP address associated with an internal Container App Environment.
+    /// </summary>
+    internal BicepOutputReference ContainerAppStaticIp => new("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", this);
 
     /// <summary>
     /// Gets the name of the associated Azure Container Registry.
