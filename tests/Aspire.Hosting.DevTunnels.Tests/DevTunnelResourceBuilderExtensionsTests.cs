@@ -11,7 +11,6 @@ using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.DevTunnels.Tests;
@@ -295,14 +294,17 @@ public class DevTunnelResourceBuilderExtensionsTests
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
             .WithReference(target);
 
+        var port = Assert.Single(tunnel.Resource.Ports);
+        port.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(port.TargetEndpoint.EndpointAnnotation, "localhost", 5000);
         using var app = builder.Build();
-        var healthCheck = new DevTunnelHealthCheck(
-            client,
-            app.Services.GetRequiredService<LoggedOutNotificationManager>(),
-            tunnel.Resource,
-            app.Services.GetRequiredService<ILogger<DevTunnelHealthCheck>>());
+        var monitor = app.Services.GetRequiredKeyedService<DevTunnelMonitor>(tunnel.Resource);
+        monitor.StartupLogTimeout = TimeSpan.Zero;
+        await monitor.StartAsync("mytunnel", CancellationToken.None);
+        var healthCheck = new DevTunnelHealthCheck(monitor);
 
         var result = await healthCheck.CheckHealthAsync(new HealthCheckContext()).DefaultTimeout();
+        await app.ResourceNotifications.WaitForResourceAsync(port.Name,
+            e => e.Snapshot.Properties.Any(p => p.Name == "Anonymous access")).DefaultTimeout();
 
         Assert.Equal(HealthStatus.Healthy, result.Status);
         Assert.Collection(
@@ -353,14 +355,17 @@ public class DevTunnelResourceBuilderExtensionsTests
             Region = DevTunnelRegion.NorthEurope
         }).WithReference(target);
 
+        var port = Assert.Single(tunnel.Resource.Ports);
+        port.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(port.TargetEndpoint.EndpointAnnotation, "localhost", 5000);
         using var app = builder.Build();
-        var healthCheck = new DevTunnelHealthCheck(
-            client,
-            app.Services.GetRequiredService<LoggedOutNotificationManager>(),
-            tunnel.Resource,
-            app.Services.GetRequiredService<ILogger<DevTunnelHealthCheck>>());
+        var monitor = app.Services.GetRequiredKeyedService<DevTunnelMonitor>(tunnel.Resource);
+        monitor.StartupLogTimeout = TimeSpan.Zero;
+        await monitor.StartAsync("mytunnel.eun1", CancellationToken.None);
+        var healthCheck = new DevTunnelHealthCheck(monitor);
 
         var result = await healthCheck.CheckHealthAsync(new HealthCheckContext()).DefaultTimeout();
+        await app.ResourceNotifications.WaitForResourceAsync(port.Name,
+            e => e.Snapshot.Properties.Any(p => p.Name == "Anonymous access")).DefaultTimeout();
 
         Assert.Equal(HealthStatus.Healthy, result.Status);
         var calls = client.Calls.ToArray();
@@ -682,8 +687,10 @@ public class DevTunnelResourceBuilderExtensionsTests
             interaction.Message);
     }
 
-    [Fact]
-    public async Task DcpStartupPublishesDevTunnelUrls()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DcpStartupPublishesDevTunnelUrls(bool useConsoleOutput)
     {
         const int targetPort = 3000;
         const string tunnelUrl = "https://n4skq32k-3000.use.devtunnels.ms";
@@ -704,7 +711,12 @@ public class DevTunnelResourceBuilderExtensionsTests
         };
         var (command, arguments) = GetLongRunningCommand();
         using var builder = TestDistributedApplicationBuilder.Create();
-        builder.Configuration["ASPIRE_DEVTUNNEL_CLI_PATH"] = command;
+        var tunnelCommand = useConsoleOutput && !OperatingSystem.IsWindows() ? "/bin/sh" : command;
+        builder.Configuration["ASPIRE_DEVTUNNEL_CLI_PATH"] = tunnelCommand;
+        if (useConsoleOutput)
+        {
+            client.GetTunnelCallback = (_, _) => throw new InvalidOperationException("Startup should not query service status when host output is available.");
+        }
         builder.Services.AddSingleton<IDevTunnelClient>(client);
         builder.Services.AddSingleton<IRequiredCommandValidator, TestRequiredCommandValidator>();
 
@@ -717,8 +729,15 @@ public class DevTunnelResourceBuilderExtensionsTests
         {
             tunnel.Resource.Annotations.Remove(annotation);
         }
-        tunnel.WithArgs(arguments);
+        tunnel.WithArgs(useConsoleOutput
+            ? OperatingSystem.IsWindows()
+                ? ["/c", $"echo Hosting port: {targetPort} & echo Connect via browser: {tunnelUrl} & echo Ready to accept connections for tunnel: mytunnel & ping -n 180 127.0.0.1"]
+                : ["-c", $"printf '%s\\n' 'Hosting port: {targetPort}' 'Connect via browser: {tunnelUrl}' 'Ready to accept connections for tunnel: mytunnel'; sleep 180"]
+            : arguments);
 
+        var dependent = builder.AddExecutable("dependent", command, Environment.CurrentDirectory, arguments)
+            .WithExplicitStart()
+            .WaitFor(builder.CreateResourceBuilder(tunnelPort));
         using var app = builder.Build();
 
         var startTask = app.StartAsync(cts.Token);
@@ -729,18 +748,29 @@ public class DevTunnelResourceBuilderExtensionsTests
                 e.Snapshot.Urls.Any(u => u.Url == inspectUrl && !u.IsInactive),
             cts.Token);
         await startTask;
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, cts.Token);
 
         Assert.Equal("n4skq32k-3000.use.devtunnels.ms", tunnelPort.TunnelEndpointAnnotation.AllocatedEndpoint?.Address);
         Assert.Contains(resourceEvent.Snapshot.Urls, u => u.Url == tunnelUrl && !u.IsInactive);
         Assert.Contains(resourceEvent.Snapshot.Urls, u => u.Url == inspectUrl && !u.IsInactive);
 
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(tunnelPort.Name, cts.Token);
+        Assert.Single(tunnelPort.Annotations.OfType<HealthCheckAnnotation>());
+        var monitor = app.Services.GetRequiredKeyedService<DevTunnelMonitor>(tunnel.Resource);
+        await monitor.ProcessLogAsync("Connection to host tunnel relay closed.", cts.Token);
+        var waitForDependency = app.ResourceNotifications.WaitForDependenciesAsync(dependent.Resource, cts.Token);
+        Assert.False(waitForDependency.IsCompleted);
+        await monitor.ProcessLogAsync("Connection to host tunnel relay restored.", cts.Token);
+        await waitForDependency.DefaultTimeout();
+
         await app.StopAsync(cts.Token);
     }
 
     [Fact]
-    public async Task ResourceReady_PublishesUrlProperties()
+    public async Task Monitor_PublishesUrlProperties()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDevTunnelClient>(new TestDevTunnelClient());
 
         var target = builder.AddProject<ProjectA>("target")
             .WithHttpEndpoint(name: "http");
@@ -749,14 +779,12 @@ public class DevTunnelResourceBuilderExtensionsTests
         var port = Assert.Single(tunnel.Resource.Ports);
         var targetEndpoint = target.GetEndpoint("http");
         targetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(targetEndpoint.EndpointAnnotation, "localhost", 3000);
-        tunnel.Resource.LastKnownStatus = new("tunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: []);
-        port.LastKnownStatus = new DevTunnelPort(3000, "http")
-        {
-            PortUri = new Uri("https://n4skq32k-3000.use.devtunnels.ms/")
-        };
-
         using var app = builder.Build();
-        await builder.Eventing.PublishAsync(new ResourceReadyEvent(tunnel.Resource, app.Services)).DefaultTimeout();
+        var monitor = app.Services.GetRequiredKeyedService<DevTunnelMonitor>(tunnel.Resource);
+        await monitor.StartAsync(tunnel.Resource.TunnelId, CancellationToken.None);
+        await monitor.ProcessLogAsync("Hosting port 3000 at https://n4skq32k-3000.use.devtunnels.ms/", CancellationToken.None);
+        await monitor.ProcessLogAsync($"Ready to accept connections for tunnel: {tunnel.Resource.TunnelId}", CancellationToken.None);
+        await app.ResourceNotifications.WaitForResourceAsync(port.Name, KnownResourceStates.Running).DefaultTimeout();
 
         var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
         Assert.True(notifications.TryGetCurrentState(port.Name, out var resourceEvent));

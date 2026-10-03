@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.DevTunnels;
@@ -37,9 +38,13 @@ internal enum LoginProvider
     GitHub
 }
 
-internal sealed record DevTunnelStatus(string TunnelId, int HostConnections, int ClientConnections, string Description, IReadOnlyList<string> Labels)
+internal sealed record DevTunnelStatus(string TunnelId, int HostConnections, int ClientConnections, string Description, IReadOnlyList<string>? Labels)
 {
     public IReadOnlyList<DevTunnelPort> Ports { get; init; } = [];
+
+    public string? TunnelExpiration { get; init; }
+
+    public IReadOnlyList<DevTunnelAccessStatus.AccessControlEntry>? AccessControl { get; init; }
 }
 
 internal sealed record DevTunnelPortList
@@ -54,12 +59,20 @@ internal sealed record DevTunnelPort(int PortNumber, string Protocol)
     public int? ClientConnections { get; init; }
 }
 
-internal sealed record DevTunnelPortStatus(string TunnelId, int PortNumber, string Protocol, int ClientConnections);
+internal sealed record DevTunnelPortStatus(string TunnelId, int PortNumber, string Protocol, int ClientConnections)
+{
+    public string? Description { get; init; }
+
+    public IReadOnlyList<string> Labels { get; init; } = [];
+
+    public IReadOnlyList<DevTunnelAccessStatus.AccessControlEntry>? AccessControl { get; init; }
+}
 
 internal sealed record DevTunnelPortDeleteResult(string DeletedPort);
 
 internal sealed record DevTunnelAccessStatus
 {
+    [JsonRequired]
     public IReadOnlyList<AccessControlEntry> AccessControlEntries { get; init; } = [];
 
     public sealed record AccessControlEntry(string Type, bool IsDeny, bool IsInherited, IReadOnlyList<string> Subjects, IReadOnlyList<string> Scopes);

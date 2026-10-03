@@ -97,6 +97,33 @@ namespace Aspire.Hosting.DevTunnels.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Dev tunnel '{0}' is connected and hosting all expected ports..
+        /// </summary>
+        internal static string DevTunnelHostHealthy {
+            get {
+                return ResourceManager.GetString("DevTunnelHostHealthy", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The local host for dev tunnel '{0}' is disconnected..
+        /// </summary>
+        internal static string DevTunnelHostDisconnected {
+            get {
+                return ResourceManager.GetString("DevTunnelHostDisconnected", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for dev tunnel '{0}' to connect and expose its ports..
+        /// </summary>
+        internal static string DevTunnelHostNotReady {
+            get {
+                return ResourceManager.GetString("DevTunnelHostNotReady", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Dev tunnel port &apos;{0}&apos; on dev tunnel &apos;{1}&apos; is active..
         /// </summary>
         internal static string DevTunnelPortHealthy {
