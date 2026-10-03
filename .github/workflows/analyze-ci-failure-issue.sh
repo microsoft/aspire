@@ -7,8 +7,8 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-if [ "$#" -ne 12 ]; then
-  echo "Usage: $0 <cause-file> <run-context-file> <last-successful-run-file> <triggering-merge-file> <candidate-history-status-file> <run-url> <run-scope> <pr-number> <cause-jobs> <occurrence-row> <body-file> <metadata-file>" >&2
+if [ "$#" -ne 13 ]; then
+  echo "Usage: $0 <cause-file> <run-context-file> <last-successful-run-file> <triggering-merge-file> <candidate-history-status-file> <run-url> <run-scope> <pr-number> <cause-jobs> <verified-failing-tests> <occurrence-row> <body-file> <metadata-file>" >&2
   exit 1
 fi
 
@@ -21,9 +21,10 @@ RUN_URL="$6"
 RUN_SCOPE="$7"
 PR_NUMBER="$8"
 CAUSE_JOBS="$9"
-NEW_OCCURRENCE_ROW="${10}"
-BODY_FILE="${11}"
-METADATA_FILE="${12}"
+VERIFIED_FAILING_TESTS="${10}"
+NEW_OCCURRENCE_ROW="${11}"
+BODY_FILE="${12}"
+METADATA_FILE="${13}"
 
 SANITIZED_CAUSE_FILE=$(mktemp)
 trap 'rm -f "$SANITIZED_CAUSE_FILE"' EXIT
@@ -109,6 +110,8 @@ fi
     if [ -n "$TRIGGERING_MERGE" ]; then
       echo "Triggering merge PR (context only, not necessarily causal): ${TRIGGERING_MERGE}"
     fi
+  elif [ "$CAUSE_TYPE" = "flaky-test" ] && [ -n "$VERIFIED_FAILING_TESTS" ]; then
+    echo "Build error leg or test failing: ${CAUSE_JOBS} / ${VERIFIED_FAILING_TESTS}"
   elif [ -n "$TEST_NAME" ]; then
     echo "Build error leg or test failing: ${CAUSE_JOBS} / ${TEST_NAME_CODE}"
   else
