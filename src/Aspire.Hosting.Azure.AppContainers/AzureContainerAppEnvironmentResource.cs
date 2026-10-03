@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -12,6 +13,7 @@ using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -26,6 +28,8 @@ public class AzureContainerAppEnvironmentResource :
     AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    private readonly DeploymentConcurrencyGroup _deploymentConcurrencyGroup;
+
     /// <inheritdoc />
     string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => AzureSubnetServiceDelegations.ContainerAppEnvironments;
 
@@ -37,6 +41,11 @@ public class AzureContainerAppEnvironmentResource :
     public AzureContainerAppEnvironmentResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
+        // ACA permits only one active create or update operation per managed environment. All
+        // deployment targets materialized for this environment share this group so every publisher
+        // can enforce the constraint without interpreting application relationships as dependencies.
+        _deploymentConcurrencyGroup = new DeploymentConcurrencyGroup($"azure-container-apps/{name}");
+
         // Add pipeline step annotation to create steps and expand deployment target steps
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
         {
@@ -203,6 +212,8 @@ public class AzureContainerAppEnvironmentResource :
             this,
             services);
 
+        var deploymentConcurrencyGroup = await GetDeploymentConcurrencyGroupAsync(appModel, services, cancellationToken).ConfigureAwait(false);
+
         foreach (var r in appModel.GetComputeResources())
         {
             // Skip resources that are explicitly targeted to a different compute environment
@@ -228,6 +239,7 @@ public class AzureContainerAppEnvironmentResource :
             // Capture information about the container registry used by the
             // container app environment in the deployment target information
             // associated with each compute resource that needs an image
+            containerApp.Annotations.Add(new DeploymentConcurrencyGroupAnnotation(deploymentConcurrencyGroup));
             r.Annotations.Add(new DeploymentTargetAnnotation(containerApp)
             {
                 ContainerRegistry = this,
@@ -237,6 +249,194 @@ public class AzureContainerAppEnvironmentResource :
 
         // Log once about all HTTP endpoints upgraded to HTTPS
         containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
+    private async Task<DeploymentConcurrencyGroup> GetDeploymentConcurrencyGroupAsync(
+        DistributedApplicationModel model,
+        IServiceProvider services,
+        CancellationToken cancellationToken)
+    {
+        // Deployment targets are prepared during BeforeStart, before the deployment pipeline creates
+        // a ProvisioningContext. Use only the configured values known at this stage; values selected
+        // by later prompting remain unresolved below so identity matching stays conservative.
+        var configuration = services.GetRequiredService<IConfiguration>();
+        var currentSubscription = configuration["Azure:SubscriptionId"];
+        var currentLocation = configuration["Azure:Location"];
+        var azureEnvironment = model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault();
+
+        // Publish mode prompts for both location and resource group when location is unset,
+        // overwriting any configured resource group after deployment targets are prepared.
+        // Keep that mutable identity part unresolved so it can match the eventual selection.
+        var currentResourceGroup = currentLocation is null
+            ? null
+            : configuration["Azure:ResourceGroup"];
+
+        if (currentLocation is not null && azureEnvironment is not null)
+        {
+            var environmentResourceGroup = await ResolveParameterValueAsync(
+                azureEnvironment.ResourceGroupName,
+                cancellationToken).ConfigureAwait(false);
+
+            // WithResourceGroup replaces the default, unmodeled parameter with a resource in the
+            // application model. Preserve an unresolved explicit override instead of falling back
+            // to ambient configuration that publish will not use.
+            if (environmentResourceGroup is not null || model.Resources.Contains(azureEnvironment.ResourceGroupName))
+            {
+                currentResourceGroup = environmentResourceGroup;
+            }
+        }
+
+        var environments = new List<(
+            AzureContainerAppEnvironmentResource Environment,
+            (object? Name, object? Subscription, object? ResourceGroup) Identity,
+            bool IsExisting)>();
+        foreach (var environment in model.Resources.OfType<AzureContainerAppEnvironmentResource>())
+        {
+            if (environment.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var resource))
+            {
+                var identity = await ResolveExistingResourceIdentityAsync(
+                    resource,
+                    currentSubscription,
+                    currentResourceGroup,
+                    cancellationToken).ConfigureAwait(false);
+                environments.Add((environment, identity, IsExisting: true));
+            }
+            else
+            {
+                environments.Add((
+                    environment,
+                    (environment.NameOutputReference, currentSubscription, currentResourceGroup),
+                    IsExisting: false));
+            }
+        }
+
+        // The current deployment scope and parameter values can remain unresolved while deployment
+        // targets are materialized. Treat only those unresolved parts as potentially matching explicit
+        // values. An existing environment can also identify a provisioned environment through an output
+        // reference or an eventual literal name, so include both kinds before choosing a canonical owner.
+        var possibleAliases = new HashSet<AzureContainerAppEnvironmentResource>(ReferenceEqualityComparer.Instance)
+        {
+            this
+        };
+        var pendingAliases = new Queue<(
+            (object? Name, object? Subscription, object? ResourceGroup) Identity,
+            bool IsExisting)>();
+        var currentEnvironment = environments
+            .Single(candidate => ReferenceEquals(candidate.Environment, this));
+        pendingAliases.Enqueue((currentEnvironment.Identity, currentEnvironment.IsExisting));
+
+        while (pendingAliases.TryDequeue(out var alias))
+        {
+            foreach (var candidate in environments)
+            {
+                if (!possibleAliases.Contains(candidate.Environment) &&
+                    EnvironmentIdentityMayMatch(
+                        alias.Identity,
+                        alias.IsExisting,
+                        candidate.Identity,
+                        candidate.IsExisting))
+                {
+                    possibleAliases.Add(candidate.Environment);
+                    pendingAliases.Enqueue((candidate.Identity, candidate.IsExisting));
+                }
+            }
+        }
+
+        var canonicalEnvironment = environments
+            .First(candidate => possibleAliases.Contains(candidate.Environment))
+            .Environment;
+
+        return canonicalEnvironment._deploymentConcurrencyGroup;
+    }
+
+    private static bool EnvironmentIdentityMayMatch(
+        (object? Name, object? Subscription, object? ResourceGroup) left,
+        bool leftIsExisting,
+        (object? Name, object? Subscription, object? ResourceGroup) right,
+        bool rightIsExisting)
+    {
+        if (leftIsExisting && rightIsExisting)
+        {
+            return ExistingResourceIdentityMayMatch(left, right);
+        }
+
+        if (leftIsExisting == rightIsExisting)
+        {
+            return false;
+        }
+
+        var existing = leftIsExisting ? left : right;
+        var provisioned = leftIsExisting ? right : left;
+
+        return ExistingResourceIdentityPartMayMatch(existing.Subscription, provisioned.Subscription) &&
+               ExistingResourceIdentityPartMayMatch(existing.ResourceGroup, provisioned.ResourceGroup) &&
+               ExistingResourceIdentityPartMayMatch(existing.Name, provisioned.Name);
+    }
+
+    private static async ValueTask<(object? Name, object? Subscription, object? ResourceGroup)> ResolveExistingResourceIdentityAsync(
+        ExistingAzureResourceAnnotation resource,
+        string? currentSubscription,
+        string? currentResourceGroup,
+        CancellationToken cancellationToken)
+    {
+        var name = await ResolveIdentityPartAsync(resource.Name, cancellationToken).ConfigureAwait(false);
+        var subscription = await ResolveIdentityPartAsync(resource.Subscription ?? currentSubscription, cancellationToken).ConfigureAwait(false);
+        var resourceGroup = await ResolveIdentityPartAsync(resource.ResourceGroup ?? currentResourceGroup, cancellationToken).ConfigureAwait(false);
+
+        return (name, subscription, resourceGroup);
+    }
+
+    private static async ValueTask<object?> ResolveIdentityPartAsync(object? part, CancellationToken cancellationToken)
+    {
+        return part is ParameterResource parameter
+            ? await ResolveParameterValueAsync(parameter, cancellationToken).ConfigureAwait(false)
+            : part;
+    }
+
+    private static async ValueTask<string?> ResolveParameterValueAsync(ParameterResource parameter, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (MissingParameterValueException)
+        {
+            // Parameter prompting happens later when the Azure provisioning context is created.
+            // Keep an unresolved marker so alias grouping remains conservative until then.
+            return null;
+        }
+    }
+
+    private static bool ExistingResourceIdentityMayMatch(
+        (object? Name, object? Subscription, object? ResourceGroup) left,
+        (object? Name, object? Subscription, object? ResourceGroup) right)
+    {
+        return ExistingResourceIdentityPartMayMatch(left.Subscription, right.Subscription) &&
+               ExistingResourceIdentityPartMayMatch(left.ResourceGroup, right.ResourceGroup) &&
+               ExistingResourceIdentityPartMayMatch(left.Name, right.Name);
+    }
+
+    private static bool ExistingResourceIdentityPartMayMatch(object? left, object? right)
+    {
+        if (left is null || right is null)
+        {
+            return true;
+        }
+
+        // Bicep outputs are populated only after provisioning, but concurrency groups are assigned
+        // while deployment targets are prepared. Until then an output can match any supported name
+        // value, so keep those aliases together rather than allowing concurrent physical writes.
+        if (left is BicepOutputReference || right is BicepOutputReference)
+        {
+            return true;
+        }
+
+        if (left is string leftString && right is string rightString)
+        {
+            return string.Equals(leftString, rightString, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return ReferenceEquals(left, right) || Equals(left, right);
     }
 
     internal bool UseAzdNamingConvention { get; set; }
