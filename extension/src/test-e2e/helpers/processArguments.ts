@@ -170,12 +170,26 @@ async function listWindowsProcessEntries(): Promise<ProcessEntry[]> {
     return entries.map(entry => ({
         pid: entry.ProcessId,
         commandLine: entry.CommandLine ?? '',
-        arguments: Array.isArray(entry.Arguments)
-            ? entry.Arguments
-            : entry.Arguments === null
-                ? []
-                : [entry.Arguments],
+        arguments: parseWindowsProcessArguments(entry),
     }));
+}
+
+function parseWindowsProcessArguments(entry: WindowsProcessEntry): string[] {
+    // For inaccessible command lines, Windows PowerShell can serialize the empty if-expression as
+    // { "ProcessId": 4, "CommandLine": null, "Arguments": {} } rather than an empty argument array.
+    if (entry.CommandLine === null || entry.Arguments === null) {
+        return [];
+    }
+
+    if (typeof entry.Arguments === 'string') {
+        return [entry.Arguments];
+    }
+
+    if (Array.isArray(entry.Arguments) && entry.Arguments.every(argument => typeof argument === 'string')) {
+        return entry.Arguments;
+    }
+
+    throw new Error(`Unexpected arguments for Windows process ${entry.ProcessId}.`);
 }
 
 function parseNullSeparatedArguments(value: string): string[] {
@@ -200,7 +214,7 @@ function isProcessLookupError(error: unknown): boolean {
 interface WindowsProcessEntry {
     ProcessId: number;
     CommandLine: string | null;
-    Arguments: string[] | string | null;
+    Arguments: unknown;
 }
 
 const windowsProcessArgumentsScript = String.raw`

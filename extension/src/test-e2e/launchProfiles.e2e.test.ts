@@ -2,10 +2,11 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { ProjectLaunchConfiguration } from '../dcp/types';
+import { commandLineArgumentEquals } from '../test/helpers/processArguments';
 import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, stopAppHostIfRunning, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { executeE2eControlCommand, removePath, restoreWorkspaceAppHostConfig, runE2eTeardown, waitForKnownProcessExit, writeFileWithRetry, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
 import { runProcess } from './helpers/process';
-import { getProcessEntry } from './helpers/processArguments';
+import { getProcessEntry, listProcessEntries } from './helpers/processArguments';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { acceptModalDialog, openAspireView } from './helpers/vscode';
 
@@ -22,16 +23,57 @@ suite('Aspire launch profiles E2E', function () {
     let originalLaunchSettings: FileSnapshot | undefined;
     let originalLaunchJson: FileSnapshot | undefined;
     let launchSettingsDirectoryExisted: boolean | undefined;
+    let debugAppHostPath: string | undefined;
+
+    setup(() => {
+        originalLaunchSettings = undefined;
+        originalLaunchJson = undefined;
+        launchSettingsDirectoryExisted = undefined;
+        debugAppHostPath = undefined;
+    });
 
     teardown(async () => {
+        const denoDebugRequested = debugAppHostPath === denoAppHostPath;
+        let denoProcessIds: number[] | undefined;
+        let debuggingStopped = false;
+        let denoProcessesExited = false;
+
         await runE2eTeardown([
-            () => executeE2eControlCommand({ name: 'stopDebugging' }),
-            () => waitForNoDebugSessions().catch(() => undefined),
-            () => waitForNoRunningAppHost().catch(() => undefined),
-            () => fs.existsSync(denoAppHostPath) ? stopAppHostIfRunning(denoAppHostPath) : undefined,
-            () => fs.existsSync(denoAppHostPath) ? waitForNoRunningAppHost(90000, denoAppHostPath) : undefined,
+            async () => {
+                if (denoDebugRequested) {
+                    // A Deno process waiting for its inspector is not yet in the AppHost registry.
+                    // Match the fixture's exact argv path before stopping its owning debugger.
+                    // VS Code can use c:\... while Deno uses C:\... on Windows. The listing hint
+                    // is case-sensitive, so compare complete path arguments after listing there.
+                    const processes = await listProcessEntries(process.platform === 'win32' ? undefined : denoAppHostPath);
+                    denoProcessIds = processes
+                        .filter(entry => entry.arguments.some(argument => commandLineArgumentEquals(argument, denoAppHostPath)))
+                        .map(entry => entry.pid);
+                }
+            },
+            async () => {
+                if (debugAppHostPath) {
+                    // Leave time in the hook for process discovery (60s), exit (30s), and restoration.
+                    // The bridge already waits for debug sessions and launching/stopping state to clear.
+                    await executeE2eControlCommand({ name: 'stopDebugging' }, { timeoutMs: 120000 });
+                    debuggingStopped = true;
+                }
+            },
+            async () => {
+                if (denoProcessIds) {
+                    await Promise.all(denoProcessIds.map(pid =>
+                        waitForKnownProcessExit(pid, 'a Deno AppHost fixture process', 30000)));
+                    denoProcessesExited = true;
+                }
+            },
             () => restoreWorkspaceAppHostConfig(),
-            () => removePath(denoAppHostDirectory, { recursive: true, force: true }),
+            () => {
+                // Preserve a failed shutdown's fixture rather than deleting files under live processes.
+                // runE2eTeardown still reports the stop/exit failure and restores the independent files.
+                if (!denoDebugRequested || (debuggingStopped && denoProcessesExited)) {
+                    removePath(denoAppHostDirectory, { recursive: true, force: true });
+                }
+            },
             () => restoreFile(launchSettingsPath, originalLaunchSettings),
             () => restoreFile(launchJsonPath, originalLaunchJson),
             () => removeDirectoryIfCreated(launchSettingsDirectory, launchSettingsDirectoryExisted),
@@ -42,21 +84,19 @@ suite('Aspire launch profiles E2E', function () {
         this.timeout(600000);
 
         fs.mkdirSync(denoAppHostDirectory, { recursive: true });
+        // Select Deno before init installs dependencies. A package.json marker would instead
+        // make scaffolding treat this as a brownfield project and nest the AppHost in a subdirectory.
+        writeFileWithRetry(path.join(denoAppHostDirectory, 'deno.json'), '{}\n');
         await runProcess(
             getCliPath(),
             ['init', '--language', 'typescript', '--non-interactive', '--suppress-agent-init'],
             { cwd: denoAppHostDirectory, timeoutMs: 180000 });
-        const packageJsonPath = path.join(denoAppHostDirectory, 'package.json');
-        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8')) as Record<string, unknown>;
-        packageJson.packageManager = 'deno@2.9.0';
-        writeFileWithRetry(packageJsonPath, JSON.stringify(packageJson, undefined, 2));
-        await runProcess('deno', ['install'], { cwd: denoAppHostDirectory, timeoutMs: 180000 });
-
         writeWorkspaceAppHostConfigForPath(denoAppHostPath);
         await openAspireView();
         await waitForSelectedWorkspaceAppHost(denoAppHostPath, 180000);
 
         const beforeDebug = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        debugAppHostPath = denoAppHostPath;
         await executeE2eControlCommand({ name: 'debugAppHost', appHostPath: denoAppHostPath }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
         // Deno's --inspect-wait blocks before evaluating apphost.mts, so AppHost startup proves
@@ -187,6 +227,7 @@ suite('Aspire launch profiles E2E', function () {
             }],
         }, undefined, 2));
 
+        debugAppHostPath = appHostPath;
         const launchStatus = await executeE2eControlCommand({
             name: 'startDebugging',
             configurationName: launchConfigurationName,
