@@ -1,4 +1,3 @@
-# DisableDockerDetector "Playground sample - not a production image"
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 # Enable bytecode compilation and copy mode for the virtual environment
