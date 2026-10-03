@@ -17,6 +17,11 @@ internal interface IDotnetSdkVersionProvider
 {
     Task<SemVersion?> TryGetVersionAsync(string? workingDirectory, CancellationToken cancellationToken);
 
+    Task<SemVersion?> TryGetVersionAsync(
+        string? workingDirectory,
+        string dotnetExecutablePath,
+        CancellationToken cancellationToken);
+
     Task<bool> SupportsMultiThreadedBuildAsync(
         string? workingDirectory,
         IReadOnlyDictionary<string, string> environmentVariables,
@@ -73,12 +78,28 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     {
         return await TryGetVersionAsync(
             workingDirectory,
+            "dotnet",
+            s_emptyEnvironment,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<SemVersion?> TryGetVersionAsync(
+        string? workingDirectory,
+        string dotnetExecutablePath,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(dotnetExecutablePath);
+
+        return await TryGetVersionAsync(
+            workingDirectory,
+            dotnetExecutablePath,
             s_emptyEnvironment,
             cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<SemVersion?> TryGetVersionAsync(
         string? workingDirectory,
+        string dotnetExecutablePath,
         IReadOnlyDictionary<string, string> environmentVariables,
         CancellationToken cancellationToken)
     {
@@ -91,7 +112,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
         {
             normalizedWorkingDirectory = Path.GetFullPath(workingDirectory ?? Environment.CurrentDirectory);
             probeEnvironment = CreateProbeEnvironment(environmentVariables);
-            sdkContext = GetSdkContext(normalizedWorkingDirectory, probeEnvironment);
+            sdkContext = GetSdkContext(dotnetExecutablePath, normalizedWorkingDirectory, probeEnvironment);
         }
         catch (Exception ex)
         {
@@ -101,7 +122,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
 
         var versionTask = _versionsBySdkContext.GetOrAdd(
             sdkContext,
-            _ => CreateVersionTask(sdkContext, normalizedWorkingDirectory, probeEnvironment));
+            _ => CreateVersionTask(sdkContext, dotnetExecutablePath, normalizedWorkingDirectory, probeEnvironment));
 
         return await versionTask.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -113,6 +134,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     {
         var version = await TryGetVersionAsync(
             workingDirectory,
+            GetDotnetExecutablePath(environmentVariables),
             environmentVariables,
             cancellationToken).ConfigureAwait(false);
         return DotnetSdkUtils.SupportsMultiThreadedBuild(version);
@@ -125,6 +147,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     {
         var version = await TryGetVersionAsync(
             workingDirectory,
+            GetDotnetExecutablePath(environmentVariables),
             environmentVariables,
             cancellationToken).ConfigureAwait(false);
         return DotnetSdkUtils.SupportsFileBasedMultiThreadedBuild(version);
@@ -132,6 +155,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
 
     private Lazy<Task<SemVersion?>> CreateVersionTask(
         string sdkContext,
+        string dotnetExecutablePath,
         string workingDirectory,
         IReadOnlyDictionary<string, string> probeEnvironment)
     {
@@ -140,6 +164,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
             async () =>
             {
                 var version = await ProbeVersionAsync(
+                    dotnetExecutablePath,
                     workingDirectory,
                     probeEnvironment).ConfigureAwait(false);
                 if (version is null)
@@ -155,6 +180,7 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     }
 
     private static string GetSdkContext(
+        string dotnetExecutablePath,
         string workingDirectory,
         IReadOnlyDictionary<string, string> environmentVariables)
     {
@@ -168,7 +194,23 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
                 $"{globalJsonPath}\0{hash.ToString("X16", CultureInfo.InvariantCulture)}";
         }
 
-        return $"{globalJsonContext}\0{GetEnvironmentFingerprint(environmentVariables)}";
+        return $"{dotnetExecutablePath}\0{globalJsonContext}\0{GetEnvironmentFingerprint(environmentVariables)}";
+    }
+
+    private static string GetDotnetExecutablePath(IReadOnlyDictionary<string, string> environmentVariables)
+    {
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        foreach (var (name, value) in environmentVariables)
+        {
+            if (comparer.Equals(name, "DOTNET_HOST_PATH") && value.Length > 0)
+            {
+                return value;
+            }
+        }
+
+        return "dotnet";
     }
 
     private static Dictionary<string, string> CreateProbeEnvironment(
@@ -226,12 +268,13 @@ internal sealed class DotnetSdkVersionProvider : IDotnetSdkVersionProvider
     }
 
     private async Task<SemVersion?> ProbeVersionAsync(
+        string dotnetExecutablePath,
         string workingDirectory,
         IReadOnlyDictionary<string, string> probeEnvironment)
     {
         try
         {
-            var (resultTask, process) = _processRunner.Run(new ProcessSpec("dotnet")
+            var (resultTask, process) = _processRunner.Run(new ProcessSpec(dotnetExecutablePath)
             {
                 WorkingDirectory = workingDirectory,
                 ArgumentList = ["--version"],

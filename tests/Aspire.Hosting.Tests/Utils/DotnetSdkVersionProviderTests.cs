@@ -87,6 +87,23 @@ public class DotnetSdkVersionProviderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task TryGetVersionAsyncUsesSpecifiedExecutable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
+        var provider = CreateProvider(processRunner);
+
+        var version = await provider.TryGetVersionAsync(
+            workspace.Path,
+            "custom-dotnet-host",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("11.0.100-rc.1", version?.ToString());
+        Assert.Equal("custom-dotnet-host", Assert.Single(processRunner.ProcessSpecs).ExecutablePath);
+    }
+
+    [Fact]
     public async Task SupportsMultiThreadedBuildAsyncUsesBuildEnvironment()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
