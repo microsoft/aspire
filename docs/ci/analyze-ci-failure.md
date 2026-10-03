@@ -53,7 +53,7 @@ matching a recurring cause, so a failed prerequisite cannot be treated as a
 test failure merely because it occurred in a test job.
 
 Before any side effect, the
-[`analyze-ci-failure-validation.sh`](../../.github/workflows/analyze-ci-failure-validation.sh)
+[`AnalyzeCiFailure` validator](../../tools/AnalyzeCiFailure/Validation/AnalysisValidator.cs)
 boundary rebuilds trusted run, attempt, SHA, PR, failed-job, test, and cause
 identity from collected artifacts. It rejects output that adds, omits, or
 rebinds trusted records. Published diagnostics are reconstructed from trusted
@@ -122,8 +122,22 @@ The source workflow is
 generated executable workflow is
 [`analyze-ci-failure.lock.yml`](../../.github/workflows/analyze-ci-failure.lock.yml).
 Collection and persistence helpers live beside the workflow as
-`analyze-ci-failure-*.sh`; final output validation is in
-`analyze-ci-failure-validation.sh`.
+`analyze-ci-failure-*.sh`. Final output validation is the C# tool in
+[`tools/AnalyzeCiFailure`](../../tools/AnalyzeCiFailure), which the publication
+job builds and runs with the SDK from `global.json`. It has no package
+references and cuts repository build inheritance, so it builds from the sparse
+checkout without restoring Arcade or NuGet packages. It reuses the bash
+sanitizers in `analyze-ci-failure-persistence.sh` and the comment renderer in
+`analyze-ci-failure-comment.sh` so redaction logic has a single
+implementation.
+
+The tool is layered so each rule has one obvious home:
+
+- `Validation/AnalysisValidator.cs` lists the validation steps in order.
+- `Validation/Rules/` holds the rules and their limits (`ValidationPolicy`).
+- `Validation/ValidationInputs.cs` reads and sanitizes the input files.
+- `Contracts/` defines the JSON document shapes and vocabulary.
+- `Common/` holds generic JSON, process, text, and workflow-command helpers.
 
 Focused coverage lives in
 [`AnalyzeCiFailureWorkflowTests`](../../tests/Infrastructure.Tests/WorkflowScripts/AnalyzeCiFailureWorkflowTests.cs).
