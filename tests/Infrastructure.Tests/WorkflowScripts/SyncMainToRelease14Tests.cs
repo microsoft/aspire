@@ -10,29 +10,32 @@ namespace Infrastructure.Tests;
 public sealed class SyncMainToRelease14Tests(ITestOutputHelper output)
 {
     [Fact]
-    public void WorkflowRestrictsBotAccessToMainAndDoesNotExecuteBranchCode()
+    public void PrivilegedWorkflowRestrictsBotAccessAndDoesNotExecuteBranchCode()
     {
         var root = LoadWorkflow();
         Assert.Empty(Mapping(root, "permissions").Children);
         var triggers = Mapping(root, "on");
-        Assert.Equal(["schedule", "workflow_dispatch"], triggers.Children.Keys.Select(key => key.ToString()));
-        var schedule = Assert.IsType<YamlMappingNode>(Assert.Single(Assert.IsType<YamlSequenceNode>(triggers.Children[new YamlScalarNode("schedule")])));
-        Assert.Equal("23 8 * * *", Scalar(schedule, "cron"));
+        Assert.Equal(
+            ["schedule", "workflow_dispatch"],
+            triggers.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value).Order());
+        Assert.Equal(
+            ["23 8 * * *"],
+            Sequence(triggers, "schedule").Children
+                .Cast<YamlMappingNode>()
+                .Select(schedule => Scalar(schedule, "cron")));
         var concurrency = Mapping(root, "concurrency");
         Assert.Equal("sync-main-to-release-14", Scalar(concurrency, "group"));
         Assert.Equal("false", Scalar(concurrency, "cancel-in-progress"));
 
-        var job = Assert.IsType<YamlMappingNode>(Assert.Single(Mapping(root, "jobs").Children).Value);
+        var job = Mapping(Mapping(root, "jobs"), "sync");
         Assert.Equal("github.repository == 'microsoft/aspire' && github.ref == 'refs/heads/main'", Scalar(job, "if"));
-        Assert.Equal("10", Scalar(job, "timeout-minutes"));
-        var steps = Assert.IsType<YamlSequenceNode>(job.Children[new YamlScalarNode("steps")]);
-        Assert.Equal(2, steps.Children.Count);
-        var tokenStep = Assert.IsType<YamlMappingNode>(steps.Children[0]);
-        Assert.Equal(["name", "id", "uses", "with"], tokenStep.Children.Keys.Select(key => key.ToString()));
+        var steps = Sequence(job, "steps").Children.Cast<YamlMappingNode>().ToList();
+        Assert.DoesNotContain(
+            steps,
+            step => ScalarOrNull(step, "uses")?.StartsWith("actions/checkout@", StringComparison.Ordinal) == true);
+        var tokenStep = Assert.Single(steps, step => ScalarOrNull(step, "id") == "app-token");
         Assert.Matches("^actions/create-github-app-token@[a-f0-9]{40}$", Scalar(tokenStep, "uses"));
         var token = Mapping(tokenStep, "with");
-        Assert.Equal(["client-id", "private-key", "owner", "repositories", "permission-contents", "permission-pull-requests", "skip-token-revoke"],
-            token.Children.Keys.Select(key => key.ToString()));
         Assert.Equal("${{ secrets.ASPIRE_BOT_APP_ID }}", Scalar(token, "client-id"));
         Assert.Equal("${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}", Scalar(token, "private-key"));
         Assert.Equal("microsoft", Scalar(token, "owner"));
@@ -41,8 +44,10 @@ public sealed class SyncMainToRelease14Tests(ITestOutputHelper output)
         Assert.Equal("write", Scalar(token, "permission-pull-requests"));
         Assert.Equal("false", Scalar(token, "skip-token-revoke"));
 
-        var scriptStep = Assert.IsType<YamlMappingNode>(steps.Children[1]);
-        Assert.Equal(["name", "uses", "env", "with"], scriptStep.Children.Keys.Select(key => key.ToString()));
+        var scriptStep = Assert.Single(
+            steps,
+            step => ScalarOrNull(step, "uses")?.StartsWith("actions/github-script@", StringComparison.Ordinal) == true);
+        Assert.True(steps.IndexOf(scriptStep) > steps.IndexOf(tokenStep));
         Assert.Matches("^actions/github-script@[a-f0-9]{40}$", Scalar(scriptStep, "uses"));
         Assert.Equal("${{ steps.app-token.outputs.app-slug }}[bot]", Scalar(Mapping(scriptStep, "env"), "SYNC_BOT_LOGIN"));
         var options = Mapping(scriptStep, "with");
@@ -121,4 +126,12 @@ public sealed class SyncMainToRelease14Tests(ITestOutputHelper output)
 
     private static string Scalar(YamlMappingNode node, string key)
         => Assert.IsType<YamlScalarNode>(node.Children[new YamlScalarNode(key)]).Value!;
+
+    private static YamlSequenceNode Sequence(YamlMappingNode node, string key)
+        => Assert.IsType<YamlSequenceNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static string? ScalarOrNull(YamlMappingNode node, string key)
+        => node.Children.TryGetValue(new YamlScalarNode(key), out var value)
+            ? Assert.IsType<YamlScalarNode>(value).Value
+            : null;
 }

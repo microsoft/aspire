@@ -1,280 +1,271 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Xml.Linq;
+using Aspire.TestUtilities;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
-/// Guards on the CI wiring that surrounds the SelectTests engine but lives in YAML rather than C#:
-/// the <c>run-full-ci</c> label kill switch (computed in <c>.github/workflows/tests.yml</c>, consumed by
-/// <c>.github/actions/select-tests/action.yml</c>), the top-level changed-file skip gate, and the
-/// selection-comment posting in <c>tests.yml</c>. These are not exercised by the CLI tests, yet are easy to silently regress
-/// (loosen the kill switch, or revert the comment to update-in-place), so they are pinned here.
+/// Guards durable workflow contracts around the SelectTests engine that are not exercised by its
+/// command-line and project-graph tests.
 /// </summary>
-public sealed class SelectTestsWorkflowTests
+public sealed class SelectTestsWorkflowTests(ITestOutputHelper output)
 {
-    // The kill switch is a maintainer-only PR label, not a PR-body token. The action must consume it
-    // as a plain boolean (forceAll) and must NOT re-introduce body scanning (a grep over an untrusted
-    // PR description -- the injection surface this design deliberately removed).
+    private static readonly YamlMappingNode s_selectTestsAction = LoadYaml(
+        ".github", "actions", "select-tests", "action.yml");
+    private static readonly YamlMappingNode s_checkChangedFilesAction = LoadYaml(
+        ".github", "actions", "check-changed-files", "action.yml");
+    private static readonly YamlMappingNode s_testsWorkflow = LoadYaml(
+        ".github", "workflows", "tests.yml");
+    private static readonly YamlMappingNode s_testsJobs = Mapping(s_testsWorkflow, "jobs");
+    private static readonly YamlMappingNode s_nativeArchivesWorkflow = LoadYaml(
+        ".github", "workflows", "build-cli-native-archives.yml");
+    private static readonly YamlMappingNode s_nativeDashboardWorkflow = LoadYaml(
+        ".github", "workflows", "native-dashboard-validation.yml");
+
     [Fact]
-    public void SelectTestsActionGatesForceAllOnBooleanInputNotPrBody()
+    public void SelectTestsActionGatesForceAllOnBooleanInput()
     {
-        var action = File.ReadAllText(SelectTestsActionPath);
+        var forceAll = Mapping(Mapping(s_selectTestsAction, "inputs"), "forceAll");
+        Assert.Equal("false", Scalar(forceAll, "default"));
 
-        Assert.Contains("forceAll:", action);
-        Assert.Contains("FORCE_ALL: ${{ inputs.forceAll }}", action);
-        Assert.Contains("[ \"$FORCE_ALL\" = \"true\" ]", action);
+        var select = StepById(ActionSteps(s_selectTestsAction), "select");
+        Assert.Equal("${{ inputs.forceAll }}", Scalar(Mapping(select, "env"), "FORCE_ALL"));
 
-        // No body-scanning kill switch: the PR body must not flow into the action at all.
-        Assert.DoesNotContain("prBody", action);
-        Assert.DoesNotContain("PR_BODY", action);
-        Assert.DoesNotContain("full ci", action);
+        // --force-all is a public SelectTests CLI token; the action must forward the boolean input
+        // through that command-line contract rather than reinterpret selection itself.
+        var script = Scalar(select, "run");
+        Assert.Contains("[ \"$FORCE_ALL\" = \"true\" ]", script, StringComparison.Ordinal);
+        Assert.Contains("args+=(--force-all)", script, StringComparison.Ordinal);
     }
 
-    // The repo SDK can move ahead of the target framework used by SelectTests. The minimal bootstrap
-    // must install that SDK through Arcade's wrapper because MSBuildLocator needs the SDK's MSBuild
-    // assemblies; installing only the runtime can execute SelectTests but cannot build its project graph.
     [Fact]
     public void SelectTestsActionInstallsPinnedSdkWithArcadeWrapperArguments()
     {
-        var action = File.ReadAllText(SelectTestsActionPath);
+        var versions = XDocument.Load(RepoPath("eng", "Versions.props"));
+        Assert.Single(versions.Descendants("DotNetSdkNet10VersionForTesting"));
 
-        Assert.Contains("<DotNetSdkNet10VersionForTesting>", File.ReadAllText(VersionsPropsPath));
-        Assert.Contains("<DotNetSdkNet10VersionForTesting>", action);
-        Assert.Contains("./eng/common/dotnet-install.sh", action);
-        Assert.Contains("-runtime sdk", action);
-        Assert.Contains("-version \"$sdk_version\"", action);
-        Assert.DoesNotContain("-runtime dotnet", action);
-        Assert.DoesNotContain("--install-dir", action);
-        Assert.DoesNotContain("--skip-non-versioned-files", action);
+        var install = Assert.Single(
+            ActionSteps(s_selectTestsAction),
+            step => Scalar(step, "run")?.Contains("./eng/common/dotnet-install.sh", StringComparison.Ordinal) == true);
+        var script = Scalar(install, "run");
+
+        // These literals are the external Arcade installer interface required to install an SDK
+        // (not merely a runtime) at the version selected by eng/Versions.props.
+        Assert.Contains("<DotNetSdkNet10VersionForTesting>", script, StringComparison.Ordinal);
+        Assert.Contains("-runtime sdk", script, StringComparison.Ordinal);
+        Assert.Contains("-version \"$sdk_version\"", script, StringComparison.Ordinal);
     }
 
-    // tests.yml must compute forceAll from the presence of the 'run-full-ci' label on the PR, read from
-    // the event-payload snapshot. If the label name or the contains() expression drifts, the kill
-    // switch silently stops working (it would just never force-all), so pin the exact wiring.
     [Fact]
     public void TestsWorkflowComputesForceAllFromFullCiLabel()
     {
-        var testsYml = File.ReadAllText(TestsWorkflowPath);
+        var select = StepByUses(Steps(Mapping(s_testsJobs, "setup_for_tests")), "./.github/actions/select-tests");
 
-        Assert.Contains(
-            "forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}",
-            testsYml);
+        Assert.Equal(
+            "${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}",
+            Scalar(Mapping(select, "with"), "forceAll"));
     }
 
     [Fact]
     public void TestsWorkflowEnforcesSelectedTestSubset()
     {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(TestsWorkflowPath));
-        yaml.Load(reader);
+        var select = StepByUses(Steps(Mapping(s_testsJobs, "setup_for_tests")), "./.github/actions/select-tests");
 
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var setupForTests = (YamlMappingNode)jobs.Children[new YamlScalarNode("setup_for_tests")];
-        var steps = (YamlSequenceNode)setupForTests.Children[new YamlScalarNode("steps")];
-        var selectTests = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("uses"), out var uses) &&
-                    uses.ToString() == "./.github/actions/select-tests");
-        var inputs = (YamlMappingNode)selectTests.Children[new YamlScalarNode("with")];
-
-        Assert.Equal("true", inputs.Children[new YamlScalarNode("enforce")].ToString());
+        Assert.Equal("true", Scalar(Mapping(select, "with"), "enforce"));
     }
 
-    // The native ARM64 MSVC linker in the VS 2022 image fails on the Native AOT Dashboard object
-    // with LNK1322. Keep win-arm64 on the newer VS 2026 ARM image in both the PR override and the
-    // reusable workflow default so scheduled/direct callers do not regress to windows-11-arm.
     [Fact]
     public void WindowsArm64NativeArchiveUsesVs2026ArmRunner()
     {
-        var testsYml = File.ReadAllText(TestsWorkflowPath);
-        var nativeArchivesYml = File.ReadAllText(BuildCliNativeArchivesWorkflowPath);
-        const string expectedTarget = "{\"os\": \"windows-latest\", \"runner\": \"windows-11-vs2026-arm\", \"rids\": \"win-arm64\"}";
+        var testsTarget = Scalar(
+            Mapping(Mapping(s_testsJobs, "build_cli_archive_windows_arm64"), "with"),
+            "targets");
+        AssertWindowsArm64Target(testsTarget);
 
-        Assert.Contains(expectedTarget, testsYml);
-        Assert.Contains(expectedTarget, nativeArchivesYml);
-        Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", testsYml);
-        Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", nativeArchivesYml);
+        var workflowCall = Mapping(Mapping(s_nativeArchivesWorkflow, "on"), "workflow_call");
+        var defaultTargets = Scalar(Mapping(Mapping(workflowCall, "inputs"), "targets"), "default");
+        AssertWindowsArm64Target(defaultTargets);
     }
 
     [Fact]
     public void NativeArchiveDependencyPackagesUseMatrixRid()
     {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(BuildCliNativeArchivesWorkflowPath));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var archiveJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("build_cli_archives")];
-        var steps = (YamlSequenceNode)archiveJob.Children[new YamlScalarNode("steps")];
+        var archiveJob = Mapping(Mapping(s_nativeArchivesWorkflow, "jobs"), "build_cli_archives");
         var packageBuild = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
-                    name.ToString() == "Build RID-specific packages");
-        var command = packageBuild.Children[new YamlScalarNode("run")].ToString();
+            Steps(archiveJob),
+            step => Scalar(step, "run")?.Contains("BuildBundleDepsOnly=true", StringComparison.Ordinal) == true);
+        var command = Scalar(packageBuild, "run");
 
-        Assert.Contains("/p:BuildBundleDepsOnly=true", command);
-        Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command);
+        // These MSBuild properties are the interface that binds each matrix lane to its RID-specific
+        // dependency packages.
+        Assert.Contains("/p:BuildBundleDepsOnly=true", command, StringComparison.Ordinal);
+        Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command, StringComparison.Ordinal);
     }
 
     [Fact]
     public void NativeDashboardInteractivityOptsIntoOuterloopTests()
     {
+        var validationJob = Mapping(Mapping(s_nativeDashboardWorkflow, "jobs"), "validate");
+        var interactiveTest = Assert.Single(
+            Steps(validationJob),
+            step => Scalar(step, "run")?.Contains(
+                "NativeDashboard_LoadsInteractivePageWithoutBrowserErrors",
+                StringComparison.Ordinal) == true);
+        var command = Scalar(interactiveTest, "run");
+
+        Assert.Equal("${{ inputs.rid == 'win-x64' }}", Scalar(interactiveTest, "if"));
+        // These are public MSBuild/MTP switches; changing either silently moves this coverage out of
+        // the intended execution lane.
+        Assert.Contains("/p:RunOuterloopTests=true", command, StringComparison.Ordinal);
+        Assert.Contains(
+            "--filter-method \"*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors\"",
+            command,
+            StringComparison.Ordinal);
+        Assert.Contains("--filter-not-trait \"quarantined=true\"", command, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TestsWorkflowPassesPrHeadShaToSelector()
+    {
+        var select = StepByUses(Steps(Mapping(s_testsJobs, "setup_for_tests")), "./.github/actions/select-tests");
+        Assert.Equal(
+            "${{ github.event.pull_request.head.sha }}",
+            Scalar(Mapping(select, "with"), "headSha"));
+
+        var headSha = Mapping(Mapping(s_selectTestsAction, "inputs"), "headSha");
+        Assert.Equal("${{ github.event.pull_request.head.sha }}", Scalar(headSha, "default"));
+    }
+
+    [Fact]
+    [RequiresTools(["bash", "git", "jq"])]
+    public async Task CheckChangedFilesActionReportsBothSidesOfRenames()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        await RunGitAsync(workspace.Path, "init", "--quiet");
+        await RunGitAsync(workspace.Path, "config", "user.email", "workflow-tests@example.invalid");
+        await RunGitAsync(workspace.Path, "config", "user.name", "Workflow Tests");
+        await RunGitAsync(workspace.Path, "config", "commit.gpgsign", "false");
+
+        var sourceDirectory = workspace.CreateDirectory("src").FullName;
+        var sourcePath = Path.Combine(sourceDirectory, "critical.txt");
+        await File.WriteAllTextAsync(sourcePath, "content");
+        await RunGitAsync(workspace.Path, "add", "--all");
+        await RunGitAsync(workspace.Path, "commit", "--quiet", "-m", "base");
+        var baseSha = (await RunGitAsync(workspace.Path, "rev-parse", "HEAD")).StandardOutput.Trim();
+
+        var destinationDirectory = Directory.CreateDirectory(
+            Path.Combine(workspace.Path, "docs", "skippable")).FullName;
+        File.Move(sourcePath, Path.Combine(destinationDirectory, "critical.txt"));
+        await RunGitAsync(workspace.Path, "add", "--all");
+        await RunGitAsync(workspace.Path, "commit", "--quiet", "-m", "rename");
+        var headSha = (await RunGitAsync(workspace.Path, "rev-parse", "HEAD")).StandardOutput.Trim();
+
+        const string patternsFileName = "skippable-patterns.txt";
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, patternsFileName), "docs/**\n");
+
+        var checkFiles = StepById(ActionSteps(s_checkChangedFilesAction), "check_files");
+        var script = Assert.IsType<string>(Scalar(checkFiles, "run"))
+            .Replace("${{ github.event_name }}", "pull_request", StringComparison.Ordinal)
+            .Replace("${{ inputs.patterns_file }}", patternsFileName, StringComparison.Ordinal)
+            .Replace("${{ github.event.pull_request.base.sha }}", baseSha, StringComparison.Ordinal)
+            .Replace("${{ github.event.pull_request.head.sha }}", headSha, StringComparison.Ordinal);
+        var githubOutputPath = Path.Combine(workspace.Path, "github-output");
+        var runnerPath = Path.Combine(workspace.Path, "run-check-changed-files.sh");
+        await File.WriteAllTextAsync(
+            runnerPath,
+            $"""
+            #!/bin/bash
+            set -euo pipefail
+            export GITHUB_WORKSPACE={ShellQuote(workspace.Path)}
+            export GITHUB_OUTPUT={ShellQuote(githubOutputPath)}
+            {script}
+            """);
+
+        var result = await ProcessRunner.RunAsync(output, "bash", [runnerPath], workspace.Path);
+        Assert.Equal(0, result.ExitCode);
+
+        var outputs = await File.ReadAllTextAsync(githubOutputPath);
+        Assert.Contains("only_changed=false", await File.ReadAllLinesAsync(githubOutputPath));
+        Assert.Equal(
+            ["docs/skippable/critical.txt", "src/critical.txt"],
+            ReadJsonOutput(outputs, "changed_files").Order(StringComparer.Ordinal));
+        Assert.Equal(["docs/skippable/critical.txt"], ReadJsonOutput(outputs, "matched_files"));
+        Assert.Equal(["src/critical.txt"], ReadJsonOutput(outputs, "unmatched_files"));
+    }
+
+    private static void AssertWindowsArm64Target(string? json)
+    {
+        Assert.NotNull(json);
+        using var document = JsonDocument.Parse(json);
+        var target = Assert.Single(
+            document.RootElement.EnumerateArray(),
+            candidate => candidate.GetProperty("rids").GetString() == "win-arm64");
+
+        Assert.Equal("windows-latest", target.GetProperty("os").GetString());
+        Assert.Equal("windows-11-vs2026-arm", target.GetProperty("runner").GetString());
+    }
+
+    private static List<YamlMappingNode> ActionSteps(YamlMappingNode action)
+        => Sequence(Mapping(action, "runs"), "steps").Cast<YamlMappingNode>().ToList();
+
+    private static List<YamlMappingNode> Steps(YamlMappingNode job)
+        => Sequence(job, "steps").Cast<YamlMappingNode>().ToList();
+
+    private static YamlMappingNode StepById(IEnumerable<YamlMappingNode> steps, string id)
+        => Assert.Single(steps, step => Scalar(step, "id") == id);
+
+    private static YamlMappingNode StepByUses(IEnumerable<YamlMappingNode> steps, string uses)
+        => Assert.Single(steps, step => Scalar(step, "uses") == uses);
+
+    private static YamlSequenceNode Sequence(YamlMappingNode node, string key)
+        => Assert.IsType<YamlSequenceNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static YamlMappingNode Mapping(YamlMappingNode node, string key)
+        => Assert.IsType<YamlMappingNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static string? Scalar(YamlMappingNode node, string key)
+        => node.Children.TryGetValue(new YamlScalarNode(key), out var value) && value is YamlScalarNode scalar
+            ? scalar.Value
+            : null;
+
+    private static string RepoPath(params string[] path)
+        => Path.Combine([RepoRoot.Path, .. path]);
+
+    private static YamlMappingNode LoadYaml(params string[] path)
+    {
         var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(NativeDashboardValidationWorkflowPath));
+        using var reader = new StringReader(File.ReadAllText(RepoPath(path)));
         yaml.Load(reader);
 
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var validationJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("validate")];
-        var steps = (YamlSequenceNode)validationJob.Children[new YamlScalarNode("steps")];
-        var interactiveTest = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
-                    name.ToString() == "Test Native AOT Dashboard interactivity");
-        var command = interactiveTest.Children[new YamlScalarNode("run")].ToString();
-
-        Assert.Equal("${{ inputs.rid == 'win-x64' }}", interactiveTest.Children[new YamlScalarNode("if")].ToString());
-        Assert.Contains("/p:RunOuterloopTests=true --", command);
-        Assert.EndsWith(
-            "--filter-method \"*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors\" --filter-not-trait \"quarantined=true\"",
-            command.Trim());
+        return Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
     }
 
-    // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
-    // updateComment for a re-run of the same commit) and collapses superseded comments with
-    // minimizeComment -- it must never delete. This guard fails if deletion is introduced or the
-    // head-commit link (also the idempotency key) is dropped.
-    [Fact]
-    public void CommentSelectionJobIsIdempotentPerCommitAndCollapsesSuperseded()
+    private static string ShellQuote(string value)
+        => $"'{value.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'";
+
+    private async Task<ProcessResult> RunGitAsync(string workingDirectory, params string[] arguments)
     {
-        var job = ExtractCommentSelectionJob();
-
-        Assert.Contains("github.rest.issues.createComment", job);
-        Assert.Contains("github.rest.issues.updateComment", job);
-        Assert.Contains("minimizeComment", job);
-        Assert.DoesNotContain("deleteComment", job);
-
-        // Minimization is gated on this run being the PR's live head (a stale re-run must not collapse
-        // a newer commit's comment), resolved via pulls.get.
-        Assert.Contains("github.rest.pulls.get", job);
-
-        // The marker is read back to find prior comments; the head SHA links the commit and keys
-        // create-vs-update.
-        Assert.Contains("<!-- select-tests-comment -->", job);
-        Assert.Contains("pull_request?.head?.sha", job);
-        Assert.Contains("/commit/", job);
+        var result = await ProcessRunner.RunAsync(output, "git", arguments, workingDirectory);
+        Assert.Equal(0, result.ExitCode);
+        return result;
     }
 
-    // The selector diffs head against the merge-base of base..head, so it must be handed the PR's REAL
-    // head (pull_request.head.sha). github.sha is the synthetic refs/pull/N/merge commit, regenerated
-    // asynchronously as the base advances; feeding it lets base-branch churn leak into the diff and
-    // over-select (microsoft/aspire#18377). Pin the real-head wiring -- the caller's explicit input AND the
-    // action's own default -- and forbid a revert to github.sha in either, so a future caller relying on
-    // the default can't silently reintroduce the bug.
-    [Fact]
-    public void TestsWorkflowPassesPrHeadShaNotMergeRefToSelector()
+    private static string[] ReadJsonOutput(string outputs, string name)
     {
-        var testsYml = File.ReadAllText(TestsWorkflowPath);
+        var startMarker = $"{name}<<EOF\n";
+        var start = outputs.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Output '{name}' was not found.");
+        start += startMarker.Length;
 
-        Assert.Contains("headSha: ${{ github.event.pull_request.head.sha }}", testsYml);
-        Assert.DoesNotContain("headSha: ${{ github.sha }}", testsYml);
+        var end = outputs.IndexOf("\nEOF", start, StringComparison.Ordinal);
+        Assert.True(end >= 0, $"Output '{name}' was not terminated.");
 
-        // The action's headSha default must also be the real head, not the synthetic merge ref.
-        var action = File.ReadAllText(SelectTestsActionPath);
-        Assert.Contains("default: ${{ github.event.pull_request.head.sha }}", action);
-        Assert.DoesNotContain("default: ${{ github.sha }}", action);
+        return JsonSerializer.Deserialize<string[]>(outputs[start..end])!;
     }
 
-    // On a PR the action diffs from the merge-base of base..head, which the shallow CI checkout can't
-    // see until it is deepened. The step must deepen BOTH endpoints until `git merge-base` resolves and,
-    // if it never does within a bounded number of fetches, degrade to --force-all (run ALL) rather than
-    // fail the PR -- a missing merge-base must not block PRs while the wiring is fixed. Pin the loop, its
-    // termination bound, the warning, and the --force-all fallback so a regression can't turn it back into
-    // a hard failure or an unbounded fetch.
-    [Fact]
-    public void SelectTestsActionDeepensUntilMergeBaseReachableThenFallsBackToAll()
-    {
-        var action = File.ReadAllText(SelectTestsActionPath);
-
-        // The deepen loop gates on the two endpoints' merge-base actually resolving locally.
-        Assert.Contains("until git merge-base \"$PR_BASE_SHA\" \"$HEAD_SHA\"", action);
-        // Each iteration re-fetches both endpoints at a growing depth.
-        Assert.Contains("git fetch --no-tags --depth=\"$depth\" origin \"$PR_BASE_SHA\" \"$HEAD_SHA\"", action);
-        // Bounded so a pathological history can't fetch forever.
-        Assert.Contains("-ge 4096", action);
-        // An unresolved merge-base warns and degrades to run-all -- it must NOT be a hard ::error::/exit.
-        Assert.Contains("::warning::Could not find a merge-base", action);
-        Assert.DoesNotContain("::error::Could not find a merge-base", action);
-
-        // The unresolved-merge-base path must DEGRADE to run-all, never hard-fail the PR. A bare
-        // Contains("args+=(--force-all)") is non-discriminating: that string also appears in the
-        // kill-switch and non-PR branches, so it would still pass if THIS branch were turned into an
-        // `exit 1`. Scope the assertions to the merge-base resolution + fallback region -- past the
-        // base-fetch guards that legitimately `exit 1` -- so a regression to a hard failure is caught.
-        var resolveStart = action.IndexOf("merge_base_found=true", StringComparison.Ordinal);
-        Assert.True(resolveStart >= 0, "merge-base resolution region not found in action.yml");
-        // The closing `fi` of the `if [ "$merge_base_found" = "true" ]` gate, matched at its 10-space
-        // indent so the loop's inner `fi` (12 spaces) and the outer branch `fi` (8 spaces) don't match.
-        var resolveEnd = action.IndexOf("\n          fi", resolveStart, StringComparison.Ordinal);
-        Assert.True(resolveEnd > resolveStart, "merge_base_found gate is not closed as expected");
-        var mergeBaseRegion = action[resolveStart..resolveEnd];
-
-        // Give-up path breaks out of the loop rather than exiting ...
-        Assert.Contains("break", mergeBaseRegion);
-        // ... and the gate degrades to run-all, recording the reason for the audit summary.
-        Assert.Contains("--force-all --force-all-reason", mergeBaseRegion);
-        // Nothing in the resolution or fallback may hard-fail the PR.
-        Assert.DoesNotContain("exit", mergeBaseRegion);
-    }
-
-    // The top-level skip gate runs before SelectTests. Git's default rename detection can report only
-    // the destination, so moving compiled source into a skippable baseline-shaped path could otherwise
-    // hide the deleted source and skip the entire CI workflow. Keep both rename sides visible, matching
-    // the selector's own changed-file resolution.
-    [Fact]
-    public void CheckChangedFilesActionDisablesRenameDetection()
-    {
-        var action = File.ReadAllText(CheckChangedFilesActionPath);
-
-        Assert.Contains(
-            "git diff --name-only --no-renames \"$BASE_REF\"...\"$HEAD_REF\"",
-            action);
-    }
-
-    private static string SelectTestsActionPath
-        => Path.Combine(RepoRoot.Path, ".github", "actions", "select-tests", "action.yml");
-
-    private static string CheckChangedFilesActionPath
-        => Path.Combine(RepoRoot.Path, ".github", "actions", "check-changed-files", "action.yml");
-
-    private static string TestsWorkflowPath
-        => Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml");
-
-    private static string VersionsPropsPath
-        => Path.Combine(RepoRoot.Path, "eng", "Versions.props");
-
-    private static string BuildCliNativeArchivesWorkflowPath
-        => Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml");
-
-    private static string NativeDashboardValidationWorkflowPath
-        => Path.Combine(RepoRoot.Path, ".github", "workflows", "native-dashboard-validation.yml");
-
-    private static string ExtractCommentSelectionJob()
-    {
-        var testsYml = File.ReadAllText(TestsWorkflowPath);
-
-        var start = testsYml.IndexOf("comment_selection:", StringComparison.Ordinal);
-        Assert.True(start >= 0, $"Expected a comment_selection job in {TestsWorkflowPath}.");
-
-        // Bound the slice at the next top-level job so assertions can't match other jobs' scripts.
-        var end = testsYml.IndexOf("build_packages:", start, StringComparison.Ordinal);
-        Assert.True(end > start, $"Expected the comment_selection job to precede build_packages in {TestsWorkflowPath}.");
-
-        return testsYml[start..end];
-    }
 }

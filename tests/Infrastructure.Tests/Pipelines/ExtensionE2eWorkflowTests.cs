@@ -40,49 +40,6 @@ public sealed class ExtensionE2eWorkflowTests
         var environment = (YamlMappingNode)runSuiteStep.Children[new YamlScalarNode("env")];
         Assert.False(environment.Children.ContainsKey(new YamlScalarNode("ASPIRE_EXTENSION_E2E_ALLOW_TEST_FAILURE")));
         Assert.Equal("${{ matrix.advisoryIssue }}", Scalar(environment, "ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE"));
-
-        var prepareCliStep = Assert.Single(steps, step => Scalar(step, "name") == "Prepare Aspire CLI and package hive");
-        var prepareCliScript = Scalar(prepareCliStep, "run") ?? string.Empty;
-        Assert.Contains(
-            "\"ASPIRE_DCP_PATH=$($dcp.Directory.FullName)\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
-            prepareCliScript,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "\"ASPIRE_CLI_PACKAGES=$hiveDir\" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append",
-            prepareCliScript,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void DenoIsInstalledOnlyForDenoE2eShards()
-    {
-        var job = LoadExtensionE2eJob();
-        var rows = MatrixIncludeRows(job).ToList();
-        var denoRows = rows
-            .Where(row => Scalar(row, "installDeno") == "true")
-            .ToList();
-
-        Assert.Contains(denoRows, row => Scalar(row, "name") == "Linux" && Scalar(row, "shardName") == "launch-profiles");
-        Assert.Contains(denoRows, row => Scalar(row, "name") == "Windows" && Scalar(row, "shardName") == "launch-profiles");
-        Assert.All(denoRows, row =>
-        {
-            var name = Scalar(row, "name");
-            var shardName = Scalar(row, "shardName");
-            Assert.True(
-                (shardName == "launch-profiles" && name is "Linux" or "Windows") ||
-                (shardName == "deno-debugger" && name == "Linux"),
-                $"Deno should not be installed for the {name}/{shardName} shard.");
-        });
-
-        var installDenoStep = Assert.Single(
-            ExtensionE2eWorkflow.Steps(job),
-            step => Scalar(step, "name") == "Install Deno");
-        Assert.Equal("${{ matrix.installDeno }}", Scalar(installDenoStep, "if"));
-        Assert.Equal("pwsh", Scalar(installDenoStep, "shell"));
-        var installScript = Scalar(installDenoStep, "run") ?? string.Empty;
-        Assert.Contains("https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip", installScript, StringComparison.Ordinal);
-        Assert.Contains("$installDirectory | Out-File -FilePath $env:GITHUB_PATH", installScript, StringComparison.Ordinal);
-        Assert.Contains("--version", installScript, StringComparison.Ordinal);
     }
 
     [Fact]

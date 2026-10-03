@@ -25,8 +25,9 @@
   build-test-matrix.ps1 turns each "collection:N" into
   --filter-trait "Partition=N" and "uncollected:*" into
   --filter-not-trait "Partition=*", so the "uncollected" entry runs every test
-  that lacks a Partition trait. That backstop means a class missed by the scan
-  (or one with no trait) is never dropped — it still runs under "uncollected".
+  that lacks a Partition trait. A class whose runtime Partition trait is missed
+  by this source scan would be excluded from "uncollected" without appearing in
+  a collection shard, so Infrastructure.Tests enforces the supported source form.
 
   Class-mode projects (no Partition traits in source) are NOT handled here: the
   caller falls back to the build + --list-tests path, because class lists have
@@ -86,8 +87,8 @@ if (-not (Test-Path $ProjectDirectory)) {
 #   [TraitAttribute("partition", "5")]
 # The value is a string literal (xunit trait values are compile-time constants), so the captured set
 # matches what the compiled assembly exposes. Note: this does not catch the rarer combined-attribute
-# form [Trait(...), Trait(...)]; the repo uses only the standalone form today (enforced by the
-# compiled extractor being the authority for split projects).
+# form [Trait(...), Trait(...)]; the repo uses only the standalone form today, enforced by
+# ScanTestPartitionsFromSourceGuardTests.
 $partitionRegex = [regex]'(?i)\[\s*(?:[\w.]+\.)?Trait(?:Attribute)?\s*\(\s*"Partition"\s*,\s*"([^"]+)"\s*\)\s*\]'
 
 $partitions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
@@ -98,6 +99,11 @@ $sourceFiles = Get-ChildItem -Path $ProjectDirectory -Recurse -File -Filter '*.c
 
 foreach ($file in $sourceFiles) {
   $content = Get-Content -Raw -LiteralPath $file.FullName
+  # PowerShell returns $null rather than an empty string for a zero-length file.
+  if ($null -eq $content) {
+    continue
+  }
+
   foreach ($m in $partitionRegex.Matches($content)) {
     $value = $m.Groups[1].Value.Trim()
     if (-not [string]::IsNullOrWhiteSpace($value)) {

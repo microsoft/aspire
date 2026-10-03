@@ -404,7 +404,7 @@ internal static partial class TimelineRenderer
             var phase = ClassifyPhase(g.Name);
             foreach (var j in g.Jobs)
             {
-                if (j.CompletedAt >= minTotalSeconds && IsSignificantJob(j))
+                if (j.CompletedAt > minTotalSeconds && IsSignificantJob(j))
                 {
                     if (!phaseJobs.TryGetValue(phase, out var list))
                     {

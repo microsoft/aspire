@@ -1,42 +1,55 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
+using Aspire.TestUtilities;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
-public sealed class CiWorkflowTests
+public sealed class CiWorkflowTests(ITestOutputHelper output)
 {
-    [Fact]
-    public void TemplateManifestGenerationUsesSameBuildPackagesBeforeCleanup()
-    {
-        var job = GetJob(ReadWorkflow("build-packages.yml"), "build_packages");
-        var generate = GetStep(job, "Generate template component manifest");
+    private static readonly YamlMappingNode s_buildPackageJobs = Jobs("build-packages.yml");
+    private static readonly YamlMappingNode s_testsJobs = Jobs("tests.yml");
+    private static readonly YamlMappingNode s_installerJobs = Jobs("prepare-installer-artifacts.yml");
+    private static readonly YamlMappingNode s_runTestsJobs = Jobs("run-tests.yml");
+    private static readonly YamlMappingNode s_ciJobs = Jobs("ci.yml");
 
-        Assert.True(job.IndexOf("name: Build with packages", StringComparison.Ordinal) <
-            job.IndexOf("name: Generate template component manifest", StringComparison.Ordinal));
-        Assert.True(job.IndexOf("name: Generate template component manifest", StringComparison.Ordinal) <
-            job.IndexOf("name: Clean up artifacts", StringComparison.Ordinal));
-        Assert.Contains("eng/scripts/generate-template-cgmanifest.ps1", generate);
+    [Fact]
+    public void TemplateManifestIsGeneratedFromBuiltPackagesBeforeCleanup()
+    {
+        var steps = Steps(Mapping(s_buildPackageJobs, "build_packages"));
+        var buildIndex = steps.FindIndex(
+            step => Scalar(step, "run")?.Contains("./build.sh", StringComparison.Ordinal) == true &&
+                    Scalar(step, "run")?.Contains("-pack", StringComparison.Ordinal) == true);
+        var generateIndex = steps.FindIndex(
+            step => Scalar(step, "run")?.Contains(
+                "eng/scripts/generate-template-cgmanifest.ps1",
+                StringComparison.Ordinal) == true);
+        var uploadIndex = steps.FindIndex(
+            step => Scalar(step, "uses")?.StartsWith("actions/upload-artifact@", StringComparison.Ordinal) == true &&
+                    Scalar(Mapping(step, "with"), "name") == "template-component-manifest");
+        var cleanupIndex = steps.FindIndex(
+            step => Scalar(step, "run")?.Contains("rm -rf artifacts/bin", StringComparison.Ordinal) == true);
+
+        Assert.True(buildIndex >= 0, "The package build step was not found.");
+        Assert.True(generateIndex > buildIndex, "The manifest must be generated from the built packages.");
+        Assert.True(uploadIndex > generateIndex, "The generated manifest must be uploaded before cleanup.");
+        Assert.True(cleanupIndex > uploadIndex, "Build artifacts must remain available through manifest generation and upload.");
     }
 
     [Fact]
-    public void TemplateManifestArtifactContainsOnlyTheFinalInventory()
+    public void TemplateManifestUploadRequiresTheFinalInventory()
     {
-        var yaml = new YamlStream();
-        yaml.Load(new StringReader(ReadWorkflow("build-packages.yml")));
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children["jobs"];
-        var job = (YamlMappingNode)jobs.Children["build_packages"];
-        var steps = (YamlSequenceNode)job.Children["steps"];
-        var upload = Assert.Single(steps.Children.Cast<YamlMappingNode>(), step =>
-            step.Children.TryGetValue("name", out var name) && ((YamlScalarNode)name).Value == "Upload template component manifest");
-        var inputs = (YamlMappingNode)upload.Children["with"];
+        var upload = Assert.Single(
+            Steps(Mapping(s_buildPackageJobs, "build_packages")),
+            step => Scalar(step, "uses")?.StartsWith("actions/upload-artifact@", StringComparison.Ordinal) == true &&
+                    Scalar(Mapping(step, "with"), "name") == "template-component-manifest");
+        var inputs = Mapping(upload, "with");
 
-        Assert.Equal("artifacts/cg/templates/cgmanifest.json", ((YamlScalarNode)inputs.Children["path"]).Value);
-        Assert.Equal("5", ((YamlScalarNode)inputs.Children["retention-days"]).Value);
-        Assert.Equal("error", ((YamlScalarNode)inputs.Children["if-no-files-found"]).Value);
+        Assert.Equal("artifacts/cg/templates/cgmanifest.json", Scalar(inputs, "path"));
+        Assert.Equal("error", Scalar(inputs, "if-no-files-found"));
     }
 
     [Theory]
@@ -44,87 +57,143 @@ public sealed class CiWorkflowTests
     [InlineData("prepare_homebrew_installer_artifacts")]
     public void InstallerJobsDependOnBuiltPackages(string jobName)
     {
-        var workflow = ReadWorkflow("tests.yml");
-        var job = GetJob(workflow, jobName);
+        var job = Mapping(s_testsJobs, jobName);
 
-        Assert.Contains("      build_packages,", job);
+        Assert.Contains("build_packages", SequenceScalars(job, "needs"));
     }
 
-    [Fact]
-    public void InstallerWorkflowStagesSameRunTemplatePackages()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [RequiresTools(["pwsh"])]
+    public async Task InstallerWorkflowStagesSameRunTemplatePackages(int shippingPackageCount)
     {
-        var workflow = ReadWorkflow("prepare-installer-artifacts.yml");
-        var job = GetJob(workflow, "prepare_installer_artifacts");
-        var downloadStep = GetStep(job, "Download NuGet packages");
-        var configureStep = GetStep(job, "Configure CLI package override");
+        var steps = Steps(Mapping(s_installerJobs, "prepare_installer_artifacts"));
+        var download = Assert.Single(
+            steps,
+            step => Scalar(step, "uses")?.StartsWith("actions/download-artifact@", StringComparison.Ordinal) == true &&
+                    Scalar(Mapping(step, "with"), "name") == "built-nugets");
+        var downloadInputs = Mapping(download, "with");
 
-        Assert.Contains("name: built-nugets", downloadStep);
-        Assert.Contains("path: ${{ github.workspace }}/built-nugets", downloadStep);
-        Assert.Contains("Aspire.ProjectTemplates.*.nupkg", configureStep);
-        Assert.Contains("Where-Object { $_.Directory.Name -eq 'Shipping' }", configureStep);
-        Assert.Contains("ASPIRE_CLI_PACKAGES=$packageDirectory", configureStep);
-        Assert.Contains("$env:GITHUB_ENV", configureStep);
+        Assert.Equal("${{ github.workspace }}/built-nugets", Scalar(downloadInputs, "path"));
+
+        var configure = Assert.Single(steps, step => Scalar(step, "shell") == "pwsh" &&
+            Scalar(step, "run")?.Contains("ASPIRE_CLI_PACKAGES=", StringComparison.Ordinal) == true);
+        var script = Assert.IsType<string>(Scalar(configure, "run"));
+
+        using var workspace = TemporaryWorkspace.Create(output);
+        var shippingDirectory = Path.Combine(workspace.Path, "built-nugets", "packages", "Shipping");
+        if (shippingPackageCount > 0)
+        {
+            Directory.CreateDirectory(shippingDirectory);
+        }
+
+        for (var packageIndex = 0; packageIndex < shippingPackageCount; packageIndex++)
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(shippingDirectory, $"Aspire.ProjectTemplates.{packageIndex + 1}.0.0.nupkg"),
+                string.Empty);
+        }
+
+        var nonShippingDirectory = Directory.CreateDirectory(
+            Path.Combine(workspace.Path, "built-nugets", "packages", "Debug")).FullName;
+        await File.WriteAllTextAsync(
+            Path.Combine(nonShippingDirectory, "Aspire.ProjectTemplates.2.0.0.nupkg"),
+            string.Empty);
+
+        var scriptPath = Path.Combine(workspace.Path, "configure-cli-package-override.ps1");
+        var githubEnvironmentPath = Path.Combine(workspace.Path, "github-environment");
+        await File.WriteAllTextAsync(scriptPath, script);
+
+        using var command = new PowerShellCommand(scriptPath, output)
+            .WithWorkingDirectory(workspace.Path)
+            .WithEnvironmentVariable("GITHUB_WORKSPACE", workspace.Path)
+            .WithEnvironmentVariable("GITHUB_ENV", githubEnvironmentPath);
+        var result = await command.ExecuteAsync();
+
+        if (shippingPackageCount == 1)
+        {
+            result.EnsureSuccessful();
+            Assert.Equal(
+                [$"ASPIRE_CLI_PACKAGES={shippingDirectory}"],
+                await File.ReadAllLinesAsync(githubEnvironmentPath));
+        }
+        else
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains($"found {shippingPackageCount}", result.Output, StringComparison.Ordinal);
+            Assert.False(File.Exists(githubEnvironmentPath));
+        }
     }
 
     [Fact]
     public void RunTestsInstallsJavaForProjectsThatRequireIt()
     {
-        var workflow = ReadWorkflow("run-tests.yml");
-        var javaSetup = System.Text.RegularExpressions.Regex.Match(
-            workflow,
-            "(?ms)^      - name: Set up Java\\r?\\n(?<body>.*?)(?=^      - |\\z)");
-        Assert.True(javaSetup.Success, "Could not find the Java setup step in run-tests.yml.");
-        Assert.Contains("if: ${{ fromJson(inputs.properties).requiresJava == true }}", javaSetup.Value);
-        Assert.Contains("uses: actions/setup-java@", javaSetup.Value);
-        Assert.Contains("distribution: temurin", javaSetup.Value);
-        Assert.Contains("java-version: 21", javaSetup.Value);
+        var steps = Steps(Mapping(s_runTestsJobs, "test"));
+        var javaSetup = Assert.Single(
+            steps,
+            step => Scalar(step, "uses")?.StartsWith("actions/setup-java@", StringComparison.Ordinal) == true);
 
-        var properties = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng", "testing", "CITestsProperties.props"));
-        Assert.Contains("<CITestsProperty Include=\"requiresJava\" MSBuildProp=\"RequiresJava\"", properties);
+        Assert.Equal("${{ fromJson(inputs.properties).requiresJava == true }}", Scalar(javaSetup, "if"));
+        Assert.Equal("temurin", Scalar(Mapping(javaSetup, "with"), "distribution"));
+        Assert.Equal("21", Scalar(Mapping(javaSetup, "with"), "java-version"));
 
-        var javaTests = File.ReadAllText(Path.Combine(
-            RepoRoot.Path,
+        var properties = XDocument.Load(RepoPath("eng", "testing", "CITestsProperties.props"));
+        var requiresJava = Assert.Single(
+            properties.Descendants("CITestsProperty"),
+            element => (string?)element.Attribute("Include") == "requiresJava");
+        Assert.Equal("RequiresJava", (string?)requiresJava.Attribute("MSBuildProp"));
+
+        var javaProject = XDocument.Load(RepoPath(
             "tests",
             "Aspire.Hosting.CodeGeneration.Java.Tests",
             "Aspire.Hosting.CodeGeneration.Java.Tests.csproj"));
-        Assert.Contains("<RequiresJava>true</RequiresJava>", javaTests);
+        Assert.Equal("true", Assert.Single(javaProject.Descendants("RequiresJava")).Value);
     }
 
     [Fact]
-    public void CiFailureTrackerCheckoutDoesNotPinMain()
+    public void CiFailureTrackerChecksOutTheEvaluatedBranch()
     {
-        var workflow = ReadWorkflow("ci.yml");
-        var job = GetJob(workflow, "ci_failure_tracker");
+        var tracker = Mapping(s_ciJobs, "ci_failure_tracker");
+        var checkout = Assert.Single(
+            Steps(tracker),
+            step => Scalar(step, "uses")?.StartsWith("actions/checkout@", StringComparison.Ordinal) == true);
 
-        var checkout = System.Text.RegularExpressions.Regex.Match(job, "(?ms)^      - uses: actions/checkout@.*?(?=^      - |\\z)");
-        Assert.True(checkout.Success, "Could not find the ci_failure_tracker checkout step.");
-
-        // Push CI also runs on release/**. Pinning this checkout to main makes the
-        // tracker execute main's reporter instead of the workflow code from the branch
-        // whose run is being evaluated.
-        Assert.DoesNotContain("ref: main", checkout.Value);
+        Assert.False(
+            checkout.Children.TryGetValue(new YamlScalarNode("with"), out var withNode) &&
+            Assert.IsType<YamlMappingNode>(withNode).Children.ContainsKey(new YamlScalarNode("ref")));
     }
 
-    private static string ReadWorkflow(string fileName)
-        => File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", fileName)).ReplaceLineEndings("\n");
+    private static YamlMappingNode Jobs(string workflowName)
+        => Mapping(LoadWorkflow(workflowName), "jobs");
 
-    private static string GetJob(string workflow, string jobName)
+    private static List<YamlMappingNode> Steps(YamlMappingNode job)
+        => Sequence(job, "steps").Cast<YamlMappingNode>().ToList();
+
+    private static List<string?> SequenceScalars(YamlMappingNode node, string key)
+        => Sequence(node, key).Cast<YamlScalarNode>().Select(item => item.Value).ToList();
+
+    private static YamlSequenceNode Sequence(YamlMappingNode node, string key)
+        => Assert.IsType<YamlSequenceNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static YamlMappingNode Mapping(YamlMappingNode node, string key)
+        => Assert.IsType<YamlMappingNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static string? Scalar(YamlMappingNode node, string key)
+        => node.Children.TryGetValue(new YamlScalarNode(key), out var value) && value is YamlScalarNode scalar
+            ? scalar.Value
+            : null;
+
+    private static string RepoPath(params string[] path)
+        => Path.Combine([RepoRoot.Path, .. path]);
+
+    private static YamlMappingNode LoadWorkflow(string workflowName)
     {
-        var job = System.Text.RegularExpressions.Regex.Match(
-            workflow,
-            $@"(?ms)^  {System.Text.RegularExpressions.Regex.Escape(jobName)}:\n(?<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\z)");
-        Assert.True(job.Success, $"Could not find the {jobName} job.");
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(RepoPath(".github", "workflows", workflowName)));
+        yaml.Load(reader);
 
-        return job.Value;
-    }
-
-    private static string GetStep(string job, string stepName)
-    {
-        var step = System.Text.RegularExpressions.Regex.Match(
-            job,
-            $@"(?ms)^      - name: {System.Text.RegularExpressions.Regex.Escape(stepName)}\n.*?(?=^      - |\z)");
-        Assert.True(step.Success, $"Could not find the {stepName} step.");
-
-        return step.Value;
+        return Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
     }
 }

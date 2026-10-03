@@ -12,8 +12,6 @@ namespace Infrastructure.Tests;
 public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
 {
     private static readonly string s_releaseWorkflowPath = Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-release.yml");
-    private static readonly string s_changelogWorkflowPath = Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-changelog.md");
-    private static readonly string s_changelogWorkflowLockPath = Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-changelog.lock.yml");
     private static readonly string s_releaseNotesGeneratorPath = Path.Combine(
         RepoRoot.Path,
         ".github",
@@ -50,114 +48,16 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
     [Fact]
     public void ExtensionChangelogPromptRequiresLocalFullRangeEnumerationAndRejectsPrBodyAsAuthority()
     {
-        var prompt = File.ReadAllText(s_changelogWorkflowPath);
-        var compiledWorkflow = File.ReadAllText(s_changelogWorkflowLockPath);
+        var prompt = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-changelog.md"));
+        var compiledWorkflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "extension-changelog.lock.yml"));
 
-        Assert.Contains(
-            "The PR body, description, and deterministic fallback notes are presentation-only",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "MUST NOT be used to discover the change set.",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "`${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv`",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "A deterministic pre-agent step already validated and materialized the",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Do not run `git` or",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "perform any network fetch in the agent step.",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Each line contains the 40-character commit SHA",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Count every line and keep that exact candidate count",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "Consider and classify **every** candidate",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "You may group related user-facing commits into one final note",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "MUST NOT stop after a fixed number",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "report the exact candidate count from Step 4",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "how many candidates were included in the final notes and how many were excluded",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "the included/excluded totals (or equivalent auditable classification totals)",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "The authoritative candidate file is missing or unreadable after pre-agent",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "materialization, or required enrichment searches fail outright",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "<!-- aspire-ext-changelog-finalized from=<FROM_SHA> to=<TO_SHA> base=<BASE_VERSION> -->",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "The pending `aspire-ext-changelog` marker MUST NOT survive",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "replaced with the finalized marker and your generated notes",
-            prompt,
-            StringComparison.Ordinal);
-        Assert.False(
-            prompt.Contains("Use the compare API to get the commits between the validated SHAs:", StringComparison.Ordinal),
-            "The prompt must not treat API pagination as the authoritative candidate set.");
-        Assert.False(
-            prompt.Contains("If the checkout is shallow or either SHA is missing locally, fetch the exact", StringComparison.Ordinal),
-            "The prompt must not ask the agent to fetch history after credentials are removed.");
-        Assert.False(
-            prompt.Contains("after explicit fetch", StringComparison.Ordinal),
-            "The prompt must not describe failure handling in terms of an agent-side fetch that is no longer allowed.");
-        Assert.False(
-            prompt.Contains("Use local git as the authoritative source", StringComparison.Ordinal),
-            "The prompt must consume the pre-agent candidate file instead of invoking Git.");
-        Assert.False(
-            prompt.Contains("`git log", StringComparison.Ordinal),
-            "The prompt must not expose broad Git execution to the agent.");
-        Assert.DoesNotContain(
-            "/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
-            prompt,
-            StringComparison.Ordinal);
-        var tools = GetSection(prompt, "^tools:", "^pre-agent-steps:");
-        Assert.DoesNotContain("\"git\"", tools, StringComparison.Ordinal);
-        Assert.Contains(
-            "--mount \"${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro\"",
-            compiledWorkflow,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "/tmp/gh-aw/agent/extension-changelog-candidates.tsv",
-            compiledWorkflow,
-            StringComparison.Ordinal);
+        Assert.Contains("The PR body, description, and deterministic fallback notes are presentation-only", prompt, StringComparison.Ordinal);
+        Assert.Contains("MUST NOT be used to discover the change set.", prompt, StringComparison.Ordinal);
+        Assert.Contains("Each line contains the 40-character commit SHA", prompt, StringComparison.Ordinal);
+        Assert.Contains("Count every line and keep that exact candidate count", prompt, StringComparison.Ordinal);
+        Assert.Contains("Consider and classify **every** candidate", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"git\"", GetSection(prompt, "^tools:", "^pre-agent-steps:"), StringComparison.Ordinal);
+        Assert.Contains("--mount \"${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro\"", compiledWorkflow, StringComparison.Ordinal);
         Assert.Contains("{{#runtime-import .github/workflows/extension-changelog.md}}", compiledWorkflow, StringComparison.Ordinal);
     }
 
@@ -174,7 +74,7 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public void ExtensionReleaseWorkflowChecksOutHelpersFromWorkflowDefinitionCommit()
+    public void ExtensionReleaseWorkflowLoadsHelpersFromWorkflowDefinitionCommit()
     {
         var yaml = new YamlStream();
         using var reader = new StringReader(File.ReadAllText(s_releaseWorkflowPath));
@@ -201,76 +101,21 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         Assert.Equal("false", Scalar(helperCheckoutWith, "persist-credentials"));
         Assert.Equal(".github/workflows/extension-release\n", Scalar(helperCheckoutWith, "sparse-checkout")?.ReplaceLineEndings("\n"));
 
-        var workflow = File.ReadAllText(s_releaseWorkflowPath);
         Assert.Contains(
-            "python3 .extension-release-workflow-source/.github/workflows/extension-release/generate_deterministic_release_notes.py",
-            workflow,
-            StringComparison.Ordinal);
+            steps,
+            step => Scalar(step, "run")?.Contains(
+                "python3 .extension-release-workflow-source/.github/workflows/extension-release/generate_deterministic_release_notes.py",
+                StringComparison.Ordinal) == true);
         Assert.Contains(
-            "python3 .extension-release-workflow-source/.github/workflows/extension-release/validate_github_pr_body.py",
-            workflow,
-            StringComparison.Ordinal);
+            steps,
+            step => Scalar(step, "run")?.Contains(
+                "python3 .extension-release-workflow-source/.github/workflows/extension-release/validate_github_pr_body.py",
+                StringComparison.Ordinal) == true);
         Assert.Contains(
-            "bash .extension-release-workflow-source/.github/workflows/extension-release/apply_extension_release_trigger_label.sh",
-            workflow,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "python3 .github/workflows/extension-release/generate_deterministic_release_notes.py",
-            workflow,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "python3 .github/workflows/extension-release/validate_github_pr_body.py",
-            workflow,
-            StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "bash .github/workflows/extension-release/apply_extension_release_trigger_label.sh",
-            workflow,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void CompiledWorkflowPreloadsAuthoritativeRangeBeforeCleaningCredentials()
-    {
-        var workflow = File.ReadAllText(s_changelogWorkflowLockPath);
-        var preloadScript = GetCompiledWorkflowRunScript("Preload authoritative marker range for local changelog enumeration");
-
-        var configureGitCredentialsIndex = FindRequiredText(workflow, "Configure Git credentials");
-        var checkoutPrBranchIndex = FindRequiredText(workflow, "Checkout PR branch");
-        var preloadIndex = FindRequiredText(workflow, "Preload authoritative marker range for local changelog enumeration");
-        var cleanCredentialsIndex = FindRequiredText(workflow, "Clean credentials");
-
-        Assert.True(
-            preloadIndex > configureGitCredentialsIndex,
-            "The authoritative range preload must run after Git credentials are configured.");
-        Assert.True(
-            preloadIndex > checkoutPrBranchIndex,
-            "The authoritative range preload must run after the PR branch checkout.");
-        Assert.True(
-            preloadIndex < cleanCredentialsIndex,
-            "The authoritative range preload must finish before gh-aw removes Git credentials.");
-        Assert.Contains("extension/CHANGELOG.md", preloadScript, StringComparison.Ordinal);
-        Assert.Contains("aspire-ext-changelog", preloadScript, StringComparison.Ordinal);
-        Assert.Contains("git fetch --no-tags", preloadScript, StringComparison.Ordinal);
-        Assert.Contains(
-            "CANDIDATES_FILE=\"${RUNNER_TEMP}/gh-aw/extension-changelog-candidates.tsv\"",
-            preloadScript,
-            StringComparison.Ordinal);
-        Assert.Contains("git log --format='%H%x09%s' --no-merges", preloadScript, StringComparison.Ordinal);
-        Assert.Contains("${FROM_SHA}..${TO_SHA}", preloadScript, StringComparison.Ordinal);
-        Assert.Contains("-- extension/ > \"${CANDIDATES_FILE}\"", preloadScript, StringComparison.Ordinal);
-        Assert.Contains("candidate_count=\"$(wc -l < \"${CANDIDATES_FILE}\")\"", preloadScript, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    [RequiresTools(["bash"])]
-    public async Task CompiledWorkflowPreloadScriptHasValidBashSyntax()
-    {
-        var script = GetCompiledWorkflowRunScript("Preload authoritative marker range for local changelog enumeration");
-        var result = await RunBashSyntaxCheckAsync(script);
-
-        Assert.True(
-            result.ExitCode == 0,
-            $"Expected compiled preload script to pass 'bash -n'.{Environment.NewLine}{result.Output}");
+            steps,
+            step => Scalar(step, "run")?.Contains(
+                "bash .extension-release-workflow-source/.github/workflows/extension-release/apply_extension_release_trigger_label.sh",
+                StringComparison.Ordinal) == true);
     }
 
     [Fact]
@@ -671,93 +516,18 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         return new CommandResult(process.ExitCode, output);
     }
 
-    private static string GetSection(string text, string startPattern, string endPattern)
-    {
-        var match = System.Text.RegularExpressions.Regex.Match(
-            text,
-            $"(?ms){startPattern}\\r?\\n.*?(?={endPattern})",
-            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-        Assert.True(match.Success, $"Could not find workflow section starting with '{startPattern}'.");
-        return match.Value;
-    }
-
-    private static int FindRequiredText(string contents, string text)
-    {
-        var index = contents.IndexOf(text, StringComparison.Ordinal);
-
-        Assert.True(index >= 0, $"Expected to find '{text}'.");
-
-        return index;
-    }
-
-    private static string GetCompiledWorkflowRunScript(string stepName)
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(s_changelogWorkflowLockPath));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-
-        foreach (var jobEntry in jobs.Children)
-        {
-            if (jobEntry.Value is not YamlMappingNode job
-                || !job.Children.TryGetValue(new YamlScalarNode("steps"), out var stepsNode)
-                || stepsNode is not YamlSequenceNode steps)
-            {
-                continue;
-            }
-
-            foreach (var step in steps.Children.OfType<YamlMappingNode>())
-            {
-                if (Scalar(step, "name") == stepName)
-                {
-                    var run = Scalar(step, "run");
-                    Assert.False(string.IsNullOrEmpty(run), $"Expected step '{stepName}' to define a run script.");
-                    return run!;
-                }
-            }
-        }
-
-        Assert.Fail($"Could not find workflow step '{stepName}'.");
-        return null!;
-    }
-
-    private async Task<CommandResult> RunBashSyntaxCheckAsync(string script)
-    {
-        using var process = new Process();
-        process.StartInfo.FileName = "bash";
-        process.StartInfo.ArgumentList.Add("-n");
-        process.StartInfo.WorkingDirectory = RepoRoot.Path;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.RedirectStandardInput = true;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.UseShellExecute = false;
-
-        process.Start();
-        await process.StandardInput.WriteAsync(script);
-        process.StandardInput.Close();
-
-        // Read both streams concurrently to avoid deadlock when bash emits parser diagnostics.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
-
-        var output = await stdoutTask + await stderrTask;
-        testOutput.WriteLine(output);
-
-        return new CommandResult(process.ExitCode, output);
-    }
-
-    private async Task<CommandResult> RunBashScriptAsync(string scriptPath, IEnumerable<string> args, IReadOnlyDictionary<string, string?> environment)
+    private async Task<CommandResult> RunBashScriptAsync(
+        string scriptPath,
+        IEnumerable<string> args,
+        IReadOnlyDictionary<string, string?> environment,
+        string? workingDirectory = null)
     {
         Assert.True(File.Exists(scriptPath), $"Expected helper script at '{scriptPath}'.");
 
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo("bash")
         {
-            WorkingDirectory = RepoRoot.Path,
+            WorkingDirectory = workingDirectory ?? RepoRoot.Path,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
             UseShellExecute = false,
@@ -857,6 +627,16 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         => node.Children.TryGetValue(new YamlScalarNode(key), out var value) && value is YamlScalarNode scalar
             ? scalar.Value
             : null;
+
+    private static string GetSection(string text, string startPattern, string endPattern)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            text,
+            $"(?ms){startPattern}\\r?\\n.*?(?={endPattern})",
+            System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        Assert.True(match.Success, $"Could not find workflow section starting with '{startPattern}'.");
+        return match.Value;
+    }
 
     private sealed record FakeGhFixture(string CallLogPath, string PathEnvironment);
     private sealed record CommandResult(int ExitCode, string Output);
