@@ -53,7 +53,7 @@ export function registerCliCommands(
   // Delegates to aspire-vscode.new / aspire-vscode.init above, so it doesn't go
   // through tryExecuteCommand itself — the delegated-to command owns its own CLI
   // availability check and telemetry.
-  const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', createWithAspireCommand);
+  const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', () => createWithAspireCommand(editorCommandProvider));
   const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
   const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
   const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (_tp, invocation, cliPath) => doCommand(configInfoProvider, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
