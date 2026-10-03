@@ -45,9 +45,9 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
     internal override ValueTask<ResolvedFoundryToolboxTool> ResolveAsync(CancellationToken cancellationToken)
     {
         // Build the OpenAI Responses "web_search" tool wire JSON by hand and read it back as a
-        // ProjectsAgentTool, bypassing ModelReaderWriter.Write on an OpenAI.Responses tool entirely.
+        // ToolboxTool, bypassing ModelReaderWriter.Write on an OpenAI.Responses tool entirely.
         //
-        // The natural implementation here is:
+        // Before toolbox-specific SDK models, the natural implementation was:
         //
         //   var openAiTool = OpenAI.Responses.ResponseTool.CreateWebSearchTool();
         //   var agentTool  = openAiTool.AsAgentTool(); // round-trips via ModelReaderWriter.Write
@@ -56,8 +56,8 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
         // work in the polyglot (e.g. JavaScript/TypeScript) AppHostServer host process. That host
         // ships its own copy of OpenAI + System.ClientModel inside its application folder, and
         // loads hosting integrations into an isolated AssemblyLoadContext (see Aspire.Hosting.RemoteHost
-        // IntegrationLoadContext). Today the host carries System.ClientModel 1.10.0 while this
-        // integration is built against System.ClientModel 1.11.0; the load policy resolves the
+        // IntegrationLoadContext). When this was introduced, the host carried System.ClientModel 1.10.0
+        // while this integration used System.ClientModel 1.11.0; the load policy resolves the
         // newer SCM into the probe ALC but keeps OpenAI bound to the older SCM in the default ALC.
         // The two SCMs surface as distinct CLR assemblies, so the WebSearchTool instance (loaded
         // in the default ALC) implements IPersistableModel<WebSearchTool> against default-ALC SCM,
@@ -70,8 +70,7 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
         // comes into play. The Read side is fine because AzureAIProjectsAgentsContext is resolved
         // from the same ALC as the SCM it talks to.
         //
-        // Toolbox tools support an additional "name" field that is not modeled by the current
-        // Azure.AI.Projects.Agents SDK but is preserved through its additional-properties bag:
+        // Toolbox tools also carry a "name" field:
         //   {"type":"web_search","name":"web-search"}
         // See https://learn.microsoft.com/azure/foundry/agents/how-to/tools/toolbox#multiple-tool-types.
         using var stream = new MemoryStream();
@@ -88,7 +87,7 @@ internal sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxTool
         }
 
         var json = BinaryData.FromBytes(stream.ToArray());
-        var agentTool = ModelReaderWriter.Read<ProjectsAgentTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default);
+        var agentTool = ModelReaderWriter.Read<ToolboxTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default);
         return new ValueTask<ResolvedFoundryToolboxTool>(
             new ResolvedFoundryToolboxTool(Name, agentTool!, json.ToString()));
     }
@@ -158,7 +157,7 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
         }
 
         // Build the OpenAI Responses "mcp" tool wire JSON by hand and read it back as a
-        // ProjectsAgentTool. See the comment on FoundryToolboxWebSearchToolDefinition for the
+        // ToolboxTool. See the comment on FoundryToolboxWebSearchToolDefinition for the
         // underlying cross-ALC System.ClientModel version mismatch that makes the natural
         // `ResponseTool.CreateMcpTool(...).AsAgentTool()` round-trip throw in the polyglot
         // (e.g. JavaScript/TypeScript) AppHostServer host process. Constructing the JSON
@@ -193,7 +192,7 @@ internal sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefini
         }
 
         var json = BinaryData.FromBytes(stream.ToArray());
-        var tool = ModelReaderWriter.Read<ProjectsAgentTool>(
+        var tool = ModelReaderWriter.Read<ToolboxTool>(
             json,
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default)!;
@@ -422,7 +421,7 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
         }
 
         var json = BinaryData.FromBytes(stream.ToArray());
-        var tool = ModelReaderWriter.Read<ProjectsAgentTool>(
+        var tool = ModelReaderWriter.Read<ToolboxTool>(
             json,
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default)!;

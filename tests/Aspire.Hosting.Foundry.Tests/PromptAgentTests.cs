@@ -5,12 +5,18 @@
 #pragma warning disable ASPIREFOUNDRY001 // Preview tool types
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
 #pragma warning disable ASPIREAZURE001 // Azure types are experimental
+#pragma warning disable OPENAI001 // Responses API is experimental
 
+using System.ClientModel.Primitives;
+using System.Net;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Azure.AI.Extensions.OpenAI;
+using Azure.AI.Projects;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -79,6 +85,53 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task SendMessage_ResponsesClient_CreatesAgentResponse()
+    {
+        using var handler = new SequenceHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""
+                {
+                  "id": "resp_test",
+                  "object": "response",
+                  "created_at": 0,
+                  "status": "completed",
+                  "model": "gpt-4.1",
+                  "output": [
+                    {
+                      "type": "message",
+                      "id": "msg_test",
+                      "status": "completed",
+                      "role": "assistant",
+                      "content": [
+                        { "type": "output_text", "text": "Hello from the agent!", "annotations": [] }
+                      ]
+                    }
+                  ]
+                }
+                """, System.Text.Encoding.UTF8, "application/json")
+        });
+        using var httpClient = new HttpClient(handler);
+        var projectClient = new AIProjectClient(
+            new Uri("https://example.invalid/api/projects/my-project"),
+            new TestTokenCredential(),
+            new AIProjectClientOptions { Transport = new HttpClientPipelineTransport(httpClient) });
+
+        // Exercise the SDK calls used by Send Message: incompatible Azure/OpenAI versions
+        // can compile successfully but throw MissingMethodException when constructing this client.
+        var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(new AgentReference("my-agent"));
+        var response = await responseClient.CreateResponseAsync("Hello", cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("Hello from the agent!", response.Value.GetOutputText());
+        var request = Assert.Single(handler.Requests);
+        using var body = JsonDocument.Parse(request.Content);
+        Assert.Equal("my-agent", body.RootElement.GetProperty("agent_reference").GetProperty("name").GetString());
+        var input = Assert.Single(body.RootElement.GetProperty("input").EnumerateArray());
+        Assert.Equal("user", input.GetProperty("role").GetString());
+        var content = Assert.Single(input.GetProperty("content").EnumerateArray());
+        Assert.Equal("Hello", content.GetProperty("text").GetString());
     }
 
     [Fact]

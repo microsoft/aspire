@@ -87,14 +87,14 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
             var container = Assert.IsType<ContainerConfiguration>(definition.ContainerConfiguration);
             var image = container.Image;
             Assert.Contains(".azurecr.io/", image, StringComparison.Ordinal);
-            Assert.Collection(definition.ProtocolVersions, protocol =>
+            Assert.Collection(definition.Versions, protocol =>
             {
                 Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
                 Assert.Equal("2.0.0", protocol.Version);
             });
             var agent = await client.AgentAdministrationClient.GetAgentAsync(agentName, cancellationToken: cts.Token);
             Assert.NotNull(agent.Value.AgentEndpoint);
-            Assert.Contains(AgentEndpointProtocol.Responses, agent.Value.AgentEndpoint.Protocols);
+            Assert.NotNull(agent.Value.AgentEndpoint.ProtocolConfiguration.Responses);
             output.WriteLine($"Hosted agent {agentName}, version {deployedVersion.Version}, image {image}");
 
             await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, $$"""

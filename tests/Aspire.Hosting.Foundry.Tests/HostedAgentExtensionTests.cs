@@ -752,9 +752,9 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
+    public void GetAgentEndpointProtocolConfiguration_MapsContainerProtocolsToEndpointProtocols()
     {
-        var endpointProtocols = AzureHostedAgentResource.GetAgentEndpointProtocols(
+        var configuration = AzureHostedAgentResource.GetAgentEndpointProtocolConfiguration(
             [
                 new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"),
                 new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0"),
@@ -762,11 +762,40 @@ public class HostedAgentExtensionTests
                 new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.1.0")
             ]);
 
-        Assert.Collection(
-            endpointProtocols,
-            protocol => Assert.Equal(AgentEndpointProtocol.Invocations, protocol),
-            protocol => Assert.Equal(AgentEndpointProtocol.Responses, protocol),
-            protocol => Assert.Equal(AgentEndpointProtocol.Activity, protocol));
+        Assert.NotNull(configuration.Invocations);
+        Assert.NotNull(configuration.Responses);
+        Assert.NotNull(configuration.Activity);
+        Assert.Null(configuration.A2a);
+        Assert.Null(configuration.Mcp);
+        Assert.Null(configuration.InvocationsWs);
+    }
+
+    [Fact]
+    public void GetAgentEndpointProtocolConfiguration_MapsAdditionalProtocols()
+    {
+        var configuration = AzureHostedAgentResource.GetAgentEndpointProtocolConfiguration(
+            [
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("a2a"), "1.0.0"),
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("mcp"), "1.0.0"),
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("invocations_ws"), "1.0.0"),
+                new ProtocolVersionRecord(new ProjectsAgentProtocol("activity_protocol"), "1.0.0")
+            ]);
+
+        Assert.NotNull(configuration.A2a);
+        Assert.NotNull(configuration.Mcp);
+        Assert.NotNull(configuration.InvocationsWs);
+        Assert.NotNull(configuration.Activity);
+        Assert.Null(configuration.Responses);
+        Assert.Null(configuration.Invocations);
+    }
+
+    [Fact]
+    public void GetAgentEndpointProtocolConfiguration_RejectsUnsupportedProtocol()
+    {
+        var exception = Assert.Throws<NotSupportedException>(() => AzureHostedAgentResource.GetAgentEndpointProtocolConfiguration(
+            [new ProtocolVersionRecord(new ProjectsAgentProtocol("unknown"), "1.0.0")]));
+
+        Assert.Equal("Foundry hosted agent endpoint protocol 'unknown' is not supported.", exception.Message);
     }
 
     [Fact]

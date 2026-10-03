@@ -154,7 +154,7 @@ internal sealed class FoundryToolboxDeploymentDefinition
 
 internal sealed record ResolvedFoundryToolboxTool(
     string Name,
-    ProjectsAgentTool Tool,
+    ToolboxTool Tool,
     string CanonicalConfiguration,
     string? McpServerLabel = null);
 
@@ -194,7 +194,7 @@ internal sealed class AzureFoundryToolboxAdministration(
         try
         {
             toolbox = await ExecuteWithProjectReadinessRetryAsync(
-                async token => (await toolboxes.GetToolboxAsync(name, token).ConfigureAwait(false)).Value,
+                async token => (await toolboxes.GetAsync(name, token).ConfigureAwait(false)).Value,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ClientResultException ex) when (ex.Status == 404 && !IsProjectEndpointNotReady(ex))
@@ -206,7 +206,7 @@ internal sealed class AzureFoundryToolboxAdministration(
             async token =>
             {
                 var result = new List<FoundryToolboxVersionState>();
-                await foreach (var version in toolboxes.GetToolboxVersionsAsync(
+                await foreach (var version in toolboxes.GetVersionsAsync(
                     name,
                     cancellationToken: token).ConfigureAwait(false))
                 {
@@ -223,7 +223,7 @@ internal sealed class AzureFoundryToolboxAdministration(
             string.Equals(version.Version, toolbox.DefaultVersion, StringComparison.Ordinal)))
         {
             var defaultVersion = await ExecuteWithProjectReadinessRetryAsync(
-                async token => (await toolboxes.GetToolboxVersionAsync(
+                async token => (await toolboxes.GetVersionAsync(
                     name,
                     toolbox.DefaultVersion,
                     token).ConfigureAwait(false)).Value,
@@ -243,11 +243,12 @@ internal sealed class AzureFoundryToolboxAdministration(
         return ExecuteWithProjectReadinessRetryAsync(
             async token =>
             {
-                var result = await toolboxes.CreateToolboxVersionAsync(
+                var result = await toolboxes.CreateVersionAsync(
                     definition.Name,
                     definition.Tools.Select(tool => tool.Tool),
                     definition.Description,
                     definition.CreateDeploymentMetadata(),
+                    skills: null,
                     policies: null,
                     token).ConfigureAwait(false);
                 return result.Value.Version;
@@ -267,7 +268,7 @@ internal sealed class AzureFoundryToolboxAdministration(
                 {
                     CancellationToken = token
                 };
-                await toolboxes.UpdateToolboxAsync(name, version, options).ConfigureAwait(false);
+                await toolboxes.UpdateDefaultVersionAsync(name, version, options).ConfigureAwait(false);
                 return true;
             },
             cancellationToken).ConfigureAwait(false);

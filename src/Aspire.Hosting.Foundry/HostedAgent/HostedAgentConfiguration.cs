@@ -129,7 +129,7 @@ public partial class HostedAgentConfiguration(string image)
         };
         foreach (var protocolVersion in ProtocolVersions)
         {
-            def.ProtocolVersions.Add(protocolVersion);
+            def.Versions.Add(protocolVersion);
         }
         if (ContentFilterConfiguration is not null)
         {

@@ -380,16 +380,16 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
         options.AddPolicy(new ToolboxFeaturesPolicy(), PipelinePosition.PerCall);
         var projectClient = new AIProjectClient(projectEndpoint, credential, options);
         var toolboxes = projectClient.AgentAdministrationClient.GetAgentToolboxes();
-        var toolbox = (await toolboxes.GetToolboxAsync("field-tools", cancellationToken)).Value;
+        var toolbox = (await toolboxes.GetAsync("field-tools", cancellationToken)).Value;
         var versions = new List<ToolboxVersion>();
-        await foreach (var version in toolboxes.GetToolboxVersionsAsync(
+        await foreach (var version in toolboxes.GetVersionsAsync(
             "field-tools",
             cancellationToken: cancellationToken))
         {
             versions.Add(version);
         }
 
-        var defaultVersion = (await toolboxes.GetToolboxVersionAsync(
+        var defaultVersion = (await toolboxes.GetVersionAsync(
             "field-tools",
             toolbox.DefaultVersion,
             cancellationToken)).Value;
@@ -407,7 +407,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             serializedTools);
     }
 
-    private static JsonElement SerializeTool(ProjectsAgentTool tool)
+    private static JsonElement SerializeTool(ToolboxTool tool)
     {
         using var document = JsonDocument.Parse(ModelReaderWriter.Write(
             tool,

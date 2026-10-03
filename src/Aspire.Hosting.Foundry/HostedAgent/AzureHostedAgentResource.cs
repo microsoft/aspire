@@ -184,21 +184,19 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 
     private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var endpointProtocols = GetAgentEndpointProtocols(configuration.ProtocolVersions);
-        if (endpointProtocols.Count == 0)
+        if (configuration.ProtocolVersions.Count == 0)
         {
             return;
         }
 
-        var endpoint = new AgentEndpoint();
-        foreach (var protocol in endpointProtocols)
+        var endpoint = new AgentEndpointConfiguration
         {
-            endpoint.Protocols.Add(protocol);
-        }
+            ProtocolConfiguration = GetAgentEndpointProtocolConfiguration(configuration.ProtocolVersions)
+        };
 
         // Creating a hosted-agent version does not update the endpoint's advertised protocols;
         // keep routing in sync so endpoint-scoped invocations can reach the selected version.
-        await agentsClient.PatchAgentObjectAsync(
+        await agentsClient.PatchAgentAsync(
             Name,
             new PatchAgentOptions
             {
@@ -207,31 +205,40 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             cancellationToken).ConfigureAwait(false);
     }
 
-    internal static IReadOnlyList<AgentEndpointProtocol> GetAgentEndpointProtocols(IEnumerable<ProtocolVersionRecord> protocolVersions)
+    internal static ProtocolConfiguration GetAgentEndpointProtocolConfiguration(IEnumerable<ProtocolVersionRecord> protocolVersions)
     {
-        var endpointProtocols = new List<AgentEndpointProtocol>();
+        // The 3.x SDK advertises protocols as configuration objects rather than a string list.
+        var configuration = new ProtocolConfiguration();
 
         foreach (var protocolVersion in protocolVersions)
         {
-            var endpointProtocol = ToAgentEndpointProtocol(protocolVersion.Protocol);
-            if (!endpointProtocols.Contains(endpointProtocol))
+            switch (protocolVersion.Protocol.ToString())
             {
-                endpointProtocols.Add(endpointProtocol);
+                case "activity_protocol":
+                case "activity":
+                    configuration.Activity ??= new();
+                    break;
+                case "invocations":
+                    configuration.Invocations ??= new();
+                    break;
+                case "responses":
+                    configuration.Responses ??= new();
+                    break;
+                case "a2a":
+                    configuration.A2a ??= new();
+                    break;
+                case "mcp":
+                    configuration.Mcp ??= new();
+                    break;
+                case "invocations_ws":
+                    configuration.InvocationsWs ??= new();
+                    break;
+                default:
+                    throw new NotSupportedException($"Foundry hosted agent endpoint protocol '{protocolVersion.Protocol}' is not supported.");
             }
         }
 
-        return endpointProtocols;
-    }
-
-    private static AgentEndpointProtocol ToAgentEndpointProtocol(ProjectsAgentProtocol protocol)
-    {
-        return protocol.ToString() switch
-        {
-            "activity_protocol" => AgentEndpointProtocol.Activity,
-            "invocations" => AgentEndpointProtocol.Invocations,
-            "responses" => AgentEndpointProtocol.Responses,
-            var value => new AgentEndpointProtocol(value)
-        };
+        return configuration;
     }
 
     private async Task AssignFoundryRoleToAgentIdentityAsync(
