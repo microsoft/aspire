@@ -231,7 +231,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
 
         PopulateConfiguration(builder.Configuration, connectionString);
 
-        builder.AddAzureCosmosClient("cosmos", configureClientOptions: options =>
+        builder.AddAzureCosmosClient("cosmos", configureClientOptions: (_, options) =>
         {
             options.LimitToEndpoint = false;
         });
@@ -241,6 +241,73 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
 
         Assert.Equal(expectedEndpoint, client.Endpoint.ToString());
         Assert.False(client.ClientOptions.LimitToEndpoint);
+    }
+
+    [Theory]
+    [InlineData("client")]
+    [InlineData("keyed-client")]
+    [InlineData("container")]
+    [InlineData("keyed-container")]
+    [InlineData("database")]
+    [InlineData("keyed-database")]
+    public void ConfigureClientOptionsCanResolveServices(string registrationType)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        const string connectionName = "cosmos";
+        const string applicationName = "ConfiguredFromServices";
+        var connectionString = "AccountEndpoint=https://localhost:8081/;AccountKey=fake;Database=testdb;Container=testcontainer;";
+        var callbackCount = 0;
+
+        PopulateConfiguration(builder.Configuration, connectionString);
+        builder.Services.AddSingleton(applicationName);
+
+        Action<IServiceProvider, CosmosClientOptions> configureClientOptions = (serviceProvider, options) =>
+        {
+            options.ApplicationName = serviceProvider.GetRequiredService<string>();
+            callbackCount++;
+        };
+
+        switch (registrationType)
+        {
+            case "client":
+                builder.AddAzureCosmosClient(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "keyed-client":
+                builder.AddKeyedAzureCosmosClient(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "container":
+                builder.AddAzureCosmosContainer(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "keyed-container":
+                builder.AddKeyedAzureCosmosContainer(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "database":
+                builder.AddAzureCosmosDatabase(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            case "keyed-database":
+                builder.AddKeyedAzureCosmosDatabase(connectionName, configureClientOptions: configureClientOptions);
+                break;
+            default:
+                throw new InvalidOperationException();
+        }
+
+        Assert.Equal(0, callbackCount);
+
+        using var host = builder.Build();
+
+        var client = registrationType switch
+        {
+            "client" => host.Services.GetRequiredService<CosmosClient>(),
+            "keyed-client" => host.Services.GetRequiredKeyedService<CosmosClient>(connectionName),
+            "container" => host.Services.GetRequiredService<Container>().Database.Client,
+            "keyed-container" => host.Services.GetRequiredKeyedService<Container>(connectionName).Database.Client,
+            "database" => host.Services.GetRequiredService<Database>().Client,
+            "keyed-database" => host.Services.GetRequiredKeyedService<Database>(connectionName).Client,
+            _ => throw new InvalidOperationException()
+        };
+
+        Assert.EndsWith($"/{applicationName}", client.ClientOptions.ApplicationName);
+        Assert.Equal(1, callbackCount);
     }
 
     [Fact]
@@ -254,7 +321,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
 
         PopulateConfiguration(builder.Configuration, connectionString);
 
-        builder.AddAzureCosmosClient("cosmos", configureClientOptions: options =>
+        builder.AddAzureCosmosClient("cosmos", configureClientOptions: (_, options) =>
         {
             options.LimitToEndpoint = false;
         });
@@ -279,7 +346,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         PopulateConfiguration(builder.Configuration, connectionString);
 
         builder.AddAzureCosmosClient("cosmos");
-        builder.AddAzureCosmosDatabase("cosmos", configureClientOptions: options =>
+        builder.AddAzureCosmosDatabase("cosmos", configureClientOptions: (_, options) =>
         {
             options.LimitToEndpoint = false;
         });
@@ -307,7 +374,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         PopulateConfiguration(builder.Configuration, connectionString);
 
         builder.AddAzureCosmosClient("cosmos");
-        builder.AddAzureCosmosContainer("cosmos", configureClientOptions: options =>
+        builder.AddAzureCosmosContainer("cosmos", configureClientOptions: (_, options) =>
         {
             options.LimitToEndpoint = false;
         });
@@ -335,7 +402,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         PopulateConfiguration(builder.Configuration, connectionString, serviceKey);
 
         builder.AddKeyedAzureCosmosClient(serviceKey);
-        builder.AddKeyedAzureCosmosDatabase(serviceKey, configureClientOptions: options =>
+        builder.AddKeyedAzureCosmosDatabase(serviceKey, configureClientOptions: (_, options) =>
         {
             options.LimitToEndpoint = false;
         });
@@ -364,7 +431,7 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
         PopulateConfiguration(builder.Configuration, connectionString, serviceKey);
 
         builder.AddKeyedAzureCosmosClient(serviceKey);
-        builder.AddKeyedAzureCosmosContainer(serviceKey, configureClientOptions: options =>
+        builder.AddKeyedAzureCosmosContainer(serviceKey, configureClientOptions: (_, options) =>
         {
             options.LimitToEndpoint = false;
         });
@@ -473,6 +540,39 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
     }
 
     [Fact]
+    public async Task AddAzureCosmosDatabase_CreatesOneSharedClientWhenContainersAreResolvedConcurrently()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        const string connectionName = "cosmos";
+        var connectionString = "AccountEndpoint=https://localhost:8081/;AccountKey=fake;Database=testdb;";
+        var callbackCount = 0;
+
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>($"ConnectionStrings:{connectionName}", connectionString),
+            new KeyValuePair<string, string?>("ConnectionStrings:container1", $"{connectionString}Container=container1;"),
+            new KeyValuePair<string, string?>("ConnectionStrings:container2", $"{connectionString}Container=container2;")
+        ]);
+
+        builder.AddAzureCosmosDatabase(connectionName, configureClientOptions: (_, _) =>
+        {
+            Interlocked.Increment(ref callbackCount);
+        })
+            .AddKeyedContainer("container1")
+            .AddKeyedContainer("container2");
+
+        using var host = builder.Build();
+
+        var containerTasks = Enumerable.Range(0, 20)
+            .Select(index => Task.Run(() => host.Services.GetRequiredKeyedService<Container>($"container{index % 2 + 1}")))
+            .ToArray();
+        var containers = await Task.WhenAll(containerTasks);
+        var client = containers[0].Database.Client;
+
+        Assert.All(containers, container => Assert.Same(client, container.Database.Client));
+        Assert.Equal(1, callbackCount);
+    }
+
+    [Fact]
     public void AddAzureCosmosDatabase_AddKeyedContainer_ThrowsWhenContainerNameMissing()
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -533,8 +633,10 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
             new KeyValuePair<string, string?>("ConnectionStrings:container1", $"{connectionString}Container={containerName};")
         ]);
 
-        builder.AddAzureCosmosDatabase("cosmos",
-            configureClientOptions: options => {
+        builder.AddAzureCosmosDatabase(
+            "cosmos",
+            configureClientOptions: (_, options) =>
+            {
                 options.ApplicationName = "TestApp";
                 options.LimitToEndpoint = false;
             })
