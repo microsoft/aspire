@@ -45,14 +45,20 @@ public partial class ConsoleLogsTests
             Assert.Single(viewer.Instance.LogEntries!.GetEntries(), l => l.RawContent == "startup output");
             Assert.Empty(cut.FindComponents<TerminalView>());
             Assert.Equal("console-logs-search", cut.FindComponent<FluentTextInput>().Instance.Name);
+            var expectedMenuItems = new List<string?>
+            {
+                Resources.ConsoleLogs.DownloadLogs,
+                viewer.Instance.ShowTimestamp ? Resources.ConsoleLogs.ConsoleLogsTimestampHide : Resources.ConsoleLogs.ConsoleLogsTimestampShow
+            };
+            if (viewer.Instance.ShowTimestamp)
+            {
+                // UTC timestamps option is only shown when timestamps are shown.
+                expectedMenuItems.Add(Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc);
+            }
+            expectedMenuItems.Add(viewer.Instance.NoWrapLogs ? Resources.ConsoleLogs.ConsoleLogsWrapLogs : Resources.ConsoleLogs.ConsoleLogsNoWrapLogs);
+
             Assert.Equal(
-                new[]
-                {
-                    Resources.ConsoleLogs.DownloadLogs,
-                    viewer.Instance.ShowTimestamp ? Resources.ConsoleLogs.ConsoleLogsTimestampHide : Resources.ConsoleLogs.ConsoleLogsTimestampShow,
-                    Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc,
-                    viewer.Instance.NoWrapLogs ? Resources.ConsoleLogs.ConsoleLogsWrapLogs : Resources.ConsoleLogs.ConsoleLogsNoWrapLogs
-                },
+                expectedMenuItems,
                 cut.Instance.LogsMenuItemsForTest.Where(i => !i.IsDivider).Select(i => i.Text));
         });
     }
