@@ -598,4 +598,76 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
             "resource");
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    [RequiresFeature(TestFeature.DevCert)]
+    public async Task SqlServerBecomesHealthyAfterDisablingTlsOnReusedVolume()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        string? volumeName = null;
+
+        try
+        {
+            using var builder1 = TestDistributedApplicationBuilder.Create(o => { }, testOutputHelper);
+
+            // Opting in to the developer certificate explicitly makes the test independent of whether that is
+            // also the ambient default on this machine, and lets the health check below validate it for real
+            // (a self-signed test certificate would never pass that check).
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+            var sqlserver1 = builder1.AddSqlServer("sqlserver1")
+                .WithHttpsDeveloperCertificate();
+#pragma warning restore ASPIRECERTIFICATES001
+
+#pragma warning disable CS0618 // Type or member is obsolete
+            var password = sqlserver1.Resource.PasswordParameter.Value;
+#pragma warning restore CS0618
+
+            // Use a deterministic volume name to prevent them from exhausting the machines if deletion fails
+            volumeName = VolumeNameGenerator.Generate(sqlserver1, nameof(SqlServerBecomesHealthyAfterDisablingTlsOnReusedVolume));
+
+            // if the volume already exists (because of a crashing previous run), delete it
+            DockerUtils.AttemptDeleteDockerVolume(volumeName, throwOnFailure: true);
+            sqlserver1.WithDataVolume(volumeName);
+
+            using (var app1 = builder1.Build())
+            {
+                await app1.StartAsync();
+
+                await app1.ResourceNotifications.WaitForResourceHealthyAsync(sqlserver1.Resource.Name, cts.Token);
+                Assert.True(sqlserver1.Resource.PrimaryEndpoint.TlsEnabled);
+
+                // Stops the container, or the Volume would still be in use
+                await app1.StopAsync();
+            }
+
+            using var builder2 = TestDistributedApplicationBuilder.Create(o => { }, testOutputHelper);
+            var passwordParameter2 = builder2.AddParameter("pwd", password);
+
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+            var sqlserver2 = builder2.AddSqlServer("sqlserver2", passwordParameter2)
+                .WithoutHttpsCertificate();
+#pragma warning restore ASPIRECERTIFICATES001
+
+            sqlserver2.WithDataVolume(volumeName);
+
+            using (var app2 = builder2.Build())
+            {
+                await app2.StartAsync();
+
+                // Before mssql.conf was always written deterministically, the stale TLS config
+                // left over from sqlserver1's run (forceencryption=1 pointing at certificate
+                // files that no longer exist) would prevent SQL Server from starting here.
+                await app2.ResourceNotifications.WaitForResourceHealthyAsync(sqlserver2.Resource.Name, cts.Token);
+
+                await app2.StopAsync();
+            }
+        }
+        finally
+        {
+            if (volumeName is not null)
+            {
+                DockerUtils.AttemptDeleteDockerVolume(volumeName);
+            }
+        }
+    }
 }
