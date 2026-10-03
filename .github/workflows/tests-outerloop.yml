@@ -2,7 +2,7 @@
 #
 # COPILOT INSTRUCTIONS:
 # - Keep the shared 'paths:' entries (specialized-test-runner.yml,
-#   run-tests.yml, build-cli-e2e-image.yml) in sync across
+#   run-tests.yml, build-cli-e2e-image.yml, and the non-blocking result verifier) in sync across
 #   tests-outerloop.yml and tests-quarantine.yml. Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
@@ -29,6 +29,8 @@ on:
       - '.github/workflows/specialized-test-runner.yml'
       - '.github/workflows/run-tests.yml'
       - '.github/workflows/build-cli-e2e-image.yml'
+      - '.github/workflows/filter-nonblocking-test-artifacts.sh'
+      - 'eng/scripts/verify-nonblocking-test-results.ps1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -81,6 +83,14 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/out"
           OUT="$RUNNER_TEMP/out/failed-tests.json"
+          # Project-level NonBlockingTestFailures keeps known test outcomes visible in
+          # their job summary without making the workflow red. If another job
+          # fails, exclude those non-gating artifacts so they cannot be reported
+          # as part of the gating failure issue.
+          if [ -d "$GITHUB_WORKSPACE/all-logs" ]; then
+            bash ./.github/workflows/filter-nonblocking-test-artifacts.sh "$GITHUB_WORKSPACE/all-logs"
+          fi
+
           # extractionFailed distinguishes "we could not read the results" from
           # "the run produced zero failed tests". The reporter classifies a
           # genuinely-red run with unknown results as a test failure (not infra),
@@ -114,4 +124,3 @@ jobs:
           script: |
             const reporter = require('./.github/workflows/report-specialized-test-failures.js');
             await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
-

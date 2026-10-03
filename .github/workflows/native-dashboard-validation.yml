@@ -37,16 +37,19 @@ jobs:
 
       - name: Extract and smoke test Native AOT Dashboard
         shell: pwsh
+        env:
+          ARTIFACTS_DIRECTORY: ${{ github.workspace }}/artifacts/native-dashboard
+          RID: ${{ inputs.rid }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $archive = @(Get-ChildItem -Path '${{ github.workspace }}/artifacts/native-dashboard' -Filter 'aspire-dashboard-${{ inputs.rid }}.zip' -File -Recurse)
+          $archive = @(Get-ChildItem -Path $env:ARTIFACTS_DIRECTORY -Filter "aspire-dashboard-$env:RID.zip" -File -Recurse)
           if ($archive.Count -ne 1) {
-            throw "Expected one Native AOT Dashboard archive for ${{ inputs.rid }}, found $($archive.Count): $($archive.FullName -join ', ')"
+            throw "Expected one Native AOT Dashboard archive for $env:RID, found $($archive.Count): $($archive.FullName -join ', ')"
           }
 
-          $extractDirectory = '${{ github.workspace }}/artifacts/native-dashboard/extracted'
+          $extractDirectory = Join-Path $env:ARTIFACTS_DIRECTORY 'extracted'
           New-Item -ItemType Directory -Path $extractDirectory | Out-Null
-          if ('${{ runner.os }}' -eq 'Windows') {
+          if ($env:RUNNER_OS -eq 'Windows') {
             Expand-Archive -LiteralPath $archive[0].FullName -DestinationPath $extractDirectory
             $dashboardPath = Join-Path $extractDirectory 'Aspire.Dashboard.exe'
           }
@@ -61,19 +64,40 @@ jobs:
           Add-Content -LiteralPath $env:GITHUB_ENV -Value "ASPIRE_NATIVE_DASHBOARD_PATH=$dashboardPath"
           ./eng/scripts/test-native-dashboard.ps1 -DashboardPath $dashboardPath
 
+      - name: Test Native AOT Dashboard
+        if: ${{ inputs.rid == 'win-x64' }}
+        shell: pwsh
+        env:
+          CONFIGURATION: ${{ inputs.configuration }}
+          NUGET_PACKAGES: ${{ github.workspace }}/.packages
+        run: |
+          & ./dotnet.cmd test `
+            --project tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj `
+            -c $env:CONFIGURATION `
+            --no-launch-profile `
+            /p:ContinuousIntegrationBuild=true `
+            /p:RunOuterloopTests=true `
+            -- `
+            --filter-method "*.NativeDashboard_*" `
+            --filter-not-trait "quarantined=true"
+
+          $testExitCode = $LASTEXITCODE
+          & .github/workflows/normalize-mtp-exit-code.ps1 -ExitCode $testExitCode
+
       - name: Test Native AOT Dashboard interactivity
         if: ${{ inputs.rid == 'win-x64' }}
         shell: pwsh
         env:
+          CONFIGURATION: ${{ inputs.configuration }}
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
         run: >
           ./dotnet.cmd test
-          --project tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj
-          -c ${{ inputs.configuration }}
+          --project tests/Aspire.Dashboard.Playwright.Tests/Aspire.Dashboard.Playwright.Tests.csproj
+          -c $env:CONFIGURATION
           --no-launch-profile
           /p:ContinuousIntegrationBuild=true
           /p:InstallBrowsersForPlaywright=true
           /p:RunOuterloopTests=true
           --
-          --filter-method "*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors"
+          --filter-method "*.NativeDashboard_*"
           --filter-not-trait "quarantined=true"

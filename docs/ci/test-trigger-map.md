@@ -421,13 +421,14 @@ carry it forward. Never silently regenerate it.
   the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
   `src` coverage and the convention backstop for non-MSBuild files.
 - **Independent workflow targets.** `deployment-e2e`,
-  `Aspire.Deployment.EndToEnd.Tests`, `Aspire.EndToEnd.Tests`, and
-  `Aspire.Oracle.EntityFrameworkCore.Tests` are not in the regular PR matrix
-  today; their rules give the *would-be* trigger paths. Their own schedules,
-  dispatches, or narrow PR workflow triggers decide whether they run. Comments
-  and job summaries list them separately from work the PR selector can actually
-  run. The API/ATS baseline regeneration workflows are independently scheduled
-  or dispatched and ignored as selector targets, as described in `ignore` above.
+  `Aspire.Dashboard.Playwright.Tests`, `Aspire.Deployment.EndToEnd.Tests`,
+  `Aspire.EndToEnd.Tests`, and `Aspire.Oracle.EntityFrameworkCore.Tests` are not
+  in the regular PR matrix today; their rules give the *would-be* trigger paths.
+  Their own schedules, dispatches, or narrow PR workflow triggers decide whether
+  they run. Comments and job summaries list them separately from work the PR
+  selector can actually run. The API/ATS baseline regeneration workflows are
+  independently scheduled or dispatched and ignored as selector targets, as
+  described in `ignore` above.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files

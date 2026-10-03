@@ -58,7 +58,7 @@ This invokes `eng/TestEnumerationRunsheetBuilder/TestEnumerationRunsheetBuilder.
 - Writes a `.tests-metadata.json` file to `artifacts/helix/` containing:
   - `projectName`, `shortName`, `testProjectPath`
   - `supportedOSes` array (e.g., `["windows", "linux", "macos"]`)
-  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
+  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `enablePlaywrightInstall`, `nonBlockingTestFailures`, `requiresJava`
   - `testSessionTimeout`, `testHangTimeout` values
   - `uncollectedTestsSessionTimeout`, `uncollectedTestsHangTimeout` values
   - `splitTests` flag
@@ -101,7 +101,8 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
         "requiresNugets": true,
         "requiresTestSdk": true,
         "requiresCliArchive": false,
-        "enablePlaywrightInstall": false
+        "enablePlaywrightInstall": false,
+        "nonBlockingTestFailures": false
       },
       "testSessionTimeout": "20m",
       "testHangTimeout": "10m",
@@ -116,7 +117,8 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
         "requiresNugets": false,
         "requiresTestSdk": false,
         "requiresCliArchive": false,
-        "enablePlaywrightInstall": false
+        "enablePlaywrightInstall": false,
+        "nonBlockingTestFailures": false
       },
       "testSessionTimeout": "30m",
       "extraTestArgs": "--filter-trait \"Partition=Docker\"",
@@ -308,6 +310,7 @@ All boolean test properties (such as `RequiresNugets`, `RequiresTestSdk`, `Requi
   <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
   <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
   <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
+  <CITestsProperty Include="nonBlockingTestFailures" MSBuildProp="NonBlockingTestFailures" Default="false" />
 </ItemGroup>
 ```
 
@@ -324,6 +327,19 @@ Each `CITestsProperty` item has three attributes:
 1. **MSBuild targets** (`TestEnumerationRunsheetBuilder.targets`, `SpecializedTestRunsheetBuilderBase.targets`) import this file and iterate `@(CITestsProperty)` to dynamically resolve property values and emit the `"properties"` JSON object — no hardcoded property names in the targets.
 2. **PowerShell scripts** (`build-test-matrix.ps1`) parse the `.props` XML at startup to build the defaults dictionary and copy properties generically — no per-property code blocks.
 3. **GitHub Actions workflows** (`run-tests.yml`) read properties from the opaque `properties` JSON string with bespoke `if:` conditions for each property that controls unique workflow behavior.
+
+`NonBlockingTestFailures` is a narrow opt-in for test projects whose results
+should remain visible without gating the workflow. Known test outcomes such as
+failed tests, session aborts, and test-host crashes are reported in the job
+summary and artifacts, while missing evidence, unknown exit codes, and runner
+or configuration failures still fail the job. A project-level opt-in also fails
+when zero tests execute. Specialized workflows that intentionally apply a trait
+filter across project/OS combinations can explicitly allow a valid zero-test
+result.
+
+The reusable test job reports success only after that classification succeeds,
+so aggregate `Final Results` jobs do not need a separate exclusion list.
+Infrastructure failures still propagate as failed dependencies.
 
 ### Adding a new boolean test property
 

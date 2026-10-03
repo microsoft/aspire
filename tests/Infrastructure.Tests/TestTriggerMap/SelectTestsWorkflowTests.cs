@@ -121,30 +121,6 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command);
     }
 
-    [Fact]
-    public void NativeDashboardInteractivityOptsIntoOuterloopTests()
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(NativeDashboardValidationWorkflowPath));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var validationJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("validate")];
-        var steps = (YamlSequenceNode)validationJob.Children[new YamlScalarNode("steps")];
-        var interactiveTest = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
-                    name.ToString() == "Test Native AOT Dashboard interactivity");
-        var command = interactiveTest.Children[new YamlScalarNode("run")].ToString();
-
-        Assert.Equal("${{ inputs.rid == 'win-x64' }}", interactiveTest.Children[new YamlScalarNode("if")].ToString());
-        Assert.Contains("/p:RunOuterloopTests=true --", command);
-        Assert.EndsWith(
-            "--filter-method \"*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors\" --filter-not-trait \"quarantined=true\"",
-            command.Trim());
-    }
-
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
     // updateComment for a re-run of the same commit) and collapses superseded comments with
     // minimizeComment -- it must never delete. This guard fails if deletion is introduced or the
@@ -260,9 +236,6 @@ public sealed class SelectTestsWorkflowTests
 
     private static string BuildCliNativeArchivesWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml");
-
-    private static string NativeDashboardValidationWorkflowPath
-        => Path.Combine(RepoRoot.Path, ".github", "workflows", "native-dashboard-validation.yml");
 
     private static string ExtractCommentSelectionJob()
     {

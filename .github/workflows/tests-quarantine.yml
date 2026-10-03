@@ -2,7 +2,7 @@
 #
 # COPILOT INSTRUCTIONS:
 # - Keep the shared 'paths:' entries (specialized-test-runner.yml,
-#   run-tests.yml, build-cli-e2e-image.yml) in sync across
+#   run-tests.yml, build-cli-e2e-image.yml, and the non-blocking result verifier) in sync across
 #   tests-outerloop.yml and tests-quarantine.yml. Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
@@ -30,6 +30,7 @@ on:
       - '.github/workflows/specialized-test-runner.yml'
       - '.github/workflows/run-tests.yml'
       - '.github/workflows/build-cli-e2e-image.yml'
+      - 'eng/scripts/verify-nonblocking-test-results.ps1'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,9 +46,12 @@ jobs:
       extraTestArgs: "--filter-trait quarantined=true"
       enablePlaywrightInstall: true
       ignoreTestFailures: true
+      allowZeroTests: true
 
-  # Quarantine passes ignoreTestFailures, so failing quarantined tests do NOT red
-  # the run (run-tests.yml swallows them and only checks that TRX were produced).
+  # Quarantine passes ignoreTestFailures, so known quarantined test outcomes do
+  # not red the run. Some project/OS lanes have no matching quarantined tests,
+  # so allowZeroTests accepts their valid zero-test TRX. The runner still
+  # validates exit-code and result evidence.
   # A failed quarantine run therefore means infrastructure broke — file/append a
   # single deduplicated 'automation-broken' issue. No test-failure issues are
   # filed here. PR-triggered runs are excluded.
@@ -79,4 +83,3 @@ jobs:
           script: |
             const reporter = require('./.github/workflows/report-specialized-test-failures.js');
             await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
-
