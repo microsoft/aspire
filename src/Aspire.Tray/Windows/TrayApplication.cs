@@ -323,6 +323,12 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
         }
         switch (message)
         {
+            case 0x120: // WM_MENUCHAR: owner-drawn menus require explicit character matching.
+                return MatchMenuCharacter(lParam, (char)(wParam & 0xFFFF));
+            case 0x2C: // WM_MEASUREITEM: native menu layout asks for our padded row sizes.
+                return MeasureMenuItem(lParam) ? 1 : 0;
+            case 0x2B: // WM_DRAWITEM: retain native menu navigation and paint only the rows.
+                return DrawMenuItem(lParam) ? 1 : 0;
             case NativeMethods.ReadyMessage:
                 lock (_lifecycleGate)
                 {
@@ -361,6 +367,7 @@ internal sealed unsafe partial class TrayApplication(TrayController controller, 
             case NativeMethods.WmSettingChange:
             case NativeMethods.WmSysColorChange:
             case NativeMethods.WmThemeChanged:
+                RefreshMenuPalette();
                 _dpiDirty = true;
                 RequestRefresh();
                 return 0;
