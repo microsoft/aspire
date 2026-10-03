@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\transport.go" LogicalName="Aspire.Hosting.CodeGeneration.Go.Resources.transport.go" />
+    <EmbeddedResource Include="Resources\transport_windows.go" LogicalName="Aspire.Hosting.CodeGeneration.Go.Resources.transport_windows.go" />
+    <EmbeddedResource Include="Resources\transport_unix.go" LogicalName="Aspire.Hosting.CodeGeneration.Go.Resources.transport_unix.go" />
     <EmbeddedResource Include="Resources\base.go" LogicalName="Aspire.Hosting.CodeGeneration.Go.Resources.base.go" />
   </ItemGroup>
 
