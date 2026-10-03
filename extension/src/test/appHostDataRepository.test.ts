@@ -3591,6 +3591,9 @@ suite('AppHostDataRepository', () => {
         let workspaceFoldersStub: sinon.SinonStub | undefined;
         let repository: AppHostDataRepository | undefined;
 
+        fs.mkdirSync(path.dirname(configuredAppHostPath), { recursive: true });
+        fs.writeFileSync(configuredAppHostPath, '');
+
         try {
             fs.writeFileSync(path.join(workspaceRoot, 'aspire.config.json'), JSON.stringify({
                 appHost: {
@@ -3671,6 +3674,7 @@ suite('AppHostDataRepository', () => {
             repository?.dispose();
             workspaceFoldersStub?.restore();
             removeDirectorySafely(workspaceRoot);
+            removeDirectorySafely(path.dirname(configuredAppHostPath));
         }
     });
 

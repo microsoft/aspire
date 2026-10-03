@@ -2435,6 +2435,7 @@ suite('AppHost discovery', () => {
                 const appHostProgramPath = path.join(tempDir, 'AppHost', 'Program.cs');
 
                 fs.mkdirSync(path.dirname(appHostProjectPath), { recursive: true });
+                fs.writeFileSync(appHostProjectPath, '');
                 fs.writeFileSync(configPath, JSON.stringify({ appHost: { path: 'AppHost/AppHost.csproj' } }));
                 findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
                     const pattern = typeof include === 'string' ? include : include.pattern;
@@ -2517,6 +2518,111 @@ suite('AppHost discovery', () => {
                         },
                         {
                             path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                            selected: true,
+                        },
+                    ]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                removeDirectorySafely(tempDir);
+            }
+        });
+        test('does not re-add configured AppHost path that no longer exists on disk', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const configPath = path.join(tempDir, 'aspire.config.json');
+                const realAppHostPath = path.join(tempDir, 'aspire-apphost.csproj');
+
+                fs.mkdirSync(tempDir, { recursive: true });
+                // Configured path is stale/mistyped and does not exist on disk.
+                fs.writeFileSync(configPath, JSON.stringify({ appHost: { path: 'aspire_apphost.csproj' } }));
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('aspire.config.json')
+                        ? [vscode.Uri.file(configPath)]
+                        : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    emitLsOutput(options, [
+                        {
+                            path: realAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    // Only the real, CLI-discovered AppHost should appear. The nonexistent
+                    // configured path must not be re-added as a phantom candidate (#20013).
+                    assert.deepStrictEqual(result, [
+                        {
+                            path: realAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                removeDirectorySafely(tempDir);
+            }
+        });
+
+        test('re-adds configured AppHost path when it exists but was not returned by the CLI', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const workspaceFsPath = vscode.Uri.file(tempDir).fsPath;
+                const configPath = path.join(tempDir, 'aspire.config.json');
+                const configuredAppHostPath = path.join(workspaceFsPath, 'AppHost', 'AppHost.csproj');
+                const otherAppHostPath = path.join(tempDir, 'Other', 'AppHost.csproj');
+
+                fs.mkdirSync(path.dirname(configuredAppHostPath), { recursive: true });
+                fs.writeFileSync(configuredAppHostPath, '');
+                fs.writeFileSync(configPath, JSON.stringify({ appHost: { path: 'AppHost/AppHost.csproj' } }));
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('aspire.config.json')
+                        ? [vscode.Uri.file(configPath)]
+                        : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    emitLsOutput(options, [
+                        {
+                            path: otherAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [
+                        {
+                            path: otherAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                        {
+                            path: configuredAppHostPath,
                             language: 'csharp',
                             status: 'buildable',
                             selected: true,
