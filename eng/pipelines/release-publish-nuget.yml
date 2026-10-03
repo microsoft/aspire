@@ -747,21 +747,22 @@ extends:
         dependsOn: PrepareArtifacts
         jobs:
           - job: ReleaseJob
-            displayName: 'Validate, Publish, and Promote'
-            timeoutInMinutes: 240
+            displayName: 'Validate and Publish NuGet Packages'
+            timeoutInMinutes: 90
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
               BarBuildId: ''
+              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             # templateContext type: releaseJob enables proper network access for external publishing
             # inputs.pipelineArtifact consumes artifacts from PrepareArtifacts stage (which have SBOM)
             templateContext:
               type: releaseJob
               isProduction: true
-              # ReleaseJob is the only job that performs ESRP-backed publish (1ES.PublishNuget@1,
-              # MicroBuild.Publish.yml for npm via DryRun=true gating). The auto-injected
+              # ReleaseJob performs the NuGet publish that gates the downstream fan-out.
+              # NpmPublishJob separately performs MicroBuild.Publish.yml for npm. The auto-injected
               # MicroBuildAuthorizePublishPlugin@0 task must therefore be able to authenticate
               # to the MicroBuildToolset feed. The dnceng collection (b55de4ed-4b5a-4215-a8e4-0a0a5f71e7d8)
               # hosts its own mirror at pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset,
@@ -776,18 +777,6 @@ extends:
                 - input: pipelineArtifact
                   artifactName: PackageArtifacts
                   targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
-                - input: pipelineArtifact
-                  artifactName: NpmRidPackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
-                - input: pipelineArtifact
-                  artifactName: NpmPointerPackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
-                - input: pipelineArtifact
-                  artifactName: NpmValidationSummary
-                  targetPath: '$(Pipeline.Workspace)/npm/validation-summary'
-                - input: pipelineArtifact
-                  artifactName: NpmSignatureArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/signatures'
             steps:
               # ===== VALIDATION =====
               # Note: No checkout - releaseJob doesn't allow it. All scripts are inlined.
@@ -927,6 +916,8 @@ extends:
 
                       Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective]$effectiveOwners"
                       Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective]$effectiveApprovers"
+                      Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective;isOutput=true]$effectiveOwners"
+                      Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective;isOutput=true]$effectiveApprovers"
                       Write-Host "npm ESRP owners and approvers were resolved and include the required release contacts."
                     }
                     # <<< END npm release alias helpers <<<
@@ -954,6 +945,19 @@ extends:
                   NPM_PUBLISH_OWNERS: '${{ parameters.NpmPublishOwners }}'
                   NPM_PUBLISH_APPROVERS: '${{ parameters.NpmPublishApprovers }}'
                   NPM_PUBLISH_REQUIRED_OWNERS: $(NPM_PUBLISH_REQUIRED_OWNERS)
+                name: validateParameters
+
+              - powershell: |
+                  $releaseVersion = "$(ReleaseVersionEffective)"
+                  if ([string]::IsNullOrWhiteSpace($releaseVersion) -or $releaseVersion -like '$(*)') {
+                    Write-Error "ReleaseVersionEffective was not set by PrepareArtifacts.PrepareJob."
+                    exit 1
+                  }
+
+                  Write-Host "ReleaseVersionEffective: $releaseVersion"
+                  Write-Host "##vso[task.setvariable variable=releaseVersionEffective;isOutput=true]$releaseVersion"
+                name: deriveReleaseVersion
+                displayName: 'Export ReleaseVersion for downstream jobs'
 
               # ===== EXTRACT BAR BUILD ID =====
               - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
@@ -982,6 +986,7 @@ extends:
                         $barBuildId = $Matches[1]
                         Write-Host "✓ Extracted BAR Build ID: $barBuildId"
                         Write-Host "##vso[task.setvariable variable=BarBuildId]$barBuildId"
+                        Write-Host "##vso[task.setvariable variable=BarBuildId;isOutput=true]$barBuildId"
                       } else {
                         Write-Error "Could not find BAR ID tag in build $buildId. Tags found: $($response.value -join ', ')"
                         exit 1
@@ -990,6 +995,7 @@ extends:
                       Write-Error "Failed to fetch build tags: $_"
                       exit 1
                     }
+                  name: extractBarBuildId
                   displayName: 'Extract BAR Build ID'
                   env:
                     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
@@ -1116,7 +1122,137 @@ extends:
                     Write-Host "=== Skipping NuGet Publishing (SkipNuGetPublish=true) ==="
                   displayName: 'Skip NuGet Publish (flagged)'
 
-              # ===== PUBLISH TO npm =====
+              # ===== SUMMARY =====
+              - powershell: |
+                  Write-Host ""
+                  Write-Host "╔═══════════════════════════════════════════════════════════════╗"
+                  Write-Host "║                    RELEASE SUMMARY                            ║"
+                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
+                  Write-Host "║ Source Build:   $(resources.pipeline.aspire-build.runName)"
+                  Write-Host "║ Source Build ID: $(resources.pipeline.aspire-build.runID)"
+                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
+                    Write-Host "║ BAR Build ID:   (SKIPPED)"
+                  } else {
+                    Write-Host "║ BAR Build ID:   $(BarBuildId)"
+                  }
+                  Write-Host "║ GA Channel:     ${{ parameters.GaChannelName }}"
+                  Write-Host "║ Prerelease:     ${{ parameters.IsPrerelease }}"
+                  Write-Host "║ Dry Run:        ${{ parameters.DryRun }}"
+                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
+                  Write-Host "║ NuGet Publish:  ${{ parameters.SkipNuGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipNuGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (EXECUTED)"
+                  }
+                  Write-Host "║ npm Publish:    RID skip=${{ parameters.SkipNpmRidPublish }}, pointer skip=${{ parameters.SkipNpmPointerPublish }}" -NoNewline
+                  if ("${{ parameters.SkipNpmRidPublish }}" -eq "true" -and "${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (DRY RUN)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (BLOCKED - prerelease requires non-latest npm dist-tag support)"
+                  } elseif ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
+                    Write-Host " (runs in parallel after NuGet; pointer publish skipped)"
+                  } elseif ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
+                    Write-Host " (runs in parallel after NuGet; RID publish skipped)"
+                  } else {
+                    Write-Host " (runs in parallel after NuGet)"
+                  }
+                  Write-Host "║ npm RID Skip:   ${{ parameters.SkipNpmRidPublish }}"
+                  Write-Host "║ npm Ptr Skip:   ${{ parameters.SkipNpmPointerPublish }}"
+                  Write-Host "║ Channel Promo:  ${{ parameters.SkipChannelPromotion }}" -NoNewline
+                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (EXECUTED)"
+                  }
+                  Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } else {
+                    Write-Host " (runs after channel promotion)"
+                  }
+                  Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
+                  if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (runs in parallel after NuGet; dry_run=true forwarded)"
+                  } else {
+                    Write-Host " (runs in parallel after NuGet)"
+                  }
+                  Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
+                  if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (verify only; no upload in dry-run)"
+                  } else {
+                    Write-Host " (uploaded to draft release after GitHub Tasks job)"
+                  }
+                  Write-Host "║ Nix Flake:      ${{ parameters.SkipNixPackageUpdate }}" -NoNewline
+                  if ("${{ parameters.SkipNixPackageUpdate }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (dry-run dispatch after baseline branch creation)"
+                  } else {
+                    Write-Host " (runs after baseline branch creation; independent of asset upload)"
+                  }
+                  Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
+                  if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    if ("${{ parameters.DryRun }}" -eq "true") {
+                      Write-Host " (validated in dry-run)"
+                    } else {
+                      Write-Host " (runs in parallel after NuGet)"
+                    }
+                  }
+                  Write-Host "╚═══════════════════════════════════════════════════════════════╝"
+                  Write-Host ""
+                displayName: 'Print Summary'
+                condition: always()
+
+          # ===== npm PUBLISHING =====
+          - job: NpmPublishJob
+            displayName: 'Publish npm Packages'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                or(eq('${{ parameters.SkipNpmRidPublish }}', 'false'), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'))
+              )
+            timeoutInMinutes: 120
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              NpmPublishOwnersEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishOwnersEffective'] ]
+              NpmPublishApproversEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishApproversEffective'] ]
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              mb:
+                publish:
+                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: NpmRidPackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
+                - input: pipelineArtifact
+                  artifactName: NpmPointerPackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
+                - input: pipelineArtifact
+                  artifactName: NpmValidationSummary
+                  targetPath: '$(Pipeline.Workspace)/npm/validation-summary'
+                - input: pipelineArtifact
+                  artifactName: NpmSignatureArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/signatures'
+            steps:
               - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - task: NodeTool@0
                   displayName: 'Install Node.js for npm Validation'
@@ -1988,7 +2124,32 @@ extends:
                     Write-Host "=== Skipping npm Publishing (SkipNpmRidPublish=true and SkipNpmPointerPublish=true) ==="
                   displayName: 'Skip npm Packages (flagged)'
 
-              # ===== PROMOTE TO CHANNEL =====
+
+          # ===== CHANNEL PROMOTION =====
+          # This job wrapper lets darc promotion run in parallel with npm and GitHub work after
+          # NuGet completes. The steps below are the existing promotion steps moved out of ReleaseJob.
+          - job: ChannelPromotionJob
+            displayName: 'Promote Build to Channel'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipChannelPromotion }}', 'false')
+              )
+            timeoutInMinutes: 45
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              BarBuildId: $[ dependencies.ReleaseJob.outputs['extractBarBuildId.BarBuildId'] ]
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              mb:
+                publish:
+                  enabled: false
+            steps:
               - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
                 - powershell: |
                     Write-Host "Installing darc CLI..."
@@ -2054,99 +2215,6 @@ extends:
                   env:
                     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
-              # ===== SUMMARY =====
-              - powershell: |
-                  Write-Host ""
-                  Write-Host "╔═══════════════════════════════════════════════════════════════╗"
-                  Write-Host "║                    RELEASE SUMMARY                            ║"
-                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
-                  Write-Host "║ Source Build:   $(resources.pipeline.aspire-build.runName)"
-                  Write-Host "║ Source Build ID: $(resources.pipeline.aspire-build.runID)"
-                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
-                    Write-Host "║ BAR Build ID:   (SKIPPED)"
-                  } else {
-                    Write-Host "║ BAR Build ID:   $(BarBuildId)"
-                  }
-                  Write-Host "║ GA Channel:     ${{ parameters.GaChannelName }}"
-                  Write-Host "║ Prerelease:     ${{ parameters.IsPrerelease }}"
-                  Write-Host "║ Dry Run:        ${{ parameters.DryRun }}"
-                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
-                  Write-Host "║ NuGet Publish:  ${{ parameters.SkipNuGetPublish }}" -NoNewline
-                  if ("${{ parameters.SkipNuGetPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } else {
-                    Write-Host " (EXECUTED)"
-                  }
-                  Write-Host "║ npm Publish:    RID skip=${{ parameters.SkipNpmRidPublish }}, pointer skip=${{ parameters.SkipNpmPointerPublish }}" -NoNewline
-                  if ("${{ parameters.SkipNpmRidPublish }}" -eq "true" -and "${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (DRY RUN)"
-                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
-                    Write-Host " (BLOCKED - prerelease requires non-latest npm dist-tag support)"
-                  } elseif ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
-                    Write-Host " (PARTIAL - pointer publish skipped; registry smoke still ran)"
-                  } elseif ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
-                    Write-Host " (PARTIAL - RID publish skipped; pointer publish still ran)"
-                  } else {
-                    Write-Host " (EXECUTED)"
-                  }
-                  Write-Host "║ npm RID Skip:   ${{ parameters.SkipNpmRidPublish }}"
-                  Write-Host "║ npm Ptr Skip:   ${{ parameters.SkipNpmPointerPublish }}"
-                  Write-Host "║ Channel Promo:  ${{ parameters.SkipChannelPromotion }}" -NoNewline
-                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } else {
-                    Write-Host " (EXECUTED)"
-                  }
-                  Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
-                  if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
-                    Write-Host " (SKIPPED - prerelease)"
-                  } else {
-                    Write-Host " (runs in parallel after this job)"
-                  }
-                  Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
-                  if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (dispatched after Release stage; dry_run=true forwarded)"
-                  } else {
-                    Write-Host " (dispatched after Release stage)"
-                  }
-                  Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
-                  if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (verify only; no upload in dry-run)"
-                  } else {
-                    Write-Host " (uploaded to draft release after GitHub Tasks job)"
-                  }
-                  Write-Host "║ Nix Flake:      ${{ parameters.SkipNixPackageUpdate }}" -NoNewline
-                  if ("${{ parameters.SkipNixPackageUpdate }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
-                    Write-Host " (SKIPPED - prerelease)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (dry-run dispatch after Release Assets job)"
-                  } else {
-                    Write-Host " (updates baseline PR after Release Assets job)"
-                  }
-                  Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
-                  if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } else {
-                    if ("${{ parameters.DryRun }}" -eq "true") {
-                      Write-Host " (validated in dry-run)"
-                    } else {
-                      Write-Host " (publish runs after this job)"
-                    }
-                  }
-                  Write-Host "╚═══════════════════════════════════════════════════════════════╝"
-                  Write-Host ""
-                displayName: 'Print Summary'
-                condition: always()
 
           # ===== VS CODE EXTENSION PUBLISHING =====
           - job: VSCodeExtensionJob
@@ -2315,10 +2383,13 @@ extends:
           # ===== WINGET PUBLISHING =====
           - job: WinGetJob
             displayName: 'Submit WinGet Release Manifests'
-            dependsOn: ReleaseJob
+            dependsOn:
+              - ReleaseJob
+              - ChannelPromotionJob
             condition: |
               and(
                 in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                in(dependencies.ChannelPromotionJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
                 eq('${{ parameters.SkipWinGetPublish }}', 'false'),
                 eq('${{ parameters.IsPrerelease }}', 'false')
               )
@@ -2347,93 +2418,27 @@ extends:
                   packageIdentifier: Microsoft.Aspire
                   dryRun: ${{ parameters.DryRun }}
 
-      # ===== STAGE 3: GITHUB TASKS =====
-      # Three responsibilities, all running as (or against) the aspire-repo-bot
-      # GitHub App:
-      #
-      #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
-      #      GitHub Actions workflow (tag, DRAFT GitHub Release, merge-back PR,
-      #      baseline PR) and polls the run to completion. Fails the pipeline
-      #      if the workflow doesn't succeed.
-      #
-      #   2. PublishReleaseAssetsJob — downloads aspire-cli-* archives from
-      #      the signed source build's BlobArtifacts, verifies their SHA512s,
-      #      and uploads them as assets on the draft GitHub release that the
-      #      dispatch job just created. Asset upload against drafts is
-      #      supported by the Releases REST API.
-      #
-      #   3. UpdateNixPackageJob — dispatches the update-nix-cli-flake
-      #      GitHub Actions workflow. It reads the aspire-cli-*.tar.gz.sha512
-      #      checksums from the signed source build's BlobArtifacts and passes
-      #      them to the workflow as inputs, so the manifest is built from the
-      #      build (not the draft release, whose assets aren't publicly
-      #      downloadable). The workflow commits eng/nix/versions.json to the
-      #      update-baseline-<version> branch and opens the PR from that branch
-      #      (release-github-tasks.yml created only the branch via
-      #      defer_baseline_pr=true; PR creation is handled here).
-      #
-      # After these jobs succeed the release is a fully-prepared DRAFT — the
-      # release manager publishes it manually as a final step (see
-      # docs/release-process.md "Publish the draft release"). The draft-first
-      # flow is required for compatibility with GitHub's immutable releases
-      # (https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases):
-      # publishing the release locks assets + tag, so every mutation must
-      # happen before publish.
-      #
-      # Homebrew cask validation against the live GitHub release used to
-      # run as a fourth job in this stage. It now lives in
-      # .github/workflows/homebrew-validate-release.yml and runs on the
-      # `release: [published]` event, i.e. only once the release manager
-      # publishes the draft and the asset URLs become public. See that
-      # workflow for details.
-      #
-      # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets /
-      # SkipNixPackageUpdate) so partial-failure re-runs can recover any piece
-      # independently. Skipping all three skips the stage entirely.
-      #
-      # DryRun behavior: this stage still runs when DryRun=true. DryRun is
-      # propagated to the GH workflow as dry_run=true (keeps it from
-      # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). The Nix workflow is
-      # dispatched with dry_run=true and intentionally does not read release
-      # assets in that mode because the AzDO dry-run path does not create/upload
-      # a live GitHub release.
-      - stage: GitHubTasks
-        displayName: 'Dispatch GitHub Release Tasks'
-        # PrepareArtifacts is listed explicitly (in addition to Release) so the
-        # jobs in this stage can resolve
-        # stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'].
-        # AzDO only exposes stageDependencies for stages named directly in dependsOn —
-        # the relationship is NOT transitive through Release. Without this, the
-        # ReleaseVersionEffective variable silently evaluates to empty and the GitHub
-        # workflow dispatch fails with HTTP 422 "Required input 'release_version' not provided".
-        dependsOn:
-          - Release
-          - PrepareArtifacts
-        condition: |
-          and(
-            in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
-            or(
-              eq('${{ parameters.SkipGitHubTasks }}', 'false'),
-              eq('${{ parameters.SkipReleaseAssets }}', 'false'),
-              and(
-                eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
-                eq('${{ parameters.IsPrerelease }}', 'false')
-              )
-            )
-          )
-        jobs:
+          # ===== GITHUB TASKS =====
+          # These jobs run after ReleaseJob's NuGet barrier, in parallel with npm
+          # publishing, channel promotion, and VS Code publishing. Dispatch creates
+          # the tag/draft release/baseline branch; asset upload and Nix then fan out
+          # from that dispatch so Nix does not wait for draft asset upload.
           - job: DispatchGitHubTasksJob
             displayName: 'Dispatch and Wait for release-github-tasks workflow'
-            condition: eq('${{ parameters.SkipGitHubTasks }}', 'false')
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipGitHubTasks }}', 'false')
+              )
             timeoutInMinutes: 90
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
-              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              # Pulled from the deriveReleaseVersion step in ReleaseJob.
+              ReleaseVersionEffective: $[ dependencies.ReleaseJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               # No ESRP publish in this job (dispatches a GitHub Actions workflow via GH App JWT
               # and polls for completion). Skip the auto-injected publish auth task.
@@ -2525,9 +2530,12 @@ extends:
           # when its sibling is skipped.
           - job: PublishReleaseAssetsJob
             displayName: 'Upload CLI Assets to GitHub Release'
-            dependsOn: DispatchGitHubTasksJob
+            dependsOn:
+              - ReleaseJob
+              - DispatchGitHubTasksJob
             condition: |
               and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
                 eq('${{ parameters.SkipReleaseAssets }}', 'false'),
                 in(dependencies.DispatchGitHubTasksJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
               )
@@ -2537,10 +2545,10 @@ extends:
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Pulled from the deriveReleaseVersion step in ReleaseJob.
               # Mapped here independently of DispatchGitHubTasksJob so this job still gets the
               # value when SkipGitHubTasks=true causes its sibling to be skipped.
-              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              ReleaseVersionEffective: $[ dependencies.ReleaseJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               # No ESRP publish in this job (gh CLI upload to GitHub Release via App-token auth).
               # Skip the auto-injected publish auth task.
@@ -2658,18 +2666,22 @@ extends:
           # required for immutable releases. The updater commits
           # eng/nix/versions.json to the update-baseline-<version> branch created
           # by release-github-tasks.yml (which deferred PR creation via
-          # defer_baseline_pr=true) and opens the PR from that branch. dependsOn
-          # PublishReleaseAssetsJob is kept for ordering (branch creation +
-          # single release upload), and accepting 'Skipped' supports
-          # partial-failure re-runs where SkipReleaseAssets=true is used.
+          # defer_baseline_pr=true) and opens the PR from that branch.
+          # DispatchGitHubTasksJob is kept for ordering because it creates the
+          # baseline branch. Nix does not wait for release asset upload; accepting
+          # 'Skipped' supports partial-failure re-runs where SkipGitHubTasks=true
+          # is used after the branch already exists.
           - job: UpdateNixPackageJob
             displayName: 'Update baseline PR with Nix flake manifest'
-            dependsOn: PublishReleaseAssetsJob
+            dependsOn:
+              - ReleaseJob
+              - DispatchGitHubTasksJob
             condition: |
               and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
                 eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
                 eq('${{ parameters.IsPrerelease }}', 'false'),
-                in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+                in(dependencies.DispatchGitHubTasksJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
               )
             timeoutInMinutes: 45
             pool:
@@ -2677,10 +2689,11 @@ extends:
               image: windows.vs2026preview.scout.amd64
               os: windows
             variables:
-              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Pulled from the deriveReleaseVersion step in ReleaseJob.
               # Mapped here independently of sibling jobs so this job still gets the value when
-              # SkipGitHubTasks/SkipReleaseAssets cause those siblings to be skipped.
-              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+              # SkipGitHubTasks=true skips the workflow dispatch but SkipReleaseAssets=false still
+              # uploads CLI assets to an already-created draft release.
+              ReleaseVersionEffective: $[ dependencies.ReleaseJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
             templateContext:
               # No ESRP publish in this job (dispatches a GitHub Actions workflow via GH App JWT
               # and polls for completion). Skip the auto-injected publish auth task.

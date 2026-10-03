@@ -137,6 +137,8 @@ function Invoke-NpmReleaseAliasValidation(
 
   Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective]$effectiveOwners"
   Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective]$effectiveApprovers"
+  Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective;isOutput=true]$effectiveOwners"
+  Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective;isOutput=true]$effectiveApprovers"
   Write-Host "npm ESRP owners and approvers were resolved and include the required release contacts."
 }
 # <<< END npm release alias helpers <<<
