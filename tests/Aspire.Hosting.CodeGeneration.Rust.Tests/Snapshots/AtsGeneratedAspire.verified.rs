@@ -1554,6 +1554,128 @@ impl TestResourceContext {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext
+pub struct TestReturnValueContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestReturnValueContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestReturnValueContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Invokes the GetNullableString method
+    pub fn get_nullable_string(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableStringTaskAsync method
+    pub fn get_nullable_string_task_async(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableStringValueTaskAsync method
+    pub fn get_nullable_string_value_task_async(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetString method
+    pub fn get_string(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetStringTaskAsync method
+    pub fn get_string_task_async(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetStringValueTaskAsync method
+    pub fn get_string_value_task_async(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableInt method
+    pub fn get_nullable_int(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableIntTaskAsync method
+    pub fn get_nullable_int_task_async(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetNullableIntValueTaskAsync method
+    pub fn get_nullable_int_value_task_async(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetInt method
+    pub fn get_int(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetIntTaskAsync method
+    pub fn get_int_task_async(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Invokes the GetIntValueTaskAsync method
+    pub fn get_int_value_task_async(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+}
+
 /// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource
 pub struct TestVaultResource {
     handle: Handle,

@@ -48,7 +48,7 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
 # Verify appsettings.json through the generated SDK before adding Redis.
 echo "Configuring apphost.rs with appsettings validation and Redis..."
 if [ -f "apphost.rs" ] && grep -q "builder.build()" apphost.rs; then
-    sed -i '/builder.build()/i\    let appsettings_value = builder.get_configuration()?.get_config_value("PolyglotTest:Value")?;\n    if appsettings_value != "from-appsettings" {\n        return Err(format!("Expected appsettings.json value, got \\"{appsettings_value}\\"").into());\n    }\n\n    // Add Redis cache resource\n    builder.add_redis("cache", None, None)?.with_image_registry("netaspireci.azurecr.io")?;' apphost.rs
+    sed -i '/builder.build()/i\    let appsettings_value = builder.get_configuration()?.get_config_value("PolyglotTest:Value")?;\n    if appsettings_value.as_deref() != Some("from-appsettings") {\n        return Err(format!("Expected appsettings.json value, got {appsettings_value:?}").into());\n    }\n    let missing_value = builder.get_configuration()?.get_config_value("PolyglotTest:Missing")?;\n    if missing_value.is_some() {\n        return Err(format!("Expected missing configuration key to return None, got {missing_value:?}").into());\n    }\n\n    // Add Redis cache resource\n    builder.add_redis("cache", None, None)?.with_image_registry("netaspireci.azurecr.io")?;' apphost.rs
     echo "✅ appsettings validation and Redis configuration added to apphost.rs"
 fi
 
