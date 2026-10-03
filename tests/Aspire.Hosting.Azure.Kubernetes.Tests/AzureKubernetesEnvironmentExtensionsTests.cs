@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is evaluation-only
+#pragma warning disable ASPIREPIPELINES003
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -17,6 +18,34 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnassociatedImageAdoptsEffectiveAksRegistry(bool overrideRegistry)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var image = builder.AddContainerImage("tools", "busybox");
+        var registry = builder.AddAzureContainerRegistry("selected");
+        var environment = builder.AddAzureKubernetesEnvironment("aks");
+        var generated = Assert.IsType<AzureContainerRegistryResource>(
+            Assert.Single(environment.Resource.Annotations.OfType<ContainerRegistryReferenceAnnotation>()).Registry);
+        if (overrideRegistry)
+        {
+            environment.WithContainerRegistry(registry);
+        }
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var selected = overrideRegistry ? registry.Resource : generated;
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal([selected.Name], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Same(selected, image.GetImageReference(builder.CreateResourceBuilder(selected)).Registry);
+        Assert.Same(selected, Assert.Single(environment.Resource.Annotations.OfType<ContainerImageRegistryTargetAnnotation>()).Registry);
+        Assert.Equal(!overrideRegistry, app.Services.GetRequiredService<DistributedApplicationModel>().Resources.Contains(generated));
+    }
+
     [Fact]
     public async Task AddAzureKubernetesEnvironment_BasicConfiguration()
     {

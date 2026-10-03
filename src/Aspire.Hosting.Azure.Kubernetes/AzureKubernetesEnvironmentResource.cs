@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 
 using System.Text.Json.Nodes;
@@ -35,6 +36,11 @@ public partial class AzureKubernetesEnvironmentResource :
         Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
+        Annotations.Add(new ContainerImageRegistryTargetAnnotation(() =>
+            this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registry)
+                ? registry.Registry
+                : DefaultContainerRegistry));
+
         // Add pipeline step annotation to register per-environment AKS steps:
         //   - prepare-aks-{name}: applies node-pool/workload-identity annotations to compute
         //     resources targeted at this AKS env. Runs before BeforeStart so the inner

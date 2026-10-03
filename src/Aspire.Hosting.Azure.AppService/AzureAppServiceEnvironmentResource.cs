@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREPROJECTS001
 
@@ -46,6 +47,8 @@ public class AzureAppServiceEnvironmentResource :
     public AzureAppServiceEnvironmentResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
+        Annotations.Add(new ContainerImageRegistryTargetAnnotation(GetContainerRegistry));
+
         // Add pipeline step annotation to create steps and expand deployment target steps
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
         {

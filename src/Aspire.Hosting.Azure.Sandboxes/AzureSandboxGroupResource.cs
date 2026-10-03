@@ -37,6 +37,8 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     public AzureSandboxGroupResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
+        Annotations.Add(new ContainerImageRegistryTargetAnnotation(GetContainerRegistry));
+
         Annotations.Add(new PipelineStepAnnotation(async factoryContext =>
         {
             var model = factoryContext.PipelineContext.Model;

@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
+#pragma warning disable ASPIRECOMPUTE003
 
 using System.Globalization;
 using System.Net;
@@ -28,6 +29,32 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureSandboxesTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnassociatedImageAdoptsEffectiveSandboxRegistry(bool overrideRegistry)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var image = builder.AddContainerImage("tools", "busybox");
+        var registry = builder.AddAzureContainerRegistry("selected");
+        var environment = builder.AddAzureSandboxGroup("env");
+        var generated = Assert.IsType<AzureContainerRegistryResource>(environment.Resource.ContainerRegistry);
+        if (overrideRegistry)
+        {
+            environment.WithContainerRegistry(registry);
+        }
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var selected = overrideRegistry ? registry.Resource : generated;
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal([selected.Name], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Same(selected, image.GetImageReference(builder.CreateResourceBuilder(selected)).Registry);
+        Assert.Same(selected, Assert.Single(environment.Resource.Annotations.OfType<ContainerImageRegistryTargetAnnotation>()).Registry);
+        Assert.Equal(!overrideRegistry, app.Services.GetRequiredService<DistributedApplicationModel>().Resources.Contains(generated));
+    }
+
     [Fact]
     public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
     {

@@ -1,0 +1,5 @@
+﻿{
+  "type": "containerimage.v0",
+  "source": "docker.io/library/busybox:latest",
+  "publications": {}
+}

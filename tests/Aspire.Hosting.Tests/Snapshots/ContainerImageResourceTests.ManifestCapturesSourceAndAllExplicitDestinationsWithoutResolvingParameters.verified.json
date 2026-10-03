@@ -1,0 +1,53 @@
+﻿{
+  "resources": {
+    "tools": {
+      "type": "containerimage.v0",
+      "source": "docker.io/library/busybox:v1@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "publications": {
+        "first": {
+          "registry": "first",
+          "image": "{endpoint.value}/{repository.value}/tools:v1"
+        },
+        "second": {
+          "registry": "second",
+          "image": "second.example.com/team/tools:release"
+        }
+      }
+    },
+    "endpoint": {
+      "type": "parameter.v0",
+      "value": "{endpoint.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "repository": {
+      "type": "parameter.v0",
+      "value": "{repository.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "first": {
+      "type": "containerregistry.v0",
+      "endpoint": "{endpoint.value}",
+      "repository": "{repository.value}"
+    },
+    "second": {
+      "type": "containerregistry.v0",
+      "endpoint": "second.example.com",
+      "repository": "ignored-namespace"
+    },
+    "consumer": {
+      "type": "container.v0",
+      "image": "busybox:latest",
+      "env": {
+        "TOOLS_IMAGE": "{tools.publications.first.image}"
+      }
+    }
+  }
+}
