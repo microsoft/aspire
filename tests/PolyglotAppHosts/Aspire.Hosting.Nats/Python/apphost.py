@@ -32,4 +32,10 @@ with create_builder() as builder:
     _uri = nats.uri_expression
     _user_name = nats.user_name_reference
     _cstr = nats.connection_string_expression
+    cluster_member_1 = builder.add_nats("cluster-member-1").with_jet_stream()
+    cluster_member_2 = builder.add_nats("cluster-member-2").with_jet_stream()
+    cluster_member_3 = builder.add_nats("cluster-member-3").with_jet_stream()
+    cluster = builder.add_nats_cluster("nats-cluster")
+    cluster.with_member(cluster_member_1).with_member(cluster_member_2).with_member(cluster_member_3)
+    _cluster_cstr = cluster.connection_string_expression
     builder.run()
