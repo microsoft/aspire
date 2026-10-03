@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
@@ -34,7 +35,9 @@ internal sealed class EnvFile
 
         string? currentComment = null;
 
-        foreach (var line in File.ReadAllLines(path))
+        var content = File.ReadAllText(path);
+        var position = 0;
+        while (ReadLine(content, ref position, out var lineEnding) is { } line)
         {
             var trimmed = line.TrimStart();
             if (trimmed.StartsWith('#'))
@@ -44,6 +47,37 @@ internal sealed class EnvFile
             }
             else if (TryParseKeyValue(line, out var key, out var value))
             {
+                var trimmedValue = value.AsSpan().TrimStart();
+                if (!trimmedValue.IsEmpty && trimmedValue[0] is '\'' or '"')
+                {
+                    var quote = trimmedValue[0];
+                    if (!ContainsClosingQuote(trimmedValue[1..], quote))
+                    {
+                        // Compose accepts values such as BANNER='hello\nworld'. Keep the raw
+                        // quoted text, including blank lines, '#' and '=', so rewriting does
+                        // not interpret value content as comments or additional entries.
+                        // https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/#env-file-syntax
+                        var multilineValue = new StringBuilder(value);
+                        while (true)
+                        {
+                            multilineValue.Append(lineEnding);
+                            var continuation = ReadLine(content, ref position, out lineEnding);
+                            if (continuation is null)
+                            {
+                                throw new FormatException($"Unterminated quoted value for environment variable '{key}'.");
+                            }
+
+                            multilineValue.Append(continuation);
+                            if (ContainsClosingQuote(continuation, quote))
+                            {
+                                break;
+                            }
+                        }
+
+                        value = multilineValue.ToString();
+                    }
+                }
+
                 envFile.Entries[key] = new EnvEntry(key, value, currentComment);
                 currentComment = null; // Reset comment after associating it with a key
             }
@@ -82,6 +116,51 @@ internal sealed class EnvFile
             }
         }
         return false;
+    }
+
+    private static bool ContainsClosingQuote(ReadOnlySpan<char> value, char quote)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (value[i] == '\\')
+            {
+                // A backslash escapes the next character, including a matching quote
+                // or another backslash. An escaped quote cannot end the value.
+                i++;
+            }
+            else if (value[i] == quote)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? ReadLine(string content, ref int position, out string lineEnding)
+    {
+        lineEnding = string.Empty;
+        if (position >= content.Length)
+        {
+            return null;
+        }
+
+        var start = position;
+        var relativeEnd = content.AsSpan(start).IndexOfAny('\r', '\n');
+        if (relativeEnd < 0)
+        {
+            position = content.Length;
+            return content[start..];
+        }
+
+        var end = start + relativeEnd;
+        var newlineLength = content[end] == '\r' && end + 1 < content.Length && content[end + 1] == '\n' ? 2 : 1;
+        position = end + newlineLength;
+        // Preserve the original separator inside quoted values. Compose treats a
+        // carriage return as value content, so using Environment.NewLine can change it.
+        lineEnding = content[end..position];
+
+        return content[start..end];
     }
 
     public void Save()
