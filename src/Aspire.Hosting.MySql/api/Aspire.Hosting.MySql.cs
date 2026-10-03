@@ -40,6 +40,9 @@ namespace Aspire.Hosting
         [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithPhpMyAdmin<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MySql.PhpMyAdminContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MySqlServerResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.MySqlServerResource> builder) { throw null; }
     }
 }
 
@@ -94,5 +97,7 @@ namespace Aspire.Hosting.MySql
     public sealed partial class PhpMyAdminContainerResource : ApplicationModel.ContainerResource
     {
         public PhpMyAdminContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
     }
 }
