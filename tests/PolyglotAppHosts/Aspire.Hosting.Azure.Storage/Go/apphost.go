@@ -38,6 +38,8 @@ func main() {
 	storage.AddQueues("queues")
 	storage.AddQueue("orders")
 	storage.AddBlobContainer("images")
+	files := storage.AddFiles("files")
+	files.AddFileShare("media")
 
 	if storage.Err() != nil {
 		log.Fatalf(aspire.FormatError(storage.Err()))

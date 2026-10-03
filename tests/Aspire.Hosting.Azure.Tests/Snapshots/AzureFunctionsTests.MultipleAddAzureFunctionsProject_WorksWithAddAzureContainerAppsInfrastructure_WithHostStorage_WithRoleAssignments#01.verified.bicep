@@ -5,7 +5,7 @@ param funcstorage634f8_outputs_name string
 
 param principalId string
 
-resource funcstorage634f8 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource funcstorage634f8 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: funcstorage634f8_outputs_name
 }
 

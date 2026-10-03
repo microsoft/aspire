@@ -67,7 +67,7 @@ resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@202
   parent: env
 }
 
-resource env_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource env_storageVolume 'Microsoft.Storage/storageAccounts@2025-06-01' = {
   name: take('envstoragevolume${uniqueString(resourceGroup().id)}', 24)
   kind: 'StorageV2'
   location: location
@@ -81,12 +81,12 @@ resource env_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   tags: tags
 }
 
-resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' = {
+resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2025-06-01' = {
   name: 'default'
   parent: env_storageVolume
 }
 
-resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_cache_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2025-06-01' = {
   name: take('sharesvolumescache0-${uniqueString(resourceGroup().id)}', 63)
   properties: {
     enabledProtocols: 'SMB'

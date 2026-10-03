@@ -277,6 +277,85 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AddFiles_ConnectionString_resolved_expected()
+    {
+        const string filesEndpoint = "https://myfiles";
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+        storage.Resource.Outputs["fileEndpoint"] = filesEndpoint;
+
+        var files = storage.AddFiles("files");
+
+        Assert.Equal(filesEndpoint, await ((IResourceWithConnectionString)files.Resource).GetConnectionStringAsync());
+    }
+
+    [Fact]
+    public void AddFiles_ConnectionString_unresolved_expected()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+
+        var files = storage.AddFiles("files");
+
+        Assert.Equal("{storage.outputs.fileEndpoint}", files.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void AddFiles_AfterRunAsEmulatorThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage").RunAsEmulator();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => storage.AddFiles("files"));
+
+        Assert.Equal("Emulator currently does not support file storage.", exception.Message);
+    }
+
+    [Fact]
+    public void RunAsEmulator_AfterAddFilesThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+        storage.AddFiles("files");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => storage.RunAsEmulator());
+
+        Assert.Equal("Emulator currently does not support file storage.", exception.Message);
+    }
+
+    [Fact]
+    public async Task AddFileShare_ConnectionString_resolved_expected()
+    {
+        const string fileShareName = "my-file-share";
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+        storage.Resource.Outputs["fileEndpoint"] = "https://myfiles";
+
+        var files = storage.AddFiles("files");
+        var share = files.AddFileShare("share", fileShareName);
+
+        var filesConnectionString = await ((IResourceWithConnectionString)files.Resource).GetConnectionStringAsync();
+        var expected = $"Endpoint={filesConnectionString};FileShareName={fileShareName}";
+
+        Assert.Equal(expected, await ((IResourceWithConnectionString)share.Resource).GetConnectionStringAsync());
+        Assert.Same(files.Resource, share.Resource.Parent);
+    }
+
+    [Fact]
+    public void AddFileShare_ConnectionString_unresolved_expected()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+
+        var files = storage.AddFiles("files");
+        var share = files.AddFileShare("share");
+
+        Assert.Equal("Endpoint={storage.outputs.fileEndpoint};FileShareName=share", share.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
     public async Task AddQueues_ConnectionString_resolved_expected_RunAsEmulator()
     {
         const string expected = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;";
@@ -392,10 +471,64 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
         var queues = storage.AddQueues("myqueues");
         var queue = storage.AddQueue(name: "myqueue", queueName: "my-queue");
         var tables = storage.AddTables("mytables");
+        var files = storage.AddFiles("myfiles");
+        var fileShare = files.AddFileShare(name: "myshare", fileShareName: "my-file-share");
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(storage.Resource);
 
         await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureFiles_GeneratesSmbOAuthAndFileShare()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var storage = builder.AddAzureStorage("storage");
+        var files = storage.AddFiles("files");
+        var share = files.AddFileShare("media", "media-share");
+
+        Assert.Same(storage.Resource, files.Resource.Parent);
+        Assert.Same(files.Resource, share.Resource.Parent);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(storage.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddAzureFiles_AsExistingReferencesAccountServiceAndShare()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var accountName = builder.AddParameter("storage-account-name");
+        var resourceGroup = builder.AddParameter("storage-resource-group");
+        var storage = builder.AddAzureStorage("storage")
+            .AsExisting(accountName, resourceGroup);
+        var files = storage.AddFiles("files");
+        files.AddFileShare("media", "media-share");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(storage.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddFiles_WhenReferencedAddsFileShareContributorRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var storage = builder.AddAzureStorage("storage");
+        var files = storage.AddFiles("files");
+        builder.AddContainer("app", "image")
+            .WithReference(files);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        _ = await GetManifestWithBicep(model, storage.Resource);
+
+        var roles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), resource => resource.Name == "storage-roles");
+        var rolesManifest = await GetManifestWithBicep(roles, skipPreparer: true);
+
+        Assert.Contains("StorageFileDataSmbShareContributor", rolesManifest.BicepText);
+        Assert.Contains("0c867c2a-1d8c-454a-a3db-ab2ea1bdc8bb", rolesManifest.BicepText);
     }
 
     [Fact]
@@ -662,7 +795,7 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
 
             param principalId string
 
-            resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+            resource storage 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
               name: storage_outputs_name
             }
 

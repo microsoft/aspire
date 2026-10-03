@@ -4,6 +4,8 @@
     <!-- This project needs to multi-target to net9.0 as well to avoid hitting NuGet Restore issues when package is restored from a net9+ project and avoid NU1605 downgrade errors. -->
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
+    <!-- Transitive through Aspire.Hosting.Azure.Storage; remove when Azure.Provisioning.Storage 1.2.0 ships stable. -->
+    <NoWarn Condition="'$(StabilizePackageVersion)' == 'true'">$(NoWarn);NU5104</NoWarn>
     <PackageTags>aspire integration hosting azure sql database data cloud</PackageTags>
     <Description>Azure SQL Database resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)AzureSqlServer_256x.png</PackageIconFullPath>
