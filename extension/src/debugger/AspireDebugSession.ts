@@ -79,6 +79,9 @@ export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtende
     return {
       ...loggableConfig,
       environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
+      // A msbuildProperty value can carry a user-supplied secret (WithBuildProperty / WithRunProperty),
+      // which the ...debugConfig spread would otherwise log verbatim even under the environment opt-in.
+      msbuildProperties: debugConfig.msbuildProperties ? '<redacted>' : undefined,
     };
   }
 
@@ -91,7 +94,8 @@ export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtende
     // Java process (-Dspring.datasource.password=..., -Djavax.net.ssl.trustStorePassword=...), so
     // vmArgs belongs in the same class as the environment rather than alongside plain arguments.
     ...redactedJavaLaunchFields(debugConfig),
-    msbuildProperties: debugConfig.msbuildProperties instanceof Map ? Object.fromEntries(debugConfig.msbuildProperties) : debugConfig.msbuildProperties,
+    // A msbuildProperty value can carry a user-supplied secret (WithBuildProperty / WithRunProperty).
+    msbuildProperties: debugConfig.msbuildProperties ? '<redacted>' : undefined,
   };
 }
 
