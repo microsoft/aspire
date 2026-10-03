@@ -25,7 +25,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         AuxiliaryBackchannelCapabilities.V1,
         AuxiliaryBackchannelCapabilities.V2,
         AuxiliaryBackchannelCapabilities.V3,
-        AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+        AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1,
+        AuxiliaryBackchannelCapabilities.ResourceCommandFiles_V1
     ];
     private static readonly TimeSpan s_handshakeTimeout = TimeSpan.FromSeconds(10);
 
@@ -100,6 +101,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
     /// <inheritdoc />
     public bool SupportsResourceSnapshotVersionsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1);
+
+    /// <inheritdoc />
+    public bool SupportsResourceCommandFilesV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.ResourceCommandFiles_V1);
 
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
@@ -1007,6 +1011,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             ResourceName = resourceName,
             CommandName = commandName,
             Arguments = options.Arguments,
+            Files = options.Files,
             ValidateOnly = options.ValidateOnly,
             NonInteractive = options.NonInteractive,
             ReturnArgumentInputs = options.ReturnArgumentInputs
