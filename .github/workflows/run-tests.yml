@@ -313,6 +313,14 @@ jobs:
           echo "TEST_PROJECT_PATH=$projectPath" >> $env:GITHUB_ENV
           echo "TEST_ASSEMBLY_NAME=$filenameWithoutExtension" >> $env:GITHUB_ENV
 
+      - name: Configure CLI test NuGet service index
+        shell: pwsh
+        run: |
+          if ($env:TEST_ASSEMBLY_NAME -eq 'Aspire.Cli.Tests') {
+            "ASPIRE_CLI_NUGET_SERVICE_INDEX=https://packagefeedproxy.microsoft.io/nuget/v3/index.json" |
+              Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
       - name: Build test project
         if: ${{ fromJson(inputs.properties).requiresNugets != true }}
         run: >

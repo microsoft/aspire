@@ -508,6 +508,7 @@ public class Program
         builder.Services.AddTransient<IAppHostCliBackchannel, AppHostCliBackchannel>();
 
         // Register both NuGetPackageCache implementations - factory chooses based on embedded bundle
+        builder.Services.AddSingleton<NuGetInvocationConfigurationSource>();
         builder.Services.AddSingleton<NuGetPackageCache>();
         builder.Services.AddSingleton<BundleNuGetPackageCache>();
         builder.Services.AddSingleton<INuGetPackageCache>(sp =>
@@ -563,6 +564,7 @@ public class Program
         builder.Services.AddSingleton<ILayoutDiscovery, LayoutDiscovery>();
         builder.Services.AddSingleton<INuGetClient, NuGetClient>();
         builder.Services.AddSingleton<BundleNuGetService>();
+        builder.Services.AddTransient<INuGetSettingsProvider, NuGetSettingsProvider>();
 
         // Git repository operations.
         builder.Services.AddSingleton<IGitRepository, GitRepository>();
@@ -1210,8 +1212,8 @@ public class Program
                     profileCaptureSession = await app.Services.GetRequiredService<ProfileCaptureService>().StartAsync(profileCaptureOptions, cancellationManager.Token).ConfigureAwait(false);
                 }
 
-                // Log command invocation details for debugging. Anything forwarded to the AppHost
-                // can contain secrets, so it is redacted.
+                // Log command invocation details for debugging. Credential-bearing HTTP values and
+                // anything forwarded to the AppHost can contain secrets, so they are redacted.
                 var loggableArgs = ParseResultHelper.GetLoggableArguments(parseResult);
                 var commandLine = loggableArgs.Length > 0 ? $"aspire {loggableArgs}" : "aspire";
                 logger.LogInformation("Command: {CommandLine}", commandLine);

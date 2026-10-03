@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -10,10 +11,15 @@ internal sealed class FakeNuGetClient : INuGetClient
     public int RestoreCallCount { get; private set; }
     public int WriteManifestCallCount { get; private set; }
     public int SearchCallCount { get; private set; }
+    public int GetSettingsCallCount { get; private set; }
+    public int WriteConfigOverlayCallCount { get; private set; }
     public IReadOnlyList<(string Id, string Version)>? LastRestorePackages { get; private set; }
     public IReadOnlyList<string>? LastRestoreSources { get; private set; }
-    public string? LastNuGetConfigPath { get; private set; }
+    public IReadOnlyList<string>? LastNuGetConfigPaths { get; private set; }
+    public IReadOnlyList<string>? LastConfiguredRestoreSources { get; private set; }
     public string? LastWorkingDirectory { get; private set; }
+    public string? LastSettingsWorkingDirectory { get; private set; }
+    public string? LastConfigOverlayPath { get; private set; }
 
     public Func<
         IReadOnlyList<(string Id, string Version)>,
@@ -21,8 +27,10 @@ internal sealed class FakeNuGetClient : INuGetClient
         string?,
         string,
         IReadOnlyList<string>,
-        string?,
+        IReadOnlyList<string>,
         string,
+        string?,
+        IReadOnlyList<string>,
         CancellationToken,
         Task>? RestoreCallback { get; set; }
 
@@ -38,20 +46,34 @@ internal sealed class FakeNuGetClient : INuGetClient
         CancellationToken,
         Task<IReadOnlyList<NuGetSearchResult>>>? SearchCallback { get; init; }
 
+    public Func<string, byte[], NuGetSettingsInfo>? GetSettingsCallback { get; set; }
+
+    public Action<NuGetConfigOverlay, string>? WriteConfigOverlayCallback { get; set; }
+
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
         string framework,
         string? runtimeIdentifier,
         string outputPath,
         IReadOnlyList<string> sources,
-        string? nugetConfigPath,
+        IReadOnlyList<string> nugetConfigPaths,
         string workingDirectory,
+        string? globalPackagesFolderOverride,
+        IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
     {
         RestoreCallCount++;
         LastRestorePackages = packages;
         LastRestoreSources = sources;
-        LastNuGetConfigPath = nugetConfigPath;
+        LastNuGetConfigPaths = nugetConfigPaths;
+        LastConfiguredRestoreSources = nugetConfigPaths
+            .Where(File.Exists)
+            .SelectMany(static path => XDocument.Load(path)
+                .Descendants("packageSources")
+                .Elements("add")
+                .Select(static source => source.Attribute("value")!.Value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         LastWorkingDirectory = workingDirectory;
         return RestoreCallback?.Invoke(
             packages,
@@ -59,8 +81,10 @@ internal sealed class FakeNuGetClient : INuGetClient
             runtimeIdentifier,
             outputPath,
             sources,
-            nugetConfigPath,
+            nugetConfigPaths,
             workingDirectory,
+            globalPackagesFolderOverride,
+            sensitiveSources,
             cancellationToken) ?? Task.CompletedTask;
     }
 
@@ -102,5 +126,35 @@ internal sealed class FakeNuGetClient : INuGetClient
             nugetConfigPath,
             workingDirectory,
             cancellationToken) ?? Task.FromResult<IReadOnlyList<NuGetSearchResult>>([]);
+    }
+
+    public NuGetSettingsInfo GetSettings(string workingDirectory, byte[] sourceIdentityKey)
+    {
+        GetSettingsCallCount++;
+        LastSettingsWorkingDirectory = workingDirectory;
+        return GetSettingsCallback?.Invoke(workingDirectory, sourceIdentityKey)
+            ?? new(
+                [],
+                "settings",
+                [],
+                [],
+                [],
+                [],
+                [],
+                sourceIdentityKey);
+    }
+
+    public void WriteConfigOverlay(NuGetConfigOverlay overlay, string outputPath)
+    {
+        WriteConfigOverlayCallCount++;
+        LastConfigOverlayPath = outputPath;
+        if (WriteConfigOverlayCallback is not null)
+        {
+            WriteConfigOverlayCallback(overlay, outputPath);
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        File.WriteAllText(outputPath, "<configuration />");
     }
 }

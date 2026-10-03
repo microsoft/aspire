@@ -91,6 +91,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithBrokenSdkState_ProducesExpectedXml(string channelName)
     {
+        const string stalePrHivePath = @"C:\Users\aspire-test\.aspire\hives\pr-old";
         using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
@@ -103,19 +104,19 @@ public class NuGetConfigMergerSnapshotTests
 
         // Existing config purposely minimal (no packageSourceMapping yet)
         await WriteConfigAsync(root,
-            """
+            $$"""
             <configuration>
                 <packageSources>
                     <clear />
                     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
                     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
-                    <add key="C:\Users\davifowl\.aspire\hives\pr-11227" value="C:\Users\davifowl\.aspire\hives\pr-11227" />
+                    <add key="{{stalePrHivePath}}" value="{{stalePrHivePath}}" />
                 </packageSources>
                 <packageSourceMapping>
                     <packageSource key="https://api.nuget.org/v3/index.json">
                         <package pattern="*" />
                     </packageSource>
-                    <packageSource key="C:\Users\davifowl\.aspire\hives\pr-11227">
+                    <packageSource key="{{stalePrHivePath}}">
                         <package pattern="Aspire*" />
                     </packageSource>
                     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
@@ -133,7 +134,8 @@ public class NuGetConfigMergerSnapshotTests
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
-        var xmlString = updated.ToString();
+        var xmlString = updated.ToString()
+            .Replace(stalePrHivePath, "{STALE_PR_HIVE}", StringComparison.Ordinal);
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
@@ -273,6 +275,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_ExtraPatternOnDailyFeedWhenOnPrFeedGetsConsolidatedWithOtherPatterns_ProducesExpectedXml(string channelName)
     {
+        const string stalePrHivePath = @"C:\Users\aspire-test\.aspire\hives\pr-old";
         using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
@@ -285,7 +288,7 @@ public class NuGetConfigMergerSnapshotTests
 
         // Existing config purposely minimal (no packageSourceMapping yet)
         await WriteConfigAsync(root,
-            """
+            $$"""
             <?xml version="1.0" encoding="utf-8"?>
             <configuration>
                 <packageSources>
@@ -293,7 +296,7 @@ public class NuGetConfigMergerSnapshotTests
                     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
                     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
                     <add key="mycompany" value="http://mycompany.com/feed" />
-                    <add key="C:\Users\midenn\.aspire\hives\pr-11275" value="C:\Users\midenn\.aspire\hives\pr-11275" />
+                    <add key="{{stalePrHivePath}}" value="{{stalePrHivePath}}" />
                 </packageSources>
                 <packageSourceMapping>
                     <packageSource key="https://api.nuget.org/v3/index.json">
@@ -302,7 +305,7 @@ public class NuGetConfigMergerSnapshotTests
                     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
                         <package pattern="Microsoft.Extensions.HelperStuff*" />
                     </packageSource>
-                    <packageSource key="C:\Users\midenn\.aspire\hives\pr-11275">
+                    <packageSource key="{{stalePrHivePath}}">
                         <package pattern="Aspire*" />
                     </packageSource>
                 </packageSourceMapping>
@@ -317,7 +320,8 @@ public class NuGetConfigMergerSnapshotTests
         await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
-        var xmlString = updated.ToString();
+        var xmlString = updated.ToString()
+            .Replace(stalePrHivePath, "{STALE_PR_HIVE}", StringComparison.Ordinal);
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))

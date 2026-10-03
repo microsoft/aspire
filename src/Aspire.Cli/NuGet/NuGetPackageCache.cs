@@ -5,6 +5,7 @@ using System.Collections.Frozen;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
@@ -14,11 +15,28 @@ namespace Aspire.Cli.NuGet;
 
 internal interface INuGetPackageCache
 {
-    Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
-    Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
-    Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
-    Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
-    Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
+    Task<NuGetPackageSearchConfiguration> CreateAmbientOverlayAsync(DirectoryInfo workingDirectory, IReadOnlyList<PackageMapping>? channelMappings, CancellationToken cancellationToken);
+    Task<NuGetPackageSearchConfiguration> CreateStandaloneAsync(DirectoryInfo workingDirectory, PackageMapping[] mappings);
+    Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(NuGetPackageSearchConfiguration configuration, bool prerelease, CancellationToken cancellationToken);
+    Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(NuGetPackageSearchConfiguration configuration, bool prerelease, CancellationToken cancellationToken);
+    Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(NuGetPackageSearchConfiguration configuration, bool prerelease, CancellationToken cancellationToken);
+    Task<IEnumerable<NuGetPackage>> GetPackagesAsync(NuGetPackageSearchConfiguration configuration, string packageId, Func<string, bool>? filter, bool prerelease, bool useCache, CancellationToken cancellationToken);
+    Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(NuGetPackageSearchConfiguration configuration, string exactPackageId, bool prerelease, bool useCache, CancellationToken cancellationToken);
+
+    Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        => GetTemplatePackagesAsync(NuGetPackageSearchConfiguration.Existing(workingDirectory, nugetConfigFile), prerelease, cancellationToken);
+
+    Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        => GetIntegrationPackagesAsync(NuGetPackageSearchConfiguration.Existing(workingDirectory, nugetConfigFile), prerelease, cancellationToken);
+
+    Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        => GetCliPackagesAsync(NuGetPackageSearchConfiguration.Existing(workingDirectory, nugetConfigFile), prerelease, cancellationToken);
+
+    Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+        => GetPackagesAsync(NuGetPackageSearchConfiguration.Existing(workingDirectory, nugetConfigFile), packageId, filter, prerelease, useCache, cancellationToken);
+
+    Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+        => GetPackageVersionsAsync(NuGetPackageSearchConfiguration.Existing(workingDirectory, nugetConfigFile), exactPackageId, prerelease, useCache, cancellationToken);
 }
 
 /// <summary>
@@ -67,18 +85,39 @@ internal static class PackageIdFilters
     }
 }
 
-internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache memoryCache, AspireCliTelemetry telemetry, IFeatures features) : INuGetPackageCache
+internal sealed class NuGetPackageCache(
+    IDotNetCliRunner cliRunner,
+    IMemoryCache memoryCache,
+    AspireCliTelemetry telemetry,
+    IFeatures features,
+    NuGetInvocationConfigurationSource configurationSource) : INuGetPackageCache
 {
     private const int SearchPageSize = 1000;
 
-    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+    public Task<NuGetPackageSearchConfiguration> CreateAmbientOverlayAsync(
+        DirectoryInfo workingDirectory,
+        IReadOnlyList<PackageMapping>? channelMappings,
+        CancellationToken cancellationToken)
+        => configurationSource.CreateAmbientOverlayAsync(
+            workingDirectory,
+            channelMappings,
+            cancellationToken);
+
+    public Task<NuGetPackageSearchConfiguration> CreateStandaloneAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[] mappings)
+        => NuGetInvocationConfigurationSource.CreateStandaloneAsync(workingDirectory, mappings);
+
+    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(
+        NuGetPackageSearchConfiguration configuration,
+        bool prerelease,
+        CancellationToken cancellationToken)
     {
-        var nuGetConfigHashSuffix = nugetConfigFile is not null ? await ComputeNuGetConfigHashSuffixAsync(nugetConfigFile, cancellationToken) : string.Empty;
-        var key = $"TemplatePackages-{workingDirectory.FullName}-{prerelease}-{nuGetConfigHashSuffix}";
+        var key = $"TemplatePackages-{configuration.OriginalWorkingDirectory.FullName}-{prerelease}-{configuration.CacheIdentity}";
 
         var packages = await memoryCache.GetOrCreateAsync(key, async (entry) =>
         {
-            var packages = await GetPackagesAsync(workingDirectory, "Aspire.ProjectTemplates", null, prerelease, nugetConfigFile, true, cancellationToken);
+            var packages = await GetPackagesAsync(configuration, "Aspire.ProjectTemplates", null, prerelease, true, cancellationToken);
             return packages.Where(p => p.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
 
         }) ?? throw new NuGetPackageCacheException(ErrorStrings.FailedToRetrieveCachedTemplatePackages);
@@ -86,36 +125,39 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         return packages;
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+    public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
+        NuGetPackageSearchConfiguration configuration,
+        bool prerelease,
+        CancellationToken cancellationToken)
     {
-        return await GetPackagesAsync(workingDirectory, "Aspire.Hosting", null, prerelease, nugetConfigFile, true, cancellationToken);
+        return await GetPackagesAsync(configuration, "Aspire.Hosting", null, prerelease, true, cancellationToken);
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+    public async Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(
+        NuGetPackageSearchConfiguration configuration,
+        bool prerelease,
+        CancellationToken cancellationToken)
     {
-        var nuGetConfigHashSuffix = nugetConfigFile is not null ? await ComputeNuGetConfigHashSuffixAsync(nugetConfigFile, cancellationToken) : string.Empty;
-        var key = $"CliPackages-{workingDirectory.FullName}-{prerelease}-{nuGetConfigHashSuffix}";
+        var key = $"CliPackages-{configuration.OriginalWorkingDirectory.FullName}-{prerelease}-{configuration.CacheIdentity}";
 
         var packages = await memoryCache.GetOrCreateAsync(key, async (entry) =>
         {
             // Set cache expiration to 1 hour for CLI updates
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
-            var packages = await GetPackagesAsync(workingDirectory, "Aspire.Cli", null, prerelease, nugetConfigFile, false, cancellationToken);
+            var packages = await GetPackagesAsync(configuration, "Aspire.Cli", null, prerelease, false, cancellationToken);
             return packages.Where(p => p.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
         }) ?? [];
 
         return packages;
     }
 
-    private static async Task<string> ComputeNuGetConfigHashSuffixAsync(FileInfo nugetConfigFile, CancellationToken cancellationToken)
-    {
-        using var stream = nugetConfigFile.OpenRead();
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var hashBytes = await sha256.ComputeHashAsync(stream, cancellationToken);
-        return Convert.ToHexString(hashBytes);
-    }
-
-    public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string query, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+    public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(
+        NuGetPackageSearchConfiguration configuration,
+        string query,
+        Func<string, bool>? filter,
+        bool prerelease,
+        bool useCache,
+        CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -127,13 +169,13 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         {
             // This search should pick up Aspire.Hosting.* and CommunityToolkit.Aspire.Hosting.*
             var result = await cliRunner.SearchPackagesAsync(
-                workingDirectory,
+                configuration.EffectiveWorkingDirectory,
                 query,
                 exactMatch: false,
                 prerelease,
                 SearchPageSize,
                 skip,
-                nugetConfigFile,
+                configuration.ExplicitConfigFile,
                 useCache, // Pass through the useCache parameter
                 new ProcessInvocationOptions { SuppressLogging = true },
                 cancellationToken
@@ -186,20 +228,25 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         return collectedPackages.Where(effectiveFilter);
     }
 
-    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
+        NuGetPackageSearchConfiguration configuration,
+        string exactPackageId,
+        bool prerelease,
+        bool useCache,
+        CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
         var collectedPackages = new List<NuGetPackage>();
 
         var result = await cliRunner.SearchPackagesAsync(
-                workingDirectory,
+                configuration.EffectiveWorkingDirectory,
                 exactPackageId,
                 exactMatch: true,
                 prerelease,
                 take: 0,
                 skip: 0, // skip and take parameters are ignored when exactMatch is true
-                nugetConfigFile,
+                configuration.ExplicitConfigFile,
                 useCache, // Pass through the useCache parameter
                 new ProcessInvocationOptions { SuppressLogging = true },
                 cancellationToken
@@ -229,6 +276,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
         return collectedPackages.Where(effectiveFilter);
     }
+
 }
 
 internal sealed class NuGetPackageCacheException : Exception

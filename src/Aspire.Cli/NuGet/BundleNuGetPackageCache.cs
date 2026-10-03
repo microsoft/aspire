@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -16,91 +17,96 @@ namespace Aspire.Cli.NuGet;
 internal sealed class BundleNuGetPackageCache(
     INuGetClient nuGetClient,
     ILogger<BundleNuGetPackageCache> logger,
-    IFeatures features) : INuGetPackageCache
+    IFeatures features,
+    NuGetInvocationConfigurationSource configurationSource) : INuGetPackageCache
 {
     // The aspire-managed helper was always invoked with --take 1000.
     private const int SearchTake = 1000;
 
-    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(
+    public Task<NuGetPackageSearchConfiguration> CreateAmbientOverlayAsync(
         DirectoryInfo workingDirectory,
+        IReadOnlyList<PackageMapping>? channelMappings,
+        CancellationToken cancellationToken)
+        => configurationSource.CreateAmbientOverlayAsync(
+            workingDirectory,
+            channelMappings,
+            cancellationToken);
+
+    public Task<NuGetPackageSearchConfiguration> CreateStandaloneAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[] mappings)
+        => NuGetInvocationConfigurationSource.CreateStandaloneAsync(workingDirectory, mappings);
+
+    public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(
+        NuGetPackageSearchConfiguration configuration,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
         var packages = await SearchAsync(
-            workingDirectory,
+            configuration,
             "Aspire.ProjectTemplates",
             prerelease,
-            nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
         return packages.Where(package => package.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(
-        DirectoryInfo workingDirectory,
+        NuGetPackageSearchConfiguration configuration,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
         var packages = await SearchAsync(
-            workingDirectory,
+            configuration,
             "Aspire.Hosting",
             prerelease,
-            nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
         return FilterPackages(packages, filter: null);
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(
-        DirectoryInfo workingDirectory,
+        NuGetPackageSearchConfiguration configuration,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
         var packages = await SearchAsync(
-            workingDirectory,
+            configuration,
             "Aspire.Cli",
             prerelease,
-            nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
         return packages.Where(package => package.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(
-        DirectoryInfo workingDirectory,
+        NuGetPackageSearchConfiguration configuration,
         string packageId,
         Func<string, bool>? filter,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         bool useCache,
         CancellationToken cancellationToken)
     {
         var packages = await SearchAsync(
-            workingDirectory,
+            configuration,
             packageId,
             prerelease,
-            nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
         return FilterPackages(packages, filter);
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
-        DirectoryInfo workingDirectory,
+        NuGetPackageSearchConfiguration configuration,
         string exactPackageId,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         bool useCache,
         CancellationToken cancellationToken)
     {
         var results = await SearchClientAsync(
-            workingDirectory,
+            configuration,
             exactPackageId,
             prerelease,
-            nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
         // The helper had no exact-match mode. The CLI ran an ordinary search for the package ID and expanded the
@@ -120,17 +126,15 @@ internal sealed class BundleNuGetPackageCache(
     }
 
     private async Task<List<NuGetPackage>> SearchAsync(
-        DirectoryInfo workingDirectory,
+        NuGetPackageSearchConfiguration configuration,
         string query,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
         var results = await SearchClientAsync(
-            workingDirectory,
+            configuration,
             query,
             prerelease,
-            nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
         return results.Select(package => new NuGetPackage
@@ -142,10 +146,9 @@ internal sealed class BundleNuGetPackageCache(
     }
 
     private async Task<IReadOnlyList<NuGetSearchResult>> SearchClientAsync(
-        DirectoryInfo workingDirectory,
+        NuGetPackageSearchConfiguration configuration,
         string query,
         bool prerelease,
-        FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
         try
@@ -155,8 +158,8 @@ internal sealed class BundleNuGetPackageCache(
                 prerelease,
                 SearchTake,
                 explicitSources: [],
-                nugetConfigFile?.FullName,
-                workingDirectory.FullName,
+                configuration.ExplicitConfigFile?.FullName,
+                configuration.EffectiveWorkingDirectory.FullName,
                 cancellationToken).ConfigureAwait(false);
         }
         catch (NuGetOperationException ex)
@@ -186,4 +189,5 @@ internal sealed class BundleNuGetPackageCache(
             ? packages
             : packages.Where(package => !DeprecatedPackages.IsDeprecated(package.Id));
     }
+
 }
