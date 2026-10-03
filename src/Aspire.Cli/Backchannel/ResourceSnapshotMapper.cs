@@ -153,7 +153,7 @@ internal static class ResourceSnapshotMapper
             WaitingFor = waitingFor,
             StateStyle = snapshot.StateStyle,
             HealthStatus = snapshot.HealthStatus,
-            Source = sourceViewModel?.Value,
+            Source = sourceViewModel?.OriginalValue,
             ExitCode = snapshot.ExitCode,
             CreationTimestamp = snapshot.CreatedAt,
             StartTimestamp = snapshot.StartedAt,

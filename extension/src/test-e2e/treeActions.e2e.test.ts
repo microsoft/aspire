@@ -5,6 +5,7 @@ import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPat
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { readExtensionLogs } from './helpers/logs';
 import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { VSBrowser } from './helpers/extester';
 
 interface ActiveEditorInfo {
     uri?: string;
@@ -328,6 +329,16 @@ suite('Aspire tree action command E2E', function () {
         const noCommandsResource = await waitForTreeItem(section, 'e2e-no-commands', 60000);
         await noCommandsResource.expand();
         assert.strictEqual(await noCommandsResource.findChildItem('Commands'), undefined);
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        const resourceContextMenu = await workerTreeItem.openContextMenu();
+        try {
+            await VSBrowser.instance.takeScreenshot('resource-go-to-source-context-menu');
+            await resourceContextMenu.select('Go to source');
+        } finally {
+            await resourceContextMenu.close().catch(() => undefined);
+        }
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
 
         await snapshotClipboardForE2E();
         await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });
