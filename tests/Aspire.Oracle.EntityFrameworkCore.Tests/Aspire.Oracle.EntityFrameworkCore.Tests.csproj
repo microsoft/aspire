@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <SkipTests Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RunOuterloopTests)' != 'true'">true</SkipTests>
   </PropertyGroup>
 

@@ -266,6 +266,27 @@ public sealed class ExtensionWorkflowTests
     }
 
     [Fact]
+    public void StabilizationWorkUsesExplicitEnableSwitch()
+    {
+        var job = Mapping(s_ciJobs, "stabilization_check");
+        Assert.Contains(Scalar(Mapping(job, "env"), "STABILIZATION_ENABLED"), new[] { "true", "false" });
+
+        var steps = Steps(job);
+        var skip = Assert.Single(steps, step => Scalar(step, "name") == "Skip stabilization when disabled or not a PR");
+        Assert.Equal(
+            "${{ github.event_name != 'pull_request' || env.STABILIZATION_ENABLED != 'true' }}",
+            Scalar(skip, "if"));
+
+        Assert.All(steps.Where(step => step != skip), step =>
+        {
+            var expectedCondition = Scalar(step, "name") == "Upload logs"
+                ? "${{ always() && github.event_name == 'pull_request' && env.STABILIZATION_ENABLED == 'true' }}"
+                : "${{ github.event_name == 'pull_request' && env.STABILIZATION_ENABLED == 'true' }}";
+            Assert.Equal(expectedCondition, Scalar(step, "if"));
+        });
+    }
+
+    [Fact]
     public void FinalResultsRequireSelectorDrivenTestsAndStabilization()
     {
         var results = Mapping(s_ciJobs, "results");

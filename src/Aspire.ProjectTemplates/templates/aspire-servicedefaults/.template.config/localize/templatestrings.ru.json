@@ -3,8 +3,6 @@
   "name": "Параметры службы Aspire по умолчанию",
   "description": "Шаблон проекта для создания проекта с параметрами по умолчанию для службы Aspire.",
   "symbols/Framework/description": "Целевая платформа для проекта.",
-  "symbols/Framework/choices/net8.0/description": "Целевая среда net8.0",
-  "symbols/Framework/choices/net9.0/description": "Целевая среда net9.0",
   "symbols/Framework/choices/net10.0/description": "Целевая платформа .NET 10.0",
   "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/skipRestore/description": "Если установлено, автоматическое восстановление проекта при создании пропускается.",

@@ -96,7 +96,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithDockerfileBaseImage(runtimeImage: "mcr.microsoft.com/dotnet/sdk:8.0-alpine");
+            .WithDockerfileBaseImage(runtimeImage: "mcr.microsoft.com/dotnet/sdk:10.0-alpine");
 #pragma warning restore ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
@@ -111,7 +111,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Check for success logs
         Assert.Contains(logs, log => log.Message.Contains("Building container image for resource servicea"));
-        Assert.Contains(logs, log => log.Message.Contains("--property:ContainerBaseImage=mcr.microsoft.com/dotnet/sdk:8.0-alpine"));
+        Assert.Contains(logs, log => log.Message.Contains("--property:ContainerBaseImage=mcr.microsoft.com/dotnet/sdk:10.0-alpine"));
         Assert.Contains(logs, log => log.Message.Contains(".NET CLI completed with exit code: 0"));
     }
 

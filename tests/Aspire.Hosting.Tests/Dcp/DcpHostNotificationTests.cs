@@ -809,7 +809,7 @@ public sealed class DcpHostNotificationTests
         {
             if (File.Exists(path))
             {
-                return new X509Certificate2(path, "testPassword");
+                return X509CertificateLoader.LoadPkcs12FromFile(path, "testPassword");
             }
         }
 

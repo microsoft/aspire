@@ -381,7 +381,7 @@ internal class DevTunnelCli
 
     private static async Task PumpAsync(StreamReader reader, Action<string> onLine, CancellationToken cancellationToken = default)
     {
-        while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
             if (line is null)
