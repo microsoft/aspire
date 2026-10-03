@@ -62,6 +62,56 @@ Node 20 action. There is no supported Node 24 upgrade for that dependency;
 replacing it requires a separate migration of its authentication and locking
 behavior, rather than merely changing an action pin.
 
+## Auto-sec dependency reconciliation
+
+`auto-sec.md` runs every 12 hours (and on demand). It reconciles open Dependabot
+alerts, including malware alerts, and version-mapped code scanning alerts against
+open Dependabot PRs. Pure code findings are out of scope. Only npm (npm, yarn,
+pnpm), pip (`uv.lock`, `pyproject.toml`), NuGet (`Directory.Packages.props`), and
+GitHub Actions alerts are handled; alerts in other ecosystems, such as Maven,
+Gradle, Go, Cargo, or `requirements.txt`, are reported as blocked.
+
+- **Dependabot PRs** that fix an open alert are approved by the Aspire bot App only
+  when `.github/workflows/auto-sec/auto-sec.js` re-verifies every gate in the
+  `approve_dependabot_pr` safe-output job. The gates are:
+  - only manifest or lock files change, every commit is a GitHub-verified
+    commit authored by Dependabot, and `package.json`, `pyproject.toml`, and
+    `Directory.Packages.props` change only one version token on dependency-version
+    lines (for `package.json`, only inside the dependency, override, and resolution
+    maps)
+  - no package source or feed is added (only the dnceng public feeds and sources the
+    file already uses are accepted)
+  - the alert's own manifest is changed and carries the fixed version, and no copy
+    of the package there stays below it or inside any range the advisory lists
+  - CI and statuses are green, and the PR head is unchanged when the review is submitted
+  - every package version the diff introduces, listed in the PR body or not, stays
+    within the same major version (same minor for `0.x`) and was published at least
+    7 days ago
+  - no package the diff changes has an open malware alert (those always need a human
+    review)
+- **Remaining alerts** are fixed in a single `[auto-sec]` PR on
+  `auto-sec/security-updates`, labeled `auto-sec`. Later runs update that PR
+  instead of opening another one. A deterministic step in the safe-outputs job
+  fails the run if the agent asks to push to any PR other than the open
+  `auto-sec/security-updates` PR from this repository. A second step checks the
+  agent's patch (sent with the `am` transport so the checked patch is the one
+  applied) and fails the run unless each changed manifest, rebuilt in full from
+  the base blob the patch names, differs only in dependency versions, or if any
+  file adds an unapproved package source. NuGet bumps are made only when the fixed version
+  already restores from an approved dnceng feed that `NuGet.config` package source
+  mapping assigns to the package. Otherwise the alert is reported as blocked on
+  mirroring.
+- The PR body and run summaries intentionally contain only package and version
+  summaries, never advisory details.
+
+Prerequisites:
+- The `auto-sec` label must exist.
+- The Aspire bot App needs pull request write access, and contents write access to
+  push the `auto-sec` branch.
+
+Because the compiler's Windows build mis-handles redaction paths, compile this
+workflow on Linux or WSL.
+
 ## Main to Release 14.0 Synchronization
 
 `sync-main-to-release-14.yml` keeps the advance `release/14.0` integration branch
