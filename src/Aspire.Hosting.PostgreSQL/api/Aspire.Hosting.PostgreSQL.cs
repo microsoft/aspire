@@ -56,6 +56,9 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> WithPostgresMcp(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresDatabaseResource> builder, System.Action<ApplicationModel.IResourceBuilder<Postgres.PostgresMcpContainerResource>>? configureContainer = null, string? containerName = null) { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> WithUserName(this ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> userName) { throw null; }
     }
 }
