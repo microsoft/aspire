@@ -388,12 +388,7 @@ internal sealed class ProjectLocator(
                     if (validationResult.IsValid)
                     {
                         logger.LogDebug("Found {Language} apphost {CandidateFile}", handler.DisplayName, candidateFile.FullName);
-                        var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
                         AppHostProjectCandidate appHostProject;
-                        if (displayProgress)
-                        {
-                            interactionService.DisplaySubtleMessage(relativePath);
-                        }
                         lock (lockObject)
                         {
                             appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId);
@@ -408,11 +403,6 @@ internal sealed class ProjectLocator(
                     }
                     else if (validationResult.IsUnsupported)
                     {
-                        var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
-                        if (displayProgress)
-                        {
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
-                        }
                         logger.LogDebug("Skipping unsupported project {CandidateFile}", candidateFile.FullName);
                         lock (lockObject)
                         {
@@ -421,12 +411,7 @@ internal sealed class ProjectLocator(
                     }
                     else if (validationResult.IsPossiblyUnbuildable)
                     {
-                        var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
                         AppHostProjectCandidate appHostProject;
-                        if (displayProgress)
-                        {
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
-                        }
                         lock (lockObject)
                         {
                             appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
@@ -503,60 +488,61 @@ internal sealed class ProjectLocator(
                 var handler = projectFactory.TryGetProject(settingsAppHost);
                 if (handler is null)
                 {
-                    var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
-                    if (displayProgress)
-                    {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
-                    }
-
                     logger.LogDebug("Skipping configured AppHost project {SettingsAppHost} because no project handler was found.", settingsAppHost.FullName);
                     unsupportedProjects.Add(settingsAppHost);
                     return;
                 }
 
                 var validationResult = await handler.ValidateAppHostAsync(settingsAppHost, cancellationToken).ConfigureAwait(false);
-                var settingsAppHostRelativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
                 if (validationResult.IsValid)
                 {
-                    if (displayProgress)
-                    {
-                        interactionService.DisplaySubtleMessage(settingsAppHostRelativePath);
-                    }
-
                     var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId);
                     appHostProjects.Add(appHostProject);
                     await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
                 }
                 else if (validationResult.IsPossiblyUnbuildable)
                 {
-                    if (displayProgress)
-                    {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, settingsAppHostRelativePath));
-                    }
-
                     var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
                     unbuildableSuspectedAppHostProjects.Add(appHostProject);
                     await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
                 }
                 else if (validationResult.IsUnsupported)
                 {
-                    if (displayProgress)
-                    {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, settingsAppHostRelativePath));
-                    }
-
                     logger.LogDebug("Skipping unsupported configured AppHost project {SettingsAppHost}", settingsAppHost.FullName);
                     unsupportedProjects.Add(settingsAppHost);
                 }
             }
         }
 
+        var results = displayProgress
+            ? await interactionService.ShowStatusAsync(InteractionServiceStrings.FindingAppHosts, FindAppHostsAsync)
+            : await FindAppHostsAsync();
+
         if (displayProgress)
         {
-            return await interactionService.ShowStatusAsync(InteractionServiceStrings.FindingAppHosts, FindAppHostsAsync);
+            // Spectre's live status owns the terminal cursor while discovery runs. Writing paths
+            // during that operation corrupts wrapped output, so render the collected results only
+            // after the status has restored the terminal.
+            foreach (var appHostProject in results.BuildableAppHost)
+            {
+                var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, appHostProject.AppHostFile.FullName);
+                interactionService.DisplaySubtleMessage(relativePath);
+            }
+
+            foreach (var appHostProject in results.UnbuildableSuspectedAppHostProjects.OrderBy(candidate => candidate.AppHostFile.FullName, StringComparer.Ordinal))
+            {
+                var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, appHostProject.AppHostFile.FullName);
+                interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
+            }
+
+            foreach (var unsupportedProject in results.UnsupportedProjects.OrderBy(file => file.FullName, StringComparer.Ordinal))
+            {
+                var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, unsupportedProject.FullName);
+                interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+            }
         }
 
-        return await FindAppHostsAsync();
+        return results;
     }
 
     /// <inheritdoc />

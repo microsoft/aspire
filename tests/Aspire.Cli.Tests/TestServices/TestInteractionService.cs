@@ -25,6 +25,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
+    public Action<string>? ShowStatusCompletedCallback { get; set; }
     public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
     public Action<string?, ConsoleOutput?>? DisplayCancellationMessageCallback { get; set; }
@@ -74,7 +75,7 @@ internal sealed class TestInteractionService : IInteractionService
         }
     }
 
-    public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
+    public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         lock (_displayLock)
         {
@@ -82,7 +83,14 @@ internal sealed class TestInteractionService : IInteractionService
         }
 
         ShowStatusCallback?.Invoke(statusText);
-        return action();
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            ShowStatusCompletedCallback?.Invoke(statusText);
+        }
     }
 
     public List<string> DynamicStatusTexts { get; } = [];
@@ -111,7 +119,14 @@ internal sealed class TestInteractionService : IInteractionService
             ShownStatuses.Add(statusText);
         }
 
-        action();
+        try
+        {
+            action();
+        }
+        finally
+        {
+            ShowStatusCompletedCallback?.Invoke(statusText);
+        }
     }
 
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
