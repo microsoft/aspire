@@ -1,9 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml;
+using System.Xml.Linq;
 using Aspire.TestUtilities;
 using Microsoft.Playwright;
 using Xunit;
@@ -19,8 +20,9 @@ public partial class TemplateTestsBase
     // Regex is from src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets - _GeneratedClassNameFixupRegex
     [GeneratedRegex(@"(((?<=\.)|^)(?=\d)|\W)")]
     private static partial Regex GeneratedClassNameFixupRegex();
+    [GeneratedRegex("%(?<value>[0-9A-Fa-f]{2})")]
+    private static partial Regex MSBuildEscapeRegex();
     private static Lazy<IBrowser> Browser => new(CreateBrowser);
-    private static readonly XmlWriterSettings s_xmlWriterSettings = new() { ConformanceLevel = ConformanceLevel.Fragment };
     protected readonly TestOutputWrapper _testOutput;
 
     public static readonly string[] TestFrameworkTypes = ["none", "mstest", "nunit", "xunit.net"];
@@ -51,96 +53,138 @@ public partial class TemplateTestsBase
         TestTargetFramework? tfm = null,
         BuildEnvironment? buildEnvironment = null,
         string? extraArgs = null,
-        Func<AspireProject, Task>? onBuildAspireProject = null,
-        string? overrideRootDir = null)
+        string? overrideRootDir = null,
+        bool withAppHostReference = true,
+        bool useAppHostTargetFramework = true)
     {
         buildEnvironment ??= BuildEnvironment.ForDefaultFramework;
-        var tmfArg = tfm is not null ? $"-f {tfm.Value.ToTFMString()}" : "";
+        var targetFramework = tfm?.ToTFMString();
+        var frameworkArg = targetFramework is null
+            ? ""
+            : withAppHostReference && useAppHostTargetFramework
+                ? $"--AppHostTargetFramework {targetFramework}"
+                : $"-f {targetFramework}";
 
         string rootDirToUse = overrideRootDir ?? project.RootDir;
         // Add test project
         var testProjectName = $"{id}.{FixupSymbolName(testTemplateName)}Tests";
+        var testProjectDir = Path.Combine(rootDirToUse, testProjectName);
+        var appHostProjectPath = Assert.Single(Directory.EnumerateFiles(project.AppHostProjectDirectory, "*.csproj", SearchOption.TopDirectoryOnly));
+        var appHostProjectName = Path.GetFileNameWithoutExtension(appHostProjectPath);
+        var relativeAppHostProjectPath = Path.GetRelativePath(testProjectDir, appHostProjectPath);
+        // ProcessStartInfo.Arguments parses a quoted path such as:
+        //   --AppHostProjectPath "../quote\"path/AppHost.csproj"
+        // Escape embedded quotes for that command-line layer while preserving the literal quote received by the template.
+        var escapedAppHostProjectPath = EscapeMSBuildItemValue(relativeAppHostProjectPath)
+            .Replace("\"", "\\\"", StringComparison.Ordinal);
+        var appHostArgs = withAppHostReference
+            ? $"--WithAppHostReference true --AppHostProjectPath \"{escapedAppHostProjectPath}\" --AppHostProjectName \"{appHostProjectName}\""
+            : "";
         using var newTestCmd = new DotNetNewCommand(
                                     _testOutput,
                                     label: $"new-test-{testTemplateName}",
                                     buildEnv: buildEnvironment)
                                 .WithWorkingDirectory(rootDirToUse);
-        var res = await newTestCmd.ExecuteAsync($"{testTemplateName} {tmfArg} -o \"{testProjectName}\" {extraArgs}");
+        var res = await newTestCmd.ExecuteAsync($"{testTemplateName} {frameworkArg} -o \"{testProjectName}\" {extraArgs} {appHostArgs}");
         res.EnsureSuccessful();
 
-        var testProjectDir = Path.Combine(rootDirToUse, testProjectName);
         Assert.True(Directory.Exists(testProjectDir), $"Expected tests project at {testProjectDir}");
 
         var testProjectPath = Path.Combine(testProjectDir, testProjectName + ".csproj");
         Assert.True(File.Exists(testProjectPath), $"Expected tests project file at {testProjectPath}");
 
-        var appHostProjectName = Path.GetFileName(project.AppHostProjectDirectory)!;
-        PrepareTestCsFile(
-            id: project.Id,
-            projectDir: testProjectDir,
-            appHostProjectName: appHostProjectName,
-            testTemplateName: testTemplateName);
-        PrepareTestProject(
-            project: project,
-            projectPath: testProjectPath,
-            appHostProjectName: appHostProjectName);
+        var testProject = XDocument.Load(testProjectPath);
+        if (targetFramework is not null)
+        {
+            Assert.Equal(targetFramework, Assert.Single(testProject.Descendants("TargetFramework")).Value);
+        }
+
+        var projectReferences = testProject.Descendants("ProjectReference").ToArray();
+        if (!withAppHostReference)
+        {
+            Assert.Empty(projectReferences);
+
+            // Standalone templates intentionally emit the sample as comments. Add the same reference users
+            // are instructed to add, then uncomment the sample so the caller's build verifies that guidance.
+            testProject.Root!.Add(
+                new XElement("ItemGroup",
+                    new XElement("ProjectReference",
+                        new XAttribute("Include", EscapeMSBuildItemValue(relativeAppHostProjectPath)))));
+            testProject.Save(testProjectPath);
+
+            UncommentInstructionalSample(
+                Path.Combine(testProjectDir, "IntegrationTest1.cs"),
+                testTemplateName,
+                appHostProjectName);
+
+            return testProjectDir;
+        }
+
+        var projectReferencePath = Assert.Single(projectReferences).Attribute("Include")?.Value;
+        Assert.NotNull(projectReferencePath);
+        Assert.Equal(relativeAppHostProjectPath, UnescapeMSBuildItemValue(projectReferencePath));
+        var testSourcePath = Path.Combine(testProjectDir, "IntegrationTest1.cs");
+        var testSource = await File.ReadAllTextAsync(testSourcePath);
+        var appHostProjectType = GeneratedClassNameFixupRegex().Replace(appHostProjectName, "_");
+        Assert.Contains($"DistributedApplicationTestingBuilder.CreateAsync<Projects.{appHostProjectType}>", testSource);
 
         return testProjectDir;
+    }
 
-        static void PrepareTestProject(AspireProject project, string projectPath, string appHostProjectName)
+    private static void UncommentInstructionalSample(string testSourcePath, string testTemplateName, string appHostProjectName)
+    {
+        var marker = testTemplateName switch
         {
-            // Insert <ProjectReference Include="$(MSBuildThisFileDirectory)..\aspire-starter0.AppHost\aspire-starter0.AppHost.csproj" /> in the project file
+            "aspire-nunit" => "// [Test]",
+            "aspire-mstest" => "// [TestMethod]",
+            "aspire-xunit" => "// [Fact]",
+            _ => throw new NotImplementedException($"Unknown test template: {testTemplateName}")
+        };
 
-            // taken from https://raw.githubusercontent.com/dotnet/templating/a325ffa18edd1590f9b340cf83d51d8eb567ebdc/src/Microsoft.TemplateEngine.Orchestrator.RunnableProjects/ValueForms/XmlEncodeValueFormFactory.cs
-            StringBuilder output = new();
-            using (var w = XmlWriter.Create(output, s_xmlWriterSettings))
-            {
-                w.WriteString(appHostProjectName);
-            }
-            var xmlEncodedId = output.ToString();
-
-            var projectReference = $@"<ProjectReference Include=""$(MSBuildThisFileDirectory)..\{xmlEncodedId}\{xmlEncodedId}.csproj"" />";
-
-            var newContents = File.ReadAllText(projectPath)
-                                    .Replace("</Project>", $"<ItemGroup>{projectReference}</ItemGroup>\n</Project>");
-            File.WriteAllText(projectPath, newContents);
-        }
-
-        static void PrepareTestCsFile(string id, string projectDir, string appHostProjectName, string testTemplateName)
+        var source = new StringBuilder();
+        var inTest = false;
+        foreach (var line in File.ReadAllLines(testSourcePath))
         {
-            var testCsPath = Path.Combine(projectDir, "IntegrationTest1.cs");
-            var sb = new StringBuilder();
-
-            // Uncomment everything after the marker line
-            var inTest = false;
-            var marker = testTemplateName switch
+            if (!inTest && line.Contains(marker, StringComparison.Ordinal))
             {
-                "aspire-nunit" or "aspire-nunit-9" => "// [Test]",
-                "aspire-mstest" or "aspire-mstest-9" => "// [TestMethod]",
-                "aspire-xunit" or "aspire-xunit-9" => "// [Fact]",
-                _ => throw new NotImplementedException($"Unknown test template: {testTemplateName}")
-            };
-
-            foreach (var line in File.ReadAllLines(testCsPath))
-            {
-                if (!inTest && line.Contains(marker))
-                {
-                    inTest = true;
-                }
-
-                if (inTest && CommentLineRegex().IsMatch(line))
-                {
-                    sb.AppendLine(CommentLineRegex().Replace(line, "    "));
-                    continue;
-                }
-
-                sb.AppendLine(line);
+                inTest = true;
             }
 
-            var classNameFromId = GeneratedClassNameFixupRegex().Replace(appHostProjectName, "_");
-            sb.Replace("Projects.MyAspireApp_AppHost", $"Projects.{classNameFromId}");
-            File.WriteAllText(testCsPath, sb.ToString());
+            if (inTest && CommentLineRegex().IsMatch(line))
+            {
+                source.AppendLine(CommentLineRegex().Replace(line, "    "));
+                continue;
+            }
+
+            source.AppendLine(line);
         }
+
+        Assert.True(inTest, $"Expected instructional sample marker '{marker}' in {testSourcePath}");
+
+        var appHostProjectType = GeneratedClassNameFixupRegex().Replace(appHostProjectName, "_");
+        source.Replace("Projects.MyAspireApp_AppHost", $"Projects.{appHostProjectType}");
+        File.WriteAllText(testSourcePath, source.ToString());
+    }
+
+    private static string UnescapeMSBuildItemValue(string value)
+    {
+        return MSBuildEscapeRegex().Replace(
+            value,
+            match => ((char)Convert.ToByte(match.Groups["value"].Value, 16)).ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static string EscapeMSBuildItemValue(string value)
+    {
+        return value
+            .Replace("%", "%25", StringComparison.Ordinal)
+            .Replace("$", "%24", StringComparison.Ordinal)
+            .Replace("@", "%40", StringComparison.Ordinal)
+            .Replace("'", "%27", StringComparison.Ordinal)
+            .Replace(";", "%3B", StringComparison.Ordinal)
+            .Replace("?", "%3F", StringComparison.Ordinal)
+            .Replace("*", "%2A", StringComparison.Ordinal)
+            .Replace("(", "%28", StringComparison.Ordinal)
+            .Replace(")", "%29", StringComparison.Ordinal);
     }
 
     public static Task<IBrowserContext> CreateNewBrowserContextAsync()

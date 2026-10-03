@@ -9,6 +9,18 @@ public class IntegrationTest1
 
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
 
+#if (WithAppHostReference)
+    [TestMethod]
+    public async Task AppHostBuilds()
+    {
+        using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CancellationTokenSource.Token);
+        cancellationTokenSource.CancelAfter(DefaultTimeout);
+        var cancellationToken = cancellationTokenSource.Token;
+        var appHost = await DistributedApplicationTestingBuilder.CreateAsync<Projects.GeneratedAppHostProjectType>(cancellationToken);
+
+        await using var app = await appHost.BuildAsync(cancellationToken).WaitAsync(DefaultTimeout, cancellationToken);
+    }
+#else
     // Instructions:
     // 1. Add a project reference to the target AppHost project, e.g.:
     //
@@ -47,4 +59,5 @@ public class IntegrationTest1
     //     // Assert
     //     Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     // }
+#endif
 }

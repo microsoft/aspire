@@ -878,7 +878,25 @@ internal sealed class ProjectLocator(
         return UseOrFindAppHostProjectFileAsync(projectFile, multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress: true, cancellationToken);
     }
 
-    public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
+    public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
+    {
+        var projectOptionSpecifiedAsDirectory = projectFile is not null && Directory.Exists(projectFile.FullName);
+        return UseOrFindAppHostProjectFileCoreAsync(
+            projectFile,
+            multipleAppHostProjectsFoundBehavior,
+            createSettingsFile,
+            displayProgress,
+            projectOptionSpecifiedAsDirectory,
+            cancellationToken);
+    }
+
+    private async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileCoreAsync(
+        FileInfo? projectFile,
+        MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior,
+        bool createSettingsFile,
+        bool displayProgress,
+        bool projectOptionSpecifiedAsDirectory,
+        CancellationToken cancellationToken)
     {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
         var explicitSelectionWasPrompted = false;
@@ -942,16 +960,25 @@ internal sealed class ProjectLocator(
                     {
                         // Several broken candidates under one directory is a genuine ambiguity rather than
                         // a user selection, so this stays a project-resolution failure.
-                        throw new ProjectLocatorException(ErrorStrings.AppHostsMayNotBeBuildable, ProjectLocatorFailureReason.AppHostsMayNotBeBuildable);
+                        throw new ProjectLocatorException(
+                            ErrorStrings.AppHostsMayNotBeBuildable,
+                            ProjectLocatorFailureReason.AppHostsMayNotBeBuildable,
+                            projectOptionSpecifiedAsDirectory);
                     }
 
                     if (searchResults.UnsupportedProjects.Any(file => IsUnderDirectory(file, directory)))
                     {
-                        throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.UnsupportedProjects);
+                        throw new ProjectLocatorException(
+                            ErrorStrings.NoProjectFileFound,
+                            ProjectLocatorFailureReason.UnsupportedProjects,
+                            projectOptionSpecifiedAsDirectory);
                     }
 
                     logger.LogError("No AppHost project files found in directory {Directory}", directory.FullName);
-                    throw new ProjectLocatorException(ErrorStrings.ProjectFileDoesntExist, ProjectLocatorFailureReason.ProjectFileDoesntExist);
+                    throw new ProjectLocatorException(
+                        ErrorStrings.ProjectFileDoesntExist,
+                        ProjectLocatorFailureReason.ProjectFileDoesntExist,
+                        projectOptionSpecifiedAsDirectory);
                 }
                 else if (appHostProjects.Count == 1)
                 {
@@ -979,7 +1006,10 @@ internal sealed class ProjectLocator(
                     else if (multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw)
                     {
                         logger.LogError("Multiple AppHost project files found in directory {Directory}, throwing exception", directory.FullName);
-                        throw new ProjectLocatorException(ErrorStrings.MultipleProjectFilesFound, ProjectLocatorFailureReason.MultipleProjectFilesFound);
+                        throw new ProjectLocatorException(
+                            ErrorStrings.MultipleProjectFilesFound,
+                            ProjectLocatorFailureReason.MultipleProjectFilesFound,
+                            projectOptionSpecifiedAsDirectory);
                     }
                 }
             }
@@ -1049,13 +1079,38 @@ internal sealed class ProjectLocator(
                     }
                 }
 
-                // If no handler matched, for .cs files check if we should search the parent directory
+                // An invalid apphost.cs can still identify a directory containing a project-based AppHost.
                 if (projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase) && projectFile.Directory is { } parentDirectory)
                 {
                     // File exists but is not a valid single-file apphost. Search in the parent directory.
                     // Propagate displayProgress so callers that opted out of progress UI (e.g. the hidden
                     // `extension get-apphosts` flow) do not start emitting progress on this fallback path.
-                    return await UseOrFindAppHostProjectFileAsync(new FileInfo(parentDirectory.FullName), multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress, cancellationToken);
+                    try
+                    {
+                        return await UseOrFindAppHostProjectFileCoreAsync(
+                            new FileInfo(parentDirectory.FullName),
+                            multipleAppHostProjectsFoundBehavior,
+                            createSettingsFile,
+                            displayProgress,
+                            projectOptionSpecifiedAsDirectory,
+                            cancellationToken);
+                    }
+                    catch (ProjectLocatorException ex) when (ex.FailureReason is ProjectLocatorFailureReason.ProjectFileDoesntExist)
+                    {
+                        // The original file exists, so an empty fallback search means it is not a
+                        // valid AppHost rather than that the user supplied a nonexistent path.
+                        logger.LogDebug(ex, "No project-based AppHost was found beside invalid single-file AppHost {ProjectFile}.", projectFile.FullName);
+                        throw new ProjectLocatorException(
+                            ErrorStrings.ProjectFileNotAppHostProject,
+                            ProjectLocatorFailureReason.ProjectFileNotAppHostProject);
+                    }
+                }
+
+                if (handler is not null)
+                {
+                    throw new ProjectLocatorException(
+                        ErrorStrings.ProjectFileNotAppHostProject,
+                        ProjectLocatorFailureReason.ProjectFileNotAppHostProject);
                 }
 
                 // No handler can process this file
@@ -1414,9 +1469,14 @@ internal sealed class ProjectLocator(
     }
 }
 
-internal class ProjectLocatorException(string message, ProjectLocatorFailureReason failureReason) : System.Exception(message)
+internal class ProjectLocatorException(
+    string message,
+    ProjectLocatorFailureReason failureReason,
+    bool projectOptionSpecifiedAsDirectory = false) : System.Exception(message)
 {
     public ProjectLocatorFailureReason FailureReason { get; } = failureReason;
+
+    public bool ProjectOptionSpecifiedAsDirectory { get; } = projectOptionSpecifiedAsDirectory;
 }
 
 internal static class ProjectLocatorErrorHelper
@@ -1424,6 +1484,7 @@ internal static class ProjectLocatorErrorHelper
     public static (int ExitCode, string ErrorMessage) GetExitCodeAndMessage(ProjectLocatorException ex, bool projectOptionSpecifiedAsDirectory = false)
     {
         ArgumentNullException.ThrowIfNull(ex);
+        projectOptionSpecifiedAsDirectory |= ex.ProjectOptionSpecifiedAsDirectory;
 
         return ex.FailureReason switch
         {

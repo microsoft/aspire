@@ -34,6 +34,26 @@ internal static class KnownTemplateId
     public const string TypeScriptStarter = "aspire-ts-starter";
 
     /// <summary>
+    /// The template ID for the grouped integration test template.
+    /// </summary>
+    public const string IntegrationTest = "aspire-test";
+
+    /// <summary>
+    /// The template ID for the MSTest integration test template.
+    /// </summary>
+    public const string MSTest = "aspire-mstest";
+
+    /// <summary>
+    /// The template ID for the NUnit integration test template.
+    /// </summary>
+    public const string NUnit = "aspire-nunit";
+
+    /// <summary>
+    /// The template ID for the xUnit integration test template.
+    /// </summary>
+    public const string XUnit = "aspire-xunit";
+
+    /// <summary>
     /// The template ID for the CLI Java empty AppHost template.
     /// </summary>
     public const string JavaEmptyAppHost = "aspire-java-empty";
