@@ -1,4 +1,3 @@
-# DisableDockerDetector "Playground sample - not a production image"
 FROM node:22-alpine AS build
 
 WORKDIR /app
