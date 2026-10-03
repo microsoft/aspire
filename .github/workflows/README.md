@@ -51,6 +51,49 @@ Action upgrades must update Markdown references before regenerating locks and
 the action-pin cache. A generated-only pin update is not reproducible and the
 drift check rejects it, even if the changed action versions are otherwise valid.
 
+### Validation failure reporting
+
+Failed validation writes a job summary with the failed stage, configured and
+observed compiler versions when available, and skipped stages. Generated-file
+drift includes an escaped excerpt limited to 20 paths, 100 diff lines, and 12 KiB
+of diff text. Truncation is explicit; unrelated files and general command logs
+are not copied. Inspect the original step logs for compiler, lint, restore, or
+test diagnostics.
+
+`report-agentic-validation.yml` puts stage-specific remediation and a link to
+that summary in one `[automated]` PR comment. Reruns and subsequent failures
+update the comment. Successful validation marks an existing comment resolved;
+clean runs do not create comments. Cancelled runs do not resolve failures, and
+results for superseded runs, attempts, or PR heads do not replace current advice.
+
+The validator remains read-only and blocking. The separate `workflow_run`
+reporter loads only its trusted default-branch code and uses GitHub API metadata
+to identify the run and its current open PR, including fork PRs. It never executes
+PR code or downloads PR artifacts or logs. Missing or ambiguous PR associations
+produce a warning instead of a guessed comment destination.
+
+The reporter needs `actions: read` and `pull-requests: write`, plus
+`contents: read` for its trusted helper checkout; it uses no application secret
+or PAT. Denied comment permission produces a warning and a reporter summary link
+to the original failure, without retrying with stronger credentials. Other API
+errors fail the reporter visibly. Reporting cannot turn failed validation green.
+
+GitHub activates the reporter only when its workflow exists on the default
+branch. Before that, local behavioral tests cover the publication policy, but
+live event delivery and repository token policy still require an authorized
+end-to-end check after landing.
+
+For drift, use the version displayed by CI and run:
+
+```shell
+gh aw compile --purge --force-refresh-action-pins --validate --no-check-update
+```
+
+Review and commit generated changes with their sources. CI checks the PR merge
+result, so if the branch alone is clean, reproduce with the current base
+incorporated. Check compiler/source/action-pin alignment without assuming that
+drift alone identifies the change responsible.
+
 The compiler's diagnostic `agent` artifact does not include arbitrary files from
 `/tmp/gh-aw/agent/`. Workflows that publish custom agent files must upload a named
 artifact in `post-steps`, allowlist only the required paths, and download it in the
