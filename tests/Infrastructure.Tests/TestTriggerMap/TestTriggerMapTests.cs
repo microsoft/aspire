@@ -507,6 +507,10 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests"]
         },
         {
+            ".github/actionlint-version.json",
+            ["test:Infrastructure.Tests"]
+        },
+        {
             ".github/scripts/assert-extension-e2e-bridge-vsix.ps1",
             ["job:extension-unit"]
         },
@@ -1562,7 +1566,6 @@ public sealed class TestTriggerMapTests
 
         var skippedActions = new HashSet<string>(StringComparer.Ordinal)
         {
-            "create-pull-request",
             "preload-azure-cli-requests",
         };
 

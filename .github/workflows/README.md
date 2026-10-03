@@ -39,8 +39,22 @@ workflow sources still trigger it even before their generated locks exist.
 
 Compile-time lint diagnostics alone are not a blocking gate. The lint command
 owns the actionlint image and compatibility exceptions; `.github/actionlint.yaml`
-only scopes the known stale-check output workaround to the affected generated
-workflows.
+is shared by both lint paths: it configures the runner label for handwritten
+workflow linting and scopes the known stale-check output workaround to the
+affected generated workflows. Main CI separately runs pinned core actionlint
+over handwritten workflows and their local actions through
+`lint-handwritten-workflows.sh`, which selects the files and excludes gh-aw output.
+The version and linux_amd64 archive SHA-256 are pinned in `.github/actionlint-version.json`,
+outside `.github/workflows`, so the Aspire bot can update them without workflow-write access.
+The weekly `update-actionlint.yml` workflow opens a draft PR when a newer release exists. It
+verifies the downloaded archive against the release API `sha256:` digest and lints the
+handwritten workflows with the candidate before proposing the bump. That digest comes from the
+same upstream release, so review the release notes; the committed hash then makes CI detect any
+later substitution of the archive. Manual dispatch defaults to `validate`, which does not change
+the updater branch or open a PR and is safe to run from a fork; `propose` runs only from the
+upstream repository's default branch and follows the scheduled PR-update path when a newer release
+is available. Scheduled and `propose` runs are serialized end to end by a shared concurrency
+group, so each run picks its release only after the previous run has pushed.
 
 Explicit action versions in Markdown survive recompilation, so update deprecated
 inputs and action runtimes in the sources, not just the generated YAML. The
