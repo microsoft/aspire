@@ -38,6 +38,7 @@ internal sealed class NativeSmokeHarness
     private readonly TrayController _controller;
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-tray-smoke-");
     private readonly AppHostInfo _savedHost;
+    private readonly AppHostInfo[] _groupHosts;
     private MacTrayApplication _application = null!;
     private TrayController? _discovery;
     private int _phase;
@@ -64,6 +65,25 @@ internal sealed class NativeSmokeHarness
         // control characters: ".../Saved.\t雪🧪.AppHost.cs" is an ordinary macOS filename.
         var path = Path.Combine(_directory.FullName, "Saved.\t雪🧪.AppHost.cs");
         File.WriteAllText(path, "// Native smoke fixture; never executed.");
+        var common = Path.Combine(_directory.FullName, "repository", ".git");
+        Directory.CreateDirectory(common);
+        _groupHosts = new[] { "feature/cart", "release/2.0", "experiment-a" }.Select((branch, index) =>
+        {
+            var root = Path.Combine(_directory.FullName, "worktree-" + index);
+            var git = Path.Combine(common, "worktrees", "worktree-" + index);
+            Directory.CreateDirectory(git);
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, ".git"), "gitdir: " + git);
+            File.WriteAllText(Path.Combine(git, "commondir"), "../..");
+            File.WriteAllText(Path.Combine(git, "HEAD"), "ref: refs/heads/" + branch);
+            var source = Path.Combine(root, "Shop.AppHost.cs");
+            File.WriteAllText(source, "// Native grouping fixture; never executed.");
+            return new AppHostInfo(source, 42001 + index, "http://localhost:19001/")
+            {
+                ProcessStartTimeUnixMilliseconds = 1_700_000_010_001 + index,
+                Health = index == 2 ? AppHostHealth.Warning : AppHostHealth.Healthy
+            };
+        }).ToArray();
         _savedHost = new(path, 41006, null)
         {
             ProcessStartTimeUnixMilliseconds = 1_700_000_000_006,
@@ -151,7 +171,7 @@ internal sealed class NativeSmokeHarness
         Require(menu.AutosaveName == "AspireTray.Smoke", "Smoke must not share the production item's saved placement.");
         Require(menu.HasTemplateIcon && menu.HasIconOnlyTitle && menu.HasExpectedConnectionBadge && menu.HasNoItemTooltips
             && menu.HasCommandQ && menu.DispatcherSupportsAllModes, "Icon, tooltip, keyboard, or dispatcher contract failed.");
-        Require(menu.ItemCount == menu.Rows.Count + 6 + (menu.StatusNotice is null ? 0 : 1), "Unexpected menu structure.");
+        Require(menu.ItemCount == _application.TopLevelHostCountForSmoke + 6 + (menu.StatusNotice is null ? 0 : 1), "Unexpected menu structure.");
         if (menu.StatusNotice is not null)
         {
             Require(menu.StatusNotice == state.Status, "Status notice was not updated.");
@@ -536,6 +556,46 @@ internal sealed class NativeSmokeHarness
                 Require(!_controller.ConfirmStop && !_savedStateStore.Load().ConfirmStop
                     && _clearConfirmations == 2 && _removeConfirmations == 1,
                     "Stop-warning opt-out must survive other actions without suppressing Clear or missing-file confirmations.");
+                _phase++;
+                Publish(_groupHosts);
+                break;
+            case 36:
+                VerifyRows(state, menu);
+                Require(state.MenuGroups.Single(group => group.Title == "Shop").Instances.Count == 3, "Default layout must group related worktrees.");
+                _phase++;
+                goto case 37;
+            case 37:
+                VerifyRows(state, menu);
+                _application.VerifyGroupedMenusForSmoke();
+                _application.VerifyGroupedContextMenuLookupForSmoke();
+                _application.PerformDashboardForSmoke(_groupHosts[1].Id);
+                _application.RetainStopSenderForSmoke(_groupHosts[0].Id);
+                _application.SetTrackingForSmoke(_groupHosts[0].Id, open: true);
+                _phase++;
+                Publish([_groupHosts[2], _groupHosts[0] with { ProcessStartTimeUnixMilliseconds = _groupHosts[0].ProcessStartTimeUnixMilliseconds + 1 }, _groupHosts[1]]);
+                break;
+            case 38:
+                _application.VerifyGroupedMenusForSmoke();
+                Require(menu.Rows.Single(row => row.Id == _groupHosts[0].Id) is { Enabled: false, CanStop: false },
+                    "Nested stale instance remained enabled during tracking.");
+                _application.PerformRetainedStopForSmoke();
+                Require(state.AppHosts.All(host => !host.IsStopping), "Retained nested command targeted a replacement lifetime.");
+                _phase++;
+                _application.SetTrackingForSmoke(_groupHosts[0].Id, open: false);
+                break;
+            case 39:
+                VerifyRows(state, menu);
+                _application.VerifyGroupedMenusForSmoke();
+                _application.ReleaseRetainedStopSenderForSmoke();
+                Publish([]);
+                _phase = 40;
+                break;
+            case 40:
+                Require(state.RecentMenuGroups.Single(group => group.Title == "Shop").Instances.Count == 3,
+                    "Open Recent must group related worktrees within its own section.");
+                _application.VerifyGroupedMenusForSmoke();
+                _application.VerifyGroupedContextMenuLookupForSmoke();
+                VerifyCopy(_groupHosts[1].AppHostPath);
                 // Interactive preview should still expose the real alert for manual inspection.
                 _controller.SetConfirmStop(true);
                 _finished = true;
@@ -593,7 +653,7 @@ internal sealed class NativeSmokeHarness
     {
         foreach (var native in menu.Rows)
         {
-            var row = state.AppHosts.Single(host => host.Id == native.Id);
+            var row = state.MenuGroups.SelectMany(group => group.Instances).Single(host => host.Id == native.Id);
             Require(native.Title == (native.Subtitle is null ? $"{row.Title} - {row.Subtitle}" : row.Title)
                 && (native.Subtitle is null || native.Subtitle == row.Subtitle), "Native title/subtitle mismatch.");
             var healthDescription = !row.IsRunning ? "AppHost stopped" : row.Health switch

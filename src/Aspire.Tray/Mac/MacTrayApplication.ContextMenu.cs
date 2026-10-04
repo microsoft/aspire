@@ -54,13 +54,7 @@ internal sealed partial class MacTrayApplication
         {
             return nativeEvent;
         }
-        var item = AppKit.Get(_menu, "highlightedItem");
-        var row = _rows.FirstOrDefault(row => row.Item == item);
-        if (row is null)
-        {
-            item = AppKit.Get(_recentMenu, "highlightedItem");
-            row = _recentRows.FirstOrDefault(row => row.Item == item);
-        }
+        var row = FindHighlightedAppHostRow(menu => AppKit.Get(menu, "highlightedItem"));
         if (row is null)
         {
             return nativeEvent;
@@ -75,6 +69,23 @@ internal sealed partial class MacTrayApplication
         // the old tree first and let the main-loop source present the immutable path action.
         RequestRefresh();
         return 0;
+    }
+
+    private NativeAppHostRow? FindHighlightedAppHostRow(Func<nint, nint> getHighlightedItem)
+    {
+        // Group headers are highlighted in the root/recent menu; the selected instance
+        // is highlighted in its group submenu. Only inspect menus that are tracking so
+        // an inactive submenu's previous selection cannot redirect a context action.
+        foreach (var menu in _openMenus)
+        {
+            var item = getHighlightedItem(menu);
+            var row = _rows.Concat(_recentRows).FirstOrDefault(row => row.Item == item);
+            if (row is not null)
+            {
+                return row;
+            }
+        }
+        return null;
     }
 
     private void ShowPendingPinContextMenu()

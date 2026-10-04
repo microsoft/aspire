@@ -136,6 +136,17 @@ unbadged, dots indicate connecting, a cross indicates unavailable discovery, and
 a solid dot indicates active AppHosts. The badge's transparent border reveals the menu-bar background rather
 than painting an opaque outline. Native two-line AppHost
 rows show the project/worktree name first and directory context and PID underneath.
+Instances of the same AppHost in related Git worktrees are grouped automatically
+under the application name. Each child shows its branch, or its worktree folder
+for a detached checkout. Duplicate labels include directory context and, when
+needed, PID. Single instances remain directly accessible. Repository identity
+and the AppHost's repository-relative source path determine grouping; unrelated
+repositories and different AppHosts with the same name stay separate. When Git
+metadata cannot be read, only instances using the same absolute source path can
+be grouped. Recently opened entries use the same grouping within their separate
+section, preserving the most recently opened application and worktree order.
+The parent health indicator summarizes the original child instances, and unknown
+or stopped children prevent an otherwise healthy group from appearing fully healthy.
 The redundant branded/count header is omitted when AppHosts are listed; an empty
 placeholder or actionable error/disconnection notice is shown when appropriate.
 Each live AppHost has an **Open Dashboard** action and **Stop AppHost...** action.
