@@ -186,6 +186,27 @@
   <data name="TerminalDisconnected" xml:space="preserve">
     <value>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</value>
   </data>
+  <data name="TerminalDisconnectedMessage" xml:space="preserve">
+    <value>Terminal disconnected. The last output has been preserved.</value>
+  </data>
+  <data name="TerminalDisconnectedWithExitCode" xml:space="preserve">
+    <value>Terminal disconnected (exit code {0}). The last output has been preserved.</value>
+  </data>
+  <data name="TerminalRestartResource" xml:space="preserve">
+    <value>Restart resource</value>
+  </data>
+  <data name="TerminalCloseTab" xml:space="preserve">
+    <value>Close tab</value>
+  </data>
+  <data name="TerminalShowOutput" xml:space="preserve">
+    <value>Show terminal</value>
+  </data>
+  <data name="TerminalShowDisconnectedBanner" xml:space="preserve">
+    <value>Terminal disconnected. Show recovery actions</value>
+  </data>
+  <data name="TerminalShowDisconnectedBannerWithExitCode" xml:space="preserve">
+    <value>Terminal disconnected (exit code {0}). Show recovery actions</value>
+  </data>
   <data name="TerminalInputFailed" xml:space="preserve">
     <value>The terminal could not complete the input or clipboard action. Check browser clipboard permissions and try again.</value>
   </data>

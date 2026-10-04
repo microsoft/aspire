@@ -1,0 +1,49 @@
+@namespace Aspire.Dashboard.Components.Controls
+
+@if (_collapsed)
+{
+    <div class="terminal-disconnected-indicator">
+        <FluentButton @ref="_toggleButton"
+                      Appearance="ButtonAppearance.Default"
+                      IconOnly="true"
+                      Class="terminal-show-banner"
+                      Title="@ShowBannerLabel"
+                      aria-label="@ShowBannerLabel"
+                      aria-expanded="false"
+                      OnClick="@(() => SetCollapsedAsync(false))">
+            <FluentIcon Value="@(new Icons.Regular.Size20.PlugDisconnected())" Color="Color.Default" />
+        </FluentButton>
+    </div>
+}
+else
+{
+    <div class="terminal-disconnected-banner">
+        <FluentIcon Value="@(new Icons.Regular.Size20.PlugDisconnected())" Color="Color.Default" />
+        <span role="status">@Message</span>
+        @if (RestartCommand is not null)
+        {
+            <FluentButton Appearance="ButtonAppearance.Default"
+                          Class="terminal-restart-resource"
+                          Disabled="@RestartDisabled"
+                          OnClick="@RestartResourceAsync">
+                @Loc[nameof(Resources.TerminalStrings.TerminalRestartResource)]
+            </FluentButton>
+        }
+        @if (OnClose.HasDelegate)
+        {
+            <FluentButton Appearance="ButtonAppearance.Default"
+                          Class="terminal-close-tab"
+                          Disabled="@_executing"
+                          OnClick="@CloseAsync">
+                @Loc[nameof(Resources.TerminalStrings.TerminalCloseTab)]
+            </FluentButton>
+        }
+        <FluentButton @ref="_toggleButton"
+                      Appearance="ButtonAppearance.Default"
+                      Class="terminal-show-output"
+                      aria-expanded="true"
+                      OnClick="@(() => SetCollapsedAsync(true))">
+            @Loc[nameof(Resources.TerminalStrings.TerminalShowOutput)]
+        </FluentButton>
+    </div>
+}

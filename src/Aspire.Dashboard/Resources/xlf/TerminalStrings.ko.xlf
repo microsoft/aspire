@@ -7,6 +7,11 @@
         <target state="new">Toggle terminal (`)</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalCloseTab">
+        <source>Close tab</source>
+        <target state="new">Close tab</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalCopyFailed">
         <source>Could not copy to clipboard.</source>
         <target state="new">Could not copy to clipboard.</target>
@@ -25,6 +30,16 @@
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
         <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDisconnectedMessage">
+        <source>Terminal disconnected. The last output has been preserved.</source>
+        <target state="new">Terminal disconnected. The last output has been preserved.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDisconnectedWithExitCode">
+        <source>Terminal disconnected (exit code {0}). The last output has been preserved.</source>
+        <target state="new">Terminal disconnected (exit code {0}). The last output has been preserved.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDismissError">
@@ -187,9 +202,29 @@
         <target state="new">Warning</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalRestartResource">
+        <source>Restart resource</source>
+        <target state="new">Restart resource</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
         <target state="new">Reconnect terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalShowDisconnectedBanner">
+        <source>Terminal disconnected. Show recovery actions</source>
+        <target state="new">Terminal disconnected. Show recovery actions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalShowDisconnectedBannerWithExitCode">
+        <source>Terminal disconnected (exit code {0}). Show recovery actions</source>
+        <target state="new">Terminal disconnected (exit code {0}). Show recovery actions</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalShowOutput">
+        <source>Show terminal</source>
+        <target state="new">Show terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizeLabel">

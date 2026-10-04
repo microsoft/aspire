@@ -18,7 +18,7 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.171.0** release,
+`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.173.0-alpha.1824.1.98d8766** alpha,
 paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages and the
 repository-local `hex1b` tool at the same version. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
@@ -60,8 +60,9 @@ path `woff2/CascadiaMonoNF.woff2`. Its relative path under
 `dist/fonts/cascadia-mono-nf/` is preserved. Do not hand-edit generated assets.
 `TerminalView.razor.js` imports only the minified public entry point.
 
-The matching NuGet packages are available through the approved `dotnet-public` feed;
-no additional package source is required.
+For this alpha trial, `NuGet.config` temporarily maps only the three Hex1b packages
+to nuget.org. Remove that temporary source and mapping once these versions are
+available through an approved internal feed.
 
 Desktop and Android Firefox terminals use `renderer: "webgl2"` until the
 [WebGPU performance issue](https://bugzilla.mozilla.org/show_bug.cgi?id=1870699)
@@ -194,7 +195,7 @@ The terminal uses Hex1b's default Canvas2D **overlay** scrollbar, not a native
 HTML scrollbar or a reserved gutter. The mount requests 3 CSS pixels of internal
 padding on every side. `createDefaultScrollbarRenderer` keeps the
 upstream capsule thumb, marker drawing, gestures, hit testing and auto-hide.
-The pinned renderer draws rectangular markers on a flat translucent track,
+The pinned renderer draws rectangular markers on a translucent track,
 with upstream marker navigation and a thumb focus outline.
 A scoped shadow-DOM override hides the track's DOM focus outline
 after pointer input, restoring the upstream `:focus-visible` outline on keyboard
@@ -230,7 +231,16 @@ zero. Browser-owned bookmarks remain per-view and do not survive reconnect.
 
 ### View lifecycle
 
-Each reconnect aborts the previous mount and creates a new client. Mounting is
+Each reconnect creates a new client. A disconnected client with a received frame
+stays mounted above its replacements until a connected frame arrives, retaining
+text, Sixel and Kitty graphics through failed retries. `preserveOnDisconnect`
+keeps the received screen locally; it does not guarantee unreceived final output.
+Disconnected output is dimmed with a localized **Disconnected** badge. Successful
+reconnect removes the treatment and disposes the retained client. Completed
+views retain their screen until closed; switching endpoints releases the previous
+screen immediately. Renderer failures still surface an error and dispose the
+unusable client rather than treating it as a retained transport disconnect.
+Mounting is
 deferred while initially hidden; once connected, changing the Console/Terminal
 view retains the client, selection, and producer-backed history. Disposal closes
 only this view, never the server-side producer. Sizing changes explicitly request

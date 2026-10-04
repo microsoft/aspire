@@ -1,0 +1,36 @@
+.terminal-disconnected-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--borderRadiusMedium);
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+    box-shadow: var(--shadow4);
+}
+
+.terminal-disconnected-banner span {
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+@media (forced-colors: active) {
+    .terminal-disconnected-banner {
+        border-color: CanvasText;
+        background: Canvas;
+        color: CanvasText;
+    }
+}
+
+.terminal-disconnected-indicator {
+    align-self: flex-end;
+}
+
+.terminal-disconnected-indicator ::deep .terminal-show-banner {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--borderRadiusMedium);
+    box-shadow: var(--shadow4);
+}

@@ -149,9 +149,11 @@ function updateAppearance(state) {
     state.viewElement.style.setProperty("--terminal-background", palette.background);
     state.viewElement.style.setProperty("--terminal-foreground", palette.foreground);
     state.client?.setColorMode(state.colorMode);
+    state.retainedClient?.client.setColorMode(state.colorMode);
     state.scrollbar = scrollbarConfiguration(state);
     // setScrollbar replaces, rather than merges, the configuration.
     state.client?.setScrollbar(state.scrollbar);
+    state.retainedClient?.client.setScrollbar(state.scrollbar);
     notifyToolbar(state);
 }
 
@@ -245,8 +247,16 @@ function cancelReconnect(state) {
     }
 }
 
-function releaseClient(state) {
-    state.inspectionObserver?.disconnect();
+function releaseRetainedClient(state) {
+    const retained = state.retainedClient;
+    state.retainedClient = null;
+    retained?.inspectionObserver?.disconnect();
+    retained?.controller?.abort();
+    retained?.client.dispose();
+}
+
+function releaseClient(state, preserve = false) {
+    const inspectionObserver = state.inspectionObserver;
     state.inspectionObserver = null;
     if (state.client?.element.contains(document.activeElement)) {
         requestFocus(state);
@@ -255,6 +265,17 @@ function releaseClient(state) {
     const client = state.client;
     state.controller = null;
     state.client = null;
+    if (preserve && client && !client.connected) {
+        releaseRetainedClient(state);
+        // Keep the real GPU-backed view above replacement mounts until their first frame.
+        // Aborting its mount signal would dispose it and discard retained graphics.
+        client.element.style.position = "absolute";
+        client.element.style.inset = "0";
+        client.element.style.zIndex = "1";
+        state.retainedClient = { client, controller, inspectionObserver };
+        return;
+    }
+    inspectionObserver?.disconnect();
     controller?.abort();
     client?.dispose();
 }
@@ -274,6 +295,7 @@ function configureTerminalChrome(client) {
     style.textContent = `
         .return-live { display: none !important; }
         .inspection-message[data-aspire-history-position] { display: none !important; }
+        .inspection-message[data-aspire-disconnected-status] { display: none !important; }
         :host([data-aspire-pointer-input="true"]) .scrollbar-accessibility:focus-visible { outline: none; }
         .viewport {
             background-color: color-mix(in srgb, var(--terminal-background) 92%, black);
@@ -304,6 +326,11 @@ function configureTerminalChrome(client) {
         // feedback and navigation errors and must not be suppressed.
         status.toggleAttribute("data-aspire-history-position",
             status.dataset.level !== "error" && /^\d+ rows above live$/.test(status.textContent));
+        // Hex1b can report "Terminal view is not connected" directly or with an
+        // action prefix, e.g. "Scrollbar: Terminal view is not connected".
+        // Aspire's recovery banner owns this state; keep unrelated errors visible.
+        status.toggleAttribute("data-aspire-disconnected-status", !client.connected &&
+            /^(?:(?:Input action failed|Copy failed|Scrollbar(?: tooltip)?): )?Terminal view is not connected$/.test(status.textContent));
     };
     const observer = new MutationObserver(update);
     observer.observe(status, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ["data-level"] });
@@ -329,7 +356,7 @@ function scheduleReconnect(state, generation) {
     }, delay);
 }
 
-function connectionFailed(state, generation, error) {
+function connectionFailed(state, generation, error, preserve) {
     if (!isCurrent(state, generation) || state.ended || state.failurePending) {
         return;
     }
@@ -338,8 +365,8 @@ function connectionFailed(state, generation, error) {
     state.peer = { id: null, primaryId: null, isPrimary: false };
     state.pendingSizing = null;
     console.warn("Dashboard terminal connection failed.", error);
-    state.error = "mount-failed";
-    releaseClient(state);
+    releaseClient(state, preserve);
+    state.error = state.retainedClient ? null : "mount-failed";
     scheduleReconnect(state, generation);
     notifyToolbar(state);
 }
@@ -348,10 +375,11 @@ function connectionClosed(state, generation, details) {
     if (!isCurrent(state, generation) || state.ended) {
         return;
     }
+    state.disconnected = true;
     if (details.code !== TERMINAL_ENDED_CLOSE_CODE) {
         // Normal closure (1000), missing close frames (1006), reasons and wasClean
         // describe transport state, never whether the producer has completed.
-        connectionFailed(state, generation, new Error(`Terminal WebSocket closed (${details.code}).`));
+        connectionFailed(state, generation, new Error(`Terminal WebSocket closed (${details.code}).`), true);
         return;
     }
     state.ended = true;
@@ -598,6 +626,7 @@ async function mountClient(state, generation, controller) {
             label: state.options.label,
             sizing: state.sizing,
             readOnly: state.readOnly,
+            preserveOnDisconnect: true,
             colorMode: state.colorMode,
             lightModePalette: lightPalette,
             darkModePalette: darkPalette,
@@ -669,7 +698,7 @@ async function mountClient(state, generation, controller) {
                     state.error = "input-failed";
                     notifyToolbar(state);
                 } else {
-                    connectionFailed(state, generation, message);
+                    connectionFailed(state, generation, message, false);
                 }
             },
             onGeometry(geometry) {
@@ -716,7 +745,9 @@ async function mountClient(state, generation, controller) {
             notifyToolbar(state);
             return;
         }
+        releaseRetainedClient(state);
         state.connected = client.connected;
+        state.disconnected = !client.connected;
         state.peer = client.peer;
         state.geometry = client.geometry;
         state.sizing = client.sizing;
@@ -728,7 +759,7 @@ async function mountClient(state, generation, controller) {
         notifyToolbar(state);
     } catch (error) {
         if (current()) {
-            connectionFailed(state, generation, error);
+            connectionFailed(state, generation, error, false);
         }
     }
 }
@@ -789,11 +820,13 @@ export function initTerminal(element, wsUrl, dotNetRef, options, selectionTempla
         readOnly: !!options.readOnly,
         autoFit: !!options.autoFit,
         client: null,
+        retainedClient: null,
         inspectionObserver: null,
         controller: null,
         disposed: false,
         ended: false,
         connected: false,
+        disconnected: false,
         title: "",
         workingDirectory: null,
         workingDirectoryUri: null,
@@ -883,6 +916,8 @@ export function reconnectTerminal(id, wsUrl) {
         return state?.generation ?? 0;
     }
     if (state.wsUrl !== wsUrl) {
+        releaseRetainedClient(state);
+        state.disconnected = false;
         state.title = "";
         state.workingDirectory = null;
         state.workingDirectoryUri = null;
@@ -913,6 +948,7 @@ export function disposeTerminal(id) {
     state.footerObserver.disconnect();
     state.listeners.abort();
     releaseClient(state);
+    releaseRetainedClient(state);
     state.dotNetRef = null;
     terminals.delete(id);
 }
@@ -1024,7 +1060,7 @@ export function getToolbarState(id) {
         terminalId: id,
         generation: state.generation,
         status: !connected ? "connecting" : isPrimary ? "primary" : state.peer.primaryId === null ? "no-primary" : "viewer",
-        connected, isPrimary, canTakeControl,
+        connected, disconnected: state.disconnected, isPrimary, canTakeControl,
         title: state.title,
         workingDirectory: state.workingDirectory,
         workingDirectoryUri: state.workingDirectoryUri,
@@ -1056,9 +1092,9 @@ export function getTerminalSnapshot(element) {
                 ...getToolbarState(state.id),
                 readOnly: state.readOnly || state.ended,
                 ended: state.ended,
-                screenText: state.client?.screenText ?? "",
-                selection: state.client?.selection ?? null,
-                viewport: state.client?.viewport ?? null,
+                screenText: (state.client ?? state.retainedClient?.client)?.screenText ?? "",
+                selection: (state.client ?? state.retainedClient?.client)?.selection ?? null,
+                viewport: (state.client ?? state.retainedClient?.client)?.viewport ?? null,
             };
         }
     }

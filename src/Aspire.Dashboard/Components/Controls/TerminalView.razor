@@ -27,19 +27,29 @@
                 }
             </div>
         }
-        <div class="terminal-body">
+        <div class="terminal-body @(_state.Disconnected ? "terminal-disconnected" : null)">
             <div class="terminal-container" @ref="_terminalElement"></div>
-            @if (_terminalError is not null)
+            @if (_state.Disconnected || _terminalError is not null)
             {
-                <div class="terminal-error">
-                    <span role="alert">@GetErrorMessage()</span>
-                    @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+                <div class="terminal-overlays @(_state.Disconnected && _bannerCollapsed ? "terminal-overlays-collapsed" : null)">
+                    @if (_state.Disconnected)
                     {
-                        <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                        <TerminalDisconnectedBanner @key="ResourceName" ResourceName="@ResourceName" ReadOnly="@ReadOnly" OnClose="@OnClose"
+                                                    OnCollapsedChanged="@(collapsed => _bannerCollapsed = collapsed)" />
                     }
-                    else
+                    @if (_terminalError is not null && !(_state.Disconnected && _bannerCollapsed))
                     {
-                        <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                        <div class="terminal-error">
+                            <span role="alert">@GetErrorMessage()</span>
+                            @if (_terminalError is "input-failed" or "sizing-failed" or "palette-failed")
+                            {
+                                <FluentButton OnClick="DismissErrorAsync">@Loc[nameof(Resources.TerminalStrings.TerminalDismissError)]</FluentButton>
+                            }
+                            else
+                            {
+                                <FluentButton OnClick="RetryAsync">@Loc[nameof(Resources.TerminalStrings.TerminalRetry)]</FluentButton>
+                            }
+                        </div>
                     }
                 </div>
             }

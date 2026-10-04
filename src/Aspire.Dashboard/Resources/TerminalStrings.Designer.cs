@@ -181,6 +181,48 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        public static string TerminalDisconnectedMessage {
+            get {
+                return ResourceManager.GetString("TerminalDisconnectedMessage", resourceCulture);
+            }
+        }
+
+        public static string TerminalDisconnectedWithExitCode {
+            get {
+                return ResourceManager.GetString("TerminalDisconnectedWithExitCode", resourceCulture);
+            }
+        }
+
+        public static string TerminalRestartResource {
+            get {
+                return ResourceManager.GetString("TerminalRestartResource", resourceCulture);
+            }
+        }
+
+        public static string TerminalCloseTab {
+            get {
+                return ResourceManager.GetString("TerminalCloseTab", resourceCulture);
+            }
+        }
+
+        public static string TerminalShowOutput {
+            get {
+                return ResourceManager.GetString("TerminalShowOutput", resourceCulture);
+            }
+        }
+
+        public static string TerminalShowDisconnectedBanner {
+            get {
+                return ResourceManager.GetString("TerminalShowDisconnectedBanner", resourceCulture);
+            }
+        }
+
+        public static string TerminalShowDisconnectedBannerWithExitCode {
+            get {
+                return ResourceManager.GetString("TerminalShowDisconnectedBannerWithExitCode", resourceCulture);
+            }
+        }
+
         public static string TerminalInputFailed {
             get {
                 return ResourceManager.GetString("TerminalInputFailed", resourceCulture);

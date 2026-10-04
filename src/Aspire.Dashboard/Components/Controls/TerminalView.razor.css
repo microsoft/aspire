@@ -188,6 +188,36 @@
     pointer-events: none;
 }
 
+.terminal-disconnected .terminal-container {
+    opacity: 0.55;
+}
+
+.terminal-overlays {
+    position: absolute;
+    inset-inline-start: 12px;
+    inset-inline-end: 12px;
+    top: 12px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: calc(100% - 24px);
+    overflow: auto;
+    /* Only the visible banner/icon intercepts input; retained output stays accessible around it. */
+    pointer-events: none;
+}
+
+.terminal-overlays > ::deep * {
+    pointer-events: auto;
+}
+
+.terminal-overlays-collapsed {
+    inset-inline-start: 20px;
+    inset-inline-end: 20px;
+    top: 20px;
+    max-height: calc(100% - 40px);
+}
+
 .terminal-container:focus-within::after {
     outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
     outline-offset: calc(-1 * var(--strokeWidthThick));
@@ -237,12 +267,13 @@
     .terminal-container {
         --terminal-focus-color: Highlight;
     }
+
+    .terminal-disconnected .terminal-container {
+        opacity: 1;
+    }
 }
 
 .terminal-error {
-    position: absolute;
-    inset-inline: 12px;
-    top: 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;

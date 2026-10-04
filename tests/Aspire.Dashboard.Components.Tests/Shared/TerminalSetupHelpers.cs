@@ -73,6 +73,7 @@ internal static class TerminalSetupHelpers
     {
         SetupTerminalTitle(context);
         context.Services.TryAddSingleton<TerminalViewSessionRegistry>();
+        context.Services.TryAddScoped<DashboardCommandExecutor>();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.Initialize", _ => true).SetVoidResult();
         var module = context.JSInterop.SetupModule(modulePath);
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);

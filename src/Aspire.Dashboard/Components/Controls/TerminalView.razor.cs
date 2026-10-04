@@ -32,6 +32,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private bool _reconciling;
     private Task? _initializationTask;
     private string? _terminalError;
+    private bool _bannerCollapsed;
     private TerminalToolbarState _state = new();
     private IReadOnlyList<TerminalSizePreset> _sizePresets = [];
     private TerminalViewSession? _viewSession;
@@ -103,6 +104,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// <summary>Raised when the terminal's metadata, role, dimensions, font or connection state changes.</summary>
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
+
+    /// <summary>Raised when the disconnected banner offers to close the owning dock tab.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -266,6 +271,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
                 await _jsModule.InvokeVoidAsync("disposeTerminal", id);
             }
             _state = new();
+            _bannerCollapsed = false;
             _terminalError = null;
             if (!_disposed)
             {
@@ -326,6 +332,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         _connectedGeneration = state.Generation;
         if (_state != state)
         {
+            if (_state.Disconnected != state.Disconnected)
+            {
+                _bannerCollapsed = false;
+            }
             _state = state;
             if (!_initializationFailed)
             {
@@ -546,6 +556,8 @@ public sealed record TerminalToolbarState
     public string Status { get; init; } = "connecting";
     /// <summary>Whether a connected frame has been presented.</summary>
     public bool Connected { get; init; }
+    /// <summary>Whether the transport closed, including while reconnecting or after producer completion.</summary>
+    public bool Disconnected { get; init; }
     /// <summary>The workload-reported title, or empty when unset.</summary>
     public string Title { get; init; } = string.Empty;
     /// <summary>The decoded working directory reported by the shell, or null when unset.</summary>

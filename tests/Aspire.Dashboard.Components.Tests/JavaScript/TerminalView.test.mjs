@@ -121,7 +121,7 @@ beforeEach(() => {
             append(style) { this.styles.push(style.textContent); },
         };
         const client = {
-            element: { parentElement: element, shadowRoot: shadow, dataset: {}, contains: value => value === client.element },
+            element: { parentElement: element, shadowRoot: shadow, dataset: {}, style: {}, contains: value => value === client.element },
             connected: true,
             peer: { id: "browser-1", primaryId: "cli-1", isPrimary: false },
             geometry: { columns: 100, rows: 30 },
@@ -610,6 +610,9 @@ test("palette, theme and contrast changes replace the complete overlay without r
             globalAlpha: 1,
             save() {},
             restore() {},
+            beginPath() {},
+            roundRect() {},
+            fill() { painted.push({ color: this.fillStyle, opacity: this.globalAlpha }); },
             fillRect() { painted.push({ color: this.fillStyle, opacity: this.globalAlpha }); },
         };
         attempt.client.scrollbar.render({
@@ -994,6 +997,41 @@ test("history chrome suppression preserves errors and selection feedback and dis
     assert.equal(replacement.disconnected, true);
 });
 
+for (const code of [1006, 4000]) {
+    test(`disconnect ${code} suppresses only redundant connection status on the retained screen`, async () => {
+        const { id } = mount();
+        const old = attempts[0];
+        old.resolve();
+        await settle();
+        const status = old.client.element.shadowRoot.querySelector(".inspection-message");
+        const observer = themeObservers.find(observer => observer.element === status);
+        assert.match(old.client.element.shadowRoot.styles[0], /data-aspire-disconnected-status/);
+        status.textContent = "Terminal view is not connected";
+        status.dataset.level = "error";
+        observer.callback();
+        assert.equal(status.attributes.has("data-aspire-disconnected-status"), false);
+
+        old.close(code);
+        await settle();
+        assert.notEqual(observer.disconnected, true);
+        for (const [text, hidden] of [
+            ["Terminal view is not connected", true],
+            ["Scrollbar: Terminal view is not connected", true],
+            ["Copy failed: Terminal view is not connected", true],
+            ["Input action failed: Terminal view is not connected", true],
+            ["Clipboard writing is unavailable", false],
+            ["Navigation rejected", false],
+            ["Selection copied", false],
+        ]) {
+            status.textContent = text;
+            observer.callback();
+            assert.equal(status.attributes.has("data-aspire-disconnected-status"), hidden, text);
+        }
+        terminal.disposeTerminal(id);
+        assert.equal(observer.disconnected, true);
+    });
+}
+
 test("init returns an id while mount waits for its first connected frame", async () => {
     const { id } = mount();
     assert.equal(terminal.getToolbarState(id).connected, false);
@@ -1008,7 +1046,7 @@ test("init returns an id while mount waits for its first connected frame", async
     attempts[0].resolve();
     await settle();
     assert.deepEqual(snapshots.at(-1), {
-        terminalId: id, generation: 1, status: "viewer", connected: true,
+        terminalId: id, generation: 1, status: "viewer", connected: true, disconnected: false,
         title: "", workingDirectory: null, workingDirectoryUri: null,
         progressState: "none", progressPercentage: null,
         isPrimary: false, canTakeControl: true, sizeMode: "font", sizeKey: "100x30",
@@ -1275,16 +1313,17 @@ test("a disconnect schedules only one retry and restores focus only if still app
     await settle();
     document.activeElement = attempts[0].client.element;
     attempts[0].client.connected = false;
-    attempts[0].options.onStatus("closed", "error");
+    attempts[0].close(1006);
     attempts[0].options.onStatus("closed again", "error");
     await settle();
     assert.equal(timers.size, 1);
-    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(attempts[0].client.disposed, false);
     retry();
     document.activeElement = document.body;
     attempts[1].resolve();
     await settle();
     assert.equal(attempts[1].client.focusCalls, 1);
+    assert.equal(attempts[0].client.disposed, true);
     assert.equal(terminal.getToolbarState(id).connected, true);
 });
 
@@ -1441,7 +1480,7 @@ test("dismissing a sizing error keeps the existing connection", async () => {
     assert.equal(attempts.length, 1);
 });
 
-test("a delayed dismiss cannot hide a connection failure or cancel its retry", async () => {
+test("a delayed dismiss cannot hide the disconnected state or cancel its retry", async () => {
     const { id } = mount();
     attempts[0].resolve();
     await settle();
@@ -1449,9 +1488,10 @@ test("a delayed dismiss cannot hide a connection failure or cancel its retry", a
     attempts[0].close(1006);
     await settle();
     terminal.dismissError(id);
-    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+    assert.equal(terminal.getToolbarState(id).error, null);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
     assert.equal(timers.size, 1);
-    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(attempts[0].client.disposed, false);
 });
 
 test("remote role changes authoritatively switch primary, viewer and unclaimed states", async () => {
@@ -1977,6 +2017,8 @@ test("authoritative close keeps the existing presentation read-only without remo
     attempts[0].options.onStatus("Late transport error", "error");
     await settle();
     assert.equal(terminal.getTerminalSnapshot(element).ended, true);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(attempts[0].options.preserveOnDisconnect, true);
     assert.equal(attempts[0].client.disposed, false);
     assert.equal(timers.size, 0);
     terminal.setReadOnly(id, false);
@@ -2036,6 +2078,93 @@ test("rebind ignores authoritative close from the old connection", async () => {
     assert.equal(timers.size, 0);
 });
 
+test("transport retries retain the last screen until a replacement frame arrives", async () => {
+    const { id, element } = mount();
+    const original = attempts[0];
+    original.client.screenText = "Final output with graphics";
+    original.resolve();
+    await settle();
+    original.close(1006);
+    await settle();
+    assert.equal(original.client.disposed, false);
+    assert.equal(original.options.signal.aborted, false);
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Final output with graphics");
+
+    retry();
+    attempts[1].reject();
+    await settle();
+    assert.equal(original.client.disposed, false);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Final output with graphics");
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    terminal.setTerminalPalette("light");
+    assert.equal(original.client.colorMode, "light");
+    retry();
+    const replacement = attempts[2];
+    replacement.client.screenText = "Reconnected output";
+    replacement.resolve();
+    await settle();
+    assert.equal(original.client.disposed, true);
+    assert.equal(original.options.signal.aborted, true);
+    assert.equal(terminal.getToolbarState(id).disconnected, false);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Reconnected output");
+});
+
+for (const action of ["dispose", "rebind"]) {
+    test(`${action} releases a retained screen and cancels its pending replacement`, async () => {
+        const { id } = mount();
+        attempts[0].resolve();
+        await settle();
+        attempts[0].close(1006);
+        retry();
+        if (action === "dispose") {
+            terminal.disposeTerminal(id);
+        } else {
+            terminal.reconnectTerminal(id, "wss://dashboard/api/terminal?resource=other");
+            assert.equal(terminal.getToolbarState(id).disconnected, false);
+        }
+        assert.equal(attempts[0].client.disposed, true);
+        assert.equal(attempts[0].options.signal.aborted, true);
+        assert.equal(attempts[1].options.signal.aborted, true);
+        attempts[1].resolve();
+        await settle();
+        assert.equal(attempts[1].client.disposed, true);
+    });
+}
+
+test("exhausted retries keep the final screen until the view is disposed", async () => {
+    const { id, element } = mount();
+    attempts[0].client.screenText = "Final output";
+    attempts[0].resolve();
+    await settle();
+    attempts[0].close(1006);
+    for (let i = 0; i < 30; i++) {
+        retry();
+        attempts.at(-1).reject();
+        await settle();
+    }
+    assert.equal(timers.size, 0);
+    assert.equal(terminal.getToolbarState(id).error, "disconnected");
+    assert.equal(terminal.getToolbarState(id).disconnected, true);
+    assert.equal(terminal.getTerminalSnapshot(element).screenText, "Final output");
+    assert.equal(attempts[0].client.disposed, false);
+    terminal.disposeTerminal(id);
+    assert.equal(attempts[0].client.disposed, true);
+});
+
+test("renderer failures surface an error rather than retaining an unusable view", async () => {
+    const { id } = mount();
+    attempts[0].resolve();
+    await settle();
+    attempts[0].client.connected = false;
+    attempts[0].options.onStatus("Renderer failed", "error");
+    await settle();
+    assert.equal(terminal.getToolbarState(id).error, "mount-failed");
+    assert.equal(terminal.getToolbarState(id).disconnected, false);
+    assert.equal(attempts[0].client.disposed, true);
+    assert.equal(timers.size, 1);
+});
+
 test("disposing a view ignores later native close callbacks", async () => {
     const { id } = mount();
     terminal.disposeTerminal(id);
@@ -2053,23 +2182,29 @@ test("frontend manifest, lockfile, minified bundle and backend use the exact pai
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.171.0");
+    assert.equal(version, "0.173.0-alpha.1824.1.98d8766");
     assert.equal(bundle.split(/\r?\n/, 1)[0], `// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.`);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
+    const tools = JSON.parse(await readFile(new URL("../../.config/dotnet-tools.json", dashboard), "utf8"));
+    assert.equal(tools.tools["hex1b.tool"].version, version);
+    const mcp = JSON.parse(await readFile(new URL("../../.mcp.json", dashboard), "utf8"));
+    assert.equal(mcp.servers.hex1b.args[0], `Hex1b.McpServer@${version}`);
 
     // Central package rows have the form:
     //   <PackageVersion Include="Hex1b" Version="0.171.0" />
-    // Match the exact Include value, not Hex1b.Tool or Hex1b.McpServer;
+    // Match the three paired package IDs, not other packages sharing their prefix;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");
     const declarations = [...packages.matchAll(/<PackageVersion\b[^>]*\/>/g)]
         .map(match => match[0])
-        .filter(declaration => /\bInclude\s*=\s*["']Hex1b["']/.test(declaration));
-    assert.equal(declarations.length, 1, "Expected exactly one central Hex1b library version.");
-    const backendVersion = declarations[0].match(/\bVersion\s*=\s*["']([^"']+)["']/);
-    assert.ok(backendVersion, "The paired Hex1b library must have an explicit central version.");
-    assert.equal(backendVersion[1], version);
+        .filter(declaration => /\bInclude\s*=\s*["']Hex1b(?:\.Tool|\.McpServer)?["']/.test(declaration));
+    assert.equal(declarations.length, 3, "Expected all three central Hex1b package versions.");
+    for (const declaration of declarations) {
+        const backendVersion = declaration.match(/\bVersion\s*=\s*["']([^"']+)["']/);
+        assert.ok(backendVersion, "Paired Hex1b packages must have explicit central versions.");
+        assert.equal(backendVersion[1], version);
+    }
 });
 
 test("checked-in deployment contains only the minified bundle, font and required licenses without npm installation", async () => {

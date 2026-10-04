@@ -163,6 +163,7 @@
                                       ShowDimensionsPicker="false"
                                       AutoFit="@(_isVisible && IsPaneActive(terminal.TerminalId))"
                                       OnToolbarStateChanged="@OnTerminalToolbarStateChanged"
+                                      OnClose="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))"
                                       SizeMemoryKey="@($"dock:{terminal.TerminalId}")" />
                     }
                 </div>

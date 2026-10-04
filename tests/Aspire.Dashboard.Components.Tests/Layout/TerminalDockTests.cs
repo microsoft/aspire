@@ -426,6 +426,39 @@ public partial class TerminalDockTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task DisconnectedBanner_ClosesOwningTabAndWaitsForWatchRemoval()
+    {
+        var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var client = TerminalSetupHelpers.CreateTerminalDashboardClient(
+            terminalChannelProvider: () => updates, closeTerminal: (_, _) => completion.Task);
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot("first", "second"));
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindComponents<TerminalView>().Count));
+        var views = cut.FindComponents<TerminalView>();
+        await cut.InvokeAsync(() => views[0].Instance.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1, Generation = 1, Disconnected = true
+        }));
+        var click = cut.InvokeAsync(() => cut.Find(".terminal-close-tab").ClickAsync(new()));
+        cut.WaitForAssertion(() => Assert.Equal(["first"], client.ClosedTerminals.ToArray()));
+        Assert.Equal(2, cut.FindAll("[role=tab]").Count);
+        Assert.Empty(cut.FindAll(".terminal-restart-resource"));
+
+        await updates.Writer.WriteAsync(TerminalSetupHelpers.Change(TerminalChangeType.Removed, "first"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll("[role=tab]"));
+            Assert.Equal("second", cut.Find("[aria-selected=true]").TextContent.Trim());
+            Assert.Same(views[1].Instance, cut.FindComponent<TerminalView>().Instance);
+        });
+        completion.SetResult();
+        await click;
+    }
+
+    [Fact]
     public async Task LastTabRemoved_EmptyDockCanReceiveAnotherAppHostTerminal()
     {
         var updates = Channel.CreateUnbounded<WatchTerminalsUpdate>();

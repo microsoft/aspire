@@ -295,9 +295,11 @@ matches `ResourceViewModel.Name`, including the generated instance suffix.
    binary WebSocket message, without dropping or reordering frames.
 4. Hex1b owns input encoding, primary-role negotiation, selection, history,
    graphics projection, acknowledgements and state resynchronization. The
-   dashboard bounds handshake and send times and cancels both pumps when
-   either transport ends. Disposing a view disconnects only that peer, not
-   the AppHost-owned producer.
+   dashboard bounds handshake and send times. On producer disconnect it waits
+   for the mirror to finish processing output and gives the final HWT frame a
+   bounded acknowledgement period before cancelling the pumps and closing the
+   WebSocket. Disposing a view disconnects only that peer, not the AppHost-owned
+   producer.
 
 The browser never sees `consumerUdsPath` and cannot induce the dashboard
 to connect to an arbitrary local socket — it can only ask for
@@ -326,6 +328,37 @@ gRPC attachment failures such as `Unavailable` retain HTTP 503 responses; a
 resource replica that is not yet available retains HTTP 404. Neither marks the
 producer as ended.
 
+The browser enables Hex1b's `preserveOnDisconnect` option to retain the last
+received screen, including Sixel and Kitty graphics. Disconnected views dim
+their output and show a localized banner over the retained screen. Resource
+terminal banners include the exit code when reported in the resource protocol;
+an absent code is not treated as success. Docked-terminal completion does not
+currently expose the workload exit code through the pinned Hex1b adapter.
+Resource terminals offer **Restart resource** using the resource's advertised Restart
+or Start command, with the usual command availability, confirmation and error
+reporting. Docked terminals offer **Close tab** through the existing dock close
+action. Other surfaces show the disconnected message without a close-tab action.
+All banners offer **Show terminal**, which hides the banner and accompanying
+retry error behind a floating disconnected icon at the top right. The icon
+reopens the recovery actions without reconnecting, restarting, or replacing the
+retained renderer. Collapse persists through transport retries and resets after
+a successful reconnect. The floating icon is inset from the terminal's focus
+border, and the overlay intercepts input only on its visible controls. Hex1b's
+redundant "Terminal view is not connected" status is suppressed while disconnected;
+unrelated errors and selection feedback remain visible.
+The current Hex1b alpha does not support selecting or copying output while
+disconnected; that requires upstream offline-selection support, not merely
+collapsing the banner.
+Retryable transport loss keeps the retained view above replacement mounts until
+a connected frame arrives; successful reconnect removes the treatment and
+releases the old view. Producer completion keeps the screen until the view is
+closed. Rebinding to another endpoint discards the previous screen. Retention
+does not imply producer completion or guarantee output that was never received.
+The terminal host defers viewer handshakes until its producer has connected,
+including after a recycle. Its listening socket alone is not proof of a live
+terminal: reconnecting to an empty relay while a shell is stopped must not
+replace the retained display.
+
 Each component registers a separate input policy with the dashboard and passes
 its opaque `viewId` with the WebSocket URL. Changes to a view's read-only
 state update that policy before updating browser input behavior. The bridge
@@ -341,7 +374,7 @@ it does not lock the terminal, its creator's automation, or other viewers.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.171.0`. HWT1 is experimental state transfer
+exactly `0.173.0-alpha.1824.1.98d8766`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The vendored runtime consists of one bundled
 JavaScript file for the client and both workers, a font, and two licenses.
