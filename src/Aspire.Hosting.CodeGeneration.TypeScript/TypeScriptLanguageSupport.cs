@@ -313,4 +313,30 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             .GetProperty(nameof(RuntimeSpec.CertificateBundleEnvironmentVariable))
             ?.SetValue(runtimeSpec, environmentVariableName);
     }
+
+    /// <summary>
+    /// Gets the integration-host launch specification as JSON for optional server-side discovery.
+    /// </summary>
+#pragma warning disable CA1822 // The optional provider hook is discovered as an instance method on ILanguageSupport implementations.
+    public JsonElement GetIntegrationHostSpec()
+#pragma warning restore CA1822
+    {
+        // The CLI force-shares Aspire.TypeSystem, including when it predates this feature.
+        // Keep the hook off ILanguageSupport and use a framework return type so discovery
+        // can load this provider without resolving any new contract types or members.
+        using var document = JsonDocument.Parse("""
+            {
+              "execute": {
+                "command": "npx",
+                "args": ["--no-install", "tsx", "{entryPoint}"]
+              },
+              "installDependencies": {
+                "command": "npm",
+                "args": ["install"]
+              }
+            }
+            """);
+
+        return document.RootElement.Clone();
+    }
 }

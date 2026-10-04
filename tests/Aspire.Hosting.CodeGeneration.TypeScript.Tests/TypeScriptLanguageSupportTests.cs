@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.Loader;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared;
 using Aspire.TypeSystem;
@@ -272,6 +274,45 @@ public sealed class TypeScriptLanguageSupportTests(ITestOutputHelper outputHelpe
             "NODE_EXTRA_CA_CERTS");
 
         Assert.NotNull(legacyRuntimeSpec);
+    }
+
+    [Fact]
+    public void LanguageSupport_LoadsAgainstSharedContractWithoutIntegrationHostMembers()
+    {
+        var sharedContract = typeof(ILanguageSupport).Assembly;
+        Assert.Null(sharedContract.GetType("Aspire.TypeSystem.IntegrationHostSpec"));
+        Assert.Null(typeof(ILanguageSupport).GetMethod("GetIntegrationHostSpec"));
+
+        // Mirror the CLI's isolated codegen load while force-sharing a contract with
+        // no spike types or members. GetTypes must succeed before any hook is probed.
+        var loadContext = new AssemblyLoadContext(nameof(LanguageSupport_LoadsAgainstSharedContractWithoutIntegrationHostMembers), isCollectible: true);
+        try
+        {
+            var assembly = loadContext.LoadFromAssemblyPath(typeof(TypeScriptLanguageSupport).Assembly.Location);
+            var providerType = Assert.Single(
+                assembly.GetTypes(),
+                type => type.FullName == typeof(TypeScriptLanguageSupport).FullName);
+            var provider = Assert.IsAssignableFrom<ILanguageSupport>(Activator.CreateInstance(providerType));
+
+            Assert.Same(sharedContract, providerType.GetInterface(typeof(ILanguageSupport).FullName!)!.Assembly);
+            Assert.Equal("typescript/nodejs", provider.Language);
+            Assert.Equal("npx", provider.GetRuntimeSpec().Execute.Command);
+
+            var hook = providerType.GetMethod("GetIntegrationHostSpec", Type.EmptyTypes);
+            Assert.NotNull(hook);
+            Assert.Equal(typeof(JsonElement), hook.ReturnType);
+
+            var payload = Assert.IsType<JsonElement>(hook.Invoke(provider, null));
+            Assert.Equal("npx", payload.GetProperty("execute").GetProperty("command").GetString());
+            Assert.Equal(
+                ["--no-install", "tsx", "{entryPoint}"],
+                payload.GetProperty("execute").GetProperty("args").EnumerateArray().Select(arg => Assert.IsType<string>(arg.GetString())).ToArray());
+            Assert.Equal("npm", payload.GetProperty("installDependencies").GetProperty("command").GetString());
+        }
+        finally
+        {
+            loadContext.Unload();
+        }
     }
 
     [Fact]

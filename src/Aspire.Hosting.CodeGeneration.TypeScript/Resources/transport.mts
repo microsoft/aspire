@@ -550,6 +550,28 @@ export function getCallbackCount(): number {
     return callbackRegistry.size;
 }
 
+/**
+ * Invoke a callback previously registered by registerCallback.
+ *
+ * Hosts that provide their own JSON-RPC connection, such as external integration hosts,
+ * use this to service .NET callback invocations without duplicating callback registry
+ * internals. The registered wrapper handles positional argument unpacking, handle wrapping,
+ * and DTO writeback.
+ */
+export async function invokeRegisteredCallback(callbackId: string, args: unknown, client: AspireClientRpc): Promise<unknown> {
+    const callback = callbackRegistry.get(callbackId);
+    if (!callback) {
+        throw new Error(`Callback not found: ${callbackId}`);
+    }
+
+    try {
+        return await Promise.resolve(callback(args, client));
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Callback execution failed: ${message}`);
+    }
+}
+
 // ============================================================================
 // Cancellation Token Registry
 // ============================================================================
@@ -942,20 +964,8 @@ export class AspireClient implements AspireClientRpc {
                     this.connection.onError((err: any) => console.error('JsonRpc connection error:', err));
 
                     // Handle callback invocations from the .NET side
-                    this.connection.onRequest('invokeCallback', async (callbackId: string, args: unknown) => {
-                        const callback = callbackRegistry.get(callbackId);
-                        if (!callback) {
-                            throw new Error(`Callback not found: ${callbackId}`);
-                        }
-                        try {
-                            // The registered wrapper handles arg unpacking and handle wrapping
-                            // Pass this client so handles can be wrapped with typed wrapper classes
-                            return await Promise.resolve(callback(args, this));
-                        } catch (error) {
-                            const message = error instanceof Error ? error.message : String(error);
-                            throw new Error(`Callback execution failed: ${message}`);
-                        }
-                    });
+                    this.connection.onRequest('invokeCallback', (callbackId: string, args: unknown) =>
+                        invokeRegisteredCallback(callbackId, args, this));
 
                     socket.on('error', onConnectedSocketError);
                     socket.on('close', onConnectedSocketClose);

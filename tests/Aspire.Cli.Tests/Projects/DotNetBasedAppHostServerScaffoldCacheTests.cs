@@ -139,6 +139,36 @@ public class DotNetBasedAppHostServerScaffoldCacheTests(ITestOutputHelper output
         Assert.Contains(secondProject, await File.ReadAllTextAsync(csprojPath));
     }
 
+    [Fact]
+    public async Task CreateProjectFiles_InvalidatesScaffold_WhenIntegrationHostEntryPointChanges()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appPath = workspace.WorkspaceRoot.FullName;
+        var project = CreateProject(appPath);
+        var firstHost = Path.Combine(appPath, "first", "host.ts");
+        var secondHost = Path.Combine(appPath, "second", "host.ts");
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromNpm("@test/integration", firstHost)]);
+        var assetsPath = SeedRestoreArtifacts(project);
+        var appSettingsPath = Path.Combine(project.ProjectModelPath, "appsettings.json");
+        var firstSettings = await File.ReadAllTextAsync(appSettingsPath);
+        var timestamp = File.GetLastWriteTimeUtc(appSettingsPath);
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromNpm("@test/integration", firstHost)]);
+
+        Assert.True(File.Exists(assetsPath));
+        Assert.Equal(timestamp, File.GetLastWriteTimeUtc(appSettingsPath));
+        Assert.Equal(firstSettings, await File.ReadAllTextAsync(appSettingsPath));
+
+        await project.CreateProjectFilesAsync([IntegrationReference.FromNpm("@test/integration", secondHost)]);
+
+        Assert.False(File.Exists(assetsPath));
+        using var settings = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(appSettingsPath));
+        var host = Assert.Single(settings.RootElement.GetProperty("IntegrationHosts").EnumerateArray());
+        Assert.Equal("@test/integration", host.GetProperty("PackageName").GetString());
+        Assert.Equal(secondHost, host.GetProperty("HostEntryPoint").GetString());
+    }
+
     /// <summary>
     /// Writes the marker file the cache uses to decide whether a usable restore already exists.
     /// Real restores create far more under obj/, but project.assets.json is the file the skip path

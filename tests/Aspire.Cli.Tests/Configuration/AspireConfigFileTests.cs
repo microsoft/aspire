@@ -279,7 +279,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.AddOrUpdatePackage("Aspire.Hosting.Redis", "13.2.0");
 
         Assert.NotNull(config.Packages);
-        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"]);
+        var entry = config.Packages["Aspire.Hosting.Redis"];
+        Assert.Equal(IntegrationSource.Nuget, entry.Source);
+        Assert.Equal("13.2.0", entry.Version);
     }
 
     [Fact]
@@ -287,12 +289,12 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string> { ["Aspire.Hosting.Redis"] = "13.1.0" }
+            Packages = new Dictionary<string, PackageEntry> { ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.1.0") }
         };
 
         config.AddOrUpdatePackage("Aspire.Hosting.Redis", "13.2.0");
 
-        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"]);
+        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"].Version);
     }
 
     [Fact]
@@ -300,10 +302,10 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string>
+            Packages = new Dictionary<string, PackageEntry>
             {
-                ["Aspire.Hosting.Redis"] = "13.2.0",
-                ["Aspire.Hosting.PostgreSQL"] = "13.2.0"
+                ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.2.0"),
+                ["Aspire.Hosting.PostgreSQL"] = PackageEntry.Nuget("13.2.0")
             }
         };
 
@@ -340,9 +342,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string>
+            Packages = new Dictionary<string, PackageEntry>
             {
-                ["Aspire.Hosting.Redis"] = "13.2.0"
+                ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.2.0")
             }
         };
 
@@ -351,6 +353,99 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, refs.Count);
         Assert.Contains(refs, r => r.Name == "Aspire.Hosting");
         Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis");
+    }
+
+    [Fact]
+    public void Load_ParsesStringCsprojShorthandAsProjectReference()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        // Legacy/shorthand: a bare string value ending in ".csproj" is a local project reference,
+        // not a NuGet version. Regression coverage for the polyglot AppHost restore path, where a
+        // value like "DeadlockExtension/DeadlockExtension.csproj" must not be treated as a NuGet
+        // package version (which would fail with "not a valid version string").
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "DeadlockExtension": "DeadlockExtension/DeadlockExtension.csproj"
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var entry = config.Packages!["DeadlockExtension"];
+        Assert.Equal(IntegrationSource.Project, entry.Source);
+        Assert.Equal("DeadlockExtension/DeadlockExtension.csproj", entry.Path);
+        Assert.Null(entry.Version);
+
+        var projectRef = config.GetIntegrationReferences("13.2.0", workspace.WorkspaceRoot.FullName)
+            .Single(r => r.Name == "DeadlockExtension");
+        Assert.Equal(IntegrationSource.Project, projectRef.Source);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(workspace.WorkspaceRoot.FullName, "DeadlockExtension/DeadlockExtension.csproj")),
+            projectRef.Path);
+    }
+
+    [Fact]
+    public void Load_ParsesStringShorthandAsNugetVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "9.2.0",
+                "Aspire.Hosting.Kafka": ""
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var redis = config.Packages!["Aspire.Hosting.Redis"];
+        Assert.Equal(IntegrationSource.Nuget, redis.Source);
+        Assert.Equal("9.2.0", redis.Version);
+
+        // Empty string short form means "use the SDK version" (stored as null).
+        var kafka = config.Packages!["Aspire.Hosting.Kafka"];
+        Assert.Equal(IntegrationSource.Nuget, kafka.Source);
+        Assert.Null(kafka.Version);
+    }
+
+    [Theory]
+    [InlineData("null", "13.2.0")]
+    [InlineData("\" 9.2.0 \"", "9.2.0")]
+    [InlineData("""{ "source": "nuget", "version": " 9.2.0 " }""", "9.2.0")]
+    public void Load_NormalizesNugetVersions(string packageValue, string expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, $$"""
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": {{packageValue}}
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var reference = Assert.Single(
+            config.GetIntegrationReferences("13.2.0", workspace.WorkspaceRoot.FullName),
+            reference => reference.Name == "Aspire.Hosting.Redis");
+        Assert.Equal(IntegrationSource.Nuget, reference.Source);
+        Assert.Equal(expectedVersion, reference.Version);
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+        var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(config.Packages!["Aspire.Hosting.Redis"].Version, reloaded.Packages!["Aspire.Hosting.Redis"].Version);
     }
 
     [Fact]

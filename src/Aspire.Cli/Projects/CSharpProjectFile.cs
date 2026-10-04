@@ -71,12 +71,17 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
 
         foreach (var integrationReference in integrationReferences)
         {
-            if (integrationReference.IsProjectReference)
+            if (integrationReference.Source is IntegrationSource.Npm)
+            {
+                continue;
+            }
+
+            if (integrationReference.Source is IntegrationSource.Project)
             {
                 if (addedIntegrations.Add(integrationReference.Name))
                 {
                     AddProjectReference(
-                        integrationReference.ProjectPath!,
+                        integrationReference.Path!,
                         isAspireProjectResource,
                         referenceOutputAssembly,
                         privateReference,
@@ -105,7 +110,7 @@ internal sealed class CSharpProjectFile(string sdk = "Microsoft.NET.Sdk")
 
             if (integrationReference.Version is null)
             {
-                throw new InvalidOperationException($"Integration '{integrationReference.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
+                throw new InvalidOperationException($"NuGet integration '{integrationReference.Name}' has a null Version.");
             }
 
             PackageReferences.Add(new CSharpPackageReference(integrationReference.Name, integrationReference.Version, packageVersionAttributeName));

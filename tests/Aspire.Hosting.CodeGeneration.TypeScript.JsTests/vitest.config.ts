@@ -8,6 +8,11 @@ export default defineConfig({
         alias: {
             '@aspire/transport': path.resolve(resources, 'transport.mts'),
             '@aspire/base': path.resolve(resources, 'base.mts'),
+            // Integration playgrounds normally import a restored SDK. Exercise their
+            // host protocol without running CLI codegen; tests register the handle types they use.
+            '../.aspire/modules/base.mjs': path.resolve(resources, 'base.mts'),
+            '../.aspire/modules/transport.mjs': path.resolve(resources, 'transport.mts'),
+            '../.aspire/modules/aspire.mjs': path.resolve(resources, 'base.mts'),
             // The source files import 'vscode-jsonrpc/node.js' which needs to
             // resolve from this test project's node_modules, not the source tree.
             'vscode-jsonrpc': path.resolve(__dirname, 'node_modules/vscode-jsonrpc'),

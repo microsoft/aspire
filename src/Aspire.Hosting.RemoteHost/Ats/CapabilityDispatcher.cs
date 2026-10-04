@@ -32,6 +32,7 @@ internal sealed class CapabilityDispatcher
     private readonly Dictionary<string, HashSet<string>> _polyglotMethodNamesByClrName = new(StringComparer.Ordinal);
     private readonly HandleRegistry _handles;
     private readonly AtsMarshaller _marshaller;
+    private readonly ExternalCapabilityRegistry? _externalRegistry;
     private readonly ILogger _logger;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
     private AtsContext? _atsContext;
@@ -58,17 +59,20 @@ internal sealed class CapabilityDispatcher
     /// <param name="handles">The handle registry for resolving handle references.</param>
     /// <param name="assemblyLoader">The assembly loader to get assemblies from.</param>
     /// <param name="marshaller">The marshaller for converting objects to/from JSON.</param>
+    /// <param name="externalRegistry">The shared registry for capabilities supplied by external integration hosts.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="profilingTelemetry">The remote host profiling telemetry helper.</param>
     public CapabilityDispatcher(
         HandleRegistry handles,
         AssemblyLoader assemblyLoader,
         AtsMarshaller marshaller,
+        ExternalCapabilityRegistry externalRegistry,
         ILogger<CapabilityDispatcher> logger,
         RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _handles = handles;
         _marshaller = marshaller;
+        _externalRegistry = externalRegistry;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
 
@@ -534,12 +538,30 @@ internal sealed class CapabilityDispatcher
     /// </summary>
     /// <param name="capabilityId">The capability ID.</param>
     /// <param name="args">The arguments as a JSON object.</param>
+    /// <param name="ownerInvoker">The callback invoker of the guest-side connection issuing this
+    /// call, used to route external capability callbacks back to the originating guest.</param>
     /// <returns>The result as JSON, or null for void methods.</returns>
-    public async Task<JsonNode?> InvokeAsync(string capabilityId, JsonObject? args)
+    public async Task<JsonNode?> InvokeAsync(string capabilityId, JsonObject? args, JsonRpcCallbackInvoker? ownerInvoker = null)
     {
-        // Look up the capability
+        // Look up the capability in the local (scoped) registry
         if (!_capabilities.TryGetValue(capabilityId, out var registration))
         {
+            // Fallback: check the shared external capability registry (integration hosts)
+            _logger.LogDebug("Capability {CapabilityId} not found locally, checking external registry (has registry: {HasRegistry})",
+                capabilityId, _externalRegistry is not null);
+
+            if (_externalRegistry is not null)
+            {
+                _logger.LogDebug("Calling ExternalCapabilityRegistry.TryInvokeAsync for {CapabilityId}", capabilityId);
+                var (found, result) = await _externalRegistry.TryInvokeAsync(capabilityId, args, ownerInvoker).ConfigureAwait(false);
+                _logger.LogDebug("ExternalCapabilityRegistry returned: found={Found}, result={Result}",
+                    found, result?.ToJsonString() ?? "null");
+                if (found)
+                {
+                    return result;
+                }
+            }
+
             throw CapabilityException.CapabilityNotFound(capabilityId);
         }
 
