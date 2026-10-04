@@ -12,6 +12,7 @@
 #
 name: Deployment E2E Tests
 
+
 on:
   workflow_dispatch:
     inputs:
@@ -190,8 +191,8 @@ jobs:
           retention-days: 1
 
   # Prepare the target subscription once, before the test matrix fans out: register the resource
-  # providers the suite needs and self-heal the configured quotas. Doing this in a single
-  # prerequisite job (rather than inside every matrix entry) avoids dozens of jobs issuing the
+  # providers the suite needs, grant Foundry data-plane access, and self-heal the configured quotas.
+  # Doing this in a single prerequisite job (rather than inside every matrix entry) avoids dozens of jobs issuing the
   # same subscription-level registration writes and Microsoft.Quota requests at once — which
   # throttle each other on a cold subscription — and it keeps each matrix job's Azure token
   # freshly minted right before that job deploys. Best-effort: continue-on-error plus the
@@ -244,6 +245,63 @@ jobs:
           echo "Verifying Azure authentication..."
           az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o table
           echo "✅ Azure authentication successful"
+
+      - name: Ensure Foundry deployment permissions
+        # Report RBAC failures without skipping the remaining best-effort subscription setup.
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
+        with:
+          script: |
+            const subscription = process.env.ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION;
+            const client = process.env.AZURE_CLIENT_ID;
+            const tenant = process.env.AZURE_TENANT_ID;
+            const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (![subscription, client, tenant].every(value => guid.test(value))) {
+              throw new Error('Deployment subscription, client, and tenant IDs must be GUIDs.');
+            }
+
+            const token = await exec.getExecOutput('az', [
+              'account', 'get-access-token', '--subscription', subscription,
+              '--resource', 'https://management.azure.com/',
+              '--query', 'accessToken', '--output', 'tsv', '--only-show-errors'
+            ], { silent: true });
+            core.setSecret(token.stdout.trim());
+
+            // The ARM token obtained from the authenticated CLI contains the tenant-local
+            // service principal ID: { "oid": "...", "tid": "...", "appid": "..." } (v2 uses "azp").
+            // Reading it avoids requiring Microsoft Graph directory-read permissions.
+            const claims = JSON.parse(Buffer.from(token.stdout.trim().split('.')[1], 'base64url').toString('utf8'));
+            if (!guid.test(claims.oid) ||
+                claims.tid?.toLowerCase() !== tenant.toLowerCase() ||
+                (claims.appid ?? claims.azp)?.toLowerCase() !== client.toLowerCase()) {
+              throw new Error('Azure CLI token does not identify the configured deployment service principal.');
+            }
+
+            // Owner is control-plane only. Foundry User (formerly Azure AI User) supplies
+            // agents/read and agents/write; subscription scope covers projects created by tests.
+            // https://learn.microsoft.com/azure/foundry/concepts/rbac-foundry
+            const role = '53ca6127-db72-4b80-b1b0-d745d6d5456d';
+            const scope = `/subscriptions/${subscription}`;
+            const result = await exec.getExecOutput('az', [
+              'role', 'assignment', 'create', '--assignee-object-id', claims.oid,
+              '--assignee-principal-type', 'ServicePrincipal', '--role', role,
+              '--scope', scope, '--subscription', subscription,
+              '--output', 'json', '--only-show-errors'
+            ], { silent: true });
+
+            // Azure CLI returns an existing assignment on reruns. Do not accept a narrower
+            // or conditioned assignment as satisfying the subscription-wide grant.
+            const assignment = JSON.parse(result.stdout);
+            if (assignment.principalId?.toLowerCase() !== claims.oid.toLowerCase() ||
+                assignment.scope?.toLowerCase() !== scope.toLowerCase() ||
+                !assignment.roleDefinitionId?.toLowerCase().endsWith(`/roledefinitions/${role}`) ||
+                assignment.condition) {
+              throw new Error('Foundry User assignment does not grant unrestricted subscription access to the deployment principal.');
+            }
+            core.info('Foundry User subscription role assignment confirmed. Data-plane propagation may take several minutes.');
 
       # Ensure the target subscription has every Azure resource provider the deployment test
       # suite relies on. This is per-subscription setup, not a test concern: registration is a
