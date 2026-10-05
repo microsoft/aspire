@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Microsoft.Extensions.Logging;
@@ -164,6 +166,79 @@ internal sealed partial class CliTemplateFactory
         }
     }
 
+    private async Task<TemplateResult> ApplyCSharpCliManagedEmptyAppHostTemplateAsync(CallbackTemplate template, TemplateInputs inputs, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var projectName = inputs.Name;
+        if (string.IsNullOrWhiteSpace(projectName))
+        {
+            var defaultName = template.Name;
+            projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
+        }
+
+        var outputPath = await ResolveOutputPathAsync(inputs, template.PathDeriver, projectName, parseResult, cancellationToken);
+        if (outputPath is null)
+        {
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+
+        var useLocalhostTld = await ResolveUseLocalhostTldAsync(parseResult, cancellationToken);
+
+        try
+        {
+            if (!Directory.Exists(outputPath))
+            {
+                Directory.CreateDirectory(outputPath);
+            }
+
+            var templateResult = await _interactionService.ShowStatusAsync(
+                TemplatingStrings.CreatingNewProject,
+                (Func<Task<TemplateResult>>)(async () =>
+                {
+                    var aspireVersion = string.IsNullOrWhiteSpace(inputs.Version)
+                        ? _executionContext.IdentitySdkVersion
+                        : inputs.Version;
+                    await WriteCSharpCliManagedEmptyAppHostAsync(aspireVersion, outputPath, projectName, useLocalhostTld, cancellationToken);
+
+                    var config = AspireConfigFile.LoadOrCreate(outputPath);
+                    config.Channel = inputs.Channel;
+                    config.SdkVersion = aspireVersion;
+                    config.Save(outputPath);
+
+                    return new TemplateResult((int)CliExitCodes.Success, outputPath);
+                }), emoji: KnownEmojis.Rocket);
+
+            if (templateResult.ExitCode != CliExitCodes.Success)
+            {
+                return templateResult;
+            }
+
+            await CreateCSharpCliManagedModuleNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _interactionService.DisplayError($"Failed to create project files: {ex.Message}");
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+
+        _interactionService.DisplaySuccess($"Created C# (.NET) project at {outputPath.EscapeMarkup()}");
+        DisplayPostCreationInstructions(outputPath);
+
+        return new TemplateResult(CliExitCodes.Success, outputPath);
+    }
+
+    private async Task CreateCSharpCliManagedModuleNuGetConfigForSourceOverrideAsync(string? sourceOverride, string? channelName, string outputPath, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return;
+        }
+
+        var modulesPath = Path.Combine(outputPath, AspireJsonConfiguration.SettingsFolder, CSharpCliManagedAppHostModuleGenerator.ModulesDirectoryName);
+        Directory.CreateDirectory(modulesPath);
+
+        await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName, modulesPath, cancellationToken);
+    }
+
     private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
     {
         var aspireVersion = string.IsNullOrWhiteSpace(templateVersion)
@@ -176,5 +251,19 @@ internal sealed partial class CliTemplateFactory
 
         _logger.LogDebug("Writing C# empty AppHost template files to '{OutputPath}' with Aspire version '{AspireVersion}'.", outputPath, aspireVersion);
         await CopyTemplateTreeToDiskAsync("empty-apphost", outputPath, ApplyAllTokens, cancellationToken);
+    }
+
+    private async Task WriteCSharpCliManagedEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
+    {
+        var aspireVersion = string.IsNullOrWhiteSpace(templateVersion)
+            ? _executionContext.IdentitySdkVersion
+            : templateVersion;
+        var projectNameLower = projectName.ToLowerInvariant();
+        var ports = GenerateRandomPorts();
+        var hostName = useLocalhostTld ? $"{projectNameLower}.dev.localhost" : "localhost";
+        string ApplyAllTokens(string content) => ApplyTokens(content, projectName, projectNameLower, aspireVersion, ports, hostName);
+
+        _logger.LogDebug("Writing CLI-managed C# empty AppHost template files to '{OutputPath}' with Aspire version '{AspireVersion}'.", outputPath, aspireVersion);
+        await CopyTemplateTreeToDiskAsync("cs-managed-empty-apphost", outputPath, ApplyAllTokens, cancellationToken);
     }
 }

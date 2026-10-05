@@ -1,0 +1,32 @@
+{
+  "appHost": {
+    "path": "apphost.cs"
+  },
+  "features": {
+    "experimentalCliManagedAppHost": true
+  },
+  "packages": {
+    "Aspire.Hosting.Redis": ""
+  },
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://CliManagedCSharpAppHost.dev.localhost:17000;http://CliManagedCSharpAppHost.dev.localhost:15000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://CliManagedCSharpAppHost.dev.localhost:21000",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://CliManagedCSharpAppHost.dev.localhost:22000"
+      }
+    },
+    "http": {
+      "applicationUrl": "http://CliManagedCSharpAppHost.dev.localhost:15000",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://CliManagedCSharpAppHost.dev.localhost:19000",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://CliManagedCSharpAppHost.dev.localhost:20000",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}

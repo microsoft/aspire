@@ -29,12 +29,14 @@ internal static class KnownFeatures
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
     public static string ShowAllTemplates => "showAllTemplates";
-    public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
-    public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglotGo";
-    public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
+    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
+    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
+    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
+    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string ExperimentalCliManagedAppHost => "experimentalCliManagedAppHost";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
+    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
@@ -84,6 +86,11 @@ internal static class KnownFeatures
             "Enable or disable experimental Python language support for polyglot Aspire applications",
             DefaultValue: false),
 
+        [ExperimentalCliManagedAppHost] = new(
+            ExperimentalCliManagedAppHost,
+            "Enable or disable CLI-managed file-based C# AppHosts",
+            DefaultValue: false),
+
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
@@ -97,6 +104,11 @@ internal static class KnownFeatures
             // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
             // still honored if set directly in config.
             Hidden: true),
+
+        [TerminalCommandsEnabled] = new(
+            TerminalCommandsEnabled,
+            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach', 'aspire terminal tape play'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
+            DefaultValue: false),
 
         [PolyglotIntegrationFilterEnabled] = new(
             PolyglotIntegrationFilterEnabled,
