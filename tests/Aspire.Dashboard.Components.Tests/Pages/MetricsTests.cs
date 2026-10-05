@@ -16,6 +16,7 @@ using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
@@ -36,6 +37,63 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class MetricsTests : DashboardTestContext
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    [Theory]
+    [InlineData(MetricViewKind.Graph)]
+    [InlineData(MetricViewKind.Table)]
+    public async Task ChartContainer_NoSharedHistogramBounds_ShowsWarningAndCountRemainsAvailable(MetricViewKind view)
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var timeProvider = new TestTimeProvider { UtcNow = DateTimeOffset.UtcNow };
+        Services.AddSingleton<BrowserTimeProvider>(timeProvider);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var time = timeProvider.GetUtcNow().UtcDateTime.AddSeconds(-3);
+        var first = HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [3, 0], [10]);
+        var second = HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [5, 0], [20]);
+        first.Attributes.Add(new OpenTelemetry.Proto.Common.V1.KeyValue
+        {
+            Key = "instance",
+            Value = new OpenTelemetry.Proto.Common.V1.AnyValue { StringValue = "first" }
+        });
+        second.Attributes.Add(new OpenTelemetry.Proto.Common.V1.KeyValue
+        {
+            Key = "instance",
+            Value = new OpenTelemetry.Proto.Common.V1.AnyValue { StringValue = "second" }
+        });
+        await repository.AddMetricsAsync(new AddContext(),
+            [HistogramTestHelpers.CreateMetrics(AggregationTemporality.Delta, first, second)]);
+        var resource = Assert.Single(repository.GetResources());
+        var cut = Render<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "histogram");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(1));
+            builder.Add(component => component.ActiveView, view);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, [resource]);
+        });
+
+        cut.WaitForAssertion(() => Assert.Equal(
+            Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+            cut.Find(".block-warning").TextContent.Trim()));
+
+        var filters = cut.FindComponent<ChartFilters>();
+        await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(true));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".block-warning"));
+            if (view == MetricViewKind.Graph)
+            {
+                Assert.True(cut.FindComponent<PlotlyChart>().Instance.InstrumentViewModel.ShowCount);
+            }
+            else
+            {
+                Assert.True(cut.FindComponent<MetricTable>().Instance.InstrumentViewModel.ShowCount);
+            }
+        });
+    }
 
     [Theory]
     [InlineData(false, true)]

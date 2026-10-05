@@ -229,6 +229,10 @@ Summary tables and indexes let trace list queries avoid reconstructing every tra
 
 Metric dimensions are normalized into an attribute set and stable non-cryptographic hash. Points store timestamps, point type, repeated-value count, integer or floating-point values, and histogram data. Histogram bucket counts and explicit bounds are compact binary values rather than JSON. Exemplars and their filtered attributes are separate rows correlated to trace and span IDs.
 
+Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
+
+Cumulative bucket layouts must remain unchanged within an aggregation. A changed layout is rejected, but a reset may start an aggregation with new boundaries. Charts combine distributions from different dimensions or aggregations by merging buckets at shared boundaries, without interpolating or splitting source buckets. When no boundaries are shared, the dashboard warns that percentiles are unavailable; observation counts remain available.
+
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 
 ## Repository behavior

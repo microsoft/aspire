@@ -32,6 +32,12 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private long _instrumentUpdateVersion;
     private int _disposed;
     private Pages.Metrics.MetricViewKind _activeView;
+    private bool _hasIncompatibleHistogramBounds;
+
+    private void HistogramCompatibilityChanged(bool incompatibleBounds)
+    {
+        _hasIncompatibleHistogramBounds = incompatibleBounds;
+    }
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }

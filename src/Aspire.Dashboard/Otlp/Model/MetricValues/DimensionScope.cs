@@ -78,43 +78,24 @@ public class DimensionScope
         }
     }
 
-    public void AddHistogramValue(HistogramDataPoint h, OtlpContext context)
+    /// <summary>
+    /// Adds a histogram point, merging unchanged cumulative snapshots but retaining delta intervals.
+    /// </summary>
+    /// <param name="h">The histogram point to add.</param>
+    /// <param name="temporality">The histogram's aggregation temporality.</param>
+    /// <param name="context">The telemetry ingestion context.</param>
+    public void AddHistogramValue(HistogramDataPoint h, OtlpAggregationTemporality temporality, OtlpContext context)
     {
-        var start = OtlpHelpers.UnixNanoSecondsToDateTime(h.StartTimeUnixNano);
-        var end = OtlpHelpers.UnixNanoSecondsToDateTime(h.TimeUnixNano);
-        OtlpHelpers.ValidateHistogramDataPoint(h);
-
         var lastHistogramValue = _lastValue as HistogramValue;
-        if (lastHistogramValue is not null && lastHistogramValue.Values.Length != h.BucketCounts.Count)
+        var value = HistogramValue.Create(h, temporality, lastHistogramValue);
+        if (lastHistogramValue is not null && lastHistogramValue.CanMerge(value))
         {
-            // Histogram bucket layouts must remain stable within a series so cumulative values can
-            // be subtracted and combined. A changed bucket count would make the series unusable.
-            throw new InvalidOperationException("Histogram data point bucket count length changed.");
-        }
-
-        if (lastHistogramValue is not null && lastHistogramValue.Count == h.Count)
-        {
-            lastHistogramValue.End = end;
+            lastHistogramValue.End = value.End;
             AddExemplars(lastHistogramValue, h.Exemplars, context);
         }
         else
         {
-            // If the explicit bounds are the same as the last value, reuse them.
-            double[] explicitBounds;
-            if (lastHistogramValue is not null)
-            {
-                start = lastHistogramValue.End;
-                explicitBounds = lastHistogramValue.ExplicitBounds.SequenceEqual(h.ExplicitBounds)
-                    ? lastHistogramValue.ExplicitBounds
-                    : h.ExplicitBounds.ToArray();
-            }
-            else
-            {
-                explicitBounds = h.ExplicitBounds.ToArray();
-            }
-
-            var bucketCounts = h.BucketCounts.ToArray();
-            _lastValue = new HistogramValue(bucketCounts, h.Sum, h.Count, start, end, explicitBounds);
+            _lastValue = value;
             AddExemplars(_lastValue, h.Exemplars, context);
             _values.Add(_lastValue);
         }

@@ -30,6 +30,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     private string? _renderedTheme;
     private bool _renderedShowCount;
     private DateTimeOffset? _previousDataEndTime;
+    private bool? _hasIncompatibleHistogramBounds;
 
     // Full updates always run. This interval only throttles recurring tick updates.
     protected virtual TimeSpan UpdateInterval => TimeSpan.FromSeconds(0.2);
@@ -62,6 +63,12 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     [Parameter]
     public DateTimeOffset? DataEndTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback reporting whether percentile calculation has no shared bucket boundaries.
+    /// </summary>
+    [Parameter]
+    public EventCallback<bool> HistogramCompatibilityChanged { get; set; }
 
     // Stores a cache of the last set of spans returned as exemplars.
     // This dictionary is replaced each time the chart is updated.
@@ -167,6 +174,12 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
         else
         {
             data = calculator.CalculateHistogramValues(InstrumentViewModel.MatchedDimensions, _currentDataStartTime, TimeProvider.ToLocalDateTimeOffset, unit);
+        }
+
+        if (_hasIncompatibleHistogramBounds != data.HasIncompatibleHistogramBounds)
+        {
+            _hasIncompatibleHistogramBounds = data.HasIncompatibleHistogramBounds;
+            await HistogramCompatibilityChanged.InvokeAsync(data.HasIncompatibleHistogramBounds);
         }
 
         // Add tooltips to traces. The calculator produces values and diff values

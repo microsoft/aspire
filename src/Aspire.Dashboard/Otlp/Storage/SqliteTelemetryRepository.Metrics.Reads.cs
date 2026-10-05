@@ -27,8 +27,13 @@ public sealed partial class SqliteTelemetryRepository
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
-                p.histogram_count
+                p.histogram_count,
+                p.histogram_aggregation_start_ticks,
+                p.histogram_aggregation_id,
+                i.aggregation_temporality
             FROM telemetry_metric_points p
+            JOIN telemetry_metric_dimensions d ON d.dimension_id = p.dimension_id
+            JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = p.dimension_id
             WHERE {MetricPointRangeFilterSql}
         )
@@ -39,7 +44,7 @@ public sealed partial class SqliteTelemetryRepository
             SELECT
                 p.*,
                 ROW_NUMBER() OVER (
-                    PARTITION BY p.start_time_ticks, p.dimension_id
+                    PARTITION BY p.start_time_ticks, p.dimension_id, p.histogram_aggregation_id
                     ORDER BY p.point_id DESC) AS point_rank
             FROM selected_metric_points p
         ),
@@ -49,6 +54,8 @@ public sealed partial class SqliteTelemetryRepository
             WHERE point_rank = 1
         )
         """;
+    // An aggregation identity separates cumulative resets within one rollup. Delta points each
+    // have their own identity and retain their interval start, so no delta observations are discarded.
     private static readonly string s_rolledUpMetricPointsCteSql = $"""
         {EffectiveMetricPointsCteSql},
         bucketed_metric_points AS (
@@ -61,11 +68,11 @@ public sealed partial class SqliteTelemetryRepository
             SELECT
                 p.*,
                 MAX(p.end_time_ticks) OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks) AS rollup_end_time_ticks,
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_end_time_ticks,
                 SUM(p.repeat_count) OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks) AS rollup_repeat_count,
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_repeat_count,
                 ROW_NUMBER() OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id
                     ORDER BY
                         CASE WHEN p.point_type = {HistogramPointType} THEN p.start_time_ticks END DESC,
                         p.integer_value DESC,
@@ -78,13 +85,17 @@ public sealed partial class SqliteTelemetryRepository
                 p.point_id,
                 p.dimension_id,
                 p.point_type,
-                p.rollup_start_time_ticks AS start_time_ticks,
+                CASE WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
+                    THEN p.start_time_ticks ELSE p.rollup_start_time_ticks END AS start_time_ticks,
                 p.rollup_end_time_ticks AS end_time_ticks,
                 p.rollup_repeat_count AS repeat_count,
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
-                p.histogram_count
+                p.histogram_count,
+                p.histogram_aggregation_start_ticks,
+                p.histogram_aggregation_id,
+                p.aggregation_temporality
             FROM ranked_rollup_metric_points p
             WHERE p.rollup_rank = 1
         )
@@ -102,7 +113,10 @@ public sealed partial class SqliteTelemetryRepository
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
-                p.histogram_count
+                p.histogram_count,
+                p.histogram_aggregation_start_ticks,
+                p.histogram_aggregation_id,
+                p.aggregation_temporality
             FROM effective_metric_points p
         )
         """;
@@ -223,6 +237,9 @@ public sealed partial class SqliteTelemetryRepository
                 p.double_value AS DoubleValue,
                 p.histogram_sum AS HistogramSum,
                 p.histogram_count AS HistogramCount,
+                p.histogram_aggregation_start_ticks AS HistogramAggregationStartTicks,
+                p.histogram_aggregation_id AS HistogramAggregationId,
+                p.aggregation_temporality AS AggregationTemporality,
                 stored.bucket_counts AS BucketCounts,
                 stored.explicit_bounds AS ExplicitBounds
             FROM rolled_up_metric_points p
@@ -410,7 +427,10 @@ public sealed partial class SqliteTelemetryRepository
         checked((ulong)point.HistogramCount!.Value),
         new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
         new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
-        UnpackDoubleValues(point.ExplicitBounds!));
+        UnpackDoubleValues(point.ExplicitBounds!),
+        new DateTime(point.HistogramAggregationStartTicks!.Value, DateTimeKind.Utc),
+        point.HistogramAggregationId!.Value,
+        (OtlpAggregationTemporality)point.AggregationTemporality);
 
     private static ILookup<long, MetricsExemplar> MaterializeMetricExemplars(
         SqliteConnection connection,
@@ -425,8 +445,10 @@ public sealed partial class SqliteTelemetryRepository
             WITH {dimensionQueryRangesCteSql}
             SELECT
                 e.exemplar_id AS ExemplarId,
+                source.point_id AS SourcePointId,
                 source.dimension_id AS DimensionId,
                 source.point_type AS PointType,
+                source.histogram_aggregation_id AS HistogramAggregationId,
                 source.start_time_ticks AS SourceStartTimeTicks,
                 e.start_time_ticks AS StartTimeTicks,
                 e.exemplar_value AS ExemplarValue,
@@ -441,16 +463,24 @@ public sealed partial class SqliteTelemetryRepository
             ORDER BY source.dimension_id, source.start_time_ticks, e.exemplar_id;
             """, queryParameters, transaction).AsList();
         var pointIds = points.ToDictionary(
-            point => new MetricPointKey(point.DimensionId, point.PointType, point.StartTimeTicks),
+            point => new MetricPointKey(point.DimensionId, point.PointType, point.StartTimeTicks, point.HistogramAggregationId),
             point => point.PointId);
+        var retainedPointIds = points.Select(point => point.PointId).ToHashSet();
         var pointIntervalTicks = dataPointInterval?.Ticks;
         var mappedRecords = new List<(long PointId, MetricExemplarRecord Record)>();
         foreach (var record in records)
         {
+            // Delta intervals and reset representatives retain their own points. Other cumulative
+            // exemplars attach to the representative of their rollup and aggregation, never across a reset.
+            if (retainedPointIds.Contains(record.SourcePointId))
+            {
+                mappedRecords.Add((record.SourcePointId, record));
+                continue;
+            }
             var rollupStartTimeTicks = pointIntervalTicks is { } intervalTicks
                 ? (record.SourceStartTimeTicks / intervalTicks) * intervalTicks
                 : record.SourceStartTimeTicks;
-            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, rollupStartTimeTicks), out var pointId))
+            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, rollupStartTimeTicks, record.HistogramAggregationId), out var pointId))
             {
                 mappedRecords.Add((pointId, record));
             }
@@ -498,6 +528,9 @@ public sealed partial class SqliteTelemetryRepository
         public required long StartTimeTicks { get; init; }
         public required long RepeatCount { get; init; }
         public double? HistogramSum { get; init; }
+        public long? HistogramAggregationStartTicks { get; init; }
+        public long? HistogramAggregationId { get; init; }
+        public int AggregationTemporality { get; init; }
         public byte[]? BucketCounts { get; init; }
         public byte[]? ExplicitBounds { get; init; }
     }
@@ -513,8 +546,10 @@ public sealed partial class SqliteTelemetryRepository
     internal sealed class MetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
+        public required long SourcePointId { get; init; }
         public required long DimensionId { get; init; }
         public required int PointType { get; init; }
+        public long? HistogramAggregationId { get; init; }
         public required long SourceStartTimeTicks { get; init; }
         public required long StartTimeTicks { get; init; }
         public required double ExemplarValue { get; init; }
@@ -524,5 +559,5 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record StoredMetricDimension(long DimensionId, DimensionScope Scope);
 
-    private readonly record struct MetricPointKey(long DimensionId, int PointType, long StartTimeTicks);
+    private readonly record struct MetricPointKey(long DimensionId, int PointType, long StartTimeTicks, long? HistogramAggregationId);
 }

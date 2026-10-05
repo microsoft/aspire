@@ -31,6 +31,7 @@
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
     <Compile Include="$(TestsSharedDir)Telemetry\TelemetryTestHelpers.cs" Link="shared/Telemetry/TelemetryTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)Telemetry\HistogramTestHelpers.cs" Link="shared/Telemetry/HistogramTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
     <Compile Include="$(TestsSharedDir)DashboardModel\*.cs" LinkBase="shared/DashboardModel" />
     <Compile Include="..\Aspire.Dashboard.Tests\Model\MockKnownPropertyLookup.cs" Link="Shared\MockKnownPropertyLookup.cs" />

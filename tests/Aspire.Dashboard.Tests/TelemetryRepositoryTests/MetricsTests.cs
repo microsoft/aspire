@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
@@ -518,27 +521,6 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         Assert.Equal(s_testTime.AddMinutes(2), repositoryContext.Repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "test"));
         Assert.Null(repositoryContext.Repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "missing"));
-    }
-
-    protected static Exemplar CreateExemplar(DateTime startTime, double value, IEnumerable<KeyValuePair<string, string>>? attributes = null)
-    {
-        var exemplar = new Exemplar
-        {
-            TimeUnixNano = DateTimeToUnixNanoseconds(startTime),
-            AsDouble = value,
-            SpanId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("span-id")),
-            TraceId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("trace-id"))
-        };
-
-        if (attributes != null)
-        {
-            foreach (var attribute in attributes)
-            {
-                exemplar.FilteredAttributes.Add(new KeyValue { Key = attribute.Key, Value = new AnyValue { StringValue = attribute.Value } });
-            }
-        }
-
-        return exemplar;
     }
 
     [Fact]

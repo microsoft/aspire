@@ -8,6 +8,7 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Utils;
 using Dapper;
 using Google.Protobuf.Collections;
@@ -132,6 +133,11 @@ public sealed partial class SqliteTelemetryRepository
         try
         {
             cachedInstrument = GetOrAddCachedInstrument(connection, transaction, cachedResource, cachedView, cachedScope, metric);
+            if (metric.DataCase == Metric.DataOneofCase.Histogram &&
+                cachedInstrument.Summary.AggregationTemporality != MapAggregationTemporality(metric))
+            {
+                throw new InvalidOperationException("Histogram aggregation temporality changed.");
+            }
         }
         catch (Exception exception)
         {
@@ -157,7 +163,8 @@ public sealed partial class SqliteTelemetryRepository
             case Metric.DataOneofCase.Histogram:
                 foreach (var point in metric.Histogram.DataPoints)
                 {
-                    AddHistogramMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, point, ingestionState, pointBatch);
+                    AddHistogramMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId,
+                        cachedInstrument.Summary.AggregationTemporality, point, ingestionState, pointBatch);
                 }
                 break;
         }
@@ -244,6 +251,7 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         AddContext context,
         long instrumentId,
+        OtlpAggregationTemporality temporality,
         HistogramDataPoint point,
         MetricIngestionState ingestionState,
         MetricPointBatch pointBatch)
@@ -254,19 +262,13 @@ public sealed partial class SqliteTelemetryRepository
             var dimension = GetOrAddMetricDimension(connection, transaction, instrumentId, point.Attributes, ingestionState);
             var pendingLatest = dimension.PendingPoint;
             var latest = dimension.LatestPoint;
-            var latestPointType = pendingLatest?.PointType ?? latest?.PointType;
-            var latestEndTimeTicks = pendingLatest?.EndTimeTicks ?? latest?.EndTimeTicks;
-            var latestBucketCountLength = pendingLatest?.HistogramBucketCounts?.Length ?? latest?.HistogramBucketCountLength;
-            if (latestPointType == HistogramPointType && latestBucketCountLength != point.BucketCounts.Count)
-            {
-                throw new InvalidOperationException("Histogram data point bucket count length changed.");
-            }
+            var previousHistogram = pendingLatest?.Histogram ?? latest?.Histogram;
+            var histogram = HistogramValue.Create(point, temporality, previousHistogram);
             var histogramCount = checked((long)point.Count);
-            var sameCount = latestPointType == HistogramPointType &&
-                (pendingLatest?.HistogramCount ?? latest?.HistogramCount) == histogramCount;
             var endTimeTicks = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano).Ticks;
-            if (sameCount)
+            if (previousHistogram is not null && previousHistogram.CanMerge(histogram))
             {
+                previousHistogram.End = histogram.End;
                 if (pendingLatest is not null)
                 {
                     pendingLatest.EndTimeTicks = endTimeTicks;
@@ -283,24 +285,20 @@ public sealed partial class SqliteTelemetryRepository
             }
             else
             {
-                var start = OtlpHelpers.UnixNanoSecondsToDateTime(point.StartTimeUnixNano);
-                if (latestPointType == HistogramPointType)
-                {
-                    start = new DateTime(latestEndTimeTicks!.Value, DateTimeKind.Utc);
-                }
                 var pendingPoint = new PendingMetricPoint
                 {
                     Context = context,
                     Dimension = dimension,
                     PointType = HistogramPointType,
-                    StartTimeTicks = start.Ticks,
+                    StartTimeTicks = histogram.Start.Ticks,
                     EndTimeTicks = endTimeTicks,
                     RepeatCount = 1,
                     HistogramSum = point.Sum,
                     HistogramCount = histogramCount,
+                    Histogram = histogram,
                     Flags = (long)point.Flags,
-                    HistogramBucketCounts = point.BucketCounts.Select(count => checked((long)count)).ToArray(),
-                    HistogramExplicitBounds = point.ExplicitBounds.ToArray()
+                    HistogramBucketCounts = histogram.Values.Select(count => checked((long)count)).ToArray(),
+                    HistogramExplicitBounds = histogram.ExplicitBounds
                 };
                 pendingPoint.Exemplars.AddRange(point.Exemplars);
                 pointBatch.Inserts.Add(pendingPoint);
@@ -357,7 +355,8 @@ public sealed partial class SqliteTelemetryRepository
             "telemetry_metric_points",
             [
                 "dimension_id", "point_type", "start_time_ticks", "end_time_ticks", "repeat_count",
-                "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags"
+                "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags",
+                "histogram_aggregation_start_ticks", "histogram_aggregation_id"
             ],
             "point_id",
             static (point, parameters) =>
@@ -374,6 +373,8 @@ public sealed partial class SqliteTelemetryRepository
                 parameters[9].Value = point.HistogramBucketCounts is not null ? PackInt64Values(point.HistogramBucketCounts) : DBNull.Value;
                 parameters[10].Value = point.HistogramExplicitBounds is not null ? PackDoubleValues(point.HistogramExplicitBounds) : DBNull.Value;
                 parameters[11].Value = point.Flags;
+                parameters[12].Value = point.Histogram?.AggregationStart.Ticks ?? (object)DBNull.Value;
+                parameters[13].Value = point.Histogram?.AggregationId ?? (object)DBNull.Value;
             });
         for (var i = 0; i < pointBatch.Inserts.Count; i++)
         {
@@ -401,7 +402,7 @@ public sealed partial class SqliteTelemetryRepository
                     IntegerValue = point.IntegerValue,
                     DoubleValue = point.DoubleValue,
                     HistogramCount = point.HistogramCount,
-                    HistogramBucketCountLength = point.HistogramBucketCounts?.Length
+                    Histogram = point.Histogram
                 };
                 point.Dimension.PendingPoint = null;
             }
@@ -429,12 +430,19 @@ public sealed partial class SqliteTelemetryRepository
                     a.attribute_value AS AttributeValue,
                     p.point_id AS PointId,
                     p.point_type AS PointType,
+                    p.start_time_ticks AS StartTimeTicks,
                     p.end_time_ticks AS EndTimeTicks,
                     p.integer_value AS IntegerValue,
                     p.double_value AS DoubleValue,
                     p.histogram_count AS HistogramCount,
-                    p.bucket_counts AS HistogramBucketCounts
+                    p.histogram_sum AS HistogramSum,
+                    p.histogram_aggregation_start_ticks AS HistogramAggregationStartTicks,
+                    p.histogram_aggregation_id AS HistogramAggregationId,
+                    p.bucket_counts AS HistogramBucketCounts,
+                    p.explicit_bounds AS HistogramExplicitBounds,
+                    i.aggregation_temporality AS AggregationTemporality
                 FROM telemetry_metric_dimensions d
+                JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
                 LEFT JOIN telemetry_metric_dimension_attributes a ON a.dimension_id = d.dimension_id
                 LEFT JOIN telemetry_metric_points p ON p.point_id = (
                     SELECT point_id
@@ -467,7 +475,17 @@ public sealed partial class SqliteTelemetryRepository
                                 IntegerValue = first.IntegerValue,
                                 DoubleValue = first.DoubleValue,
                                 HistogramCount = first.HistogramCount,
-                                HistogramBucketCountLength = first.HistogramBucketCounts?.Length / sizeof(long)
+                                Histogram = first.PointType == HistogramPointType
+                                    ? new HistogramValue(
+                                        UnpackUInt64Values(first.HistogramBucketCounts!), first.HistogramSum!.Value,
+                                        checked((ulong)first.HistogramCount!.Value),
+                                        new DateTime(first.StartTimeTicks!.Value, DateTimeKind.Utc),
+                                        new DateTime(first.EndTimeTicks.Value, DateTimeKind.Utc),
+                                        UnpackDoubleValues(first.HistogramExplicitBounds!),
+                                        new DateTime(first.HistogramAggregationStartTicks!.Value, DateTimeKind.Utc),
+                                        first.HistogramAggregationId!.Value,
+                                        (OtlpAggregationTemporality)first.AggregationTemporality)
+                                    : null
                             }
                             : null
                     };
@@ -938,6 +956,7 @@ public sealed partial class SqliteTelemetryRepository
         public double? DoubleValue { get; init; }
         public double? HistogramSum { get; init; }
         public long? HistogramCount { get; init; }
+        public HistogramValue? Histogram { get; init; }
         public required long Flags { get; init; }
         public long PointId { get; set; }
         public int SourcePointCount { get; set; } = 1;
@@ -954,11 +973,17 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
         public long? PointId { get; init; }
         public int? PointType { get; init; }
+        public long? StartTimeTicks { get; init; }
         public long? EndTimeTicks { get; init; }
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public long? HistogramCount { get; init; }
+        public double? HistogramSum { get; init; }
+        public long? HistogramAggregationStartTicks { get; init; }
+        public long? HistogramAggregationId { get; init; }
+        public int AggregationTemporality { get; init; }
         public byte[]? HistogramBucketCounts { get; init; }
+        public byte[]? HistogramExplicitBounds { get; init; }
     }
 
     internal class MetricPointRecord
@@ -969,6 +994,6 @@ public sealed partial class SqliteTelemetryRepository
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public long? HistogramCount { get; init; }
-        public int? HistogramBucketCountLength { get; init; }
+        public HistogramValue? Histogram { get; init; }
     }
 }

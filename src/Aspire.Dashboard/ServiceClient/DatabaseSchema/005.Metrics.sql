@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_points (
     double_value REAL NULL,
     histogram_sum REAL NULL,
     histogram_count INTEGER NULL,
+    histogram_aggregation_start_ticks INTEGER NULL,
+    histogram_aggregation_id INTEGER NULL,
     bucket_counts BLOB NULL,
     explicit_bounds BLOB NULL,
     flags INTEGER NOT NULL

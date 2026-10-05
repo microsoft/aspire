@@ -574,7 +574,7 @@ public sealed class TelemetryExportService
                 var dataPoint = new OtlpHistogramDataPointJson
                 {
                     Attributes = ConvertAttributes(dimension.Attributes),
-                    StartTimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.Start),
+                    StartTimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(histogramValue.AggregationStart),
                     TimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.End),
                     Count = histogramValue.Count,
                     Sum = histogramValue.Sum,

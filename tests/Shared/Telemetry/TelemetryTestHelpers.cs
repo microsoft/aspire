@@ -90,6 +90,27 @@ internal static class TelemetryTestHelpers
         };
     }
 
+    public static Exemplar CreateExemplar(DateTime startTime, double value, IEnumerable<KeyValuePair<string, string>>? attributes = null)
+    {
+        var exemplar = new Exemplar
+        {
+            TimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+            AsDouble = value,
+            SpanId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("span-id")),
+            TraceId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("trace-id"))
+        };
+
+        if (attributes != null)
+        {
+            foreach (var attribute in attributes)
+            {
+                exemplar.FilteredAttributes.Add(new KeyValue { Key = attribute.Key, Value = new AnyValue { StringValue = attribute.Value } });
+            }
+        }
+
+        return exemplar;
+    }
+
     public static Metric CreateSumMetric(string metricName, DateTime startTime, IEnumerable<KeyValuePair<string, string>>? attributes = null, IEnumerable<Exemplar>? exemplars = null, int? value = null)
     {
         return new Metric

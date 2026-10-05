@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests.Shared.Telemetry;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
@@ -312,7 +313,7 @@ public class ChartDataCalculatorTests
         histogramPoint.ExplicitBounds.AddRange([10.0, 50.0, 100.0]);
         histogramPoint.BucketCounts.AddRange([50UL, 40UL, 10UL, 0UL]);
 
-        dimension.AddHistogramValue(histogramPoint, context);
+        dimension.AddHistogramValue(histogramPoint, OtlpAggregationTemporality.Cumulative, context);
 
         var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(50));
         var data = calculator.CalculateHistogramValues([dimension], s_startTime, ToLocal, "ms");
@@ -343,8 +344,8 @@ public class ChartDataCalculatorTests
 
         for (var minute = 1; minute <= 3; minute++)
         {
-            stableDimension.AddHistogramValue(CreateHistogramPoint(start, minute, 10, [10, 0, 0]), context);
-            changingDimension.AddHistogramValue(CreateHistogramPoint(start, minute, checked((ulong)(15 + (minute * 5))), [0, 0, checked((ulong)(15 + (minute * 5)))]), context);
+            stableDimension.AddHistogramValue(CreateHistogramPoint(start, minute, 10, [10, 0, 0]), OtlpAggregationTemporality.Cumulative, context);
+            changingDimension.AddHistogramValue(CreateHistogramPoint(start, minute, checked((ulong)(15 + (minute * 5))), [0, 0, checked((ulong)(15 + (minute * 5)))]), OtlpAggregationTemporality.Cumulative, context);
         }
 
         var traces = new Dictionary<int, ChartTrace>
@@ -359,14 +360,16 @@ public class ChartDataCalculatorTests
             start,
             traces,
             exemplars,
-            ToLocal);
+            ToLocal,
+            out _);
         var secondResult = ChartDataCalculator.TryCalculateHistogramPoints(
             [stableDimension, changingDimension],
             start.AddMinutes(1),
             start.AddMinutes(1),
             traces,
             exemplars,
-            ToLocal);
+            ToLocal,
+            out _);
 
         Assert.True(firstResult);
         Assert.True(secondResult);
@@ -403,7 +406,7 @@ public class ChartDataCalculatorTests
         histogramPoint.ExplicitBounds.AddRange([50.0]);
         histogramPoint.BucketCounts.AddRange([5UL, 5UL]);
 
-        dimension.AddHistogramValue(histogramPoint, context);
+        dimension.AddHistogramValue(histogramPoint, OtlpAggregationTemporality.Cumulative, context);
 
         var calculator = new ChartDataCalculator(pointCount: 10, duration: TimeSpan.FromSeconds(100));
         var data = calculator.CalculateHistogramValues([dimension], s_startTime, ToLocal, "ms");
@@ -413,6 +416,91 @@ public class ChartDataCalculatorTests
             Assert.True(data.XValues[i] > data.XValues[i - 1],
                 $"xValues[{i}] ({data.XValues[i]}) should be after xValues[{i - 1}] ({data.XValues[i - 1]})");
         }
+    }
+
+    [Fact]
+    public void HistogramBuckets_DifferentLayouts_MergesOnlyAtSharedBoundaries()
+    {
+        ulong[]? counts = [1, 5, 0];
+        double[]? bounds = [10, 100];
+        HistogramBuckets.Add(ref counts, ref bounds, [1, 2, 2, 0], [10, 50, 100]);
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([10d, 100d], bounds);
+        Assert.Equal([2ul, 9ul, 0ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_DifferentLayouts_PreservesOverflowCounts()
+    {
+        ulong[]? counts = [1, 2, 3];
+        double[]? bounds = [10, 100];
+        HistogramBuckets.Add(ref counts, ref bounds, [4, 5, 6, 7], [10, 50, 100]);
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([10d, 100d], bounds);
+        Assert.Equal([5ul, 13ul, 10ul], counts);
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative)]
+    [InlineData(OtlpAggregationTemporality.Delta)]
+    public void CalculateHistogramValues_EqualBucketLengthsWithDifferentBounds_UsesSharedBounds(OtlpAggregationTemporality temporality)
+    {
+        var first = new DimensionScope(100, []);
+        var second = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [10, 0, 0], [10, 100]),
+            temporality, CreateContext());
+        second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [0, 10, 0], [50, 100]),
+            temporality, CreateContext());
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([first, second], s_startTime, ToLocal, "ms");
+        Assert.False(data.HasIncompatibleHistogramBounds);
+        Assert.All(data.Traces, trace => Assert.All(trace.Values.OfType<double>(), value => Assert.Equal(100, value)));
+        Assert.All(data.Traces, trace => Assert.Contains(100d, trace.Values));
+    }
+
+    [Fact]
+    public void CalculateHistogramValues_NoSharedBounds_ReportsUnavailablePercentilesAndRetainsCount()
+    {
+        var first = new DimensionScope(100, []);
+        var second = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [3, 0], [10]),
+            OtlpAggregationTemporality.Delta, CreateContext());
+        second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [5, 0], [20]),
+            OtlpAggregationTemporality.Delta, CreateContext());
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([first, second], s_startTime, ToLocal, "ms");
+        Assert.True(data.HasIncompatibleHistogramBounds);
+        Assert.All(data.Traces, trace => Assert.All(trace.Values, Assert.Null));
+        Assert.True(ChartDataCalculator.TryCalculatePoint([first, second], time, time.AddSeconds(1), out var count));
+        Assert.Equal(8, count);
+    }
+
+    [Fact]
+    public void TryCalculateHistogramPoints_DeltaBoundary_BelongsToOneWindow()
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [10, 0, 0], [10, 100]),
+            OtlpAggregationTemporality.Delta, CreateContext());
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time.AddSeconds(1), time.AddSeconds(2), [0, 10, 0], [10, 100]),
+            OtlpAggregationTemporality.Delta, CreateContext());
+        var traces = new Dictionary<int, ChartTrace> { [50] = new() { Name = "P50", Percentile = 50 } };
+
+        Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime, s_startTime.AddSeconds(1),
+            traces, [], ToLocal, out _));
+        Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime.AddSeconds(1), s_startTime.AddSeconds(2),
+            traces, [], ToLocal, out _));
+        Assert.Equal([10d, 100d], traces[50].Values);
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
+        Assert.Equal(10, count);
     }
 
     [Fact]

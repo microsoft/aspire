@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Otlp.Model;
 
 namespace Aspire.Dashboard.Components.Controls.Chart;
 
@@ -76,6 +77,7 @@ internal sealed class ChartDataCalculator
         };
         var xValues = new List<DateTimeOffset>();
         var exemplars = new List<ChartExemplar>();
+        var hasIncompatibleBounds = false;
         DateTimeOffset? lastPointStartTime = null;
 
         // Generate the points in reverse order so that the chart is drawn from right to left.
@@ -88,13 +90,14 @@ internal sealed class ChartDataCalculator
 
             xValues.Add(toLocal(end));
 
-            if (!TryCalculateHistogramPoints(dimensions, start, end, traces, exemplars, toLocal))
+            if (!TryCalculateHistogramPoints(dimensions, start, end, traces, exemplars, toLocal, out var incompatibleBounds))
             {
                 foreach (var trace in traces)
                 {
                     trace.Value.Values.Add(null);
                 }
             }
+            hasIncompatibleBounds |= incompatibleBounds;
         }
 
         foreach (var item in traces)
@@ -126,7 +129,8 @@ internal sealed class ChartDataCalculator
         {
             Traces = traces.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList(),
             XValues = xValues,
-            Exemplars = exemplars
+            Exemplars = exemplars,
+            HasIncompatibleHistogramBounds = hasIncompatibleBounds
         };
     }
 
@@ -155,13 +159,35 @@ internal sealed class ChartDataCalculator
                     break;
                 }
 
+                if (metric is HistogramValue histogram)
+                {
+                    if (histogram.AggregationTemporality == OtlpAggregationTemporality.Delta)
+                    {
+                        if (metricStart >= start && metricStart < end)
+                        {
+                            dimensionValue += histogram.Count;
+                            hasValue = true;
+                        }
+                        continue;
+                    }
+
+                    if (metricStart <= end)
+                    {
+                        // Cumulative counts can decrease after a reset. Use the latest matching
+                        // snapshot, not the maximum count from before the reset.
+                        dimensionValue = histogram.Count;
+                        hasValue = true;
+                        break;
+                    }
+                    continue;
+                }
+
                 if (metricStart <= end)
                 {
                     var value = metric switch
                     {
                         MetricValue<long> longMetric => longMetric.Value,
                         MetricValue<double> doubleMetric => doubleMetric.Value,
-                        HistogramValue histogramValue => histogramValue.Count,
                         _ => 0
                     };
 
@@ -183,15 +209,16 @@ internal sealed class ChartDataCalculator
         return hasValue;
     }
 
-    internal static bool TryCalculateHistogramPoints(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, Dictionary<int, ChartTrace> traces, List<ChartExemplar> exemplars, Func<DateTimeOffset, DateTimeOffset> toLocal)
+    internal static bool TryCalculateHistogramPoints(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, Dictionary<int, ChartTrace> traces, List<ChartExemplar> exemplars, Func<DateTimeOffset, DateTimeOffset> toLocal, out bool incompatibleBounds)
     {
         var hasValue = false;
+        incompatibleBounds = false;
 
         ulong[]? currentBucketCounts = null;
         double[]? explicitBounds = null;
 
-        start = start.Subtract(TimeSpan.FromSeconds(1));
-        end = end.Add(TimeSpan.FromSeconds(1));
+        var cumulativeStart = start.Subtract(TimeSpan.FromSeconds(1));
+        var cumulativeEnd = end.Add(TimeSpan.FromSeconds(1));
 
         foreach (var dimension in dimensions)
         {
@@ -202,10 +229,14 @@ internal sealed class ChartDataCalculator
                 // MetricValueBase.Start is DateTime (Kind=Utc from Unix timestamps).
                 // Use explicit DateTimeOffset conversion to avoid silent local-time assumption.
                 var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
-                if (metricStart >= start && metricStart <= end)
+                var histogramValue = GetHistogramValue(metric);
+                var isDelta = histogramValue.AggregationTemporality == OtlpAggregationTemporality.Delta;
+                // Each delta interval belongs to exactly one chart window. The cumulative padding
+                // accommodates rounded rollup timestamps, but would double-count delta intervals.
+                if (isDelta
+                    ? metricStart >= start && metricStart < end
+                    : metricStart >= cumulativeStart && metricStart <= cumulativeEnd)
                 {
-                    var histogramValue = GetHistogramValue(metric);
-
                     CollectExemplars(exemplars, metric, toLocal);
 
                     // Only use the first recorded entry if it is the beginning of data.
@@ -215,18 +246,9 @@ internal sealed class ChartDataCalculator
                         continue;
                     }
 
-                    explicitBounds ??= histogramValue.ExplicitBounds;
-
-                    var previousHistogramValues = i > 0 ? GetHistogramValue(dimensionValues[i - 1]).Values : null;
-
-                    if (currentBucketCounts is null)
-                    {
-                        currentBucketCounts = new ulong[histogramValue.Values.Length];
-                    }
-                    else if (currentBucketCounts.Length != histogramValue.Values.Length)
-                    {
-                        throw new InvalidOperationException("Histogram values changed size");
-                    }
+                    var previous = !isDelta && i > 0 ? GetHistogramValue(dimensionValues[i - 1]) : null;
+                    var previousHistogramValues = previous is not null && previous.AggregationId == histogramValue.AggregationId ? previous.Values : null;
+                    var observationCounts = new ulong[histogramValue.Values.Length];
 
                     for (var valuesIndex = 0; valuesIndex < histogramValue.Values.Length; valuesIndex++)
                     {
@@ -238,10 +260,15 @@ internal sealed class ChartDataCalculator
                             newValue -= previousHistogramValues[valuesIndex];
                         }
 
-                        currentBucketCounts[valuesIndex] += newValue;
+                        observationCounts[valuesIndex] = newValue;
                     }
 
-                    hasValue = true;
+                    if (observationCounts.Any(count => count > 0))
+                    {
+                        HistogramBuckets.Add(ref currentBucketCounts, ref explicitBounds, observationCounts, histogramValue.ExplicitBounds);
+                        incompatibleBounds |= explicitBounds!.Length == 0;
+                        hasValue = true;
+                    }
                 }
             }
         }
@@ -271,7 +298,7 @@ internal sealed class ChartDataCalculator
             totalCount += count;
         }
 
-        if (totalCount == 0)
+        if (totalCount == 0 || explicitBounds.Length == 0)
         {
             return null;
         }
