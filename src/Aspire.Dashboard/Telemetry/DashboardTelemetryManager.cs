@@ -13,20 +13,44 @@ namespace Aspire.Dashboard.Telemetry;
 /// <summary>
 /// Owns the dashboard's Azure Monitor reported trace and usage-log providers.
 /// </summary>
-internal sealed class DashboardTelemetryManager(
-    DashboardTelemetryConfiguration configuration,
-    ILogger<DashboardTelemetryManager> logger,
-    LoggerProvider logProvider) : IHostedService, IAsyncDisposable
+internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposable
 {
     // TODO: Replace this placeholder with the dashboard's Application Insights connection string.
     private const string ApplicationInsightsConnectionString = "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://dashboard-telemetry.invalid/";
 
     private readonly Lock _lock = new();
+    private readonly DashboardTelemetryConfiguration _configuration;
+    private readonly ILogger<DashboardTelemetryManager> _logger;
+    private readonly Func<string, TracerProvider> _createTraceProvider = CreateTraceProvider;
+    private readonly Func<string, LoggerProvider> _configureLogProvider;
     private TracerProvider? _provider;
     private LoggerProvider? _logProvider;
     private bool _initialized;
     private bool _disposed;
     private Task? _shutdownTask;
+
+    public DashboardTelemetryManager(
+        DashboardTelemetryConfiguration configuration,
+        ILogger<DashboardTelemetryManager> logger,
+        LoggerProvider logProvider)
+    {
+        _configuration = configuration;
+        _logger = logger;
+        _configureLogProvider = storageDirectory =>
+            logProvider.AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, Path.Combine(storageDirectory, "logs"),
+                record => IsEventLog(record.CategoryName, record.LogLevel));
+    }
+
+    internal DashboardTelemetryManager(
+        DashboardTelemetryConfiguration configuration,
+        ILogger<DashboardTelemetryManager> logger,
+        LoggerProvider logProvider,
+        Func<string, TracerProvider> createTraceProvider,
+        Func<string, LoggerProvider> configureLogProvider) : this(configuration, logger, logProvider)
+    {
+        _createTraceProvider = createTraceProvider;
+        _configureLogProvider = configureLogProvider;
+    }
 
     internal bool IsInitialized
     {
@@ -52,40 +76,41 @@ internal sealed class DashboardTelemetryManager(
                 return;
             }
 
-            if (!configuration.ReportedTelemetryEnabled)
+            if (!_configuration.ReportedTelemetryEnabled)
             {
                 _initialized = true;
-                logger.LogDebug("Dashboard product telemetry is disabled.");
+                _logger.LogDebug("Dashboard product telemetry is disabled.");
                 return;
             }
 
-            var storageDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dashboard", "telemetrystorage");
-
-            // This trace provider listens only to product instrumentation, never ASP.NET Core,
-            // SQLite, or application telemetry ingested by the dashboard.
-            var provider = Sdk.CreateTracerProviderBuilder()
-                .AddSource(DashboardTelemetryService.ReportedActivitySourceName)
-                .SetResourceBuilder(CreateResourceBuilder())
-                .AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, storageDirectory)
-                .Build();
-
             try
             {
-                _logProvider = logProvider.AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, Path.Combine(storageDirectory, "logs"),
-                    record => IsEventLog(record.CategoryName, record.LogLevel));
-            }
-            catch
-            {
-                // A failed log exporter must not leave a trace provider alive or mark
-                // initialization complete, so a subsequent attempt can safely retry.
-                provider.Shutdown(timeoutMilliseconds: 0);
-                provider.Dispose();
-                throw;
-            }
+                var storageDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dashboard", "telemetrystorage");
+                var provider = _createTraceProvider(storageDirectory);
 
-            _provider = provider;
-            _initialized = true;
+                try
+                {
+                    _logProvider = _configureLogProvider(storageDirectory);
+                }
+                catch
+                {
+                    // A failed log exporter must not leave a trace provider alive or mark
+                    // initialization complete, so a subsequent attempt can safely retry.
+                    provider.Shutdown(timeoutMilliseconds: 0);
+                    provider.Dispose();
+                    throw;
+                }
+
+                _provider = provider;
+                _initialized = true;
+            }
+            catch (Exception ex)
+            {
+                // Product telemetry is optional; exporter or storage failures must not
+                // prevent users from starting the dashboard.
+                _logger.LogWarning(ex, "Failed to initialize dashboard product telemetry. The dashboard will continue without product export.");
+            }
         }
     }
 
@@ -130,7 +155,7 @@ internal sealed class DashboardTelemetryManager(
             {
                 if (!provider.Shutdown(timeoutMilliseconds: 5000))
                 {
-                    logger.LogWarning("Timed out flushing dashboard product traces.");
+                    _logger.LogWarning("Timed out flushing dashboard product traces.");
                 }
                 provider.Dispose();
             }
@@ -139,7 +164,7 @@ internal sealed class DashboardTelemetryManager(
             // Flush the application-owned provider, but leave its disposal to DI.
             if (logProvider is not null && !logProvider.Shutdown(timeoutMilliseconds: 5000))
             {
-                logger.LogWarning("Timed out flushing dashboard product usage logs.");
+                _logger.LogWarning("Timed out flushing dashboard product usage logs.");
             }
         })).ConfigureAwait(false);
     }
@@ -160,6 +185,17 @@ internal sealed class DashboardTelemetryManager(
 
     internal static bool IsEventLog(string? category, LogLevel level) =>
         category == DashboardTelemetryService.EventLogCategoryName && level is >= LogLevel.Information and < LogLevel.None;
+
+    private static TracerProvider CreateTraceProvider(string storageDirectory)
+    {
+        // This trace provider listens only to product instrumentation, never ASP.NET Core,
+        // SQLite, or application telemetry ingested by the dashboard.
+        return Sdk.CreateTracerProviderBuilder()
+            .AddSource(DashboardTelemetryService.ReportedActivitySourceName)
+            .SetResourceBuilder(CreateResourceBuilder())
+            .AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, storageDirectory)
+            .Build();
+    }
 
     private static ResourceBuilder CreateResourceBuilder() => ResourceBuilder.CreateEmpty().AddService(
         serviceName: "aspire-dashboard",
