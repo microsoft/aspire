@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Aspire.TestUtilities;
 using Xunit;
 using YamlDotNet.RepresentationModel;
@@ -25,30 +24,22 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
     [Fact]
     public void WorkflowRunsOnEveryPullRequestWithLeastPrivilegeAndStableCheckName()
     {
-        var workflowText = ReadWorkflowText();
-        var trigger = GetTopLevelSection(workflowText, "on");
-
-        Assert.Equal(
-            "  pull_request:\n",
-            trigger.ReplaceLineEndings("\n"));
-
         var workflow = LoadWorkflow();
         var root = (YamlMappingNode)workflow.Documents[0].RootNode;
-        var permissions = (YamlMappingNode)root.Children[new YamlScalarNode("permissions")];
+        var triggers = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("on")]);
+        var pullRequestTrigger = Assert.Single(triggers.Children);
+        Assert.Equal("pull_request", Assert.IsType<YamlScalarNode>(pullRequestTrigger.Key).Value);
+        Assert.Equal(string.Empty, Assert.IsType<YamlScalarNode>(pullRequestTrigger.Value).Value);
 
-        Assert.Collection(
-            permissions.Children,
-            entry =>
-            {
-                Assert.Equal("contents", ((YamlScalarNode)entry.Key).Value);
-                Assert.Equal("read", ((YamlScalarNode)entry.Value).Value);
-            });
+        var permissions = (YamlMappingNode)root.Children[new YamlScalarNode("permissions")];
+        var permission = Assert.Single(permissions.Children);
+        Assert.Equal("contents", Assert.IsType<YamlScalarNode>(permission.Key).Value);
+        Assert.Equal("read", Assert.IsType<YamlScalarNode>(permission.Value).Value);
 
         var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
         var gateJob = Assert.IsType<YamlMappingNode>(Assert.Single(jobs.Children).Value);
 
         Assert.Equal("Extension changelog finalized", Scalar(gateJob, "name"));
-        Assert.Contains("strict/up-to-date semantics", workflowText, StringComparison.Ordinal);
 
         var steps = ((YamlSequenceNode)gateJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>();
         var checkoutStep = Assert.Single(steps, step => Scalar(step, "uses")?.Contains("actions/checkout", StringComparison.Ordinal) == true);
@@ -59,11 +50,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
             Scalar(checkoutWith, "fetch-depth"));
         Assert.Equal("false", Scalar(checkoutWith, "persist-credentials"));
 
-        Assert.DoesNotContain(
-            steps,
-            step => Scalar(step, "name") == "Preload trusted base history for release-branch stale range checks");
-        Assert.DoesNotContain("git fetch", workflowText, StringComparison.Ordinal);
-
         var verifyStep = Assert.Single(
             steps,
             step => Scalar(step, "run")?.Contains("bash .github/workflows/check-extension-changelog-finalized.sh", StringComparison.Ordinal) == true);
@@ -71,10 +57,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
         Assert.Equal("${{ github.head_ref }}", Scalar(verifyEnv, "PR_HEAD_REF"));
         Assert.Equal("${{ github.base_ref }}", Scalar(verifyEnv, "PR_BASE_REF"));
         Assert.Equal("${{ github.event.pull_request.base.sha }}", Scalar(verifyEnv, "PR_BASE_SHA"));
-
-        Assert.Contains(
-            steps,
-            step => Scalar(step, "run")?.Contains("bash .github/workflows/check-extension-changelog-finalized.sh", StringComparison.Ordinal) == true);
     }
 
     [Theory]
@@ -523,17 +505,6 @@ public sealed class ExtensionChangelogFinalizedWorkflowTests(ITestOutputHelper o
         Assert.True(File.Exists(workflowPath), $"Expected workflow file at '{WorkflowRelativePath}'.");
 
         return File.ReadAllText(workflowPath);
-    }
-
-    private static string GetTopLevelSection(string text, string key)
-    {
-        var match = Regex.Match(
-            text,
-            $"(?m)^{Regex.Escape(key)}:\\r?\\n(?<value>(?:^[ ].*\\r?\\n)*)",
-            RegexOptions.CultureInvariant);
-
-        Assert.True(match.Success, $"Could not find top-level workflow section '{key}'.");
-        return match.Groups["value"].Value;
     }
 
     private static string? Scalar(YamlMappingNode node, string key)

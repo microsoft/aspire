@@ -4,18 +4,14 @@
 using System.Text.Json;
 using Aspire.TestUtilities;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
 /// <summary>
-/// Behavioral tests for the comment_selection job's inline github-script in
-/// <c>.github/workflows/tests.yml</c> (the job that posts the "selected tests" PR comment). The
-/// <see cref="Infrastructure.Tests.TestTriggerMap.SelectTestsWorkflowTests"/> content guards pin the
-/// script's source text; these execute the *shipped* script against mocked github/context/core to
-/// pin its behavior -- one comment per pushed commit (a new commit creates, a re-run of the same
-/// commit updates in place), superseded comments collapsed via minimize (never deleted), the
-/// head-SHA-over-context-SHA link precedence, and the skip-when-summary-missing path -- which content
-/// matching cannot verify.
+/// Executes the privileged selected-tests comment script with controlled GitHub fixtures.
+/// The workflow intentionally keeps the script inline so its write-scoped job never checks out
+/// pull request code.
 /// </summary>
 public sealed class SelectTestsCommentScriptTests : IDisposable
 {
@@ -34,6 +30,33 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
     }
 
     public void Dispose() => _workspace.Dispose();
+
+    [Fact]
+    public void CommentJobKeepsWriteTokenSeparateFromPullRequestCode()
+    {
+        var job = LoadCommentJob();
+        Assert.Equal("setup_for_tests", Scalar(job, "needs"));
+        var permissions = Mapping(job, "permissions");
+        Assert.Equal("read", Scalar(permissions, "contents"));
+        Assert.Equal("write", Scalar(permissions, "issues"));
+        Assert.Equal("write", Scalar(permissions, "pull-requests"));
+
+        var steps = Sequence(job, "steps").Children.Cast<YamlMappingNode>().ToList();
+        Assert.DoesNotContain(
+            steps,
+            step => ScalarOrNull(step, "uses")?.StartsWith("actions/checkout@", StringComparison.Ordinal) == true);
+        var download = Assert.Single(
+            steps,
+            step => ScalarOrNull(step, "uses")?.StartsWith("actions/download-artifact@", StringComparison.Ordinal) == true);
+        var comment = Assert.Single(
+            steps,
+            step => ScalarOrNull(step, "uses")?.StartsWith("actions/github-script@", StringComparison.Ordinal) == true);
+        Assert.True(steps.IndexOf(comment) > steps.IndexOf(download));
+        Assert.Equal(
+            "${{ github.workspace }}/select-tests-comment/select-tests-comment.md",
+            Scalar(Mapping(comment, "env"), "SELECT_TESTS_COMMENT_FILE"));
+        Assert.DoesNotContain("${{", Scalar(Mapping(comment, "with"), "script"), StringComparison.Ordinal);
+    }
 
     [Fact]
     [RequiresTools(["node"])]
@@ -244,53 +267,37 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
         return response!.Result;
     }
 
-    // Extracts the shipped github-script body from the comment_selection job's `script: |` block so
-    // the test exercises the exact text that runs in CI (it can't be required as a module -- see the
-    // harness header for why). Dedents the YAML block scalar by its common indent.
-    private string ExtractCommentScript()
+    private static string ExtractCommentScript()
+        => Scalar(
+            Mapping(
+                Assert.Single(
+                    Sequence(LoadCommentJob(), "steps").Children.Cast<YamlMappingNode>(),
+                    step => ScalarOrNull(step, "uses")?.StartsWith("actions/github-script@", StringComparison.Ordinal) == true),
+                "with"),
+            "script");
+
+    private static YamlMappingNode LoadCommentJob()
     {
-        var lines = File.ReadAllText(Path.Combine(_repoRoot, ".github", "workflows", "tests.yml"))
-            .Replace("\r\n", "\n")
-            .Split('\n');
-
-        var jobIdx = Array.FindIndex(lines, l => l.Contains("comment_selection:", StringComparison.Ordinal));
-        Assert.True(jobIdx >= 0, "Expected a comment_selection job in tests.yml.");
-
-        var scriptIdx = Array.FindIndex(lines, jobIdx, l => l.TrimEnd().EndsWith("script: |", StringComparison.Ordinal));
-        Assert.True(scriptIdx >= 0, "Expected a 'script: |' block in the comment_selection job.");
-
-        // The block runs from the first deeper-indented line until indentation returns to the
-        // `script:` key's column (or shallower).
-        var keyIndent = IndentOf(lines[scriptIdx]);
-        var body = new List<string>();
-        for (var i = scriptIdx + 1; i < lines.Length; i++)
-        {
-            var line = lines[i];
-            if (line.Trim().Length == 0)
-            {
-                body.Add(string.Empty);
-                continue;
-            }
-
-            if (IndentOf(line) <= keyIndent)
-            {
-                break;
-            }
-
-            body.Add(line);
-        }
-
-        while (body.Count > 0 && body[^1].Length == 0)
-        {
-            body.RemoveAt(body.Count - 1);
-        }
-
-        Assert.NotEmpty(body);
-        var minIndent = body.Where(l => l.Length > 0).Min(IndentOf);
-        return string.Join("\n", body.Select(l => l.Length >= minIndent ? l[minIndent..] : l));
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml"));
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        return Mapping(Mapping(root, "jobs"), "comment_selection");
     }
 
-    private static int IndentOf(string line) => line.Length - line.TrimStart().Length;
+    private static YamlMappingNode Mapping(YamlMappingNode node, string key)
+        => Assert.IsType<YamlMappingNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static YamlSequenceNode Sequence(YamlMappingNode node, string key)
+        => Assert.IsType<YamlSequenceNode>(node.Children[new YamlScalarNode(key)]);
+
+    private static string Scalar(YamlMappingNode node, string key)
+        => Assert.IsType<YamlScalarNode>(node.Children[new YamlScalarNode(key)]).Value!;
+
+    private static string? ScalarOrNull(YamlMappingNode node, string key)
+        => node.Children.TryGetValue(new YamlScalarNode(key), out var value)
+            ? Assert.IsType<YamlScalarNode>(value).Value
+            : null;
 
     private sealed record HarnessResponse<T>(T Result);
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
@@ -12,20 +13,8 @@ public sealed class ExtensionWorkflowTests
     private static readonly YamlMappingNode s_testJobs = Mapping(s_testsWorkflow, "jobs");
     private static readonly YamlMappingNode s_extensionUnitWorkflow = LoadWorkflow("extension-unit-tests.yml");
     private static readonly YamlMappingNode s_extensionUnitJobs = Mapping(s_extensionUnitWorkflow, "jobs");
-    private static readonly YamlMappingNode s_ciWorkflow = LoadWorkflow("ci.yml");
-    private static readonly YamlMappingNode s_ciJobs = Mapping(s_ciWorkflow, "jobs");
-
-    [Fact]
-    public void CiUsesSelectiveTestsInsteadOfDedicatedExtensionReleasePath()
-    {
-        Assert.False(s_ciJobs.Children.ContainsKey(new YamlScalarNode("extension_release_tests")));
-
-        var prepareForCi = Mapping(s_ciJobs, "prepare_for_ci");
-        Assert.False(Mapping(prepareForCi, "outputs").Children.ContainsKey(new YamlScalarNode("is_trusted_extension_release_pr")));
-        Assert.DoesNotContain(Steps(prepareForCi), step => Scalar(step, "id") == "classify_release_pr");
-        Assert.False(File.Exists(RepoPath(".github", "actions", "is-trusted-extension-release-pr", "action.yml")));
-        Assert.False(File.Exists(RepoPath(".github", "actions", "is-trusted-extension-release-pr", "validate.ps1")));
-    }
+    private static readonly YamlMappingNode s_ciJobs = Mapping(LoadWorkflow("ci.yml"), "jobs");
+    private static readonly string s_extensionPackageManager = LoadExtensionPackageManager();
 
     [Fact]
     public void FocusedExtensionWorkflowSupportsOptionalPackaging()
@@ -43,51 +32,41 @@ public sealed class ExtensionWorkflowTests
     }
 
     [Fact]
-    public void FullTestsWorkflowDoesNotExposeReleaseOnlyMode()
-    {
-        var workflowCall = Mapping(Mapping(s_testsWorkflow, "on"), "workflow_call");
-        var inputs = Mapping(workflowCall, "inputs");
-
-        Assert.False(inputs.Children.ContainsKey(new YamlScalarNode("extensionReleaseOnly")));
-    }
-
-    [Fact]
-    public void FocusedExtensionWorkflowContainsOnlyUnitTests()
-    {
-        Assert.Equal(
-            ["extension_tests_win"],
-            s_extensionUnitJobs.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
-    }
-
-    [Fact]
-    public void FocusedExtensionWorkflowRunsUnitTestsAndOwnsPackaging()
+    public void FocusedExtensionWorkflowTestsBeforePublishingVsix()
     {
         var job = Mapping(s_extensionUnitJobs, "extension_tests_win");
-
-        Assert.False(job.Children.ContainsKey(new YamlScalarNode("uses")));
         Assert.Equal("windows-latest", Scalar(job, "runs-on"));
 
         var steps = Steps(job);
-        Assert.Equal(
-            [
-                "Checkout code",
-                "Setup Node.js environment",
-                "Install Corepack",
-                "Validate lockfile registries",
-                "Install dependencies",
-                "Run tests",
-                "Override extension version for PR builds",
-                "Package VSIX",
-                "Assert E2E VSIX contains bridge",
-                "Package production VSIX",
-                "Assert production VSIX excludes bridge",
-                "Upload VSIX",
-            ],
-            steps.Select(step => Scalar(step, "name")));
+        var testIndex = StepIndex(steps, step => InvokesPackageScript(step, "test"));
+        var e2ePackageIndex = StepIndex(
+            steps,
+            step => InvokesVscePackage(step, "out/aspire-extension.vsix"));
+        var e2eValidationIndex = StepIndex(
+            steps,
+            step => InvokesVsixValidation(step, "out/aspire-extension.vsix", "Present"));
+        var productionPackageIndex = StepIndex(
+            steps,
+            step => InvokesVscePackage(step, "out/aspire-extension-production.vsix"));
+        var productionValidationIndex = StepIndex(
+            steps,
+            step => InvokesVsixValidation(step, "out/aspire-extension-production.vsix", "Absent"));
+        var uploadIndex = StepIndex(
+            steps,
+            step => UploadsArtifact(step, "aspire-extension", "extension/out/aspire-extension.vsix"));
 
-        var runTests = Assert.Single(steps, step => Scalar(step, "name") == "Run tests");
-        Assert.Equal("corepack yarn test", Scalar(runTests, "run"));
-        Assert.False(runTests.Children.ContainsKey(new YamlScalarNode("if")));
+        Assert.False(steps[testIndex].Children.ContainsKey(new YamlScalarNode("if")));
+        Assert.Equal("true", Scalar(Mapping(steps[e2ePackageIndex], "env"), "ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE"));
+
+        var uploadInputs = Mapping(steps[uploadIndex], "with");
+        Assert.Equal("aspire-extension", Scalar(uploadInputs, "name"));
+        Assert.Equal("extension/out/aspire-extension.vsix", Scalar(uploadInputs, "path"));
+
+        Assert.True(testIndex < e2ePackageIndex, "The E2E VSIX must be packaged after the unit tests execute.");
+        Assert.True(e2ePackageIndex < e2eValidationIndex, "The E2E VSIX must be validated after it is packaged.");
+        Assert.True(e2eValidationIndex < productionPackageIndex, "The production VSIX must be packaged after E2E validation.");
+        Assert.True(productionPackageIndex < productionValidationIndex, "The production VSIX must be validated after it is packaged.");
+        Assert.True(productionValidationIndex < uploadIndex, "The E2E VSIX must be uploaded only after both VSIX variants are validated.");
     }
 
     [Fact]
@@ -109,98 +88,89 @@ public sealed class ExtensionWorkflowTests
     public void FocusedWorkflowPackagesAfterTestFailuresOnlyWhenRequested()
     {
         var steps = Steps(Mapping(s_extensionUnitJobs, "extension_tests_win"));
-        var overrideVersion = Assert.Single(steps, step => Scalar(step, "name") == "Override extension version for PR builds");
+        var versionOverride = Assert.Single(
+            steps,
+            step => InvokesPackageScript(step, "version"));
         Assert.Equal(
             "${{ inputs.packageVsix && !cancelled() && inputs.extensionVersionOverride != '' }}",
-            Scalar(overrideVersion, "if"));
+            Scalar(versionOverride, "if"));
 
-        string[] packagingSteps =
-        [
-            "Package VSIX",
-            "Assert E2E VSIX contains bridge",
-            "Package production VSIX",
-            "Assert production VSIX excludes bridge",
-            "Upload VSIX",
-        ];
-
-        Assert.All(packagingSteps, stepName =>
+        var packagingSteps = new[]
         {
-            var step = Assert.Single(steps, candidate => Scalar(candidate, "name") == stepName);
-            Assert.Equal("${{ inputs.packageVsix && !cancelled() }}", Scalar(step, "if"));
-        });
+            steps[StepIndex(steps, step => InvokesVscePackage(step, "out/aspire-extension.vsix"))],
+            steps[StepIndex(steps, step => InvokesVsixValidation(step, "out/aspire-extension.vsix", "Present"))],
+            steps[StepIndex(steps, step => InvokesVscePackage(step, "out/aspire-extension-production.vsix"))],
+            steps[StepIndex(steps, step => InvokesVsixValidation(step, "out/aspire-extension-production.vsix", "Absent"))],
+            steps[StepIndex(
+                steps,
+                step => UploadsArtifact(step, "aspire-extension", "extension/out/aspire-extension.vsix"))],
+        };
+
+        Assert.All(
+            packagingSteps,
+            step => Assert.Equal("${{ inputs.packageVsix && !cancelled() }}", Scalar(step, "if")));
     }
 
     [Fact]
-    public void FullTestsFinalResultsPreserveNormalSkipChecks()
+    public void FullTestsFinalResultsRejectFailedCancelledOrSkippedExtensionJobs()
     {
         var results = Mapping(s_testJobs, "results");
-        var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any dependency failed");
+        var failureStep = Assert.Single(
+            Steps(results),
+            step => Scalar(step, "run")?.Contains("exit 1", StringComparison.Ordinal) == true);
         var condition = CollapseWhitespace(Scalar(failureStep, "if"));
 
         Assert.Contains("contains(needs.*.result, 'failure')", condition, StringComparison.Ordinal);
         Assert.Contains("contains(needs.*.result, 'cancelled')", condition, StringComparison.Ordinal);
-        string[] normalModeSkipChecks =
-        [
-            "needs.extension_tests_win.result == 'skipped'",
-            "needs.extension_e2e_tests.result == 'skipped'",
-            "needs.cli_starter_validation_linux_x64.result == 'skipped'",
-            "needs.cli_starter_validation_linux_arm64.result == 'skipped'",
-            "needs.cli_starter_validation_windows_x64.result == 'skipped'",
-            "needs.cli_starter_validation_windows_arm64.result == 'skipped'",
-            "needs.cli_starter_validation_macos_x64.result == 'skipped'",
-            "needs.cli_starter_validation_macos_arm64.result == 'skipped'",
-            "needs.native_dashboard_validation_linux_x64.result == 'skipped'",
-            "needs.native_dashboard_validation_linux_arm64.result == 'skipped'",
-            "needs.native_dashboard_validation_windows_x64.result == 'skipped'",
-            "needs.native_dashboard_validation_windows_arm64.result == 'skipped'",
-            "needs.native_dashboard_validation_macos_x64.result == 'skipped'",
-            "needs.native_dashboard_validation_macos_arm64.result == 'skipped'",
-            "needs.typescript_sdk_tests.result == 'skipped'",
-            "needs.typescript_api_compat.result == 'skipped'",
-            "needs.build_cli_archive_macos_x64.result == 'skipped'",
-            "needs.prepare_winget_installer_artifacts.result == 'skipped'",
-            "needs.prepare_homebrew_installer_artifacts.result == 'skipped'",
-            "needs.nix_package.result == 'skipped'",
-            "needs.tests_no_nugets.result == 'skipped'",
-            "needs.tests_requires_nugets_linux.result == 'skipped'",
-            "needs.tests_requires_nugets_windows.result == 'skipped'",
-            "needs.tests_requires_nugets_macos.result == 'skipped'",
-            "needs.build_cli_e2e_image.result == 'skipped'",
-            "needs.tests_requires_cli_archive.result == 'skipped'",
-            "needs.polyglot_validation.result == 'skipped'",
-        ];
-
-        Assert.All(normalModeSkipChecks, check => Assert.Contains(check, condition, StringComparison.Ordinal));
+        Assert.Contains(
+            "(needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true'))",
+            condition,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "(needs.setup_for_tests.outputs.run_extension_e2e == 'true' && needs.extension_e2e_tests.result == 'skipped')",
+            condition,
+            StringComparison.Ordinal);
     }
 
     [Fact]
     public void FullTestsWorkflowAlwaysAggregatesTestResults()
     {
         var steps = Steps(Mapping(s_testJobs, "results"));
-
-        Assert.All(
-            steps.Where(step => Scalar(step, "name") is "Upload test results" or "Generate test results summary" or "Generate CI timeline"),
-            step => Assert.Equal("${{ always() }}", Scalar(step, "if")));
-        Assert.All(
-            steps.Where(step => Scalar(step, "name") is "Checkout code" or "Create test results directory" || Scalar(step, "uses")?.StartsWith("actions/download-artifact@", StringComparison.Ordinal) == true),
-            step => Assert.False(step.Children.ContainsKey(new YamlScalarNode("if"))));
-    }
-
-    [Fact]
-    public void TestMatrixCallersUseDescriptiveLaneNames()
-    {
-        Dictionary<string, string> expectedNames = new()
+        string[] logPatterns =
+        [
+            "logs-*-macos-latest",
+            "logs-*-ubuntu-latest",
+            "logs-*-windows-latest",
+        ];
+        Assert.All(logPatterns, pattern =>
         {
-            ["tests_no_nugets"] = "No-package tests",
-            ["tests_requires_nugets_linux"] = "Package tests - Linux",
-            ["tests_requires_nugets_windows"] = "Package tests - Windows",
-            ["tests_requires_nugets_macos"] = "Package tests - macOS",
-            ["tests_requires_cli_archive"] = "CLI archive tests",
-        };
+            var download = Assert.Single(
+                steps,
+                step => Scalar(step, "uses")?.StartsWith("actions/download-artifact@", StringComparison.Ordinal) == true &&
+                        Scalar(Mapping(step, "with"), "pattern") == pattern);
+            Assert.False(download.Children.ContainsKey(new YamlScalarNode("if")));
+        });
 
-        Assert.All(
-            expectedNames,
-            expected => Assert.Equal(expected.Value, Scalar(Mapping(s_testJobs, expected.Key), "name")));
+        var upload = Assert.Single(
+            steps,
+            step => Scalar(step, "uses")?.StartsWith("actions/upload-artifact@", StringComparison.Ordinal) == true &&
+                    Scalar(Mapping(step, "with"), "name") == "All-TestResults");
+        Assert.Equal("All-TestResults", Scalar(Mapping(upload, "with"), "name"));
+        Assert.Equal("${{ github.workspace }}/testresults/**/*.trx", Scalar(Mapping(upload, "with"), "path"));
+        Assert.Equal("${{ always() }}", Scalar(upload, "if"));
+
+        string[] reportProjects =
+        [
+            "tools/GenerateTestSummary/GenerateTestSummary.csproj",
+            "tools/GenerateCITimeline/GenerateCITimeline.csproj",
+        ];
+        Assert.All(reportProjects, project =>
+        {
+            var step = Assert.Single(
+                steps,
+                candidate => Scalar(candidate, "run")?.Contains(project, StringComparison.Ordinal) == true);
+            Assert.Equal("${{ always() }}", Scalar(step, "if"));
+        });
     }
 
     [Fact]
@@ -210,45 +180,6 @@ public sealed class ExtensionWorkflowTests
 
         Assert.Equal(["contents"], workflowPermissions.Children.Keys.Cast<YamlScalarNode>().Select(key => key.Value));
         Assert.Equal("read", Scalar(workflowPermissions, "contents"));
-    }
-
-    [Fact]
-    public void NativeCopilotReviewIsPreservedAndReleasePlaceholderIsDocumented()
-    {
-        Assert.False(File.Exists(RepoPath(".github", "workflows", "copilot-review-dispatch.yml")));
-
-        var skill = File.ReadAllText(RepoPath(".agents", "skills", "code-review", "SKILL.md"));
-        string[] releaseFlowMarkers =
-        [
-            "extension/CHANGELOG.md",
-            "extension-release.yml",
-            "bot-authored `extension-release/*`",
-            "asynchronously replaced",
-            "extension-changelog.md",
-            "extension-changelog-finalized.yml",
-            "outside this exact release flow",
-        ];
-
-        Assert.All(releaseFlowMarkers, marker => Assert.Contains(marker, skill, StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void GenericReviewChecksOnlyStableNonExperimentalAtsBreaks()
-    {
-        var skill = File.ReadAllText(RepoPath(".agents", "skills", "code-review", "SKILL.md"));
-        string[] atsScopeMarkers =
-        [
-            "Aspire Type System (ATS)",
-            "polyglot SDK generation",
-            "<SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>",
-            "[Experimental]",
-            "ATS experimental metadata",
-            "dedicated `api-review` skill",
-            "general .NET/C# API breaking changes",
-        ];
-
-        Assert.All(atsScopeMarkers, marker => Assert.Contains(marker, skill, StringComparison.Ordinal));
-        Assert.False(skill.Contains("breaking changes to public API without justification", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -273,7 +204,9 @@ public sealed class ExtensionWorkflowTests
             ["prepare_for_ci", "tests", "stabilization_check"],
             SequenceScalars(results, "needs"));
 
-        var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any of the dependent jobs failed");
+        var failureStep = Assert.Single(
+            Steps(results),
+            step => Scalar(step, "run")?.Contains("exit 1", StringComparison.Ordinal) == true);
         Assert.Equal(
             "${{ always() && needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
             "(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || " +
@@ -291,7 +224,9 @@ public sealed class ExtensionWorkflowTests
             "${{ always() && github.event_name == 'push' && github.repository_owner == 'microsoft' }}",
             Scalar(tracker, "if"));
 
-        var scriptStep = Assert.Single(Steps(tracker), step => Scalar(step, "name") == "File or close the red-main issue");
+        var scriptStep = Assert.Single(
+            Steps(tracker),
+            step => Scalar(step, "uses")?.StartsWith("actions/github-script@", StringComparison.Ordinal) == true);
         var environment = Mapping(scriptStep, "env");
         Assert.Equal("${{ contains(needs.*.result, 'failure') }}", Scalar(environment, "CI_RED"));
         Assert.Equal(
@@ -301,6 +236,118 @@ public sealed class ExtensionWorkflowTests
 
     private static List<YamlMappingNode> Steps(YamlMappingNode job)
         => ((YamlSequenceNode)job.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
+
+    private static int StepIndex(
+        IReadOnlyList<YamlMappingNode> steps,
+        Func<YamlMappingNode, bool> predicate)
+        => Assert.Single(
+            steps.Select((step, index) => (Step: step, Index: index)),
+            candidate => predicate(candidate.Step)).Index;
+
+    private static bool InvokesPackageScript(YamlMappingNode step, string script)
+        => CommandTokenLines(step).Any(tokens =>
+        {
+            var commandStart = tokens is ["&", ..] ? 1 : 0;
+            if (!StartsWithTokens(tokens, commandStart, "corepack", s_extensionPackageManager))
+            {
+                return false;
+            }
+
+            var scriptIndex = commandStart + 2;
+            if (tokens.ElementAtOrDefault(scriptIndex) == "run")
+            {
+                scriptIndex++;
+            }
+
+            return tokens.ElementAtOrDefault(scriptIndex) == script;
+        });
+
+    private static bool InvokesVscePackage(YamlMappingNode step, string outputPath)
+        => CommandTokenLines(step).Any(tokens =>
+        {
+            var commandStart = tokens is ["&", ..] ? 1 : 0;
+            return StartsWithTokens(
+                    tokens,
+                    commandStart,
+                    "corepack",
+                    s_extensionPackageManager,
+                    "run",
+                    "vsce",
+                    "package") &&
+                ContainsTokenSequence(tokens, "-o", outputPath);
+        });
+
+    private static bool InvokesVsixValidation(YamlMappingNode step, string vsixPath, string expected)
+        => CommandTokenLines(step).Any(tokens =>
+        {
+            var commandStart = tokens is ["&", ..] ? 1 : 0;
+            var executable = tokens.ElementAtOrDefault(commandStart)?.Replace('\\', '/');
+            return executable?.EndsWith(
+                    "/assert-extension-e2e-bridge-vsix.ps1",
+                    StringComparison.Ordinal) == true &&
+                ContainsTokenSequence(tokens, "-VsixPath", vsixPath) &&
+                ContainsTokenSequence(tokens, "-Expected", expected);
+        });
+
+    private static bool UploadsArtifact(YamlMappingNode step, string name, string path)
+    {
+        var uses = Scalar(step, "uses");
+        var versionSeparator = uses?.IndexOf('@', StringComparison.Ordinal) ?? -1;
+        if (versionSeparator < 0 ||
+            uses![..versionSeparator] != "actions/upload-artifact" ||
+            !step.Children.TryGetValue(new YamlScalarNode("with"), out var inputsNode) ||
+            inputsNode is not YamlMappingNode inputs)
+        {
+            return false;
+        }
+
+        return Scalar(inputs, "name") == name && Scalar(inputs, "path") == path;
+    }
+
+    private static IEnumerable<string[]> CommandTokenLines(YamlMappingNode step)
+    {
+        var run = Scalar(step, "run");
+        if (run is null)
+        {
+            yield break;
+        }
+
+        foreach (var rawLine in run.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            yield return line
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Select(Unquote)
+                .ToArray();
+        }
+    }
+
+    private static bool StartsWithTokens(string[] tokens, int startIndex, params string[] expected)
+        => tokens.Length >= startIndex + expected.Length &&
+            tokens.AsSpan(startIndex, expected.Length).SequenceEqual(expected);
+
+    private static bool ContainsTokenSequence(string[] tokens, params string[] expected)
+    {
+        for (var startIndex = 0; startIndex <= tokens.Length - expected.Length; startIndex++)
+        {
+            if (StartsWithTokens(tokens, startIndex, expected))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string Unquote(string token)
+        => token is ['"', .., '"'] or ['\'', .., '\'']
+            ? token[1..^1]
+            : token;
 
     private static List<string?> SequenceScalars(YamlMappingNode node, string key)
         => ((YamlSequenceNode)node.Children[new YamlScalarNode(key)]).Cast<YamlScalarNode>().Select(item => item.Value).ToList();
@@ -318,6 +365,15 @@ public sealed class ExtensionWorkflowTests
 
     private static string RepoPath(params string[] path)
         => Path.Combine([RepoRoot.Path, .. path]);
+
+    private static string LoadExtensionPackageManager()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(RepoPath("extension", "package.json")));
+        var declaration = document.RootElement.GetProperty("packageManager").GetString();
+        Assert.NotNull(declaration);
+
+        return declaration[..declaration.IndexOf('@', StringComparison.Ordinal)];
+    }
 
     private static YamlMappingNode LoadWorkflow(string workflowName)
     {

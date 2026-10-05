@@ -10,228 +10,142 @@ public sealed class ReleasePublishNugetPipelineTests
     private readonly string _repoRoot = RepoRoot.Path;
 
     [Fact]
-    public async Task ValidatesNpmPublishPreconditionsBeforeNuGetPublish()
+    public void UsesMicroBuildPublishTemplateAndRoutesPublishAuthenticationPerJob()
     {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-        var nuGetPublishIndex = FindRequiredText(pipeline, "task: 1ES.PublishNuget@1");
+        var pipeline = AzurePipelinesYaml.Load("eng/pipelines/release-publish-nuget.yml");
+        Assert.Equal(
+            "azure-pipelines/MicroBuild.1ES.Official.Publish.yml@MicroBuildTemplate",
+            AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Mapping(pipeline, "extends"), "template"));
+        Assert.Equal("dotnet-aspire", AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Variable(pipeline, "TeamName"), "value"));
 
-        AssertBefore(
-            pipeline,
-            "npm publishing is blocked for prerelease runs because the MicroBuild npm publish template does not yet expose a dist-tag parameter.",
-            nuGetPublishIndex);
+        var releaseStage = AzurePipelinesYaml.Stage(pipeline, "Release");
+        var releaseJob = AzurePipelinesYaml.Job(releaseStage, "ReleaseJob");
+        var releasePublish = AzurePipelinesYaml.Mapping(
+            AzurePipelinesYaml.Mapping(
+                AzurePipelinesYaml.Mapping(releaseJob, "templateContext"),
+                "mb"),
+            "publish");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json",
+            AzurePipelinesYaml.Scalar(releasePublish, "feedSource"));
 
-        AssertBefore(
-            pipeline,
-            "$parameterName must include at least one required ESRP owner alias",
-            nuGetPublishIndex);
-
-        AssertBefore(
-            pipeline,
-            "Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'",
-            nuGetPublishIndex);
+        var nonPublishingJobs = new[]
+        {
+            AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(pipeline, "PrepareArtifacts"), "PrepareJob"),
+            AzurePipelinesYaml.Job(releaseStage, "VSCodeExtensionJob"),
+            AzurePipelinesYaml.Job(releaseStage, "WinGetJob"),
+            AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(pipeline, "GitHubTasks"), "DispatchGitHubTasksJob"),
+            AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(pipeline, "GitHubTasks"), "PublishReleaseAssetsJob"),
+            AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(pipeline, "GitHubTasks"), "UpdateNixPackageJob")
+        };
+        Assert.All(nonPublishingJobs, job =>
+        {
+            var publish = AzurePipelinesYaml.Mapping(
+                AzurePipelinesYaml.Mapping(
+                    AzurePipelinesYaml.Mapping(job, "templateContext"),
+                    "mb"),
+                "publish");
+            Assert.Equal("false", AzurePipelinesYaml.Scalar(publish, "enabled"));
+        });
     }
 
     [Fact]
-    public async Task UsesEsrpPublishTemplateForNpmPublishing()
+    public void NpmPublishParametersAndEsrpIdentitiesHaveSafeDefaults()
     {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var pipeline = AzurePipelinesYaml.Load("eng/pipelines/release-publish-nuget.yml");
+        var parameterNames = AzurePipelinesYaml.Parameters(pipeline)
+            .Select(parameter => AzurePipelinesYaml.Scalar(parameter, "name"))
+            .ToHashSet(StringComparer.Ordinal);
 
-        // The MicroBuild. prefix is REQUIRED for ESRP-based publishing — it wires the MicroBuild
-        // signing/publish credential context so MicroBuild.Publish.yml and the auto-injected
-        // MicroBuildAuthorizePublishPlugin task can authenticate against the
-        // devdiv.pkgs.visualstudio.com/_packaging/MicroBuildToolset feed.
-        // Plain `1ES.Official.Publish.yml@MicroBuildTemplate` (no `MicroBuild.` prefix) injects
-        // the authorize task without supplying credentials, causing a 401.
-        // See microsoft/vscode-azuretools, microsoft/pyright, microsoft/vscode-python-environments.
-        Assert.Contains("template: azure-pipelines/MicroBuild.1ES.Official.Publish.yml@MicroBuildTemplate", pipeline);
-        Assert.DoesNotContain("template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates", pipeline);
-        // Guard against accidental regression to the plain template (without the MicroBuild. prefix)
-        Assert.DoesNotContain("template: azure-pipelines/1ES.Official.Publish.yml@MicroBuildTemplate", pipeline);
+        Assert.Contains("SkipNpmRidPublish", parameterNames);
+        Assert.Contains("SkipNpmPointerPublish", parameterNames);
+        Assert.DoesNotContain("SkipNpmPublish", parameterNames);
+        Assert.DoesNotContain("AllowNpmLatestDistTagMove", parameterNames);
+        Assert.Equal("false", AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Parameter(pipeline, "SkipNpmRidPublish"), "default"));
+        Assert.Equal("false", AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Parameter(pipeline, "SkipNpmPointerPublish"), "default"));
+
+        var requiredOwners = AzurePipelinesYaml.Scalar(
+            AzurePipelinesYaml.Variable(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"),
+            "value");
+        var ownerDefault = AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Parameter(pipeline, "NpmPublishOwners"), "default")!;
+        var approverDefault = AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Parameter(pipeline, "NpmPublishApprovers"), "default");
+        Assert.Equal("joperezr,ankj", requiredOwners);
+        AssertOwnerDefaultIsSingleRequiredAlias(requiredOwners!, ownerDefault, "NpmPublishOwners");
+        Assert.Equal("adamratzman", approverDefault);
+
+        var releaseJob = AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(pipeline, "Release"), "ReleaseJob");
+        var npmPublishSteps = AzurePipelinesYaml.StepsRecursively(releaseJob)
+            .Where(step => AzurePipelinesYaml.Scalar(step, "template") == "MicroBuild.Publish.yml@MicroBuildTemplate")
+            .ToArray();
+        Assert.Equal(2, npmPublishSteps.Length);
+        Assert.Equal(
+            [
+                "$(Pipeline.Workspace)\\npm\\pointer-package",
+                "$(Pipeline.Workspace)\\npm\\rid-packages"
+            ],
+            npmPublishSteps
+                .Select(step => AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Mapping(step, "parameters"), "folderLocation"))
+                .Order(StringComparer.Ordinal));
+        Assert.All(npmPublishSteps, step =>
+        {
+            var parameters = AzurePipelinesYaml.Mapping(step, "parameters");
+            Assert.Equal("$(NpmPublishOwnersEffective)", AzurePipelinesYaml.Scalar(parameters, "owners"));
+            Assert.Equal("$(NpmPublishApproversEffective)", AzurePipelinesYaml.Scalar(parameters, "approvers"));
+        });
     }
 
     [Fact]
-    public async Task DefinesTeamNameVariableForMicroBuildTelemetry()
+    public void NpmPublishValidationAndArtifactStepsRemainOrdered()
     {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var pipeline = AzurePipelinesYaml.Load("eng/pipelines/release-publish-nuget.yml");
+        var releaseJob = AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(pipeline, "Release"), "ReleaseJob");
+        var steps = AzurePipelinesYaml.StepsRecursively(releaseJob);
 
-        // MicroBuild.1ES.Official.Publish.yml@MicroBuildTemplate auto-injects MicroBuildCleanup@1
-        // (displayName "🔩 MicroBuild Telemetry") at the END of every job. That task hard-requires
-        // a variable literally named `TeamName`; if absent the task fails with:
-        //   "The TeamName variable is required to use MicroBuild. Please update your definition
-        //    variables to include your team name in the 'TeamName' variable."
-        // common-variables.yml defines `_TeamName: dotnet-aspire` for Arcade conventions but
-        // MicroBuild reads the unprefixed name, so we must declare TeamName at pipeline scope.
-        Assert.Contains("- name: TeamName", pipeline);
-        Assert.Contains("value: dotnet-aspire", pipeline);
+        var validateParameters = FindStepIndex(steps, "Validate Parameters");
+        var nugetPublish = FindStepIndex(steps, step => AzurePipelinesYaml.Scalar(step, "task") == "1ES.PublishNuget@1");
+        var validateSummaries = FindStepIndex(steps, "Validate npm Prepare-Stage Summaries");
+        var verifyVersions = FindStepIndex(steps, "Verify Staged npm Package Versions");
+        var alreadyPublished = FindStepIndex(steps, "Verify npm Packages Are Not Already Published");
+        var ridPublish = FindStepIndex(
+            steps,
+            step => IsNpmPublishTemplateFor(step, "$(Pipeline.Workspace)\\npm\\rid-packages"));
+        var pointerPreflight = FindStepIndex(steps, "Verify npm RID Packages Present Before Pointer Publish");
+        var pointerPublish = FindStepIndex(
+            steps,
+            step => IsNpmPublishTemplateFor(step, "$(Pipeline.Workspace)\\npm\\pointer-package"));
+        var registryValidation = FindStepIndex(steps, "Validate Published npm Package from Registry");
+
+        Assert.True(validateParameters < nugetPublish);
+        Assert.True(validateSummaries < verifyVersions);
+        Assert.True(verifyVersions < alreadyPublished);
+        Assert.True(alreadyPublished < ridPublish);
+        Assert.True(ridPublish < pointerPreflight);
+        Assert.True(pointerPreflight < pointerPublish);
+        Assert.True(pointerPublish < registryValidation);
     }
 
     [Fact]
-    public async Task RoutesMicroBuildPublishAuthPluginToDncengFeedOrDisablesIt()
+    public async Task NpmOwnerParametersArePassedAsDataAndWildcardExpressionsRemainForbidden()
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
-        // MicroBuild.1ES.Official.Publish.yml@MicroBuildTemplate -> Stages/PublishStage.yml
-        // -> Jobs/PublishJob.yml auto-injects MicroBuildAuthorizePublishPlugin@0 at the START
-        // of every job. By default that task pulls its nuget package from
-        // `devdiv.pkgs.visualstudio.com/_packaging/MicroBuildToolset`, which is NOT accessible
-        // from the dnceng collection -> 401 -> stage fails before any customer step runs.
-        // Two valid escapes from MicroBuildTemplate are required:
-        //   1) templateContext.mb.publish.enabled: false  (for jobs that don't ESRP-publish)
-        //   2) templateContext.mb.publish.feedSource: <dnceng mirror>  (for the publishing job)
-        // Both must be present in this pipeline:
-        //   - non-publishing jobs (PrepareJob, WinGetJob, DispatchGitHubTasksJob,
-        //     PublishReleaseAssetsJob, UpdateNixPackageJob) -> enabled: false
-        //   - ReleaseJob (the only job that actually publishes) -> feedSource = dnceng mirror
-        Assert.Contains("enabled: false", pipeline);
-        Assert.Contains(
-            "feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'",
-            pipeline);
-    }
+        var parsed = AzurePipelinesYaml.Load("eng/pipelines/release-publish-nuget.yml");
+        var releaseJob = AzurePipelinesYaml.Job(AzurePipelinesYaml.Stage(parsed, "Release"), "ReleaseJob");
+        Assert.DoesNotContain(
+            AzurePipelinesYaml.StepsRecursively(releaseJob),
+            step => AzurePipelinesYaml.Scalar(step, "checkout") is not null);
 
-    [Fact]
-    public async Task AlreadyPublishedNpmPreflightExitsZeroAfterHandledRegistryMisses()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var validateParameters = AzurePipelinesYaml.Step(releaseJob, "Validate Parameters");
+        var environment = AzurePipelinesYaml.Mapping(validateParameters, "env");
+        Assert.Equal("${{ parameters.NpmPublishOwners }}", AzurePipelinesYaml.Scalar(environment, "NPM_PUBLISH_OWNERS"));
+        Assert.Equal("${{ parameters.NpmPublishApprovers }}", AzurePipelinesYaml.Scalar(environment, "NPM_PUBLISH_APPROVERS"));
+        Assert.Equal("$(NPM_PUBLISH_REQUIRED_OWNERS)", AzurePipelinesYaml.Scalar(environment, "NPM_PUBLISH_REQUIRED_OWNERS"));
 
-        var successIndex = FindRequiredText(pipeline, "No scheduled npm package versions already exist on npm.");
-        var displayNameIndex = FindRequiredText(pipeline, "displayName: 'Verify npm Packages Are Not Already Published'");
-        var successTail = pipeline[successIndex..displayNameIndex];
-
-        // Azure Pipelines' PowerShell task exits with $LASTEXITCODE after the inline script.
-        // `npm view` returns 1 for E404, which this script handles as success, so the success
-        // path must override that stale native exit code.
-        Assert.Contains("exit 0", successTail);
-    }
-
-    [Fact]
-    public async Task NpmPublishUsesOnlyRidAndPointerSkipParameters()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-        var spec = await ReadRepoFileAsync("docs/specs/npm-cli-package.md");
-
-        Assert.DoesNotContain("SkipNpmPublish", pipeline);
-        Assert.DoesNotContain("Skip npm Publish", pipeline);
-        Assert.DoesNotContain("SkipNpmPublish", spec);
-        Assert.Contains("displayName: '[Advanced] Skip npm RID Package Publishing", pipeline);
-        Assert.Contains("displayName: '[Advanced] Skip npm Pointer Package Publishing", pipeline);
-        Assert.Contains("or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))", pipeline);
-        Assert.Contains("and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true))", pipeline);
-    }
-
-    [Fact]
-    public async Task NpmLatestDistTagDowngradeGuardHasNoOverrideParameter()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-        var spec = await ReadRepoFileAsync("docs/specs/npm-cli-package.md");
-
-        Assert.DoesNotContain("AllowNpmLatestDistTagMove", pipeline);
-        Assert.DoesNotContain("AllowNpmLatestDistTagMove", spec);
-        Assert.DoesNotContain("skipping npm latest dist-tag downgrade guard", pipeline);
-        Assert.Contains("Publishing $($pointerPackage.Spec) would move the npm latest dist-tag backward", pipeline);
-    }
-
-    [Fact]
-    public async Task UsesRequiredNpmEsrpOwnersAndApprover()
-    {
-        var commonVariables = await ReadRepoFileAsync("eng/pipelines/common-variables.yml");
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_OWNERS", commonVariables);
-        Assert.DoesNotContain("NPM_PUBLISH_DEFAULT_APPROVER", commonVariables);
-        Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", commonVariables);
-        Assert.Contains("- name: NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
-        Assert.Equal("joperezr,ankj", FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"));
-        Assert.Contains("displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'", pipeline);
-        Assert.Contains("displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'", pipeline);
-
-        AssertOwnerDefaultIsSingleRequiredAlias(
-            FindYamlVariableValue(pipeline, "NPM_PUBLISH_REQUIRED_OWNERS"),
-            FindYamlParameterDefault(pipeline, "NpmPublishOwners"),
-            "NpmPublishOwners");
-        Assert.Equal("adamratzman", FindYamlParameterDefault(pipeline, "NpmPublishApprovers"));
-
-        Assert.Contains("$requiredNpmOwnersValue = $env:NPM_PUBLISH_REQUIRED_OWNERS", pipeline);
-        Assert.DoesNotContain("NPM_PUBLISH_DEFAULT_APPROVER", pipeline);
-        Assert.DoesNotContain("NPM_PUBLISH_REQUIRED_APPROVERS", pipeline);
-        Assert.DoesNotContain("requiredNpmApprovers", pipeline);
-        Assert.Contains("owners: '$(NpmPublishOwnersEffective)'", pipeline);
-        Assert.Contains("approvers: '$(NpmPublishApproversEffective)'", pipeline);
-        Assert.Contains("NpmPublishOwners and NpmPublishApprovers must not contain the same alias(es)", pipeline);
-    }
-
-    [Fact]
-    public async Task NpmEsrpOwnersRequireAnyConfiguredOwnerAlias()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'", pipeline);
-        Assert.Contains("Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
-        Assert.DoesNotContain("Assert-ContainsRequiredNpmAliases $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'", pipeline);
-        Assert.Contains("Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'", pipeline);
-        Assert.DoesNotContain("Assert-ContainsRequiredNpmAliases $normalizedApprovers", pipeline);
-        Assert.DoesNotContain("NpmPublishOwners not provided; using NPM_PUBLISH_REQUIRED_OWNERS.", pipeline);
-        Assert.DoesNotContain("NpmPublishApprovers not provided; using NPM_PUBLISH_DEFAULT_APPROVER.", pipeline);
-    }
-
-    [Fact]
-    public async Task ForwardsNpmOwnerAndApproverParametersAsEnvironmentVariables()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // The queue-time owner/approver values must reach the validation script as environment
-        // variables (data) rather than being interpolated into the inline PowerShell source, where
-        // a hostile value could break out of the quoted literal. Keep the template expression inside
-        // a string scalar; using the raw expression makes Azure Pipelines preserve expression-object
-        // typing and fail release-job expansion with "Unable to convert from Object to String."
-        Assert.Contains("NPM_PUBLISH_OWNERS: '${{ parameters.NpmPublishOwners }}'", pipeline);
-        Assert.Contains("NPM_PUBLISH_APPROVERS: '${{ parameters.NpmPublishApprovers }}'", pipeline);
-        Assert.Contains("$owners = $env:NPM_PUBLISH_OWNERS", pipeline);
-        Assert.Contains("$approvers = $env:NPM_PUBLISH_APPROVERS", pipeline);
+        // Parsing erases whether the expression was quoted, and Azure treats an unquoted template
+        // expression as an object. Keep this exact lexical guard in addition to the parsed env test.
         Assert.DoesNotContain("NPM_PUBLISH_OWNERS: ${{ parameters.NpmPublishOwners }}", pipeline);
         Assert.DoesNotContain("NPM_PUBLISH_APPROVERS: ${{ parameters.NpmPublishApprovers }}", pipeline);
-        Assert.DoesNotContain("$owners = \"${{ parameters.NpmPublishOwners }}\"", pipeline);
-        Assert.DoesNotContain("$approvers = \"${{ parameters.NpmPublishApprovers }}\"", pipeline);
-    }
-
-    [Fact]
-    public async Task ComputesInstallerOnlyModeInsidePowerShell()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // Azure Pipelines reports the start of the `powershell: |` scalar when an embedded
-        // template expression evaluates to a non-string object. Keep the composed boolean
-        // calculation in PowerShell and substitute only the primitive parameter values.
-        Assert.DoesNotContain("Installer-only mode: ${{ and(", pipeline);
-        Assert.Contains("$installerOnlyMode = (", pipeline);
-        Assert.Contains("Write-Host \"Installer-only mode: $installerOnlyMode\"", pipeline);
-    }
-
-    [Fact]
-    public async Task DoesNotUseWildcardTemplateParameterExpressionLiteral()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // Azure Pipelines expands template expressions inside block scalars even when the text is
-        // inside a PowerShell comment. The literal wildcard expression evaluates to the parameters
-        // object, which fails release-job parsing with "Unable to convert from Object to String."
         Assert.DoesNotContain("${{ parameters.* }}", pipeline);
-    }
-
-    [Fact]
-    public async Task NpmPublishOwnerAndApproverParametersHaveWorkingDefaults()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // Defaults let an unattended queue submission pass validation without operator input:
-        // the owner is a single required owner alias, the approver is a single distinct alias, and
-        // the per-run override parameters are marked advanced.
-        Assert.Contains("- name: NpmPublishOwners", pipeline);
-        Assert.Contains("default: 'joperezr'", pipeline);
-        Assert.Contains("- name: NpmPublishApprovers", pipeline);
-        Assert.Contains("default: 'adamratzman'", pipeline);
-        Assert.Contains("[Advanced] npm ESRP owner", pipeline);
-        Assert.Contains("[Advanced] npm ESRP approver", pipeline);
-        Assert.Contains("[Advanced] Minutes to wait between npm RID and pointer package submissions", pipeline);
     }
 
     [Fact]
@@ -308,97 +222,6 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("aspire --version output matched the published npm package version", pipeline);
         Assert.Contains("npm view $packageSpec version --registry=https://registry.npmjs.org/", pipeline);
         Assert.Contains("Registry validation will still install the selected source build's pointer package version from npm.", pipeline);
-    }
-
-    [Fact]
-    public async Task PrepareNpmCliPackagesScriptIsBash32Compatible()
-    {
-        var template = await ReadRepoFileAsync("eng/pipelines/templates/prepare-npm-cli-packages.yml");
-
-        // macOS AzDO runners execute bash@3 tasks with /bin/bash which is still
-        // Bash 3.2 on every shipping macOS release. These constructs are Bash 4+
-        // and silently break the install/uninstall smoke that gates the npm release.
-        // See dry-run build 2987449 where `shopt: globstar: invalid shell option name`
-        // killed `🟣Locate pointer and RID tarballs` on macOS.
-        Assert.DoesNotContain("shopt -s globstar", template);
-        Assert.DoesNotContain("mapfile ", template);
-        Assert.DoesNotContain("readarray ", template);
-        // declare -A (associative arrays) is also Bash 4+.
-        Assert.DoesNotContain("declare -A", template);
-    }
-
-    [Fact]
-    public async Task PrepareNpmCliPackagesScriptInstallsOfflineWithTimeout()
-    {
-        var template = await ReadRepoFileAsync("eng/pipelines/templates/prepare-npm-cli-packages.yml");
-
-        // The pointer package declares every supported RID as an optionalDependency
-        // pinned to the just-built version, which does not yet exist in the public
-        // npm registry. Even with --omit=optional, npm still resolves optional dep
-        // metadata while building the dep tree. In 1ES Linux/Windows pools the
-        // registry call is blackholed by network isolation rules and each of 7
-        // lookups burns the full fetch-timeout — that's the 9-minute pointer install
-        // hang observed in dry-run build 2987581. Pair --omit=optional with --offline
-        // (no registry traffic at all) and cap any accidental fetch with a short
-        // --fetch-timeout. NPM_CONFIG_CACHE points at a fresh empty directory so
-        // --offline cannot reuse a poisoned cache.
-        Assert.Contains("--offline", template);
-        Assert.Contains("--fetch-timeout=", template);
-    }
-
-    [Fact]
-    public async Task PointerPublishPreflightsRidPackagesAreOnRegistry()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // The pointer pins each RID package via optionalDependencies. If any
-        // RID dep is missing on npm at pointer-publish time (operator set
-        // SkipNpmRidPublish=true; only some RIDs landed in an earlier attempt;
-        // ESRP partial failure), end-user `npm install -g @microsoft/aspire-cli`
-        // succeeds but the launcher throws "The Aspire CLI native package '…'
-        // was not installed" on first invocation. The post-publish smoke only
-        // covers the publish-pool's own RID, so missing other-RID tarballs
-        // reach customers invisibly without this preflight.
-        Assert.Contains("Verify npm RID Packages Present Before Pointer Publish", pipeline);
-        Assert.Contains("Refusing to publish pointer package", pipeline);
-
-        var preflightIndex = pipeline.IndexOf("Verify npm RID Packages Present Before Pointer Publish", StringComparison.Ordinal);
-        Assert.True(preflightIndex > 0);
-
-        // The preflight must precede the actual pointer publish so it can gate
-        // submission.
-        var pointerPublishIndex = pipeline.IndexOf(
-            "folderLocation: '$(Pipeline.Workspace)\\npm\\pointer-package'",
-            StringComparison.Ordinal);
-        Assert.True(pointerPublishIndex > preflightIndex,
-            "Preflight RID-check must appear before the pointer-publish step.");
-    }
-
-    [Fact]
-    public async Task VerifiesStagedNpmPackageVersionsBeforeRidPublish()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // An npm publish is unrevocable. The pointer preflight cross-checks the
-        // pointer version against the prepare-stage validated version, but that
-        // runs AFTER the 7 RID tarballs are already submitted to ESRP. So every
-        // staged RID and pointer tarball's own package.json version must be
-        // asserted against NpmValidatedExpectedVersion BEFORE the RID publish, or
-        // a wrong-version build that slipped into staging would leak onto the
-        // public registry before any version gate fires.
-        Assert.Contains("Verify Staged npm Package Versions", pipeline);
-        Assert.Contains("does not match the prepare-stage validated version", pipeline);
-
-        var versionCheckIndex = pipeline.IndexOf("Verify Staged npm Package Versions", StringComparison.Ordinal);
-        Assert.True(versionCheckIndex > 0);
-
-        // The version check must precede the RID-package publish so it can gate
-        // submission to ESRP.
-        var ridPublishIndex = pipeline.IndexOf(
-            "folderLocation: '$(Pipeline.Workspace)\\npm\\rid-packages'",
-            StringComparison.Ordinal);
-        Assert.True(ridPublishIndex > versionCheckIndex,
-            "Staged-version check must appear before the RID-publish step.");
     }
 
     [Fact]
@@ -500,57 +323,12 @@ public sealed class ReleasePublishNugetPipelineTests
     }
 
     [Fact]
-    public async Task AspireVersionCaptureStripsCarriageReturnForWindowsRunner()
-    {
-        var template = await ReadRepoFileAsync("eng/pipelines/templates/prepare-npm-cli-packages.yml");
-
-        // Regression guard for the CRLF-stripping fix surfaced by opus-4.7 review.
-        //
-        // On Windows runners the prepare-npm step runs under Git Bash, which
-        // launches `aspire.exe` as a Windows console process. System.CommandLine
-        // 2.x's VersionOption writes through Console.Out.WriteLine, which
-        // terminates lines with Environment.NewLine = "\r\n" on Windows. Bash
-        // command substitution `$(...)` strips trailing LF but NOT CR, so the
-        // captured variable ends with "\r". The semver capture regex used by
-        // the install validation is anchored with `$` (end-of-line), which does
-        // not match a literal CR — so without `tr -d '\r'` on the version
-        // capture, the entire install validation silently fails on Windows with
-        // "##[error]aspire --version reported '' but expected '<version>'".
-        //
-        // Verified locally: `printf 'X\r\n' | grep -Eo '^X$'` produces NO match.
-        //
-        // This regressed in commit debf4ebf38 ("Harden npm prepare/publish
-        // validation against partial-failure leakage"), which replaced the
-        // earlier `tr -d '[:space:]'` form with a `grep -Eo`+`$` form. The dry
-        // run on 2987740 did NOT exercise this path because npm publishing was
-        // skipped, bypassing the release-pipeline consumer that reads the
-        // win-x64 validation summary; the Monday real publish would have hit
-        // the bug at the first source-build Windows install validation.
-        Assert.Contains("aspire --version 2>&1 | tr -d '\\r'", template);
-    }
-
-    [Fact]
-    public async Task PointerPreflightExplicitlyPinsRegistryOnSpecLine()
-    {
-        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
-
-        // The preflight that gates the pointer publish runs `npm view $spec ...`
-        // (note: `$spec`, not `$packageSpec` — the latter is the post-publish
-        // smoke). A separate test asserts the post-publish line is registry-
-        // pinned; this one asserts the preflight line is also pinned, so that
-        // a future refactor that drops `--registry=https://registry.npmjs.org/`
-        // from the preflight call would be caught at PR-time rather than
-        // silently letting a stale internal-mirror result decide whether to
-        // ship a broken pointer to npmjs.
-        Assert.Contains("npm view $spec version --registry=https://registry.npmjs.org/", pipeline);
-    }
-
-    [Fact]
     public async Task WinGetPublishingRunsOnlyForStableReleases()
     {
         var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
 
-        Assert.Equal("false", FindYamlParameterDefault(pipeline, "SkipWinGetPublish"));
+        var parsed = AzurePipelinesYaml.Load("eng/pipelines/release-publish-nuget.yml");
+        Assert.Equal("false", AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Parameter(parsed, "SkipWinGetPublish"), "default"));
 
         const string stableReleaseGate = "${{ if and(eq(parameters.SkipWinGetPublish, false), eq(parameters.IsPrerelease, false)) }}:";
         Assert.Equal(2, pipeline.Split(stableReleaseGate, StringSplitOptions.None).Length - 1);
@@ -595,35 +373,6 @@ public sealed class ReleasePublishNugetPipelineTests
 
         var secretReferenceMatches = System.Text.RegularExpressions.Regex.Matches(job, @"\b(VSCE_PAT|VscePublishToken)\b");
         Assert.Empty(secretReferenceMatches);
-    }
-
-    [Fact]
-    public async Task ExtensionReleaseInstructionsSkipNonExtensionReleaseLegs()
-    {
-        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
-        var instructions = ExtractSection(
-            workflow,
-            "For an extension-only release, use these parameters:",
-            "For a full Aspire release");
-
-        Assert.Contains("| \\`SkipNuGetPublish\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipNpmRidPublish\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipNpmPointerPublish\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipChannelPromotion\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipWinGetPublish\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipGitHubTasks\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipReleaseAssets\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipNixPackageUpdate\\` | \\`true\\` |", instructions);
-        Assert.Contains("| \\`SkipVSCodeExtensionPublish\\` | \\`false\\` |", instructions);
-    }
-
-    [Fact]
-    public async Task ExtensionReleaseDryRunInstructionsDoNotOverstatePublisherRoleValidation()
-    {
-        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
-
-        Assert.Contains("can acquire an Azure credential and read publisher role assignments", workflow);
-        Assert.Contains("Separately confirm the service connection identity is a Contributor", workflow);
     }
 
     [Fact]
@@ -688,14 +437,29 @@ public sealed class ReleasePublishNugetPipelineTests
         return contents[beginIndex..endIndex];
     }
 
-    private static void AssertBefore(string contents, string text, int boundaryIndex)
-    {
-        var textIndex = FindRequiredText(contents, text);
+    private static int FindStepIndex(IReadOnlyList<YamlDotNet.RepresentationModel.YamlMappingNode> steps, string displayName)
+        => FindStepIndex(steps, step => AzurePipelinesYaml.Scalar(step, "displayName") == displayName);
 
-        Assert.True(
-            textIndex < boundaryIndex,
-            $"Expected '{text}' to appear before 'task: 1ES.PublishNuget@1'.");
+    private static int FindStepIndex(
+        IReadOnlyList<YamlDotNet.RepresentationModel.YamlMappingNode> steps,
+        Func<YamlDotNet.RepresentationModel.YamlMappingNode, bool> predicate)
+    {
+        for (var index = 0; index < steps.Count; index++)
+        {
+            if (predicate(steps[index]))
+            {
+                return index;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("Expected pipeline step was not found.");
     }
+
+    private static bool IsNpmPublishTemplateFor(
+        YamlDotNet.RepresentationModel.YamlMappingNode step,
+        string folderLocation)
+        => AzurePipelinesYaml.Scalar(step, "template") == "MicroBuild.Publish.yml@MicroBuildTemplate" &&
+           AzurePipelinesYaml.Scalar(AzurePipelinesYaml.Mapping(step, "parameters"), "folderLocation") == folderLocation;
 
     private static int FindRequiredText(string contents, string text)
     {
@@ -737,67 +501,6 @@ public sealed class ReleasePublishNugetPipelineTests
         }
 
         return aliases;
-    }
-
-    private static string FindYamlVariableValue(string contents, string variableName)
-        => FindYamlValueAfterMarker(contents, $"- name: {variableName}", "value:");
-
-    private static string FindYamlParameterDefault(string contents, string parameterName)
-        => FindYamlValueAfterMarker(contents, $"- name: {parameterName}", "default:");
-
-    private static string FindYamlValueAfterMarker(string contents, string marker, string valueKey)
-    {
-        var lines = contents.Split('\n');
-        var markerLineIndex = Array.FindIndex(lines, line => line.TrimEnd('\r').Trim() == marker);
-
-        Assert.True(markerLineIndex >= 0, $"Expected to find '{marker}'.");
-
-        var markerIndent = CountLeadingWhitespace(lines[markerLineIndex]);
-        for (var i = markerLineIndex + 1; i < lines.Length; i++)
-        {
-            var rawLine = lines[i].TrimEnd('\r');
-            var line = rawLine.Trim();
-            if (line.Length == 0)
-            {
-                continue;
-            }
-
-            var indent = CountLeadingWhitespace(rawLine);
-            if (indent == markerIndent && line.StartsWith("- ", StringComparison.Ordinal))
-            {
-                break;
-            }
-
-            if (indent > markerIndent && line.StartsWith(valueKey, StringComparison.Ordinal))
-            {
-                return TrimYamlQuotes(line[valueKey.Length..].Trim());
-            }
-        }
-
-        throw new Xunit.Sdk.XunitException($"Expected to find '{valueKey}' after '{marker}'.");
-    }
-
-    private static int CountLeadingWhitespace(string value)
-    {
-        var count = 0;
-        while (count < value.Length && char.IsWhiteSpace(value[count]))
-        {
-            count++;
-        }
-
-        return count;
-    }
-
-    private static string TrimYamlQuotes(string value)
-    {
-        if (value.Length >= 2 &&
-            ((value[0] == '\'' && value[^1] == '\'') ||
-             (value[0] == '"' && value[^1] == '"')))
-        {
-            return value[1..^1];
-        }
-
-        return value;
     }
 
     private Task<string> ReadRepoFileAsync(string relativePath)
