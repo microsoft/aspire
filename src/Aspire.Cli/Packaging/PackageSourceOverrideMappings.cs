@@ -2,11 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils;
-
 namespace Aspire.Cli.Packaging;
 
 internal static class PackageSourceOverrideMappings
 {
+    internal const string DefaultPackagePattern = "Aspire*";
+
     /// <summary>
     /// Resolves a command-line package source against the invocation directory, returning relative local sources as absolute paths so persisted mappings remain valid elsewhere.
     /// </summary>
@@ -41,24 +42,37 @@ internal static class PackageSourceOverrideMappings
         return Directory.Exists(localDirectory) ? null : localDirectory;
     }
 
-    public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel, string? nugetServiceIndexOverride)
+    public static PackageMapping[] Create(
+        string packageSourceOverride,
+        PackageChannel? requestedChannel,
+        string? nugetServiceIndexOverride,
+        string? packagePattern = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
-        if (HasCredentialMaterial(packageSourceOverride))
-        {
-            throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(packageSourceOverride));
-        }
+        ThrowIfCredentialBearingSourceOverride(packageSourceOverride);
+
+        packagePattern = GetEffectivePackagePattern(packagePattern);
 
         var mappings = new List<PackageMapping>
         {
-            new("Aspire*", packageSourceOverride)
+            new(packagePattern, packageSourceOverride)
         };
+
+        if (IsExactPackagePattern(packagePattern))
+        {
+            // The exact pattern guarantees that the selected integration comes from --source.
+            // Keep that source eligible for the remaining Aspire closure alongside the resolved
+            // channel or ambient feed. NuGet has no source priority, so matching packages can come
+            // from either feed; the exact selected-package pattern remains authoritative.
+            mappings.Add(new PackageMapping(DefaultPackagePattern, packageSourceOverride));
+            mappings.Add(new PackageMapping(PackageMapping.AllPackages, packageSourceOverride));
+        }
 
         if (requestedChannel?.Mappings is not null)
         {
             foreach (var mapping in requestedChannel.Mappings)
             {
-                if (mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+                if (CompetesWithAuthoritativePattern(mapping.PackageFilter, packagePattern))
                 {
                     continue;
                 }
@@ -67,7 +81,9 @@ internal static class PackageSourceOverrideMappings
             }
         }
 
-        if (!mappings.Any(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
+        if (!mappings.Any(mapping =>
+            mapping.PackageFilter == PackageMapping.AllPackages &&
+            !PackageSourceIdentity.Comparer.Equals(mapping.Source, packageSourceOverride)))
         {
             // Honor the runtime service-index override (env / sidecar) when the
             // CLI emits a fresh fallback mapping. Reads from existing user
@@ -81,28 +97,70 @@ internal static class PackageSourceOverrideMappings
         return [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")];
     }
 
-    public static PackageMapping[] CreateForTemplateOperations(string packageSourceOverride)
+    internal static string GetEffectivePackagePattern(string? packagePattern)
+        => string.IsNullOrWhiteSpace(packagePattern) ? DefaultPackagePattern : packagePattern;
+
+    internal static bool IsExactPackagePattern(string packagePattern)
+        => !packagePattern.EndsWith('*');
+
+    internal static bool MatchesPackage(string packagePattern, string packageName)
+        => packagePattern.EndsWith('*')
+            ? packageName.StartsWith(packagePattern[..^1], StringComparison.OrdinalIgnoreCase)
+            : string.Equals(packageName, packagePattern, StringComparison.OrdinalIgnoreCase);
+
+    internal static bool CompetesWithAuthoritativePattern(
+        string candidatePattern,
+        string authoritativePattern)
+    {
+        if (authoritativePattern == PackageMapping.AllPackages)
+        {
+            return false;
+        }
+
+        if (!authoritativePattern.EndsWith('*'))
+        {
+            return string.Equals(candidatePattern, authoritativePattern, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var authoritativePrefix = authoritativePattern[..^1];
+        if (candidatePattern == PackageMapping.AllPackages)
+        {
+            return false;
+        }
+
+        var candidatePrefix = candidatePattern.EndsWith('*')
+            ? candidatePattern[..^1]
+            : candidatePattern;
+        return candidatePrefix.Length >= authoritativePrefix.Length &&
+            candidatePrefix.StartsWith(authoritativePrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static PackageMapping[] CreateForSourceOnlyOperations(string packageSourceOverride)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
+        ThrowIfCredentialBearingSourceOverride(packageSourceOverride);
 
         // NuGet package search queries every configured source without applying package source
         // mapping. Keep the temporary config exclusive to --source so discovery and installation
         // cannot contact a channel feed or NuGet.org behind the user's approved proxy.
         return
         [
-            new("Aspire*", packageSourceOverride),
+            new(DefaultPackagePattern, packageSourceOverride),
             new(PackageMapping.AllPackages, packageSourceOverride)
         ];
     }
 
     public static bool HasCredentialMaterial(string source)
+        => NuGetSourceIdentity.HasCredentialMaterial(source);
+
+    private static void ThrowIfCredentialBearingSourceOverride(string source)
     {
-        return Uri.TryCreate(source.Trim(), UriKind.Absolute, out var uri) &&
-            (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
-                uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) &&
-            (!string.IsNullOrEmpty(uri.UserInfo) ||
-                !string.IsNullOrEmpty(uri.Query) ||
-                !string.IsNullOrEmpty(uri.Fragment));
+        if (HasCredentialMaterial(source))
+        {
+            throw new ArgumentException(
+                "Credential-bearing HTTP sources cannot be supplied through --source. Configure credentials through NuGet instead.",
+                nameof(source));
+        }
     }
 
     public static string? GetNormalizedLocalDirectory(string source)
@@ -147,7 +205,9 @@ internal static class PackageSourceOverrideMappings
 
     private static PackageSourceKind ClassifySource(string source, out string? localDirectory)
     {
-        if (UrlHelper.IsHttpUrl(source))
+        var trimmedSource = source.Trim();
+        if (trimmedSource.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            trimmedSource.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             localDirectory = null;
             return PackageSourceKind.Http;

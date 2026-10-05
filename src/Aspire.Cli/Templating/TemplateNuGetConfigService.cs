@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
-using System.Globalization;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Templating;
@@ -215,6 +216,10 @@ internal sealed class TemplateNuGetConfigService(
         {
             return false;
         }
+        if (PackageSourceOverrideMappings.HasCredentialMaterial(sourceOverride))
+        {
+            throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(sourceOverride));
+        }
 
         var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel, nugetServiceIndexOverride);
         await NuGetConfigMerger.CreateOrUpdateAsync(
@@ -299,22 +304,25 @@ internal sealed class TemplateNuGetConfigService(
 
             await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
             {
-                var templateSearchMappings = string.IsNullOrWhiteSpace(query.SourceOverride)
-                    ? channel.Mappings
-                    : PackageSourceOverrideMappings.CreateForTemplateOperations(query.SourceOverride);
-                var templatePackages = await channel.GetTemplatePackagesAsync(
-                    executionContext.WorkingDirectory,
-                    templateSearchMappings,
-                    // Init and explicit source/version overrides historically enumerate the source
-                    // before this service selects a version. Keep pin filtering only for channel
-                    // resolution in `aspire new`; unqualified local resolution selects the exact
-                    // CLI identity version below from the complete candidate set.
-                    filterLocalPackagesToPinnedVersion:
-                        query.IncludePrHives &&
-                        !isUnqualifiedLocalResolution &&
-                        string.IsNullOrWhiteSpace(query.VersionOverride) &&
-                        string.IsNullOrWhiteSpace(query.SourceOverride),
-                    ct);
+                // Init and explicit source/version overrides historically enumerate the source
+                // before this service selects a version. Keep pin filtering only for channel
+                // resolution in `aspire new`; unqualified local resolution selects the exact
+                // CLI identity version below from the complete candidate set.
+                var filterLocalPackagesToPinnedVersion =
+                    query.IncludePrHives &&
+                    !isUnqualifiedLocalResolution &&
+                    string.IsNullOrWhiteSpace(query.VersionOverride) &&
+                    string.IsNullOrWhiteSpace(query.SourceOverride);
+                var templatePackages = string.IsNullOrWhiteSpace(query.SourceOverride)
+                    ? await channel.GetTemplatePackagesFromChannelAsync(
+                        executionContext.WorkingDirectory,
+                        filterLocalPackagesToPinnedVersion,
+                        ct)
+                    : await channel.GetTemplatePackagesAsync(
+                        executionContext.WorkingDirectory,
+                        PackageSourceOverrideMappings.CreateForSourceOnlyOperations(query.SourceOverride),
+                        filterLocalPackagesToPinnedVersion,
+                        ct);
                 lock (resultsLock)
                 {
                     results.AddRange(templatePackages.Select(p => (p, channel)));
@@ -418,22 +426,13 @@ internal sealed class TemplateNuGetConfigService(
         KnownEmoji? statusEmoji,
         CancellationToken cancellationToken)
     {
-        var templateInstallMappings = string.IsNullOrWhiteSpace(sourceOverride)
-            ? selection.Channel.Mappings
-            : PackageSourceOverrideMappings.CreateForTemplateOperations(sourceOverride);
-
-        // Whilst we install the templates - if source mappings are available we need
-        // to generate a temporary NuGet.config file to make sure we install the right package
-        // from the right feed. Without mappings we just use the ambient configuration
-        // (although we should still specify the source) because the user would have selected it.
-        //
-        // The temporary config is disposed when this method returns. That is intentional —
-        // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
-        // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
-        // template hive and uses the ambient NuGet configuration.
-        using var temporaryConfig = templateInstallMappings is not null
-            ? await TemporaryNuGetConfig.CreateAsync(templateInstallMappings)
-            : null;
+        using var searchConfiguration = string.IsNullOrWhiteSpace(sourceOverride)
+            ? await selection.Channel.CreateChannelSearchConfigurationAsync(
+                executionContext.WorkingDirectory,
+                cancellationToken)
+            : await selection.Channel.CreateSourceOverrideSearchConfigurationAsync(
+                executionContext.WorkingDirectory,
+                PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride));
 
         var collector = new OutputCollector();
 
@@ -450,7 +449,10 @@ internal sealed class TemplateNuGetConfigService(
                 return await runner.InstallTemplateAsync(
                     packageName: TemplatesPackageName,
                     version: selection.Package.Version,
-                    nugetConfigFile: temporaryConfig?.ConfigFile,
+                    // dotnet new install has no --configfile option. Running from the generated
+                    // overlay directory lets NuGet discover the overlay and continue walking the
+                    // original workspace hierarchy for ambient sources and credentials.
+                    nugetConfigFile: searchConfiguration.ConfigurationFile,
                     nugetSource: string.IsNullOrWhiteSpace(sourceOverride) ? selection.Package.Source : sourceOverride,
                     force: true,
                     options: options,

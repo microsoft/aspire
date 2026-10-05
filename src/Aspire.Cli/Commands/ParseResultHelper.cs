@@ -111,8 +111,9 @@ internal static class ParseResultHelper
 
     /// <summary>
     /// Renders the arguments of <paramref name="parseResult"/> in a form that is safe to write to
-    /// logs: tokens the CLI itself owns are preserved and every token that would be forwarded to
-    /// the AppHost is replaced with <see cref="AppHostArgumentRedactor.RedactedToken"/>.
+    /// logs: credential-bearing HTTP values owned by the CLI are sanitized, and every token that
+    /// would be forwarded to the AppHost is replaced with
+    /// <see cref="AppHostArgumentRedactor.RedactedToken"/>.
     /// </summary>
     /// <remarks>
     /// <see cref="AppHostArgumentRedactor"/> keys off the literal <c>--</c> separator, which is
@@ -153,8 +154,10 @@ internal static class ParseResultHelper
             // Ownership must be checked by reference, not by value: the same raw string can appear
             // on both sides of the boundary (`run --apphost same-value -- same-value`) and only the
             // occurrence the parser bound to a CLI symbol is safe to log.
+            // System.CommandLine exposes `--option=value` as separate option and value tokens, so
+            // sanitizing each owned token also protects values supplied with equals syntax.
             loggableTokens.Add(!isAfterSeparator && cliOwnedTokens.Contains(token)
-                ? token.Value
+                ? PackageSourceRedactor.RedactForDisplay(token.Value)
                 : AppHostArgumentRedactor.RedactedToken);
         }
 

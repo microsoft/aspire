@@ -32,6 +32,10 @@ public sealed class ProcessInvocationOptionsTests
             // Internal properties are included below, so they need non-default values too.
             AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_VALUE"] = "configured",
+            },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
             ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,

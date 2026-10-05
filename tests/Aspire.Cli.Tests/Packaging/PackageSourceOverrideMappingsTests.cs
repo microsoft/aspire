@@ -7,6 +7,52 @@ namespace Aspire.Cli.Tests.Packaging;
 
 public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("Aspire*", "Aspire.Hosting.Redis", true)]
+    [InlineData("aspire*", "Aspire.Hosting.Redis", true)]
+    [InlineData("Aspire.Hosting.Redis", "aspire.hosting.redis", true)]
+    [InlineData("Aspire.Hosting.Redis", "Aspire.Hosting.PostgreSQL", false)]
+    [InlineData("Aspire*", "CommunityToolkit.Aspire.Hosting.Redis", false)]
+    [InlineData("*", "CommunityToolkit.Aspire.Hosting.Redis", true)]
+    public void MatchesPackage_UsesNuGetMappingPatternSemantics(
+        string packagePattern,
+        string packageName,
+        bool expected)
+    {
+        Assert.Equal(expected, PackageSourceOverrideMappings.MatchesPackage(packagePattern, packageName));
+    }
+
+    [Fact]
+    public void CredentialBearingSourceOverride_IsRejected()
+    {
+        const string source = "https://user:p#word@host/";
+
+        Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(source));
+        Assert.Throws<ArgumentException>(() =>
+            PackageSourceOverrideMappings.Create(source, requestedChannel: null, nugetServiceIndexOverride: source));
+        Assert.Throws<ArgumentException>(() =>
+            PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source));
+    }
+
+    [Fact]
+    public void Create_ExactPackagePatternKeepsSourceEligibleForAspireClosure()
+    {
+        const string source = "https://example.com/integration";
+        const string packageId = "CommunityToolkit.Aspire.Hosting.Redis";
+
+        var mappings = PackageSourceOverrideMappings.Create(
+            source,
+            requestedChannel: null,
+            nugetServiceIndexOverride: null,
+            packagePattern: packageId);
+
+        Assert.Equal(
+            [packageId, PackageSourceOverrideMappings.DefaultPackagePattern, PackageMapping.AllPackages],
+            mappings
+                .Where(mapping => PackageSourceIdentity.Comparer.Equals(mapping.Source, source))
+                .Select(static mapping => mapping.PackageFilter));
+    }
+
     [Fact]
     [PlatformSpecific(TestPlatforms.AnyUnix)]
     public void ResolveForWorkingDirectory_RelativePathContainingColon_ResolvesAgainstWorkingDirectory()
@@ -40,6 +86,19 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
 
         Assert.Equal(source, result);
+    }
+
+    [Fact]
+    public void ResolveForWorkingDirectory_MalformedHttpSource_ReturnsUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string source = "https://user:p#word@packages.example.com/v3/index.json";
+
+        var result = PackageSourceOverrideMappings.ResolveForWorkingDirectory(source, workspace.WorkspaceRoot);
+
+        Assert.Equal(source, result);
+        Assert.True(PackageSourceOverrideMappings.HasCredentialMaterial(result));
+        Assert.Null(PackageSourceOverrideMappings.GetMissingLocalDirectory(result));
     }
 
     [Fact]

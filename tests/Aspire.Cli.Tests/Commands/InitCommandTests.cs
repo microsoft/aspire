@@ -1213,8 +1213,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// workspace <c>nuget.config</c> emitted by <c>NuGetConfigMerger</c> and verifies it
     /// carries the matching feed URL — proving the resolver picked the binary's identity
     /// channel rather than skipping the merge or selecting a different registered channel.
-    /// The <c>stable</c> channel is intentionally excluded: its packages live on nuget.org
-    /// (the ambient default source), so it drops no <c>nuget.config</c>; that case is covered
+    /// The <c>stable</c> channel is intentionally excluded: it uses ambient NuGet configuration,
+    /// so it drops no <c>nuget.config</c>; that case is covered
     /// by <see cref="InitCommand_SingleFileMode_StableIdentity_DoesNotCreateNuGetConfig"/>.
     /// </summary>
     [Theory]
@@ -1249,8 +1249,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// Inverse of <see cref="InitCommand_SingleFileMode_NoChannelOverride_WiresNuGetConfigToCliExecutionContextChannel"/>
     /// for the <c>stable</c> channel: a stable-identity single-file <c>aspire init</c> must NOT
-    /// drop a workspace <c>nuget.config</c>. The stable channel's packages live on nuget.org —
-    /// the ambient default source — so a <c>&lt;clear/&gt;</c>-based config would be redundant
+    /// drop a workspace <c>nuget.config</c>. Stable package resolution uses ambient NuGet
+    /// configuration, so a <c>&lt;clear/&gt;</c>-based config would be redundant
     /// and would wipe any additional feeds the user already relies on. The packaging service
     /// still registers a <c>stable</c> channel with a (test) feed source, proving the skip is
     /// driven by the channel name rather than an absence of mappings.
@@ -1276,7 +1276,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient nuget.org).");
+        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient NuGet configuration).");
     }
 
     /// <summary>
@@ -1907,7 +1907,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient nuget.org).");
+        Assert.False(File.Exists(nugetConfigPath), "stable-identity init must not drop a nuget.config (stable packages resolve from ambient NuGet configuration).");
     }
 
     /// <summary>
@@ -2353,7 +2353,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var aspirePatternSource = packageSourceMapping!.Elements("packageSource")
             .FirstOrDefault(ps => ps.Elements("package").Any(p => (string?)p.Attribute("pattern") == "Aspire*"));
         Assert.NotNull(aspirePatternSource);
-        Assert.Equal(channelSource, (string?)aspirePatternSource!.Attribute("key"));
+        var aspirePatternSourceKey = (string?)aspirePatternSource!.Attribute("key");
+        Assert.Contains(packageSources.Elements("add"), element =>
+            string.Equals((string?)element.Attribute("key"), aspirePatternSourceKey, StringComparison.OrdinalIgnoreCase) &&
+            (string?)element.Attribute("value") == channelSource);
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
+using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -76,17 +78,7 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
         await auto.RunCommandAsync("dotnet nuget add source \"$PWD/source-feed\" --name source-override-e2e", counter);
 
         // Package search can suppress source failures, so use a TCP tripwire to detect connection attempts independently of logs.
-        await auto.RunCommandAsync(
-            "printf '127.0.0.1 api.nuget.org azuresearch-usnc.nuget.org azuresearch-ussc.nuget.org pkgs.dev.azure.com\\n' >> /etc/hosts",
-            counter);
-        await auto.RunCommandAsync(
-            "rm -f /tmp/unexpected-nuget-source-contacted /tmp/nuget-source-listener-ready && " +
-            "python3 -c 'import pathlib,socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); " +
-            "s.bind((\"0.0.0.0\",443)); s.listen(); pathlib.Path(\"/tmp/nuget-source-listener-ready\").touch(); " +
-            "c,_=s.accept(); pathlib.Path(\"/tmp/unexpected-nuget-source-contacted\").touch(); c.close()' >/tmp/nuget-source-listener.log 2>&1 & " +
-            "for i in $(seq 1 100); do [ -f /tmp/nuget-source-listener-ready ] && break; sleep 0.1; done; " +
-            "if [ ! -f /tmp/nuget-source-listener-ready ]; then cat /tmp/nuget-source-listener.log; (exit 1); fi",
-            counter);
+        await auto.StartUnexpectedNuGetSourceContactTripwireAsync(counter, includeAzureDevOps: true);
         await auto.RunCommandAsync("rm -rf \"$HOME/.aspire/logs\" && mkdir -p \"$HOME/.aspire/logs\"", counter);
 
         await auto.RunCommandAsync(
@@ -111,7 +103,6 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
         // Because the positive assertion above matches a Debug line from the same log, an empty or
         // level-filtered log cannot make these negative assertions pass vacuously.
         await auto.RunCommandAsync(
-            "test ! -e /tmp/unexpected-nuget-source-contacted && " +
             "find \"$HOME/.aspire/logs\" -type f -name '*.log' -print -quit | grep -q . && " +
             "grep -R -F \"Resolved 'staging' channel\" \"$HOME/.aspire/logs\" && " +
             "grep -R -E 'Running dotnet in .*aspire-nuget-config.* with args: new install [^ ]*/source-feed/Aspire\\.ProjectTemplates\\.[^ ]*\\.nupkg' \"$HOME/.aspire/logs\" && " +
@@ -119,5 +110,173 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
             "! grep -R -F -- '--nuget-source' \"$HOME/.aspire/logs\" && " +
             "! grep -R -F 'api.nuget.org' \"$HOME/.aspire/logs\"",
             counter);
+        await auto.AssertUnexpectedNuGetSourceWasNotContactedAsync(counter);
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task StableChannelUsesAmbientNuGetSourceForTemplateDiscoveryAndInstallation()
+    {
+        const string stableTemplateVersion = "99.99.99";
+
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        Assert.SkipUnless(
+            strategy.Mode is CliInstallMode.LocalArchive or CliInstallMode.LocalHive,
+            $"The ambient template source test requires an archive containing Aspire.ProjectTemplates; current mode is {strategy.Mode}.");
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.RunCommandAsync(
+            "SOURCE_PACKAGE=$(find \"$HOME/.aspire/hives\" -path '*/packages/Aspire.ProjectTemplates.*.nupkg' -print -quit); " +
+            "test -n \"$SOURCE_PACKAGE\" && cp \"$SOURCE_PACKAGE\" source-template.nupkg",
+            counter);
+
+        var sourcePackage = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "source-template.nupkg"));
+        var ambientFeed = workspace.WorkspaceRoot.CreateSubdirectory("ambient-template-feed");
+        CreateTemplatePackageWithVersion(sourcePackage, ambientFeed, stableTemplateVersion);
+        sourcePackage.Delete();
+        WriteAmbientNuGetConfig(workspace.WorkspaceRoot, ambientFeed.Name);
+
+        // Remove the archive's package override so the explicitly requested stable channel has to
+        // discover Aspire.ProjectTemplates through the ambient NuGet hierarchy.
+        await auto.RunCommandAsync(
+            "unset ASPIRE_CLI_PACKAGES ASPIRE_CLI_VERSION ASPIRE_CLI_COMMIT; " +
+            "export NUGET_PACKAGES=\"$PWD/.nuget-packages\"",
+            counter);
+        await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
+        await auto.RunCommandAsync("aspire config set features.showAllTemplates true -g", counter);
+        await auto.StartUnexpectedNuGetSourceContactTripwireAsync(counter, includeAzureDevOps: false);
+        await auto.RunCommandAsync("rm -rf \"$HOME/.aspire/logs\" && mkdir -p \"$HOME/.aspire/logs\"", counter);
+
+        await auto.RunCommandAsync(
+            "aspire new aspire-servicedefaults --name AmbientServiceDefaults --output AmbientServiceDefaults " +
+            "--channel stable --non-interactive --suppress-agent-init --log-level Debug",
+            counter,
+            TimeSpan.FromMinutes(2));
+
+        await auto.RunCommandAsync("test -f AmbientServiceDefaults/AmbientServiceDefaults.csproj", counter);
+        await auto.RunCommandAsync(
+            $"find \"$HOME/.aspire/logs\" -type f -name '*.log' -print -quit | grep -q . && " +
+            $"grep -R -F \"Running dotnet in $PWD with args: new install $PWD/ambient-template-feed/Aspire.ProjectTemplates.{stableTemplateVersion}.nupkg\" \"$HOME/.aspire/logs\" && " +
+            "! grep -R -F 'aspire-nuget-config' \"$HOME/.aspire/logs\" && " +
+            "! grep -R -F 'api.nuget.org' \"$HOME/.aspire/logs\"",
+            counter);
+        await auto.AssertUnexpectedNuGetSourceWasNotContactedAsync(counter);
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task DailyChannelOverlayDoesNotReintroduceNuGetOrgForTemplateDiscoveryAndInstallation()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+        var ambientFeed = workspace.WorkspaceRoot.CreateSubdirectory("ambient-empty-feed");
+        WriteAmbientNuGetConfig(workspace.WorkspaceRoot, ambientFeed.Name);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Ensure the built-in daily channel, rather than an archive-backed identity override, owns
+        // template resolution. The empty ambient feed remains available for unrelated packages.
+        await auto.RunCommandAsync(
+            "unset ASPIRE_CLI_PACKAGES ASPIRE_CLI_VERSION ASPIRE_CLI_COMMIT; " +
+            "export NUGET_PACKAGES=\"$PWD/.nuget-packages\"",
+            counter);
+        await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
+        await auto.RunCommandAsync("aspire config set features.showAllTemplates true -g", counter);
+        await auto.StartUnexpectedNuGetSourceContactTripwireAsync(counter, includeAzureDevOps: false);
+        await auto.RunCommandAsync("rm -rf \"$HOME/.aspire/logs\" && mkdir -p \"$HOME/.aspire/logs\"", counter);
+
+        await auto.RunCommandAsync(
+            "aspire new aspire-servicedefaults --name DailyServiceDefaults --output DailyServiceDefaults " +
+            "--channel daily --non-interactive --suppress-agent-init --log-level Debug",
+            counter,
+            TimeSpan.FromMinutes(3));
+
+        await auto.RunCommandAsync("test -f DailyServiceDefaults/DailyServiceDefaults.csproj", counter);
+        await auto.RunCommandAsync(
+            "find \"$HOME/.aspire/logs\" -type f -name '*.log' -print -quit | grep -q . && " +
+            "grep -R -E \"Running dotnet in $PWD/\\.aspire-nuget-config[^ ]* with args: new install Aspire\\.ProjectTemplates@[^ ]+\" \"$HOME/.aspire/logs\" && " +
+            "! grep -R -F 'api.nuget.org' \"$HOME/.aspire/logs\"",
+            counter);
+        await auto.AssertUnexpectedNuGetSourceWasNotContactedAsync(counter);
+    }
+
+    private static void CreateTemplatePackageWithVersion(
+        FileInfo sourcePackage,
+        DirectoryInfo destinationFeed,
+        string packageVersion)
+    {
+        var destinationPath = Path.Combine(destinationFeed.FullName, $"Aspire.ProjectTemplates.{packageVersion}.nupkg");
+        using var sourceArchive = ZipFile.OpenRead(sourcePackage.FullName);
+        using var destinationArchive = ZipFile.Open(destinationPath, ZipArchiveMode.Create);
+        var foundNuspec = false;
+
+        foreach (var sourceEntry in sourceArchive.Entries)
+        {
+            // Package signatures cover the complete archive and cannot survive the deliberate nuspec
+            // version rewrite. Local PR archives are normally unsigned, but omit the signature if one
+            // is present so the rewritten fixture remains a valid unsigned package.
+            if (string.Equals(sourceEntry.FullName, ".signature.p7s", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var destinationEntry = destinationArchive.CreateEntry(sourceEntry.FullName, CompressionLevel.Optimal);
+            destinationEntry.LastWriteTime = sourceEntry.LastWriteTime;
+
+            if (sourceEntry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
+            {
+                foundNuspec = true;
+                using var sourceStream = sourceEntry.Open();
+                var document = XDocument.Load(sourceStream, LoadOptions.PreserveWhitespace);
+                var versionElement = document
+                    .Descendants()
+                    .Single(element => string.Equals(element.Name.LocalName, "version", StringComparison.Ordinal));
+                versionElement.Value = packageVersion;
+                using var destinationStream = destinationEntry.Open();
+                document.Save(destinationStream, SaveOptions.DisableFormatting);
+            }
+            else
+            {
+                using var sourceStream = sourceEntry.Open();
+                using var destinationStream = destinationEntry.Open();
+                sourceStream.CopyTo(destinationStream);
+            }
+        }
+
+        Assert.True(foundNuspec, $"Expected a nuspec in template package '{sourcePackage.FullName}'.");
+    }
+
+    private static void WriteAmbientNuGetConfig(DirectoryInfo workspace, string sourcePath)
+    {
+        File.WriteAllText(
+            Path.Combine(workspace.FullName, "NuGet.Config"),
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="ambient-internal" value="{sourcePath}" />
+              </packageSources>
+            </configuration>
+            """);
     }
 }

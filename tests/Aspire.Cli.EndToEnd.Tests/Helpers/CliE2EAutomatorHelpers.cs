@@ -101,6 +101,35 @@ internal static class CliE2EAutomatorHelpers
         }
     }
 
+    /// <summary>
+    /// Redirects external NuGet service hosts to a local TCP listener so tests can detect attempted
+    /// source access even when package-search commands suppress individual source failures.
+    /// </summary>
+    internal static async Task StartUnexpectedNuGetSourceContactTripwireAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        bool includeAzureDevOps)
+    {
+        var blockedHosts = includeAzureDevOps
+            ? "api.nuget.org azuresearch-usnc.nuget.org azuresearch-ussc.nuget.org pkgs.dev.azure.com"
+            : "api.nuget.org azuresearch-usnc.nuget.org azuresearch-ussc.nuget.org";
+
+        await auto.RunCommandAsync($"printf '127.0.0.1 {blockedHosts}\\n' >> /etc/hosts", counter);
+        await auto.RunCommandAsync(
+            "rm -f /tmp/unexpected-nuget-source-contacted /tmp/nuget-source-listener-ready && " +
+            "python3 -c 'import pathlib,socket; s=socket.socket(); s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1); " +
+            "s.bind((\"0.0.0.0\",443)); s.listen(); pathlib.Path(\"/tmp/nuget-source-listener-ready\").touch(); " +
+            "c,_=s.accept(); pathlib.Path(\"/tmp/unexpected-nuget-source-contacted\").touch(); c.close()' >/tmp/nuget-source-listener.log 2>&1 & " +
+            "for i in $(seq 1 100); do [ -f /tmp/nuget-source-listener-ready ] && break; sleep 0.1; done; " +
+            "if [ ! -f /tmp/nuget-source-listener-ready ]; then cat /tmp/nuget-source-listener.log; (exit 1); fi",
+            counter);
+    }
+
+    internal static Task AssertUnexpectedNuGetSourceWasNotContactedAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+        => auto.RunCommandAsync("test ! -e /tmp/unexpected-nuget-source-contacted", counter);
+
     internal static Task WaitUntilAppHostStoppedSuccessfullyAsync(this Hex1bTerminalAutomator auto, TimeSpan timeout)
     {
         return auto.WaitUntilTextAsync(GetAppHostStoppedSuccessfullySuffix(), timeout: timeout);

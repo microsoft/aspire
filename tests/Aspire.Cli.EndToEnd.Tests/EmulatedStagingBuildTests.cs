@@ -260,22 +260,23 @@ public sealed class EmulatedStagingBuildTests(ITestOutputHelper output)
         var doc = XDocument.Load(configPath);
         var feedFragment = $"darc-pub-microsoft-aspire-{shortCommit}";
 
-        // <packageSources><add key="<url>" value="<url>" /></packageSources>
+        // <packageSources><add key="<source-key>" value="<feed-url>" /></packageSources>
         var stagingSourceKey = doc
             .Descendants("packageSources")
             .Elements("add")
-            .Select(e => (string?)e.Attribute("value") ?? (string?)e.Attribute("key"))
-            .FirstOrDefault(v => v is not null && v.Contains(feedFragment, StringComparison.OrdinalIgnoreCase));
+            .Where(e => ((string?)e.Attribute("value"))?.Contains(feedFragment, StringComparison.OrdinalIgnoreCase) == true)
+            .Select(e => (string?)e.Attribute("key"))
+            .FirstOrDefault();
 
         Assert.True(
             stagingSourceKey is not null,
             $"Dropped NuGet.config ({configPath}) does not contain a package source for the staging feed '{feedFragment}'. Content:\n{File.ReadAllText(configPath)}");
 
-        // <packageSourceMapping><packageSource key="<feed>"><package pattern="Aspire*" /></packageSource>
+        // <packageSourceMapping><packageSource key="<source-key>"><package pattern="Aspire*" /></packageSource>
         var aspireMappedToStagingFeed = doc
             .Descendants("packageSourceMapping")
             .Elements("packageSource")
-            .Where(ps => ((string?)ps.Attribute("key"))?.Contains(feedFragment, StringComparison.OrdinalIgnoreCase) == true)
+            .Where(ps => string.Equals((string?)ps.Attribute("key"), stagingSourceKey, StringComparison.OrdinalIgnoreCase))
             .SelectMany(ps => ps.Elements("package"))
             .Any(p => string.Equals((string?)p.Attribute("pattern"), "Aspire*", StringComparison.OrdinalIgnoreCase));
 

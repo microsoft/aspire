@@ -434,15 +434,21 @@ internal sealed class NewCommand : BaseCommand
                 // When both options are explicit, the channel still owns version policy and persistence.
                 var templateDiscoveryMappings = string.IsNullOrWhiteSpace(source)
                     ? selectedChannel.Mappings
-                    : PackageSourceOverrideMappings.CreateForTemplateOperations(source);
+                    : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(source);
 
                 try
                 {
-                    var packages = (await selectedChannel.GetTemplatePackagesAsync(
-                        ExecutionContext.WorkingDirectory,
-                        templateDiscoveryMappings,
-                        filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
-                        cancellationToken))
+                    var discoveredPackages = string.IsNullOrWhiteSpace(source)
+                        ? await selectedChannel.GetTemplatePackagesFromChannelAsync(
+                            ExecutionContext.WorkingDirectory,
+                            filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
+                            cancellationToken)
+                        : await selectedChannel.GetTemplatePackagesAsync(
+                            ExecutionContext.WorkingDirectory,
+                            templateDiscoveryMappings,
+                            filterLocalPackagesToPinnedVersion: !isUnqualifiedLocalResolution,
+                            cancellationToken);
+                    var packages = discoveredPackages
                         .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;

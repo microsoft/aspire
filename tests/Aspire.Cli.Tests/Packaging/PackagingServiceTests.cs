@@ -2320,7 +2320,21 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
     private sealed class FakeNuGetPackageCacheWithPackages(List<Aspire.Shared.NuGetPackageCli> packages) : INuGetPackageCache
     {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        public Task<NuGetPackageSearchConfiguration> CreateAmbientOverlayAsync(
+            DirectoryInfo workingDirectory,
+            IReadOnlyList<PackageMapping>? channelMappings,
+            CancellationToken cancellationToken)
+            => Task.FromResult(NuGetPackageSearchConfiguration.Ambient(workingDirectory, cacheIdentity: "ambient"));
+
+        public Task<NuGetPackageSearchConfiguration> CreateStandaloneAsync(
+            DirectoryInfo workingDirectory,
+            PackageMapping[] mappings)
+            => Task.FromResult(NuGetPackageSearchConfiguration.Ambient(workingDirectory, cacheIdentity: "standalone"));
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(
+            NuGetPackageSearchConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
         {
             // Simulate what the real cache does: filter by prerelease flag
             var filtered = prerelease
@@ -2329,16 +2343,33 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(filtered.ToList());
         }
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(
+            NuGetPackageSearchConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(
+            NuGetPackageSearchConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
             => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(
+            NuGetPackageSearchConfiguration configuration,
+            string packageId,
+            Func<string, bool>? filter,
+            bool prerelease,
+            bool useCache,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(
+            NuGetPackageSearchConfiguration configuration,
+            string exactPackageId,
+            bool prerelease,
+            bool useCache,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
     }
 }
