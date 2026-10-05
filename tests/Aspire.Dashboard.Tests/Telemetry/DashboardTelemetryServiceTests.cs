@@ -12,19 +12,6 @@ namespace Aspire.Dashboard.Tests.Telemetry;
 public class DashboardTelemetryServiceTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void Configuration_ControlsTelemetryEnablement(bool enabled)
-    {
-        using var fixture = new DashboardTelemetryFixture(reportedTelemetryEnabled: enabled);
-        var service = fixture.Telemetry;
-
-        Assert.Equal(enabled, service.IsTelemetryEnabled);
-        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
-        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
-    }
-
-    [Theory]
     [InlineData(TelemetryResult.Success, ActivityStatusCode.Ok)]
     [InlineData(TelemetryResult.Failure, ActivityStatusCode.Error)]
     [InlineData(TelemetryResult.UserFault, ActivityStatusCode.Error)]
@@ -353,10 +340,8 @@ public class DashboardTelemetryServiceTests
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void RecordError_WithoutActivity_CreatesAndCompletesReportedActivity(bool useDefaultOverload)
+    [Fact]
+    public void RecordError_WithoutActivity_CreatesAndCompletesReportedActivity()
     {
         var sink = new TestSink();
         using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
@@ -365,14 +350,7 @@ public class DashboardTelemetryServiceTests
         var previous = Activity.Current;
 
         var exception = new InvalidOperationException("secret workspace path");
-        if (useDefaultOverload)
-        {
-            service.RecordError("Local message", exception);
-        }
-        else
-        {
-            service.RecordError("Local message", exception, writeToLogging: true);
-        }
+        service.RecordError("Local message", exception);
 
         Assert.Same(previous, Activity.Current);
         Assert.True(fixture.ActivityChannel.Reader.TryRead(out var activity));

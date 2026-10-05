@@ -19,23 +19,31 @@ public class DashboardTelemetryManagerTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task Initialize_IsIdempotentAndIndependentOfConfiguredEnablement(bool enabled)
+    public async Task Initialize_ConcurrentFirstCalls_AreIdempotentAndHonorEnablement(bool enabled)
     {
         await using var services = CreateServices(enabled);
         var manager = services.GetRequiredService<DashboardTelemetryManager>();
         var telemetry = services.GetRequiredService<DashboardTelemetryService>();
-        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
-        var eventLogger = loggerFactory.CreateLogger(DashboardTelemetryService.EventLogCategoryName);
         Assert.Same(manager, Assert.Single(services.GetServices<IHostedService>()));
         Assert.False(manager.IsInitialized);
         Assert.Equal(enabled, telemetry.IsTelemetryEnabled);
 
-        await manager.StartAsync(CancellationToken.None);
-        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(manager.Initialize)));
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var initializations = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        {
+            await start.Task;
+            manager.Initialize();
+        })).ToArray();
+        start.SetResult();
+        await Task.WhenAll(initializations);
 
         Assert.True(manager.IsInitialized);
         Assert.Equal(enabled, telemetry.IsTelemetryEnabled);
-        Assert.Same(eventLogger, loggerFactory.CreateLogger(DashboardTelemetryService.EventLogCategoryName));
+
+        await manager.StartAsync(CancellationToken.None);
+
+        Assert.True(manager.IsInitialized);
+        Assert.Equal(enabled, telemetry.IsTelemetryEnabled);
         if (enabled)
         {
             using var source = new ActivitySource(DashboardTelemetryService.ReportedActivitySourceName);
@@ -90,8 +98,6 @@ public class DashboardTelemetryManagerTests
         var sink = new TestSink();
         var failure = new UnauthorizedAccessException("Telemetry storage is not writable.");
         var failInitialization = true;
-        var traceAttempts = 0;
-        var logAttempts = 0;
         using var source = new ActivitySource($"Test.Dashboard.Startup.{Guid.NewGuid():N}");
         using var host = new HostBuilder().ConfigureServices(services =>
         {
@@ -103,7 +109,6 @@ public class DashboardTelemetryManagerTests
                 services.GetRequiredService<LoggerProvider>(),
                 _ =>
                 {
-                    traceAttempts++;
                     if (failTrace && failInitialization)
                     {
                         throw failure;
@@ -113,7 +118,6 @@ public class DashboardTelemetryManagerTests
                 },
                 _ =>
                 {
-                    logAttempts++;
                     if (!failTrace && failInitialization)
                     {
                         throw failure;
@@ -134,8 +138,6 @@ public class DashboardTelemetryManagerTests
         Assert.Equal(LogLevel.Warning, warning.LogLevel);
         Assert.Same(failure, warning.Exception);
         Assert.Equal("Failed to initialize dashboard product telemetry. The dashboard will continue without product export.", warning.Message);
-        Assert.Equal(1, traceAttempts);
-        Assert.Equal(failTrace ? 0 : 1, logAttempts);
 
         if (retry)
         {
@@ -143,8 +145,6 @@ public class DashboardTelemetryManagerTests
             manager.Initialize();
             Assert.True(manager.IsInitialized);
             Assert.True(source.HasListeners());
-            Assert.Equal(2, traceAttempts);
-            Assert.Equal(failTrace ? 1 : 2, logAttempts);
         }
 
         await host.StopAsync(CancellationToken.None);

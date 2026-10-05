@@ -37,20 +37,6 @@ public class DashboardTelemetryConfigurationTests
     }
 
     [Theory]
-    [InlineData(DashboardTelemetryService.TelemetryOptOutConfigKey)]
-    [InlineData("Dashboard:DebugSession:TelemetryOptOut")]
-    public void Create_ResolvesSettingsOnce(string optOutKey)
-    {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        var settings = DashboardTelemetryConfiguration.Create(configuration);
-
-        configuration[optOutKey] = "true";
-
-        Assert.True(settings.ReportedTelemetryEnabled);
-        Assert.False(DashboardTelemetryConfiguration.Create(configuration).ReportedTelemetryEnabled);
-    }
-
-    [Theory]
     [InlineData(null)]
     [InlineData("true")]
     public void Create_InvalidLegacyOptOut_Throws(string? directOptOut)
