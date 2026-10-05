@@ -6,20 +6,17 @@ import { isExtensionTelemetryEnabled, sendTelemetryErrorEvent, sendTelemetryEven
 import { EventMeasurements, EventProperties, TelemetryPropertyValue } from '../utils/telemetryRegistry';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Dashboard → extension telemetry contract.
+// Legacy dashboard → extension telemetry contract.
 //
-// The Aspire dashboard implements its telemetry sender against the endpoints
-// defined in `src/Aspire.Dashboard/Telemetry/DashboardTelemetryService.cs`
-// (`TelemetryEndpoints` constants). When the dashboard is hosted by Visual
-// Studio or the C# Dev Kit extension, those hosts expose this HTTP surface
-// and forward each request to their own telemetry pipeline. We do the same
-// here for the VS Code Aspire extension by forwarding through VS Code's
+// Older dashboards send product telemetry through the IDE debug-session HTTP
+// endpoints. Current dashboards report directly through Azure Monitor, but the
+// extension must keep these endpoints for older installed CLI/dashboard versions.
+// Legacy requests are forwarded through VS Code's
 // TelemetryLogger, which owns opt-in, privacy cleaning, and common properties,
 // into `@vscode/extension-telemetry` as the transport.
 //
-// Wire shapes mirror the dashboard-side records in `TelemetryRequests.cs` and
-// `TelemetryResponses.cs`. Keep these types and the dashboard records in
-// lock-step — if the dashboard adds a new field, add it here too.
+// Wire shapes preserve the records shipped in older dashboards. Do not change
+// this contract to match the current dashboard's activity-based implementation.
 //
 // IMPORTANT: property names use camelCase here even though the C# records
 // use PascalCase. The dashboard sends requests via `HttpClient.PostAsJsonAsync`

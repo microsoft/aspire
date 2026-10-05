@@ -1078,6 +1078,26 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task Startup_InitializesProductTelemetryManagerAndShutdownCompletes()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        var manager = app.Services.GetRequiredService<DashboardTelemetryManager>();
+        var telemetry = app.Services.GetRequiredService<DashboardTelemetryService>();
+        Assert.False(manager.IsInitialized);
+        Assert.False(telemetry.IsTelemetryEnabled);
+
+        await app.StartAsync().DefaultTimeout();
+
+        Assert.True(manager.IsInitialized);
+        Assert.False(telemetry.IsTelemetryEnabled);
+
+        await app.StopAsync().DefaultTimeout();
+
+        Assert.False(manager.IsInitialized);
+        Assert.Throws<ObjectDisposedException>(manager.Initialize);
+    }
+
+    [Fact]
     public async Task Run_AddressAlreadyInUse_ReturnsExitCodeAddressInUse()
     {
         // Bind a port so the dashboard can't use it.

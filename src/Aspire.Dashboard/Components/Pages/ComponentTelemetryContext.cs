@@ -35,7 +35,6 @@ public enum ComponentType
 public sealed class ComponentTelemetryContext : IDisposable
 {
     private DashboardTelemetryService? _telemetryService;
-    private OperationContext? _initializeCorrelation;
     private readonly string _componentId;
     private readonly ComponentType _type;
     private bool _disposed;
@@ -60,7 +59,10 @@ public sealed class ComponentTelemetryContext : IDisposable
             Properties[TelemetryPropertyKeys.UserAgent] = new AspireTelemetryProperty(browserUserAgent);
         }
 
-        _initializeCorrelation = telemetryService.PostUserTask(
+        // Record usage now as a log rather than keeping a span open until component disposal.
+        // Spans are only exported when completed, so terminating the dashboard without graceful
+        // disposal could otherwise lose this usage data.
+        telemetryService.RecordEvent(
             TelemetryEventKeys.ComponentInitialize,
             TelemetryResult.Success,
             properties: CreateInitializeAndDisposeProperties());
@@ -87,13 +89,13 @@ public sealed class ComponentTelemetryContext : IDisposable
 
         if (anyChange)
         {
-            PostProperties(logger);
+            RecordProperties(logger);
         }
 
         return anyChange;
     }
 
-    private void PostProperties(ILogger logger)
+    private void RecordProperties(ILogger logger)
     {
         if (_telemetryService == null)
         {
@@ -101,11 +103,10 @@ public sealed class ComponentTelemetryContext : IDisposable
             return;
         }
 
-        _telemetryService.PostOperation(
+        _telemetryService.RecordEvent(
             TelemetryEventKeys.ParametersSet,
             TelemetryResult.Success,
-            properties: Properties,
-            correlatedWith: _initializeCorrelation?.Properties);
+            properties: Properties);
     }
 
     private Dictionary<string, AspireTelemetryProperty> CreateInitializeAndDisposeProperties()
@@ -122,11 +123,10 @@ public sealed class ComponentTelemetryContext : IDisposable
     {
         if (!_disposed)
         {
-            _telemetryService?.PostOperation(
+            _telemetryService?.RecordEvent(
                 TelemetryEventKeys.ComponentDispose,
                 TelemetryResult.Success,
-                properties: CreateInitializeAndDisposeProperties(),
-                correlatedWith: _initializeCorrelation?.Properties);
+                properties: CreateInitializeAndDisposeProperties());
 
             _disposed = true;
         }

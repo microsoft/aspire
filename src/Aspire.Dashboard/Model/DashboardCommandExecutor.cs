@@ -41,29 +41,24 @@ public sealed class DashboardCommandExecutor(
             _executingCommands.Add(executingCommandKey);
         }
 
-        var startEvent = telemetryService.StartOperation(TelemetryEventKeys.ExecuteCommand,
-            new Dictionary<string, AspireTelemetryProperty>
-            {
-                { TelemetryPropertyKeys.ResourceType, new AspireTelemetryProperty(TelemetryPropertyValues.GetResourceTypeTelemetryValue(resource.ResourceType, resource.SupportsDetailedTelemetry)) },
-                { TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty(TelemetryPropertyValues.GetCommandNameTelemetryValue(command.Name)) },
-            });
-
-        var operationId = startEvent.Properties.FirstOrDefault();
-
         try
         {
-            await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+            // End command telemetry before the UI's recovery delay in the finally block.
+            using var activity = telemetryService.StartOperation(TelemetryEventKeys.ExecuteCommand,
+                new Dictionary<string, AspireTelemetryProperty>
+                {
+                    { TelemetryPropertyKeys.ResourceType, new AspireTelemetryProperty(TelemetryPropertyValues.GetResourceTypeTelemetryValue(resource.ResourceType, resource.SupportsDetailedTelemetry)) },
+                    { TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty(TelemetryPropertyValues.GetCommandNameTelemetryValue(command.Name)) },
+                });
 
-            if (operationId is not null)
+            try
             {
-                telemetryService.EndOperation(operationId, TelemetryResult.Success);
+                await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+                telemetryService.SetOperationResult(activity, TelemetryResult.Success);
             }
-        }
-        catch (Exception ex)
-        {
-            if (operationId is not null)
+            catch (Exception)
             {
-                telemetryService.EndOperation(operationId, TelemetryResult.Failure, ex.Message);
+                telemetryService.SetOperationResult(activity, TelemetryResult.Failure);
             }
         }
         finally

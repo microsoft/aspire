@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Shared.Telemetry;
 using OpenTelemetry;
 
 namespace Aspire.Cli.Telemetry;
@@ -10,7 +11,7 @@ namespace Aspire.Cli.Telemetry;
 /// Processor that applies background-calculated telemetry tags to activities before export.
 /// Tags are sourced from <see cref="TelemetryTagsSource"/> which computes machine/identity
 /// information asynchronously at startup. Event-level enrichment is handled separately in
-/// <see cref="AspireCliTelemetry.RecordError"/> at event creation time.
+/// <see cref="AspireTelemetryBase.RecordError"/> at event creation time.
 /// </summary>
 internal sealed class CliTagEnrichmentProcessor : BaseProcessor<Activity>
 {

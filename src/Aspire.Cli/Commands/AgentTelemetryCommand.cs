@@ -7,6 +7,7 @@ using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -24,7 +25,7 @@ namespace Aspire.Cli.Commands;
 /// The opt-out (<c>ASPIRE_CLI_TELEMETRY_OPTOUT</c>) and the suppression of the generic
 /// <c>aspire/cli/main</c> span for this command path are handled in
 /// <see cref="TelemetryManager"/> and <c>Program</c> before the host is built. When telemetry is
-/// opted out no reported provider is created, so <see cref="AspireCliTelemetry.StartReportedActivity(string, System.Diagnostics.ActivityKind)"/>
+/// opted out no reported provider is created, so <see cref="AspireTelemetryBase.StartReportedActivity(string, System.Diagnostics.ActivityKind)"/>
 /// returns <see langword="null"/> here and the command is a no-op.
 /// </remarks>
 internal sealed class AgentTelemetryCommand : BaseCommand

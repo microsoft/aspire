@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils;
-using Azure.Monitor.OpenTelemetry.Exporter;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using OpenTelemetry;
 using OpenTelemetry.Resources;
@@ -33,7 +33,7 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal sealed class TelemetryManager : IDisposable
 {
-    // Remote export connection string for Application Insights. Intentionally hard-coded.
+    // Remote export connection string for CLI Application Insights. Intentionally hard-coded.
     private const string ApplicationInsightsConnectionString = "InstrumentationKey=e39510fc-95a1-423d-9f33-6121bf0d2113;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=4d8bb9db-b7ab-49f9-978b-80ae1e83f6da";
 
 #if DEBUG
@@ -173,24 +173,7 @@ internal sealed class TelemetryManager : IDisposable
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
             var azureMonitorBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.ReportedActivitySourceName, resource, tagsSource)
-                .AddAzureMonitorTraceExporter(o =>
-                {
-                    o.ConnectionString = ApplicationInsightsConnectionString;
-                    o.EnableLiveMetrics = false;
-                    o.StorageDirectory = GetTelemetryStoragePath();
-
-                    // Capture 100% of reported telemetry. The exporter defaults to a RateLimitedSampler
-                    // (TracesPerSecond = 5), which keeps a span with probability
-                    // min(elapsed_since_provider_built * tracesPerSecond, 1). That model assumes a
-                    // long-lived, high-volume process; the CLI is the opposite (fire-and-forget, often a
-                    // single span per process), so every span is judged at cold-start probability and
-                    // ~half are silently dropped as a startup-timing artifact rather than a deliberate
-                    // policy. Reported volume is a handful of spans per run, so full capture is cheap and
-                    // is what adoption analytics needs. TracesPerSecond takes precedence over SamplingRatio
-                    // in the exporter, so it must be nulled for the 100% ratio to take effect.
-                    o.TracesPerSecond = null;
-                    o.SamplingRatio = 1.0f;
-                });
+                .AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, GetTelemetryStoragePath());
 
 #if DEBUG
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)

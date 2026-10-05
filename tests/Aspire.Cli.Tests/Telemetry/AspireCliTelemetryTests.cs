@@ -97,7 +97,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_LogsError()
+    public void RecordError_LogsLocalAndStructuredErrors()
     {
         var logger = new FakeLogger<AspireCliTelemetry>();
         using var fixture = new TelemetryFixture(logger: logger);
@@ -105,10 +105,99 @@ public class AspireCliTelemetryTests
 
         fixture.Telemetry.RecordError("Error occurred", exception);
 
-        var logRecord = Assert.Single(logger.Collector.GetSnapshot());
-        Assert.Equal(LogLevel.Error, logRecord.Level);
-        Assert.Equal("Error occurred", logRecord.Message);
-        Assert.Same(exception, logRecord.Exception);
+        Assert.Collection(logger.Collector.GetSnapshot(),
+            local =>
+            {
+                Assert.Equal(LogLevel.Error, local.Level);
+                Assert.Equal("Error occurred", local.Message);
+                Assert.Same(exception, local.Exception);
+            },
+            reported =>
+            {
+                Assert.Equal(LogLevel.Information, reported.Level);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Message);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Id.Name);
+                Assert.Null(reported.Exception);
+                Assert.NotNull(reported.StructuredState);
+                Assert.Equal(typeof(InvalidOperationException).FullName,
+                    reported.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionType).Value);
+                Assert.Equal("Test exception",
+                    reported.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionMessage).Value);
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RecordEvent_LogsWithDefaultTagsAndUsesReportedActivityWhenPresent(bool withActivity)
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
+        using var activity = withActivity ? fixture.Telemetry.StartReportedActivity("test-activity") : null;
+        var current = Activity.Current;
+
+        fixture.Telemetry.RecordEvent("test-event", [new("test.property", 42)]);
+
+        Assert.Same(current, Activity.Current);
+        var log = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Information, log.Level);
+        Assert.Equal("test-event", log.Message);
+        Assert.Equal("test-event", log.Id.Name);
+        Assert.Null(log.Exception);
+        Assert.NotNull(log.StructuredState);
+        Assert.Equal("42", log.StructuredState.Single(t => t.Key == "test.property").Value);
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
+        Assert.NotEmpty(defaultTags);
+        foreach (var tag in defaultTags)
+        {
+            Assert.Equal(tag.Value?.ToString(), log.StructuredState.Single(t => t.Key == tag.Key).Value);
+        }
+        if (withActivity)
+        {
+            Assert.NotNull(activity);
+            var activityEvent = Assert.Single(activity.Events);
+            Assert.Equal("test-event", activityEvent.Name);
+            Assert.Equal(42, activityEvent.Tags.Single(t => t.Key == "test.property").Value);
+            Assert.Equal(defaultTags.Count + 1, activityEvent.Tags.Count());
+            foreach (var tag in defaultTags)
+            {
+                Assert.Equal(tag.Value, activityEvent.Tags.Single(t => t.Key == tag.Key).Value);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void RecordEvent_InvalidName_ThrowsWithoutLogging(string? eventName)
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
+
+        Assert.ThrowsAny<ArgumentException>(() => fixture.Telemetry.RecordEvent(eventName!));
+
+        Assert.Empty(logger.Collector.GetSnapshot());
+    }
+
+    [Fact]
+    public void TelemetryOptOut_SuppressesStructuredEventsAndErrorsButPreservesLocalErrors()
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger,
+            telemetryConfiguration: new TelemetryConfiguration { ReportedTelemetryEnabled = false });
+        using var activity = fixture.Telemetry.StartReportedActivity("test-activity");
+        Assert.NotNull(activity);
+        var exception = new InvalidOperationException("Test exception");
+
+        fixture.Telemetry.RecordEvent("test-event");
+        fixture.Telemetry.RecordError("Local error", exception);
+
+        Assert.Empty(activity.Events);
+        var log = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Error, log.Level);
+        Assert.Equal("Local error", log.Message);
+        Assert.Same(exception, log.Exception);
     }
 
     [Fact]
@@ -143,18 +232,23 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_DoesNotThrow_WhenNoActivityIsActive()
+    public void RecordError_LogsStructuredEvent_WhenNoActivityIsActive()
     {
         var logger = new FakeLogger<AspireCliTelemetry>();
         using var fixture = new TelemetryFixture(logger: logger);
         var exception = new InvalidOperationException("Test exception");
 
-        // Should not throw even when there's no active activity
+        var current = Activity.Current;
         fixture.Telemetry.RecordError("Error occurred", exception);
 
-        // Verify logging still happens
-        var logRecord = Assert.Single(logger.Collector.GetSnapshot());
-        Assert.Equal(LogLevel.Error, logRecord.Level);
+        Assert.Same(current, Activity.Current);
+        Assert.Collection(logger.Collector.GetSnapshot(),
+            local => Assert.Equal(LogLevel.Error, local.Level),
+            reported =>
+            {
+                Assert.Equal(LogLevel.Information, reported.Level);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Message);
+            });
     }
 
     [Fact]
@@ -193,7 +287,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_DoesNotRecordEvent_WhenOnlyDiagnosticActivityIsActive()
+    public void RecordError_LogsWithoutActivityEvent_WhenOnlyDiagnosticActivityIsActive()
     {
         var logger = new FakeLogger<AspireCliTelemetry>();
         using var fixture = new TelemetryFixture(logger: logger);
@@ -204,13 +298,16 @@ public class AspireCliTelemetryTests
 
         fixture.Telemetry.RecordError("Error occurred", exception);
 
-        // FindKnownActivity only looks for ReportedActivitySource, so no event should be added
         Assert.Empty(activity.Events);
         Assert.Equal(ActivityStatusCode.Unset, activity.Status);
 
-        // But logging should still happen
-        var logRecord = Assert.Single(logger.Collector.GetSnapshot());
-        Assert.Equal(LogLevel.Error, logRecord.Level);
+        Assert.Collection(logger.Collector.GetSnapshot(),
+            local => Assert.Equal(LogLevel.Error, local.Level),
+            reported =>
+            {
+                Assert.Equal(LogLevel.Information, reported.Level);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Message);
+            });
     }
 
     [Fact]

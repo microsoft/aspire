@@ -114,7 +114,11 @@ internal sealed class TelemetryFixture : IDisposable
     public Activity? CapturedActivity { get; private set; }
 
     /// <inheritdoc/>
-    public void Dispose() => _listener.Dispose();
+    public void Dispose()
+    {
+        Telemetry.Dispose();
+        _listener.Dispose();
+    }
 
     /// <summary>
     /// A test implementation of <see cref="IMachineInformationProvider"/> with configurable values.
