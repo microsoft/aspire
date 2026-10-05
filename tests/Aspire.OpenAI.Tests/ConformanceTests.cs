@@ -41,7 +41,7 @@ public class ConformanceTests : ConformanceTests<IChatClient, OpenAISettings>
 
     protected override string ActivitySourceName => "Experimental.Microsoft.Extensions.AI";
 
-    protected override string[] RequiredLogCategories => [];
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
     protected override string? ConfigurationSectionName => "Aspire:OpenAI";
 

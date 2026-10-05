@@ -11,8 +11,16 @@ namespace Aspire.Cli.DotNet;
 /// <summary>
 /// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH.
 /// </summary>
-internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNetSdkInstaller
+internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironment environment) : IDotNetSdkInstaller
 {
+    private readonly Func<string, string, ProcessStartInfo> _createProcessStartInfo = CreateProcessStartInfo;
+
+    internal DotNetSdkInstaller(IConfiguration configuration, IEnvironment environment, Func<string, string, ProcessStartInfo> createProcessStartInfo)
+        : this(configuration, environment)
+    {
+        _createProcessStartInfo = createProcessStartInfo;
+    }
+
     /// <summary>
     /// The minimum .NET SDK version required for Aspire.
     /// </summary>
@@ -23,67 +31,73 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
     {
         var minimumVersion = GetEffectiveMinimumSdkVersion(configuration);
 
+        // An invalid overrideMinimumSdkVersion can never be satisfied, so don't bother launching dotnet.
+        if (!SemVersion.TryParse(minimumVersion, SemVersionStyles.Strict, out var minVersion))
+        {
+            return (false, null, minimumVersion);
+        }
+
         try
         {
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
+            var dotnetPath = ResolveDotNetPath(environment);
 
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "dotnet",
-                    Arguments = arguments,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                }
-            };
+            using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
             process.Start();
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode != 0)
-            {
-                return (false, null, minimumVersion);
-            }
-
-            // Parse the minimum version requirement
-            if (!SemVersion.TryParse(minimumVersion, SemVersionStyles.Strict, out var minVersion))
-            {
-                return (false, null, minimumVersion);
-            }
-
-            // Parse each line of the output to find SDK versions
-            var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             SemVersion? highestDetectedVersion = null;
-            bool meetsMinimum = false;
+            var meetsMinimum = false;
 
-            foreach (var line in lines)
+            try
             {
-                // Each line is in format: "version [path]"
-                var spaceIndex = line.IndexOf(' ');
-                if (spaceIndex > 0)
+                await foreach (var line in process.ReadAllLinesAsync(cancellationToken))
                 {
-                    var versionString = line[..spaceIndex];
-                    if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var sdkVersion))
+                    if (line.StandardError)
                     {
-                        // Track the highest version
-                        if (highestDetectedVersion == null || SemVersion.ComparePrecedence(sdkVersion, highestDetectedVersion) > 0)
+                        continue;
+                    }
+
+                    // SDK records are emitted as "11.0.100 [path]"; diagnostics on stderr
+                    // are drained by ReadAllLinesAsync but must not be treated as SDKs.
+                    var spaceIndex = line.Content.IndexOf(' ');
+                    if (spaceIndex > 0 && SemVersion.TryParse(line.Content[..spaceIndex], SemVersionStyles.Strict, out var sdkVersion))
+                    {
+                        if (highestDetectedVersion is null || SemVersion.ComparePrecedence(sdkVersion, highestDetectedVersion) > 0)
                         {
                             highestDetectedVersion = sdkVersion;
                         }
 
-                        // Check if this version meets the minimum requirement
                         if (MeetsMinimumRequirement(sdkVersion, minVersion, minimumVersion))
                         {
                             meetsMinimum = true;
                         }
                     }
                 }
+
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // RunAndCaptureTextAsync only kills the root process on cancellation. The doctor
+                // timeout must also stop any descendants, so retain explicit process ownership.
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync(CancellationToken.None);
+                }
+                catch (InvalidOperationException)
+                {
+                    // The process exited between cancellation and the kill attempt.
+                }
+
+                throw;
+            }
+
+            if (process.ExitCode != 0)
+            {
+                return (false, null, minimumVersion);
             }
 
             return (meetsMinimum, highestDetectedVersion?.ToString(), minimumVersion);
@@ -93,6 +107,24 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             // If we can't start the process, the SDK is not available
             return (false, null, minimumVersion);
         }
+    }
+
+    // Use the explicit Windows executable name so lookup still finds dotnet.exe when PATHEXT omits .EXE
+    // and does not select an extensionless PATH entry that Process.Start cannot execute on Windows.
+    internal static string ResolveDotNetPath(IEnvironment environment) =>
+        PathLookupHelper.ResolveExecutablePath(environment.IsWindows() ? "dotnet.exe" : "dotnet");
+
+    private static ProcessStartInfo CreateProcessStartInfo(string dotnetPath, string arguments)
+    {
+        return new ProcessStartInfo
+        {
+            FileName = dotnetPath,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
     }
 
     /// <summary>

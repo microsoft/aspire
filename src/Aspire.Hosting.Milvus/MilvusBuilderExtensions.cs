@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Milvus;
+using Aspire.Dashboard.Model;
 
 namespace Aspire.Hosting;
 
@@ -56,6 +57,7 @@ public static class MilvusBuilderExtensions
         return builder.AddResource(milvus)
             .WithImage(MilvusContainerImageTags.Image, MilvusContainerImageTags.Tag)
             .WithImageRegistry(MilvusContainerImageTags.Registry)
+            .WithIconName("DatabaseMultiple")
             .WithHttpEndpoint(port: grpcPort, targetPort: MilvusPortGrpc, name: MilvusServerResource.PrimaryEndpointName)
             .WithEndpoint(MilvusServerResource.PrimaryEndpointName, endpoint =>
             {
@@ -108,7 +110,8 @@ public static class MilvusBuilderExtensions
 
         builder.Resource.AddDatabase(name, databaseName);
         var milvusDatabaseResource = new MilvusDatabaseResource(name, databaseName, builder.Resource);
-        return builder.ApplicationBuilder.AddResource(milvusDatabaseResource);
+        return builder.ApplicationBuilder.AddResource(milvusDatabaseResource)
+            .WithIconName("Database");
     }
 
     /// <summary>
@@ -147,9 +150,19 @@ public static class MilvusBuilderExtensions
         var resourceBuilder = builder.ApplicationBuilder.AddResource(attuContainer)
                                                         .WithImage(MilvusContainerImageTags.AttuImage, MilvusContainerImageTags.AttuTag)
                                                         .WithImageRegistry(MilvusContainerImageTags.Registry)
-                                                        .WithHttpEndpoint(targetPort: 3000, name: "http")
+                                                        .WithIconName("WindowDatabase")
+                                                        .WithHttpEndpoint(targetPort: 3000, name: AttuResource.PrimaryEndpointName)
                                                         .WithEnvironment(context => ConfigureAttuContainer(context, builder.Resource))
+                                                        .WithParentRelationship(builder)
+                                                        .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                                                         .ExcludeFromManifest();
+
+        resourceBuilder.WithHidden();
+        builder.WithUrlForEndpoint(attuContainer.PrimaryEndpoint, url =>
+        {
+            url.DisplayText = "Manage";
+            url.DisplayOrder = 1;
+        });
 
         configureContainer?.Invoke(resourceBuilder);
 

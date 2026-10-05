@@ -1,0 +1,9 @@
+plugins {
+    // Lets Gradle provision the JDK the toolchain asks for instead of failing when the machine only has
+    // a different release installed. Without it, this build only works on a host that already has a
+    // JDK 21 on disk.
+    // https://docs.gradle.org/current/userguide/toolchains.html#sub:download_repositories
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'orders'

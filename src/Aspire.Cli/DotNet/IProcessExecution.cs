@@ -4,9 +4,12 @@
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Represents a configured process execution that can be started and awaited.
+/// Represents a configured process execution that can be started and awaited. Disposal is
+/// asynchronous because the underlying primitive drains its stdout/stderr pumps and releases the
+/// anonymous pipes + console handles it owns (the isolated-console path on Windows), which cannot
+/// be done from a synchronous <see cref="IDisposable.Dispose"/> without blocking.
 /// </summary>
-internal interface IProcessExecution : IDisposable
+internal interface IProcessExecution : IAsyncDisposable
 {
     /// <summary>
     /// Gets the file name of the executable to run.
@@ -26,13 +29,19 @@ internal interface IProcessExecution : IDisposable
     /// <summary>
     /// Starts the execution.
     /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns><c>true</c> if the process was started successfully; otherwise, <c>false</c>.</returns>
-    bool Start();
+    Task<bool> StartAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets the process ID. Only valid after <see cref="Start"/> returns <c>true</c>.
+    /// Gets the process ID. Only valid after <see cref="StartAsync"/> returns <c>true</c>.
     /// </summary>
     int ProcessId { get; }
+
+    /// <summary>
+    /// Gets the process start time, when available. Only valid after <see cref="StartAsync"/> returns <c>true</c>.
+    /// </summary>
+    DateTimeOffset? StartTime { get; }
 
     /// <summary>
     /// Waits for the process to exit asynchronously.
@@ -42,7 +51,7 @@ internal interface IProcessExecution : IDisposable
     Task<int> WaitForExitAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets a value indicating whether the process has exited. Only valid after <see cref="Start"/> returns <c>true</c>.
+    /// Gets a value indicating whether the process has exited. Only valid after <see cref="StartAsync"/> returns <c>true</c>.
     /// </summary>
     bool HasExited { get; }
 

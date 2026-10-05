@@ -4,11 +4,8 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Certificates;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -19,8 +16,8 @@ internal sealed class CertificatesCleanCommand : BaseCommand
 {
     private readonly ICertificateToolRunner _certificateToolRunner;
 
-    public CertificatesCleanCommand(ICertificateToolRunner certificateToolRunner, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("clean", CertificatesCommandStrings.CleanDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+    public CertificatesCleanCommand(ICertificateToolRunner certificateToolRunner, CommonCommandServices services)
+        : base("clean", CertificatesCommandStrings.CleanDescription, services)
     {
         _certificateToolRunner = certificateToolRunner;
     }

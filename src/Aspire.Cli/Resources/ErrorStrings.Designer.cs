@@ -418,11 +418,20 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them..
+        ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version..
         /// </summary>
         public static string CodegenVersionSkewWarning {
             get {
                 return ResourceManager.GetString("CodegenVersionSkewWarning", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning..
+        /// </summary>
+        public static string LegacyTypeScriptAppHostWarning {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostWarning", resourceCulture);
             }
         }
 
@@ -477,6 +486,42 @@ namespace Aspire.Cli.Resources {
         public static string ConfigurationFileMustBeJsonObject {
             get {
                 return ResourceManager.GetString("ConfigurationFileMustBeJsonObject", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The integration project could not be built..
+        /// </summary>
+        public static string IntegrationBuildFailed {
+            get {
+                return ResourceManager.GetString("IntegrationBuildFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The integration project could not be built because a referenced project requires a newer version of Aspire.Hosting than this Aspire CLI ({0}) provides. The AppHost server is the CLI itself, so project references in aspire.config.json must target the same version the CLI ships. Either use an Aspire CLI that matches the referenced projects, or reference published packages instead of local projects..
+        /// </summary>
+        public static string IntegrationBuildPackageDowngradeFailed {
+            get {
+                return ResourceManager.GetString("IntegrationBuildPackageDowngradeFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to SDK API export is not supported for {0} because it does not use a code generator..
+        /// </summary>
+        public static string SdkExportLanguageDoesNotSupportCodeGeneration {
+            get {
+                return ResourceManager.GetString("SdkExportLanguageDoesNotSupportCodeGeneration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to SDK API export cannot export {0} because that package supplies the selected language&apos;s code generator instead of an integration API surface..
+        /// </summary>
+        public static string SdkExportGeneratorPackageNotExportable {
+            get {
+                return ResourceManager.GetString("SdkExportGeneratorPackageNotExportable", resourceCulture);
             }
         }
     }

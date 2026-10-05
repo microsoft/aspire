@@ -15,8 +15,7 @@ public sealed class GenerateTestSummaryFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        var repoRoot = FindRepoRoot();
-        ToolProjectPath = Path.Combine(repoRoot, "tools", "GenerateTestSummary", "GenerateTestSummary.csproj");
+        ToolProjectPath = Path.Combine(RepoRoot.Path, "tools", "GenerateTestSummary", "GenerateTestSummary.csproj");
 
         if (!File.Exists(ToolProjectPath))
         {
@@ -63,20 +62,4 @@ public sealed class GenerateTestSummaryFixture : IAsyncLifetime
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Aspire.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not find repository root (looking for Aspire.slnx).");
-    }
 }

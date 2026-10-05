@@ -44,8 +44,9 @@ fi
 
 # Auto-detect PR identity from .nupkg filenames (e.g. "Aspire.Hosting.AppHost.13.4.0-pr.16820.g3703c5c4.nupkg")
 # so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
-# resolves to ("pr-<N>"). Main branch validation passes ASPIRE_CLI_CHANNEL=daily
-# because main-built packages do not carry a PR suffix.
+# resolves to ("pr-<N>"). Main branch validation passes ASPIRE_CLI_CHANNEL=local
+# because main-built packages do not carry a PR suffix and local is already a
+# local-build channel.
 #
 # Anchor on Aspire.Hosting.AppHost because:
 #   - It is the core MSBuild SDK package every AppHost references; removing/renaming it

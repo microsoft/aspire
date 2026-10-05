@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,51 @@ namespace Aspire.Cli.Commands;
 
 internal static class InstallationInfoOutput
 {
-    public static async Task<IReadOnlyList<InstallationInfo>> DiscoverAllSafelyAsync(
+    internal static readonly TimeSpan s_defaultDiscoveryTimeout = TimeSpan.FromSeconds(30);
+
+    public static Task<IReadOnlyList<InstallationInfo>> DiscoverAllSafelyAsync(
+        IInstallationDiscovery discovery,
+        WingetFirstRunProbe wingetFirstRunProbe,
+        ILogger logger,
+        CancellationToken cancellationToken)
+        => DiscoverAllSafelyAsync(discovery, wingetFirstRunProbe, logger, s_defaultDiscoveryTimeout, cancellationToken);
+
+    internal static async Task<IReadOnlyList<InstallationInfo>> DiscoverAllSafelyAsync(
+        IInstallationDiscovery discovery,
+        WingetFirstRunProbe wingetFirstRunProbe,
+        ILogger logger,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+        // DiscoverAllCoreAsync catches and logs non-cancellation exceptions, so a task that
+        // continues after WaitAsync times out cannot later produce an unobserved fault.
+        var discoveryTask = Task.Run(
+            () => DiscoverAllCoreAsync(discovery, wingetFirstRunProbe, logger, timeoutCts.Token),
+            CancellationToken.None);
+
+        try
+        {
+            return await discoveryTask.WaitAsync(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            logger.LogWarning("Aspire CLI installation discovery timed out after {TimeoutSeconds} seconds.", timeout.TotalSeconds);
+            return CreateFailedDiscoveryRow(string.Format(
+                CultureInfo.CurrentCulture,
+                DoctorCommandStrings.InstallationDiscoveryTimedOutReasonFormat,
+                timeout.TotalSeconds));
+        }
+    }
+
+    private static async Task<IReadOnlyList<InstallationInfo>> DiscoverAllCoreAsync(
         IInstallationDiscovery discovery,
         WingetFirstRunProbe wingetFirstRunProbe,
         ILogger logger,
@@ -39,7 +84,7 @@ internal static class InstallationInfoOutput
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not discover Aspire CLI installations for doctor output.");
-            return CreateFailedDiscoveryRow();
+            return CreateFailedDiscoveryRow(DoctorCommandStrings.InstallationDiscoveryFailedReason);
         }
     }
 
@@ -59,7 +104,7 @@ internal static class InstallationInfoOutput
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Could not describe the running Aspire CLI installation for doctor self-probe output.");
-            return CreateFailedDiscoveryRow();
+            return CreateFailedDiscoveryRow(DoctorCommandStrings.InstallationDiscoveryFailedReason);
         }
     }
 
@@ -157,7 +202,7 @@ internal static class InstallationInfoOutput
         };
     }
 
-    private static IReadOnlyList<InstallationInfo> CreateFailedDiscoveryRow()
+    private static IReadOnlyList<InstallationInfo> CreateFailedDiscoveryRow(string reason)
     {
         return
         [
@@ -167,7 +212,7 @@ internal static class InstallationInfoOutput
                 CanonicalPath = null,
                 PathStatus = InstallationPathStatus.NotOnPath,
                 Status = InstallationInfoStatus.Failed,
-                StatusReason = DoctorCommandStrings.InstallationDiscoveryFailedReason,
+                StatusReason = reason,
             }
         ];
     }

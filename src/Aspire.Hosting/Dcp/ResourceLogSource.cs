@@ -52,6 +52,14 @@ internal sealed class ResourceLogSource<TResource>(
             SingleWriter = false
         });
 
+        // DCP emits Cwd only at debug verbosity for process execution. IDE run-session requests do not
+        // carry Spec.WorkingDirectory, so only supply the rendered value for the default/Process runner.
+        IReadOnlyList<KeyValuePair<string, string?>>? systemLogFields = resource is Executable executable
+            && executable.Spec.ExecutionType is null or "" or ExecutionType.Process
+            && !string.IsNullOrEmpty(executable.Spec.WorkingDirectory)
+            ? [new("WorkingDirectory", executable.Spec.WorkingDirectory)]
+            : null;
+
         async Task StreamLogsAsync(Stream stream, bool isError, bool parseDcpLogs)
         {
             try
@@ -70,8 +78,7 @@ internal sealed class ResourceLogSource<TResource>(
                     {
                         // Normalize carriage returns in the message content only.
                         var normalizedMessage = NormalizeCarriageReturns(parsedMessage);
-                        // Format system logs with [sys] prefix and improved readability
-                        line = DcpLogParser.FormatSystemLog(normalizedMessage);
+                        line = DcpLogParser.FormatSystemLog(normalizedMessage, systemLogFields);
                         lineIsError = isErrorLevel;
                         timestamp = dcpTimestamp?.UtcDateTime;
                         // Build raw content with the timestamp prefix so LogEntry.RawContent retains the timestamp for export.
@@ -114,14 +121,20 @@ internal sealed class ResourceLogSource<TResource>(
             var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, isError: false, parseDcpLogs: false), cancellationToken);
             streamTasks.Add(startupStderrStreamTask);
 
-            var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-            var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+            // Terminal-backed Executables bridge stdout/stderr through the PTY instead of DCP log files.
+            // DCP rejects those sources while keeping startup and system logs available.
+            // https://github.com/microsoft/dcp/blob/main/internal/logs/stdiologs/stdio_log_streamer.go
+            if (resource is not Executable { Spec.Terminal: not null })
+            {
+                var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+                var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
 
-            var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
-            streamTasks.Add(stdoutStreamTask);
+                var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
+                streamTasks.Add(stdoutStreamTask);
 
-            var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
-            streamTasks.Add(stderrStreamTask);
+                var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
+                streamTasks.Add(stderrStreamTask);
+            }
 
             var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
 

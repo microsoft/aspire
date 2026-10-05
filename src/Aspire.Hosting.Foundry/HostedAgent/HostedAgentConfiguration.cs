@@ -47,10 +47,12 @@ public partial class HostedAgentConfiguration(string image)
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
+    /// <remarks>
+    /// This collection has no configuration-level default. The <c>AsHostedAgent</c> overloads add the selected
+    /// protocol version before deployment, and the C# convenience overload defaults that selection to Responses 2.0.0.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0")
-    ];
+    public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [];
 
     private decimal _cpu = 2.0m;
 
@@ -116,14 +118,19 @@ public partial class HostedAgentConfiguration(string image)
     internal ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions(string targetResourceName)
     {
         ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
+        ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
+        ValidateProtocolVersions(targetResourceName);
 
         var def = new HostedAgentDefinition(
-            ContainerProtocolVersions,
             cpu: CpuString,
             memory: MemoryString)
         {
-            Image = Image
+            ContainerConfiguration = new ContainerConfiguration(Image)
         };
+        foreach (var protocolVersion in ProtocolVersions)
+        {
+            def.ProtocolVersions.Add(protocolVersion);
+        }
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
@@ -147,6 +154,14 @@ public partial class HostedAgentConfiguration(string image)
         return options;
     }
 
+    private void ValidateProtocolVersions(string? targetResourceName)
+    {
+        if (ProtocolVersions.Count == 0)
+        {
+            throw new DistributedApplicationException($"Foundry hosted agent for target resource '{targetResourceName}' must declare at least one protocol version.");
+        }
+    }
+
     private static void ValidateEnvironmentVariableNames(IEnumerable<string> environmentVariableNames, string? targetResourceName)
     {
         var invalidNames = environmentVariableNames
@@ -163,6 +178,30 @@ public partial class HostedAgentConfiguration(string image)
             $"Foundry hosted agent for target resource '{targetResourceName}' contains environment variable names that are not supported by Foundry Hosted Agents. " +
             $"Environment variable names must contain only ASCII letters, digits, or underscores. " +
             $"Invalid name(s): '{string.Join("', '", invalidNames)}'");
+    }
+
+    private static void ValidateEnvironmentVariableNamesAreNotReserved(IEnumerable<string> environmentVariableNames, string? targetResourceName)
+    {
+        var reservedNames = environmentVariableNames
+            .Where(IsReservedEnvironmentVariableName)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (reservedNames.Length == 0)
+        {
+            return;
+        }
+
+        throw new DistributedApplicationException(
+            $"Foundry hosted agent for target resource '{targetResourceName}' contains environment variable names that are reserved by Foundry Hosted Agents. " +
+            $"Reserved name(s): '{string.Join("', '", reservedNames)}'");
+    }
+
+    internal static bool IsReservedEnvironmentVariableName(string name)
+    {
+        return string.Equals(name, "PORT", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("FOUNDRY_", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("AGENT_", StringComparison.OrdinalIgnoreCase);
     }
 
     // hosted agent environment variables must contain only letters, digits, or underscores.

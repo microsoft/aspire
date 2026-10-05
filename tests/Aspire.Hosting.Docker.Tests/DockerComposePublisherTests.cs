@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,10 +19,10 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_GeneratesValidDockerComposeFile()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         // Arrange
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -95,8 +97,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Assert
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -105,12 +107,36 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConnectionStringNamesWithHyphens_PreserveBothAliases()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var aliases = Regex.Matches(compose, @"(?m)^\s+(ConnectionStrings__[^:]+):")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
+    }
+
+    [Fact]
     public async Task DockerComposeWithProjectResources()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         // Arrange
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -132,8 +158,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Assert
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -142,10 +168,30 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DockerComposeWithDotnetProjectUsesImagePlaceholderAndWaitDependency()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose").WithDashboard(false);
+        var api = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true);
+        builder.AddDotnetProject("worker", "worker.csproj", options => options.ExcludeLaunchProfile = true)
+            .WaitFor(api);
+        using var app = builder.Build();
+
+        app.Run();
+
+        var compose = File.ReadAllText(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var environment = File.ReadAllText(Path.Combine(workspace.Path, ".env"));
+        await Verify(compose, "yaml")
+            .AppendContentAsFile(environment, "env");
+    }
+
+    [Fact]
     public async Task DockerComposeCorrectlyEmitsPortMappings()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path)
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path)
             .WithTestAndResourceLogging(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
@@ -160,7 +206,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(60));
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         await Verify(File.ReadAllText(composePath), "yaml");
@@ -169,8 +215,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DockerComposeDoesNotHandleImageBuildingDuringPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "publish-docker-compose")
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-docker-compose")
             .WithTestAndResourceLogging(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
@@ -189,7 +235,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
         Assert.False(mockImageBuilder.BuildImageCalled);
     }
@@ -197,8 +243,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DockerComposeAppliesServiceCustomizations()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -227,6 +273,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
                 // Set a restart policy
                 composeService.Restart = "always";
 
+                composeService.ShmSize = "128mb";
+
                 composeService.ContainerName = containerNameParam.AsEnvironmentPlaceholder(serviceResource);
 
                 // Add a custom network
@@ -238,9 +286,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Assert
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(envPath));
 
         await Verify(File.ReadAllText(composePath), "yaml")
@@ -250,12 +298,12 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DockerComposeDoesNotOverwriteEnvFileOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         void PublishApp()
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
             builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
             builder.AddDockerComposeEnvironment("docker-compose");
@@ -281,12 +329,12 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DockerComposeAppendsNewKeysToEnvFileOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         void PublishApp(params string[] paramNames)
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
             builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
             builder.AddDockerComposeEnvironment("docker-compose");
@@ -320,10 +368,29 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DockerComposePreservesMultilineEnvValuesOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
+        File.WriteAllLines(envFilePath, ["BANNER='hello", "world'", "TAIL=preserved"]);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var parameter = builder.AddParameter("param1");
+        builder.AddContainer("app", "busybox").WithEnvironment("param1", parameter);
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(File.ReadAllText(envFilePath), "env");
+    }
+
+    [Fact]
     public async Task DockerComposeMapsPortsProperly()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -337,7 +404,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeFile = File.ReadAllText(composePath);
@@ -348,8 +415,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DockerComposeSetsServicePullPolicyFromAnnotation()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -363,7 +430,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -377,8 +444,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DockerComposeSetsServicePullPolicyManually()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -395,7 +462,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -409,8 +476,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DockerComposeSetsServicePrivilegedManually()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -426,7 +493,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -439,9 +506,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_WithDashboardEnabled_IncludesDashboardService()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -454,7 +521,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -463,11 +530,43 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithDashboard_HonorsRequiredOtlpProtocols()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("default", "my-default")
+            .WithOtlpExporter();
+
+        builder.AddContainer("grpc", "my-grpc")
+            .WithOtlpExporter(OtlpProtocol.Grpc);
+
+        builder.AddContainer("http-protobuf", "my-http-protobuf")
+            .WithOtlpExporter(OtlpProtocol.HttpProtobuf);
+
+        builder.AddContainer("http-json", "my-http-json")
+            .WithOtlpExporter(OtlpProtocol.HttpJson);
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithDashboardDisabled_DoesNotIncludeDashboardService()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -480,7 +579,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -488,12 +587,71 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         await Verify(composeContent, "yaml");
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishAsync_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        var hasEndpoint = compose.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = compose.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task PublishAsync_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard();
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+        var compose = await File.ReadAllTextAsync(composePath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", compose);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", compose);
+        Assert.False(compose.Contains("OTEL_DENO", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task PublishAsync_WithDashboard_UsesCustomConfiguration()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -508,7 +666,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -519,9 +677,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_MultipleResourcesWithOtlp_ConfiguresAllForDashboard()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -540,7 +698,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -551,8 +709,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_WithDockerfileFactory_WritesDockerfileToOutputFolder()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.AddDockerComposeEnvironment("docker-compose");
@@ -565,7 +723,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify Dockerfile was written to resource-specific path
-        var dockerfilePath = Path.Combine(tempDir.Path, "testcontainer.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "testcontainer.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
         var actualContent = await File.ReadAllTextAsync(dockerfilePath);
 
@@ -575,9 +733,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PublishAsync_InRunMode_DoesNotCreateDashboard()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -589,16 +747,16 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
 
         // In run mode, no compose file should be generated
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.False(File.Exists(composePath));
     }
 
     [Fact]
     public async Task PrepareStep_GeneratesCorrectEnvFileWithDefaultEnvironmentName()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Configuration["ConnectionStrings:cstest"] = "Server=localhost;Database=test";
 
@@ -616,7 +774,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
         await Verify(envFileContent, "env")
             .UseParameters("default-environment");
     }
@@ -624,9 +782,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareStep_GeneratesCorrectEnvFileWithCustomEnvironmentName()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         // Add a custom IHostEnvironment with a specific environment name
@@ -645,7 +803,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that the env file is created with the custom environment name
-        var envFilePath = Path.Combine(tempDir.Path, ".env.Staging");
+        var envFilePath = Path.Combine(workspace.Path, ".env.Staging");
         Assert.True(File.Exists(envFilePath), $"Expected env file at {envFilePath}");
 
         var envFileContent = await File.ReadAllTextAsync(envFilePath);
@@ -656,9 +814,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareStep_GeneratesEnvFileWithVariousParameterTypes()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Configuration["ConnectionStrings:dbConnection"] = "Server=localhost;Database=mydb";
 
@@ -679,7 +837,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
         await Verify(envFileContent, "env")
             .UseParameters("various-parameters");
     }
@@ -687,9 +845,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PrepareStep_OverwritesExistingEnvFileAndLogsWarning()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.WithTestAndResourceLogging(outputHelper);
 
@@ -701,7 +859,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment("PARAM1", param1);
 
         // Pre-create the env file to simulate it already existing
-        var envFilePath = Path.Combine(tempDir.Path, ".env.Production");
+        var envFilePath = Path.Combine(workspace.Path, ".env.Production");
         File.WriteAllText(envFilePath, "# Old content\nOLD_KEY=old_value\n");
 
         var app = builder.Build();
@@ -720,9 +878,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PrepareStep_OverwritesExistingEnvFileWithCustomEnvironmentName()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<Microsoft.Extensions.Hosting.IHostEnvironment>(new TestHostEnvironment("Staging"));
         builder.WithTestAndResourceLogging(outputHelper);
@@ -735,7 +893,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             .WithEnvironment("PARAM1", param1);
 
         // Pre-create the env file with custom environment name
-        var envFilePath = Path.Combine(tempDir.Path, ".env.Staging");
+        var envFilePath = Path.Combine(workspace.Path, ".env.Staging");
         File.WriteAllText(envFilePath, "# Old staging content\nOLD_STAGING_KEY=old_staging_value\n");
 
         var app = builder.Build();
@@ -750,9 +908,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareStep_ResolvesArbitraryIValueProviderSource()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose");
@@ -768,8 +926,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         // The compose file uses the user-specified container env var name; the .env file uses the
         // name derived from the provider's ValueExpression. Docker Compose interpolates between them.
-        var composeContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "docker-compose.yaml"));
-        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        var composeContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
         await Verify(composeContent, "yaml")
             .AppendContentAsFile(envFileContent, "env");
     }
@@ -777,9 +935,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PrepareStep_SkipsParameterResolutionWhenStaticDefaultIsSet()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         var environment = builder.AddDockerComposeEnvironment("docker-compose");
@@ -801,17 +959,19 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
         await Verify(envFileContent, "env");
     }
 
     [Fact]
     public async Task PrepareStep_ResolvesContainerImageReferenceViaIValueProvider()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "prepare-docker-compose");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
 
         builder.AddDockerComposeEnvironment("docker-compose");
 
@@ -825,7 +985,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
         await Verify(envFileContent, "env")
             // The image tag includes the current time (e.g. "aspire-deploy-20260525182406"); scrub it so the snapshot is stable across runs.
             .ScrubLinesWithReplace(line => Regex.Replace(line, @"aspire-deploy-\d{14}", "aspire-deploy-TIMESTAMP"));
@@ -834,9 +994,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_BindMounts_ReplacedWithEnvironmentPlaceholders()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -850,8 +1010,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -862,9 +1022,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_DockerSocket_NotReplacedWithPlaceholder()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -877,7 +1037,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         var composeContent = File.ReadAllText(composePath);
@@ -891,9 +1051,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_MixedBindMountsAndVolumes()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -901,15 +1061,15 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         // Add a container with both bind mounts and volumes
         builder.AddContainer("my-service", "my-image")
-            .WithVolume("my-volume", "/container/volume-data")
+            .WithVolume("my-volume", "/container/volume-data", env: "DATA_PATH")
             .WithBindMount("/host/path/data", "/container/bind-data")
             .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock");
 
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -918,11 +1078,36 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_ProjectAndExecutableVolumesIncludeEnvironmentPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false);
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
+        builder.AddExecutable("executable", "node", ".")
+            .PublishAsDockerFile()
+            .WithVolume("executable-data", "/srv/executable", env: "DATA_PATH");
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        await Verify(File.ReadAllText(composePath), "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_ConfigureEnvFile_AllowsMutatingCapturedEnvVars()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -947,8 +1132,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -959,9 +1144,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_ConfigureEnvFile_CanRemoveGeneratedPlaceholder()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         // Create a parameter for the cert directory
@@ -995,8 +1180,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -1013,9 +1198,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         builder.AddDockerComposeEnvironment("docker-compose")
@@ -1029,8 +1214,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
-        var envPath = Path.Combine(tempDir.Path, ".env");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
+        var envPath = Path.Combine(workspace.Path, ".env");
         Assert.True(File.Exists(composePath));
         Assert.True(File.Exists(envPath));
 
@@ -1041,8 +1226,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -1073,7 +1258,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         await Verify(File.ReadAllText(composePath), "yaml");
@@ -1082,8 +1267,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -1107,7 +1292,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composePath = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composePath));
 
         await Verify(File.ReadAllText(composePath), "yaml");

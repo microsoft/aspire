@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.Loader;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
@@ -67,6 +68,64 @@ internal sealed class AssemblyLoader
             activity.SetError(ex);
             throw;
         }
+    }
+
+    public bool TryGetPackageAssemblyNamesFromProbePaths(
+        string packageId,
+        string packageVersion,
+        out IReadOnlyList<string> assemblyNames,
+        [NotNullWhen(true)] out string? canonicalPackageId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageVersion);
+
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        canonicalPackageId = null;
+
+        foreach (var assembly in _packageProbeManifest.ManagedAssemblies)
+        {
+            if (assembly.Culture is not null)
+            {
+                continue;
+            }
+
+            if (assembly.PackageId is not null &&
+                assembly.PackageVersion is not null)
+            {
+                if (string.Equals(assembly.PackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(assembly.PackageVersion, packageVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalPackageId ??= assembly.PackageId;
+                    names.Add(assembly.Name);
+                }
+
+                continue;
+            }
+
+            // Older manifests do not record package versions, so package ownership must be
+            // recovered from the conventional global-packages path when possible.
+            if (TryGetPackageIdentityFromAssetPath(assembly.Path, out var pathPackageId, out var pathPackageVersion) &&
+                string.Equals(pathPackageId, packageId, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(pathPackageVersion, packageVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                if (assembly.PackageId is not null &&
+                    string.Equals(assembly.PackageId, packageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    canonicalPackageId ??= assembly.PackageId;
+                }
+
+                names.Add(assembly.Name);
+            }
+        }
+
+        assemblyNames = names.ToList();
+        if (assemblyNames.Count == 0)
+        {
+            return false;
+        }
+
+        canonicalPackageId ??= packageId;
+        return true;
     }
 
     /// <summary>
@@ -143,6 +202,45 @@ internal sealed class AssemblyLoader
         }
 
         return assemblyNames;
+    }
+
+    private static bool TryGetPackageIdentityFromAssetPath(
+        string assemblyPath,
+        [NotNullWhen(true)] out string? packageId,
+        [NotNullWhen(true)] out string? packageVersion)
+    {
+        // NuGet managed assets use either:
+        //   <root>/<package-id>/<version>/lib|ref/<tfm>/<assembly>
+        //   <root>/<package-id>/<version>/runtimes/<rid>/lib/<tfm>/<assembly>
+        // Matching from the assembly upward keeps this export-only lookup independent of the
+        // configured global-packages root without guessing across unrelated restored packages.
+        var targetFrameworkDirectory = Directory.GetParent(assemblyPath);
+        var assetKindDirectory = targetFrameworkDirectory?.Parent;
+        var isLibAsset = string.Equals(assetKindDirectory?.Name, "lib", StringComparison.OrdinalIgnoreCase);
+        var isRefAsset = string.Equals(assetKindDirectory?.Name, "ref", StringComparison.OrdinalIgnoreCase);
+        var versionDirectory = assetKindDirectory?.Parent;
+        if (isLibAsset &&
+            versionDirectory?.Parent is { } runtimesDirectory &&
+            string.Equals(runtimesDirectory.Name, "runtimes", StringComparison.OrdinalIgnoreCase))
+        {
+            versionDirectory = runtimesDirectory.Parent;
+        }
+
+        var packageDirectory = versionDirectory?.Parent;
+
+        if (assetKindDirectory is null ||
+            versionDirectory is null ||
+            packageDirectory is null ||
+            (!isLibAsset && !isRefAsset))
+        {
+            packageId = null;
+            packageVersion = null;
+            return false;
+        }
+
+        packageId = packageDirectory.Name;
+        packageVersion = versionDirectory.Name;
+        return true;
     }
 
     internal static IReadOnlyList<string> DiscoverAspireHostingAssemblies(IEnumerable<string?> directories, IEnumerable<string>? manifestAssemblyNames = null)
@@ -226,13 +324,25 @@ internal sealed class AssemblyLoader
     /// libs directory at a different identity than what the default context provides.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// This is a defense against a real failure mode: when the bundled <c>Aspire.TypeSystem</c>
-    /// (compiled into the apphost server's single-file executable) and the libs copy
-    /// (restored alongside <c>Aspire.Hosting.*.dll</c>) report different assembly versions or MVIDs,
-    /// integration assemblies that reference the libs copy will fail to bind their type
-    /// references through the default context. The resulting <see cref="ReflectionTypeLoadException"/>
-    /// would otherwise be swallowed silently and surface only as a downstream "no code generator
-    /// found" / "no language support found" error with no actionable diagnostic.
+    /// (compiled into the apphost server's single-file executable) and the libs copy (restored
+    /// alongside <c>Aspire.Hosting.*.dll</c>) report different assembly versions or MVIDs,
+    /// integration assemblies that reference the libs copy will fail to bind their type references
+    /// through the default context. The resulting <see cref="ReflectionTypeLoadException"/> would
+    /// otherwise be swallowed silently and surface only as a downstream "no code generator found"
+    /// or "no language support found" error with no actionable diagnostic.
+    /// </para>
+    /// <para>
+    /// <c>Aspire.TypeSystem</c> freezes its strong-name <c>AssemblyVersion</c> at a fixed constant
+    /// (see <c>src/Aspire.TypeSystem/Aspire.TypeSystem.csproj</c> for the full rationale). The CLR
+    /// satisfies a strong-named reference when the loaded (bundled) copy's version is <c>&gt;=</c>
+    /// the requested version, so the only failing configuration is a bundled copy STRICTLY LOWER
+    /// than the libs copy -- an already-shipped old CLI paired with post-freeze libs. The warning
+    /// below trips only on that case; the supported "new CLI + older SDK" direction (bundled
+    /// <c>&gt;=</c> libs, including a same-version/differing-MVID daily-SDK pairing) binds and is
+    /// logged at Debug only.
+    /// </para>
     /// </remarks>
     private static void WarnIfSharedAssemblyMismatch(string? integrationLibsPath, ILogger logger)
     {
@@ -271,14 +381,16 @@ internal sealed class AssemblyLoader
             var defaultName = defaultAsm.GetName();
             var defaultMvid = defaultAsm.ManifestModule.ModuleVersionId;
 
-            if (defaultName.Version != probedName.Version)
+            if (defaultName.Version < probedName.Version)
             {
+                // Bundled copy strictly lower: it cannot satisfy the libs' strong-named reference,
+                // so integrations are silently skipped during type discovery -- surface it.
                 logger.LogWarning(
-                    "Shared assembly '{AssemblyName}' version mismatch: bundled={BundledVersion}, libs={LibsVersion} ({LibsPath}). " +
-                    "Integration assemblies referencing this assembly from the libs directory will fail to bind their type " +
-                    "references through the default load context, which causes integrations to be silently skipped during type discovery. " +
-                    "This typically indicates the apphost server bundle and the restored integration packages were produced by " +
-                    "different build configurations.",
+                    "Shared assembly '{AssemblyName}' version too low: bundled={BundledVersion}, libs={LibsVersion} ({LibsPath}). " +
+                    "The bundled copy is older than the integration packages and cannot satisfy their strong-named reference, " +
+                    "so integration assemblies will fail to bind their type references through the default load context and be " +
+                    "silently skipped during type discovery. The apphost server (CLI) is older than the restored Aspire packages; " +
+                    "update the Aspire CLI to a version at least as new as the packages.",
                     sharedName,
                     defaultName.Version,
                     probedName.Version,
@@ -286,11 +398,12 @@ internal sealed class AssemblyLoader
                 continue;
             }
 
-            // Same version, but different MVID (compiled from different sources) is also a binary-incompatibility risk.
-            // We can't read the probed MVID without loading the assembly, which we deliberately don't do here.
-            // Logging the bundled MVID at Debug helps correlate with any subsequent ReflectionTypeLoadException.
-            logger.LogDebug("Shared assembly '{AssemblyName}' identity matches: Version={Version}, BundledMvid={Mvid}",
-                sharedName, defaultName.Version, defaultMvid);
+            // Bundled version >= libs version: the bundled copy satisfies the libs' strong-named
+            // reference (strong-name binding keys on version + public key token, not MVID), so it
+            // binds. Logged at Debug to correlate with any unrelated ReflectionTypeLoadException;
+            // we can't read the probed MVID without loading the assembly, which we avoid here.
+            logger.LogDebug("Shared assembly '{AssemblyName}' satisfies libs reference: bundled={BundledVersion}, libs={LibsVersion}, BundledMvid={Mvid}",
+                sharedName, defaultName.Version, probedName.Version, defaultMvid);
         }
     }
 

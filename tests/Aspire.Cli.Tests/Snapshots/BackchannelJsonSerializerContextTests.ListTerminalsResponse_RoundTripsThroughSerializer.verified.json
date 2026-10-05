@@ -1,0 +1,37 @@
+﻿{
+  "resourceTerminals": [
+    {
+      "resourceName": "myresource",
+      "displayName": "myresource",
+      "configuredColumns": 120,
+      "configuredRows": 30,
+      "isHostReachable": true,
+      "replicas": [
+        {
+          "replicaIndex": 0,
+          "label": "myresource-0",
+          "consumerUdsPath": "/terminal/r0.sock",
+          "isAlive": true,
+          "producerConnected": false,
+          "restartCount": 0,
+          "currentColumns": 130,
+          "currentRows": 32,
+          "attachedPeerCount": 1,
+          "peers": [
+            {
+              "peerId": "peer-1",
+              "displayName": "viewer-1"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "appHostTerminals": [
+    {
+      "terminalId": "terminal-1",
+      "title": "Shell",
+      "placement": "Dock"
+    }
+  ]
+}

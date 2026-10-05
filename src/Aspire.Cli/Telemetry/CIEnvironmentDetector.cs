@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Configuration;
-
 namespace Aspire.Cli.Telemetry;
 
 /// <summary>
@@ -10,10 +8,10 @@ namespace Aspire.Cli.Telemetry;
 /// </summary>
 internal sealed class CIEnvironmentDetector : ICIEnvironmentDetector
 {
-    private readonly IConfiguration _configuration;
+    private readonly IEnvironment _environment;
 
     /// <summary>
-    /// Boolean environment variables that indicate a CI environment when set to "true" or "1".
+    /// Boolean environment variables that indicate a CI environment when set to "true", "1", "yes", or "on".
     /// </summary>
     private static readonly string[] s_booleanVars =
     [
@@ -34,40 +32,40 @@ internal sealed class CIEnvironmentDetector : ICIEnvironmentDetector
         "JB_SPACE_API_URL"   // JetBrains Space
     ];
 
-    public CIEnvironmentDetector(IConfiguration configuration)
+    public CIEnvironmentDetector(IEnvironment environment)
     {
-        _configuration = configuration;
+        // Like dotnet, inspect the process environment rather than allowing CLI settings to override CI detection.
+        _environment = environment;
     }
 
     /// <inheritdoc />
     public bool IsCIEnvironment()
     {
-        // Check boolean environment variables - must be set to "true" or "1"
         foreach (var varName in s_booleanVars)
         {
-            if (_configuration.GetBool(varName, defaultValue: false))
+            if (IsTrue(_environment.GetEnvironmentVariable(varName)))
             {
                 return true;
             }
         }
 
         // AWS CodeBuild - both variables must be present
-        if (!string.IsNullOrEmpty(_configuration["CODEBUILD_BUILD_ID"]) &&
-            !string.IsNullOrEmpty(_configuration["AWS_REGION"]))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("CODEBUILD_BUILD_ID")) &&
+            !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("AWS_REGION")))
         {
             return true;
         }
 
         // Jenkins - both variables must be present
-        if (!string.IsNullOrEmpty(_configuration["BUILD_ID"]) &&
-            !string.IsNullOrEmpty(_configuration["BUILD_URL"]))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
+            !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_URL")))
         {
             return true;
         }
 
         // Google Cloud Build - both variables must be present
-        if (!string.IsNullOrEmpty(_configuration["BUILD_ID"]) &&
-            !string.IsNullOrEmpty(_configuration["PROJECT_ID"]))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
+            !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("PROJECT_ID")))
         {
             return true;
         }
@@ -75,12 +73,24 @@ internal sealed class CIEnvironmentDetector : ICIEnvironmentDetector
         // Check presence-only variables - just need to be set (any non-empty value)
         foreach (var varName in s_presenceVars)
         {
-            if (!string.IsNullOrEmpty(_configuration[varName]))
+            if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(varName)))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static bool IsTrue(string? value)
+    {
+        // Match dotnet's EnvironmentVariableParser.ParseBool(value, defaultValue: false):
+        // "YES" is true, but " true ", "01", and other nonzero integers are false.
+        // Keep this separate from GetBool, whose broader numeric/whitespace parsing is used by CLI settings.
+        // https://github.com/dotnet/sdk/blob/main/src/Cli/Microsoft.DotNet.Cli.CoreUtils/EnvironmentVariableParser.cs
+        return value is "1" ||
+            string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
     }
 }

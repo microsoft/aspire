@@ -11,7 +11,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Azure.Security.KeyVault\Aspire.Azure.Security.KeyVault.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

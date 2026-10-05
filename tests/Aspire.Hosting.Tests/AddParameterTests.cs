@@ -193,6 +193,18 @@ public class AddParameterTests
         Assert.Equal("A parameter value is required when publishValueAsDefault is true. (Parameter 'publishValueAsDefault')", ex.Message);
     }
 
+    [Fact]
+    public void AddParameterForPolyglotWithBothPublishValueAsDefaultAndSecretFails()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            ParameterResourceBuilderExtensions.AddParameterForPolyglot(appBuilder, "pass", "SomeSecret", publishValueAsDefault: true, secret: true));
+
+        Assert.Equal("secret", ex.ParamName);
+        Assert.Contains("A parameter cannot be both secret and published as a default value.", ex.Message);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -379,7 +391,6 @@ public class AddParameterTests
         Assert.True(parameter.Resource.EnableDescriptionMarkdown);
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     [Fact]
     public void ParameterWithDescriptionAndCustomInput_AddsInputGeneratorAnnotation()
     {
@@ -682,7 +693,6 @@ public class AddParameterTests
         Assert.Null(input.Value);
         Assert.Null(input.Options);
     }
-#pragma warning restore ASPIREINTERACTION001
 
     private static void InvokeWithCustomInputForPolyglot(IResourceBuilder<ParameterResource> parameter, IReadOnlyDictionary<string, object?>? properties = null)
     {

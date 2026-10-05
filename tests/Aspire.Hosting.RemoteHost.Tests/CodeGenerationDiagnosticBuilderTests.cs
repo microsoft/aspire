@@ -128,4 +128,40 @@ public class CodeGenerationDiagnosticBuilderTests
         // Aspire.Hosting.RemoteHost - a sibling, not the runtime that backed the failing codegen.
         Assert.Equal(aspireHostingVersion, diagnostic.RuntimeAspireHostingVersion);
     }
+
+    [Fact]
+    public void TryDescribeAssemblySkew_ExplainsReflectionLoadFailures()
+    {
+        var description = CodeGenerationDiagnosticBuilder.TryDescribeAssemblySkew(new TypeLoadException("Could not load type 'X'."));
+
+        Assert.NotNull(description);
+        Assert.Contains("aspire update --self", description);
+        Assert.Contains("sdkVersion", description);
+    }
+
+    [Fact]
+    public void TryDescribeAssemblySkew_FindsLoadFailuresNestedInTheExceptionChain()
+    {
+        var exception = new InvalidOperationException("outer", new MissingMethodException("inner"));
+
+        Assert.NotNull(CodeGenerationDiagnosticBuilder.TryDescribeAssemblySkew(exception));
+    }
+
+    [Fact]
+    public void TryDescribeAssemblySkew_FindsLoadFailuresInLaterAggregateChildren()
+    {
+        // AggregateException.InnerException only exposes the first child, so a load failure raised
+        // by any later parallel operation is only reachable by fanning out InnerExceptions.
+        var exception = new AggregateException(
+            new InvalidOperationException("unrelated"),
+            new TypeLoadException("Could not load type 'X'."));
+
+        Assert.NotNull(CodeGenerationDiagnosticBuilder.TryDescribeAssemblySkew(exception));
+    }
+
+    [Fact]
+    public void TryDescribeAssemblySkew_IsNullForUnrelatedFailures()
+    {
+        Assert.Null(CodeGenerationDiagnosticBuilder.TryDescribeAssemblySkew(new InvalidOperationException("boom")));
+    }
 }

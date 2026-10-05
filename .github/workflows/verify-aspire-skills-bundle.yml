@@ -5,7 +5,10 @@ on:
   pull_request:
     paths:
       - 'src/Aspire.Cli/Agents/AspireSkills/Embedded/**'
+      - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.sh'
+      - 'src/Aspire.Cli/Agents/Hooks/track-telemetry.ps1'
       - 'eng/scripts/verify-aspire-skills-bundle.ps1'
+      - 'eng/scripts/aspire-skills-bundle.common.ps1'
       - '.github/workflows/verify-aspire-skills-bundle.yml'
 
 permissions:
@@ -17,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'microsoft' }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Verify embedded Aspire skills bundle attestation
         shell: pwsh

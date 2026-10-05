@@ -44,16 +44,28 @@ public sealed class PersistentVolumeSpecV1
     /// This property links the PersistentVolume to a specific PersistentVolumeClaim (PVC) via an object reference,
     /// allowing resources to be dynamically or statically provisioned as required.
     /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML
+    /// when no claim reference has been configured. Eagerly initializing this to <c>new()</c>
+    /// would otherwise emit an invalid empty <c>claimRef: {}</c> mapping that Kubernetes
+    /// rejects on apply.
+    /// </remarks>
     [YamlMember(Alias = "claimRef")]
-    public ObjectReferenceV1 ClaimRef { get; set; } = new();
+    public ObjectReferenceV1? ClaimRef { get; set; }
 
     /// <summary>
     /// Gets or sets the configuration for a HostPath volume in a Kubernetes PersistentVolume.
     /// This property specifies the details of a HostPath volume source, allowing a directory
     /// from the host node file system to be mounted into a pod's container.
     /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML
+    /// when no host path has been configured. Eagerly initializing this to <c>new()</c>
+    /// would otherwise emit an invalid empty <c>hostPath: {}</c> mapping that Kubernetes
+    /// rejects on apply.
+    /// </remarks>
     [YamlMember(Alias = "hostPath")]
-    public HostPathVolumeSourceV1 HostPath { get; set; } = new();
+    public HostPathVolumeSourceV1? HostPath { get; set; }
 
     /// <summary>
     /// Gets or sets the configuration for a local volume source.
@@ -62,9 +74,13 @@ public sealed class PersistentVolumeSpecV1
     /// This property specifies the configuration for a local PersistentVolume in Kubernetes,
     /// represented by the <see cref="LocalVolumeSourceV1" /> type. Local volumes are backed
     /// by a specific file or directory on the node where the volume is created.
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML
+    /// when no local volume source has been configured. Eagerly initializing this to
+    /// <c>new()</c> would otherwise emit an invalid empty <c>local: {}</c> mapping that
+    /// Kubernetes rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "local")]
-    public LocalVolumeSourceV1 Local { get; set; } = new();
+    public LocalVolumeSourceV1? Local { get; set; }
 
     /// <summary>
     /// Represents the access modes for a Persistent Volume in a Kubernetes cluster.
@@ -99,10 +115,14 @@ public sealed class PersistentVolumeSpecV1
     /// The NodeAffinity property defines the rules and requirements for associating a
     /// PersistentVolume with specific nodes in the Kubernetes cluster. It describes the
     /// node selection criteria, which help ensure proper placement of the volume based
-    /// on node attributes and conditions.
+    /// on node attributes and conditions. Defaults to <see langword="null"/> so the
+    /// property is omitted from the serialized YAML when no node affinity has been
+    /// configured. Eagerly initializing this to <c>new()</c> would otherwise emit an
+    /// invalid empty <c>nodeAffinity: { required: {} }</c> mapping that Kubernetes
+    /// rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "nodeAffinity")]
-    public VolumeNodeAffinityV1 NodeAffinity { get; set; } = new();
+    public VolumeNodeAffinityV1? NodeAffinity { get; set; }
 
     /// <summary>
     /// Describes the reclaim policy of a PersistentVolume in Kubernetes.

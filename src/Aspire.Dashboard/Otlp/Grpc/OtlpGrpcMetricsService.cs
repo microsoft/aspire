@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Authentication;
+using Aspire.Dashboard.Utils;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using OpenTelemetry.Proto.Collector.Metrics.V1;
 
 namespace Aspire.Dashboard.Otlp.Grpc;
@@ -22,6 +22,6 @@ public class OtlpGrpcMetricsService : MetricsService.MetricsServiceBase
 
     public override Task<ExportMetricsServiceResponse> Export(ExportMetricsServiceRequest request, ServerCallContext context)
     {
-        return Task.FromResult(_metricsService.Export(request));
+        return _metricsService.ExportAsync(request);
     }
 }

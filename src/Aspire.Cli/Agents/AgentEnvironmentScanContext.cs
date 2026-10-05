@@ -10,6 +10,7 @@ internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
     private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<AgentClientKind> _detectedClients = [];
 
     /// <summary>
     /// Gets the working directory being scanned.
@@ -58,4 +59,20 @@ internal sealed class AgentEnvironmentScanContext
     /// Gets the registered skill base directories for all detected agent environments.
     /// </summary>
     public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
+
+    /// <summary>
+    /// Records that an agent client was detected as present in the environment. Used to scope
+    /// telemetry hook registration to the clients the user actually has, independent of whether the
+    /// Aspire MCP server still needs configuring.
+    /// </summary>
+    /// <param name="client">The detected agent client.</param>
+    public void AddDetectedClient(AgentClientKind client)
+    {
+        _detectedClients.Add(client);
+    }
+
+    /// <summary>
+    /// Gets the set of agent clients detected as present in the environment.
+    /// </summary>
+    public IReadOnlyCollection<AgentClientKind> DetectedClients => _detectedClients;
 }

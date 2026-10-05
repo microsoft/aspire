@@ -67,7 +67,9 @@ internal static class AspireCliShellCommandHelpers
     private static readonly string[] s_configureLocalHiveCommands =
     [
         "aspire config set channel local -g",
-        "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g"
+        // The CLI identity takes precedence over user configuration. Override all identity fields so
+        // archive builds stamped as daily still scaffold projects from the local package directory.
+        "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g && export ASPIRE_CLI_CHANNEL=local ASPIRE_CLI_VERSION=\"$SDK_VER\" ASPIRE_CLI_PACKAGES=\"$HOME/.aspire/hives/local/packages\""
     ];
 
     internal static string GetPrepareAspireEnvironmentCommand()
@@ -159,6 +161,20 @@ internal static class AspireCliShellCommandHelpers
         var nuGetConfigPath = strategy.RequiresDotnetToolNuGetConfig ? DockerNuGetConfigPath : null;
 
         return $"dotnet tool install {GetDotnetToolInstallArgs(strategy, nupkgSourcePath, nuGetConfigPath)}";
+    }
+
+    internal static string GetDotnetAddPackageCommand(string projectPath, string packageId)
+    {
+        return
+            $"PKG={QuoteBashArg(packageId)}; " +
+            $"TARGET={QuoteBashArg(projectPath)}; " +
+            "PKG_PATH=$(find \"$HOME/.aspire/hives\" -path \"*/packages/$PKG.[0-9]*.nupkg\" -type f 2>/dev/null | sort -V | tail -n 1); " +
+            "if [ -n \"$PKG_PATH\" ]; then " +
+            "PKG_FILE=$(basename \"$PKG_PATH\"); " +
+            "PKG_VERSION=${PKG_FILE#\"$PKG.\"}; " +
+            "PKG_VERSION=${PKG_VERSION%.nupkg}; " +
+            "dotnet add \"$TARGET\" package \"$PKG\" --version \"$PKG_VERSION\"; " +
+            "else dotnet add \"$TARGET\" package \"$PKG\" --prerelease; fi";
     }
 
     private static string GetDotnetToolInstallArgs(CliInstallStrategy strategy, string? nupkgSourcePath, string? nuGetConfigPath = null)
@@ -254,6 +270,22 @@ internal sealed class CliInstallStrategy
     /// Used by post-install verification to assert the correct CLI binary was installed.
     /// </summary>
     public string? ExpectedVersion { get; }
+
+    /// <summary>
+    /// Gets the package hive label selected by the local-archive installer.
+    /// </summary>
+    public string LocalArchiveHiveLabel
+    {
+        get
+        {
+            if (Mode != CliInstallMode.LocalArchive)
+            {
+                throw new InvalidOperationException($"{nameof(LocalArchiveHiveLabel)} is only available for {nameof(CliInstallMode.LocalArchive)} strategies.");
+            }
+
+            return CliPackageDiscovery.GetHiveLabel(ExpectedVersion);
+        }
+    }
 
     /// <summary>
     /// Gets whether the Docker dotnet tool install command needs the generated NuGet.config for internal/prerelease feeds.

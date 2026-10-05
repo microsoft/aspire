@@ -35,7 +35,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainerRegistry dispatcher export.")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -88,7 +88,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainerRegistry dispatcher export.")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,

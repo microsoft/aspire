@@ -1,0 +1,13 @@
+﻿parameters:
+  api:
+    port_http: 8080
+    api_image: "api:latest"
+secrets: {}
+config:
+  api:
+    OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
+    ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    HTTP_PORTS: ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18890"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "http/json"
+    OTEL_SERVICE_NAME: "api"

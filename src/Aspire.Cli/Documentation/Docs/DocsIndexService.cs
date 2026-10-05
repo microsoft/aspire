@@ -104,6 +104,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     private const float HeadingWeight = 6.0f;     // H2/H3 headings
     private const float CodeWeight = 5.0f;        // Code identifiers
     private const float BodyWeight = 1.0f;        // Body text
+    private const float TitlePhraseBonus = 40.0f;   // Exact query phrase in H1 title
+    private const float SummaryPhraseBonus = 20.0f; // Exact query phrase in blockquote summary
+    private const float HeadingPhraseBonus = 15.0f; // Exact query phrase in H2/H3 heading
 
     // Scoring constants
     private const float BaseMatchScore = 1.0f;
@@ -136,9 +139,10 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     private readonly string _llmsTxtUrl = DocsSourceConfiguration.GetLlmsTxtUrl(configuration);
     private readonly ILogger<DocsIndexService> _logger = logger;
 
-    // Volatile ensures the double-checked locking pattern works correctly by preventing
-    // instruction reordering that could expose a partially-constructed list to other threads.
+    // Volatile ensures the double-checked locking pattern publishes the fully initialized
+    // index data before any thread observes _indexedDocuments as non-null.
     private volatile List<IndexedDocument>? _indexedDocuments;
+    private volatile Dictionary<string, float>? _tokenIdf;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
 
     /// <inheritdoc />
@@ -172,7 +176,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             {
                 if (cachedDocuments is not null)
                 {
-                    _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
+                    SetIndexedDocuments(cachedDocuments);
 
                     _logger.LogWarning(
                         "Failed to refresh Aspire documentation. Using cached index with {Count} documents.",
@@ -189,17 +193,17 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             var currentFingerprint = SourceContentFingerprint.Compute(content, IndexSchemaVersion);
             if (cachedDocuments is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
-                _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
+                var indexedDocuments = SetIndexedDocuments(cachedDocuments);
 
                 var cacheElapsedTime = Stopwatch.GetElapsedTime(startTimestamp);
-                _logger.LogInformation("Loaded {Count} documents from cache in {ElapsedTime:ss\\.fff} seconds.", _indexedDocuments.Count, cacheElapsedTime);
+                _logger.LogInformation("Loaded {Count} documents from cache in {ElapsedTime:ss\\.fff} seconds.", indexedDocuments.Count, cacheElapsedTime);
                 return;
             }
 
             var documents = await LlmsTxtParser.ParseAsync(content, cancellationToken).ConfigureAwait(false);
 
-            // Pre-compute lowercase versions for faster searching
-            _indexedDocuments = [.. documents.Select(static d => new IndexedDocument(d))];
+            // Pre-compute normalized versions for faster searching
+            var indexedDocumentsFromSource = SetIndexedDocuments(documents);
 
             // Cache the parsed documents for next time
             await _docsCache.SetIndexAsync([.. documents], cancellationToken).ConfigureAwait(false);
@@ -207,12 +211,79 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
             var elapsedTime = Stopwatch.GetElapsedTime(startTimestamp);
 
-            _logger.LogInformation("Indexed {Count} documents from aspire.dev in {ElapsedTime:ss\\.fff} seconds.", _indexedDocuments.Count, elapsedTime);
+            _logger.LogInformation("Indexed {Count} documents from aspire.dev in {ElapsedTime:ss\\.fff} seconds.", indexedDocumentsFromSource.Count, elapsedTime);
         }
         finally
         {
             _indexLock.Release();
         }
+    }
+
+    private List<IndexedDocument> SetIndexedDocuments(IEnumerable<LlmsDocument> documents)
+    {
+        var indexedDocuments = documents.Select(static d => new IndexedDocument(d)).ToList();
+        _tokenIdf = BuildTokenIdf(indexedDocuments);
+        _indexedDocuments = indexedDocuments;
+        return indexedDocuments;
+    }
+
+    private static Dictionary<string, float> BuildTokenIdf(IReadOnlyList<IndexedDocument> documents)
+    {
+        var documentFrequency = new Dictionary<string, int>(StringComparer.Ordinal);
+        var documentTokens = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var document in documents)
+        {
+            documentTokens.Clear();
+
+            // IDF is based on whether a token appears in a document, not how many times
+            // it appears inside that document. That keeps noisy pages from dominating by
+            // repetition: "azure" or "new" appears almost everywhere and should carry a
+            // small multiplier, while rarer terms like "addredis" or "134" are stronger
+            // signals for queries such as "AddRedis" or "whats new 13.4".
+            foreach (var token in Tokenize(document.AllSearchableTextLower))
+            {
+                documentTokens.Add(token);
+            }
+
+            // Tokenize keeps hyphenated slugs as one token, so add slug segments too.
+            // For example, "service-discovery" should contribute weights for both
+            // "service" and "discovery" when scoring the query "service discovery".
+            foreach (var segment in document.SlugSegments)
+            {
+                if (segment.Length >= MinTokenLength)
+                {
+                    documentTokens.Add(segment);
+                }
+            }
+
+            foreach (var token in documentTokens)
+            {
+                documentFrequency[token] = documentFrequency.TryGetValue(token, out var count) ? count + 1 : 1;
+            }
+        }
+
+        var idf = new Dictionary<string, float>(documentFrequency.Count, StringComparer.Ordinal);
+        var documentCount = documents.Count;
+        foreach (var (token, count) in documentFrequency)
+        {
+            // In plain terms, IDF is a rarity multiplier. A term that appears in
+            // nearly every doc, like "new" or "azure", should not move the ranking
+            // much by itself. A rarer term, like "addredis" or "134", is stronger
+            // evidence that a document is the one the user meant.
+            //
+            // The formula below is the smoothed BM25-style way to turn that rarity
+            // into a small positive weight:
+            //   log(1 + (N - df + 0.5) / (df + 0.5))
+            // where N is the number of indexed docs and df is the number of docs that contain
+            // the token. The 0.5 terms keep very small corpora from producing extreme weights,
+            // while the +1 inside the log keeps terms that appear in every doc positive but tiny.
+            // We only use the result as a rarity multiplier in the existing field scorer; this is
+            // not a full BM25 implementation.
+            idf[token] = MathF.Log(1.0f + (documentCount - count + 0.5f) / (count + 0.5f));
+        }
+
+        return idf;
     }
 
     public async ValueTask<IReadOnlyList<DocsListItem>> ListDocumentsAsync(CancellationToken cancellationToken = default)
@@ -250,10 +321,18 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return [];
         }
 
+        if (topK <= 0)
+        {
+            return [];
+        }
+
         // Pre-compute queryAsSlug once to avoid repeated allocation in hot path
         var queryAsSlug = string.Join("-", queryTokens);
+        var queryAsPhrase = queryTokens.Length > 1 ? string.Join(' ', queryTokens) : string.Empty;
+        var queryTokenWeights = GetQueryTokenWeights(queryTokens);
 
-        var results = new List<DocsSearchResult>();
+        var results = new List<SearchCandidate>(Math.Min(topK, _indexedDocuments.Count));
+        var documentIndex = 0;
 
         foreach (var doc in _indexedDocuments)
         {
@@ -277,31 +356,62 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
             if (!anyTokenMatches)
             {
+                documentIndex++;
                 continue;
             }
 
-            var (score, matchedSection) = ScoreDocument(doc, queryTokens, queryAsSlug);
+            var (score, matchedSection) = ScoreDocument(doc, queryTokens, queryTokenWeights, queryAsSlug, queryAsPhrase);
 
             if (score > 0)
             {
-                results.Add(new DocsSearchResult
-                {
-                    Title = doc.Source.Title,
-                    Slug = doc.Source.Slug,
-                    Summary = doc.Source.Summary,
-                    MatchedSection = matchedSection,
-                    Score = score
-                });
+                AddTopResult(results, new SearchCandidate(doc, matchedSection, score, documentIndex), topK);
             }
+
+            documentIndex++;
         }
 
         return
         [
             .. results
-                .OrderByDescending(static r => r.Score)
-                .Take(topK)
+                .Select(static r => new DocsSearchResult
+                {
+                    Title = r.Document.Source.Title,
+                    Slug = r.Document.Source.Slug,
+                    Summary = r.Document.Source.Summary,
+                    MatchedSection = r.MatchedSection,
+                    Score = r.Score
+                })
         ];
     }
+
+    // SearchAsync calls this for every positive-scoring document. Keep `results` sorted and
+    // capped to topK as we scan so we never allocate/sort every matching document. A small
+    // sorted list is intentional here: the CLI default is topK = 10, so linear insertion is
+    // simple, preserves final score order and stable tie-breaking, and avoids the extra final
+    // sort a heap/priority queue would need. If topK ever becomes large, revisit this.
+    private static void AddTopResult(List<SearchCandidate> results, SearchCandidate candidate, int topK)
+    {
+        var insertIndex = 0;
+        while (insertIndex < results.Count && !IsBetterCandidate(candidate, results[insertIndex]))
+        {
+            insertIndex++;
+        }
+
+        if (insertIndex >= topK)
+        {
+            return;
+        }
+
+        results.Insert(insertIndex, candidate);
+        if (results.Count > topK)
+        {
+            results.RemoveAt(results.Count - 1);
+        }
+    }
+
+    private static bool IsBetterCandidate(SearchCandidate candidate, SearchCandidate current)
+        => candidate.Score > current.Score ||
+           (candidate.Score == current.Score && candidate.DocumentIndex < current.DocumentIndex);
 
     public async ValueTask<DocsContent?> GetDocumentAsync(string slug, string? section = null, CancellationToken cancellationToken = default)
     {
@@ -348,32 +458,65 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         };
     }
 
-    private static (float Score, string? MatchedSection) ScoreDocument(IndexedDocument doc, string[] queryTokens, string queryAsSlug)
+    private float[] GetQueryTokenWeights(string[] queryTokens)
     {
-        var score = 0.0f;
+        var tokenIdf = _tokenIdf;
+        var weights = new float[queryTokens.Length];
+
+        for (var i = 0; i < queryTokens.Length; i++)
+        {
+            var token = queryTokens[i];
+            weights[i] = tokenIdf is not null && tokenIdf.TryGetValue(token, out var idf)
+                ? idf
+                : 1.0f;
+        }
+
+        return weights;
+    }
+
+    // ScoreDocument combines two kinds of evidence:
+    //   1. Identity signals (slug + H1 title): strong proof that this is the page the user meant.
+    //   2. Context signals (summary + best matching section): useful supporting evidence, but
+    //      noisier because broad docs and release notes mention many unrelated terms.
+    // Field weights make matches in titles/headings/summaries count more than body text, IDF
+    // makes rarer query terms count more than common terms, and exact phrase bonuses help pages
+    // with the whole query in a title/heading beat pages with scattered incidental matches.
+    private static (float Score, string? MatchedSection) ScoreDocument(
+        IndexedDocument doc,
+        string[] queryTokens,
+        float[] queryTokenWeights,
+        string queryAsSlug,
+        string queryAsPhrase)
+    {
         string? matchedSection = null;
         var bestSectionScore = 0.0f;
 
         // Score slug matching - this is key for finding dedicated docs
         // e.g., query "service discovery" should match slug "service-discovery" with high score
-        score += ScoreSlugMatch(doc.SlugLower, doc.SlugSegments, queryTokens, queryAsSlug);
+        var slugScore = ScoreSlugMatch(doc.SlugLower, doc.SlugSegments, queryTokens, queryAsSlug);
 
         // Score H1 title
-        score += ScoreField(doc.TitleLower, queryTokens) * TitleWeight;
+        var titleScore = (ScoreField(doc.TitleLower, queryTokens, queryTokenWeights) * TitleWeight) +
+            ScorePhraseMatch(doc.TitleLower, queryAsPhrase, TitlePhraseBonus);
 
         // Score blockquote summary
+        var summaryScore = 0.0f;
         if (doc.SummaryLower is not null)
         {
-            score += ScoreField(doc.SummaryLower, queryTokens) * SummaryWeight;
+            summaryScore = (ScoreField(doc.SummaryLower, queryTokens, queryTokenWeights) * SummaryWeight) +
+                ScorePhraseMatch(doc.SummaryLower, queryAsPhrase, SummaryPhraseBonus);
         }
 
-        // Score each section (H2/H3 headings + content)
+        // Score every section, but only add the best one to the document score. This gives
+        // the result a useful MatchedSection without letting a long page win just because it
+        // has many sections that each contain a small incidental match.
         for (var i = 0; i < doc.Sections.Count; i++)
         {
             var section = doc.Sections[i];
-            var headingScore = ScoreField(section.HeadingLower, queryTokens) * HeadingWeight;
-            var codeScore = ScoreCodeIdentifiers(section.CodeSpans, section.Identifiers, queryTokens) * CodeWeight;
-            var bodyScore = ScoreField(section.ContentLower, queryTokens) * BodyWeight;
+            var headingScore = (ScoreField(section.HeadingLower, queryTokens, queryTokenWeights) * HeadingWeight) +
+                ScorePhraseMatch(section.HeadingLower, queryAsPhrase, HeadingPhraseBonus);
+            var codeScore = ScoreCodeIdentifiers(section.CodeSpans, section.Identifiers, queryTokens, queryTokenWeights) * CodeWeight;
+            var bodyScore = ScoreField(section.ContentLower, queryTokens, queryTokenWeights) * BodyWeight;
 
             var sectionScore = headingScore + codeScore + bodyScore;
 
@@ -384,21 +527,19 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             }
         }
 
-        score += bestSectionScore;
+        var identityScore = slugScore + titleScore;
+        var contextScore = summaryScore + bestSectionScore;
 
-        // Apply penalty for "What's New" / changelog pages
-        // These pages mention many features and shouldn't outrank dedicated documentation
-        // BUT: Skip penalty when user is explicitly searching for changelog content
-        // Note: "what's" tokenizes to "what" due to apostrophe splitting, so we check for both "what" and "new" together
-        var hasChangelogToken = queryTokens.Any(static t => t is "changelog" or "whats-new");
-        var hasWhatsNewTokens = queryTokens.Contains("what") && queryTokens.Contains("new");
-        var queryIsAboutChangelog = hasChangelogToken || hasWhatsNewTokens;
-        if (!queryIsAboutChangelog && (doc.SlugLower.Contains("whats-new") || doc.SlugLower.Contains("changelog")))
+        // What's New and changelog pages contain broad feature lists, so a query like
+        // "javascript" or "go" should prefer dedicated docs over release-note context
+        // mentions. Keep title/slug identity unpenalized so explicit queries like
+        // "whats new 13.4" and "changelog" still find the release-note pages.
+        if (IsReleaseNotesDocument(doc) && !HasReleaseNotesIdentityMatch(doc, queryTokens, queryAsSlug, slugScore))
         {
-            score *= WhatsNewPenaltyMultiplier;
+            contextScore *= WhatsNewPenaltyMultiplier;
         }
 
-        return (score, matchedSection);
+        return (identityScore + contextScore, matchedSection);
     }
 
     /// <summary>
@@ -510,53 +651,296 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     /// Tokenizes a query string, preserving symbols like --flag, AddRedis, aspire.json.
     /// </summary>
     private static string[] Tokenize(string text)
-        => LexicalScoring.Tokenize(text, TokenSplitRegex(), MinTokenLength);
+        => LexicalScoring.Tokenize(NormalizeSearchText(text), TokenSplitRegex(), MinTokenLength);
+
+    private static bool IsReleaseNotesDocument(IndexedDocument doc)
+        => doc.SlugLower.Contains("whats-new", StringComparison.Ordinal) ||
+           doc.SlugLower.Contains("changelog", StringComparison.Ordinal);
+
+    private static bool HasReleaseNotesIdentityMatch(IndexedDocument doc, string[] queryTokens, string queryAsSlug, float slugScore)
+    {
+        if (queryTokens.Length is 0)
+        {
+            return false;
+        }
+
+        // Single-token queries like "new", "whats", or "what" are not specific enough
+        // to prove the user wants a release-note page. They only become release-note
+        // identity signals when paired with more context, such as "whats new 13.4".
+        // Otherwise a broad release-note page could avoid the context penalty for a
+        // generic query and outrank a dedicated doc that happens to contain the term.
+        if (queryTokens.Length is 1 && IsReleaseNotesGenericToken(queryTokens[0]))
+        {
+            return false;
+        }
+
+        if (doc.SlugLower == queryAsSlug || slugScore >= FullPhraseInSlugBonus)
+        {
+            return true;
+        }
+
+        var matchedTokens = CountDistinctIdentityTokenMatches(doc.IdentitySearchableTextLower, queryTokens);
+        // Versioned release-note queries need all tokens so "whats new 13.4" does not
+        // rank "What's new in Aspire 13.2" just because "whats" and "new" match.
+        // Non-versioned queries allow a partial identity match for longer phrases, but
+        // still require token-boundary matches so "go" does not match inside "changelog".
+        var requiredMatches = queryTokens.Any(static token => ContainsDigit(token))
+            ? queryTokens.Length
+            : queryTokens.Length switch
+            {
+                1 => 1,
+                2 => 2,
+                _ => Math.Max(2, (queryTokens.Length * 2 + 2) / 3)
+            };
+
+        return matchedTokens >= requiredMatches;
+    }
+
+    private static bool IsReleaseNotesGenericToken(string token)
+        => token is "new" or "whats" or "what";
+
+    private static bool ContainsDigit(string token)
+    {
+        foreach (var c in token.AsSpan())
+        {
+            if (char.IsDigit(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static int CountDistinctIdentityTokenMatches(string lowerText, string[] queryTokens)
+    {
+        var count = 0;
+        var textSpan = lowerText.AsSpan();
+
+        foreach (var token in queryTokens)
+        {
+            if (ContainsIdentityToken(textSpan, token))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static bool ContainsIdentityToken(ReadOnlySpan<char> textSpan, string token)
+    {
+        if (ContainsWordBoundaryMatch(textSpan, token))
+        {
+            return true;
+        }
+
+        // The "What's new" title normalizes to "whats new", but users commonly type
+        // "what new" without the trailing s. Keep that release-note query working
+        // without allowing arbitrary substrings like "go" inside "changelog".
+        return token is "what" && ContainsWordBoundaryMatch(textSpan, "whats");
+    }
+
+    // ContainsIdentityToken uses this for release-note identity checks. Search every
+    // occurrence of the token and accept only lexical word-boundary matches, so "go"
+    // matches "Go updates" but not the substring inside "changelog". That keeps short
+    // feature names from accidentally making a changelog page look like an explicit
+    // release-note query.
+    private static bool ContainsWordBoundaryMatch(ReadOnlySpan<char> textSpan, string token)
+    {
+        var startIndex = 0;
+
+        while (startIndex < textSpan.Length)
+        {
+            var nextIndex = textSpan[startIndex..].IndexOf(token, StringComparison.Ordinal);
+            if (nextIndex < 0)
+            {
+                return false;
+            }
+
+            var absoluteIndex = startIndex + nextIndex;
+            if (LexicalScoring.IsWordBoundaryMatch(textSpan, token, absoluteIndex))
+            {
+                return true;
+            }
+
+            startIndex = absoluteIndex + token.Length;
+        }
+
+        return false;
+    }
+
+    // Apply the same lightweight normalization to indexed document fields and incoming
+    // queries before tokenization/scoring. This deliberately handles the cases where the
+    // live docs and user input use different spellings for the same intent:
+    //   "What's new" -> "whats new"
+    //   "13.4" / "13-4" -> "134"
+    // That lets a query like "whats new 13.4" line up with both the page title and the
+    // aspire.dev slug "whats-new-in-aspire-134" without changing unrelated punctuation.
+    private static string NormalizeSearchText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (IsIgnoredPunctuation(c))
+            {
+                continue;
+            }
+
+            // aspire.dev slugs strip numeric separators from versions, so normalize
+            // "13.4" and "13-4" to the same token shape as "134".
+            if (IsNumericVersionSeparator(text, i))
+            {
+                continue;
+            }
+
+            builder.Append(char.ToLowerInvariant(c));
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsIgnoredPunctuation(char c)
+        => c is '\'' or '\u2019' or '\u2018' or '\u02BC' or '`';
+
+    private static bool IsNumericVersionSeparator(string text, int index)
+        => (text[index] is '.' or '-') &&
+           index > 0 &&
+           index + 1 < text.Length &&
+           char.IsDigit(text[index - 1]) &&
+           char.IsDigit(text[index + 1]);
 
     /// <summary>
-    /// Scores how well a pre-lowercased field matches the query tokens.
+    /// Scores one normalized field by finding each query token as a substring, rewarding the
+    /// first word-boundary match, adding a capped repeated-occurrence bonus, and multiplying
+    /// the token's contribution by its IDF weight so rarer query terms count more.
     /// </summary>
-    private static float ScoreField(string lowerText, string[] queryTokens)
-        => LexicalScoring.ScoreField(
-            lowerText,
-            queryTokens,
-            MaxOccurrenceBonus,
-            BaseMatchScore,
-            WordBoundaryBonus,
-            MultipleOccurrenceBonus);
+    // This is docs-search-specific instead of using LexicalScoring.ScoreField because docs
+    // search needs per-token weights. For example, in "whats new 13.4", "new" appears in
+    // many docs and should barely move ranking, while "134" is rare and should count more.
+    // In "service discovery", a word-boundary match for "discovery" should count more than
+    // a substring match inside another word; exact whole-phrase bonuses are added by the
+    // ScoreDocument caller for titles, summaries, and headings.
+    private static float ScoreField(string lowerText, string[] queryTokens, float[] queryTokenWeights)
+    {
+        if (string.IsNullOrEmpty(lowerText))
+        {
+            return 0;
+        }
+
+        var score = 0.0f;
+        var textSpan = lowerText.AsSpan();
+        var occurrenceLimit = MaxOccurrenceBonus + 1;
+
+        for (var i = 0; i < queryTokens.Length; i++)
+        {
+            var token = queryTokens[i];
+            var startIndex = 0;
+            var firstMatchIndex = -1;
+            var count = 0;
+
+            while (startIndex < textSpan.Length && count < occurrenceLimit)
+            {
+                var nextIndex = textSpan[startIndex..].IndexOf(token, StringComparison.Ordinal);
+                if (nextIndex < 0)
+                {
+                    break;
+                }
+
+                var absoluteIndex = startIndex + nextIndex;
+                if (firstMatchIndex < 0)
+                {
+                    firstMatchIndex = absoluteIndex;
+                }
+
+                count++;
+                startIndex = absoluteIndex + token.Length;
+            }
+
+            if (count is 0)
+            {
+                continue;
+            }
+
+            var tokenScore = BaseMatchScore;
+            if (LexicalScoring.IsWordBoundaryMatch(textSpan, token, firstMatchIndex))
+            {
+                tokenScore += WordBoundaryBonus;
+            }
+
+            if (count > 1)
+            {
+                tokenScore += Math.Min(count - 1, MaxOccurrenceBonus) * MultipleOccurrenceBonus;
+            }
+
+            score += tokenScore * queryTokenWeights[i];
+        }
+
+        return score;
+    }
+
+    private static float ScorePhraseMatch(string lowerText, string queryAsPhrase, float bonus)
+        => queryAsPhrase.Length > 0 && lowerText.Contains(queryAsPhrase, StringComparison.Ordinal)
+            ? bonus
+            : 0;
 
     /// <summary>
     /// Scores pre-extracted code identifiers against query tokens.
     /// </summary>
-    private static float ScoreCodeIdentifiers(IReadOnlyList<string> codeSpans, IReadOnlyList<string> identifiers, string[] queryTokens)
+    private static float ScoreCodeIdentifiers(
+        IReadOnlyList<string> codeSpans,
+        IReadOnlyList<string> identifiers,
+        string[] queryTokens,
+        float[] queryTokenWeights)
     {
         var score = 0.0f;
 
-        // Score backticked code spans
-        foreach (var code in codeSpans)
+        for (var i = 0; i < queryTokens.Length; i++)
         {
-            foreach (var token in queryTokens)
+            var token = queryTokens[i];
+            var codeSpanMatches = CountContainingTokens(codeSpans, token);
+            if (codeSpanMatches > 0)
             {
-                if (code.Contains(token, StringComparison.Ordinal))
-                {
-                    score += BaseMatchScore;
-                }
+                score += ScoreRepeatedMatches(BaseMatchScore, codeSpanMatches) * queryTokenWeights[i];
             }
-        }
 
-        // Score PascalCase identifiers
-        foreach (var identifier in identifiers)
-        {
-            foreach (var token in queryTokens)
+            var identifierMatches = CountContainingTokens(identifiers, token);
+            if (identifierMatches > 0)
             {
-                if (identifier.Contains(token, StringComparison.Ordinal))
-                {
-                    score += CodeIdentifierBonus;
-                }
+                score += ScoreRepeatedMatches(CodeIdentifierBonus, identifierMatches) * queryTokenWeights[i];
             }
         }
 
         return score;
     }
+
+    private static int CountContainingTokens(IReadOnlyList<string> values, string token)
+    {
+        var count = 0;
+        var occurrenceLimit = MaxOccurrenceBonus + 1;
+        foreach (var value in values)
+        {
+            if (value.Contains(token, StringComparison.Ordinal))
+            {
+                count++;
+                if (count >= occurrenceLimit)
+                {
+                    break;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static float ScoreRepeatedMatches(float baseScore, int count)
+        => baseScore + Math.Min(count - 1, MaxOccurrenceBonus) * MultipleOccurrenceBonus;
 
     /// <summary>
     /// Normalizes markdown content from llms.txt sources.
@@ -717,8 +1101,10 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     [GeneratedRegex(@"(?m)(^(?:\*\s|\d+\.\s)[^\n]*\n)(?!\n|\*\s|\d+\.\s|```)")]
     private static partial Regex BlankLineAfterListRegex();
 
+    private readonly record struct SearchCandidate(IndexedDocument Document, string? MatchedSection, float Score, int DocumentIndex);
+
     /// <summary>
-    /// Pre-indexed document with lowercase text for faster searching.
+    /// Pre-indexed document with normalized search text for faster searching.
     /// </summary>
     private sealed class IndexedDocument
     {
@@ -727,13 +1113,14 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         public IndexedDocument(LlmsDocument source)
         {
             Source = source;
-            TitleLower = source.Title.ToLowerInvariant();
-            _slugLower = source.Slug.ToLowerInvariant();
+            TitleLower = NormalizeSearchText(source.Title);
+            _slugLower = NormalizeSearchText(source.Slug);
             SlugSegments = _slugLower.Split('-');
-            SummaryLower = source.Summary?.ToLowerInvariant();
+            SummaryLower = source.Summary is not null ? NormalizeSearchText(source.Summary) : null;
             Sections = [.. source.Sections.Select(static s => new IndexedSection(s))];
+            IdentitySearchableTextLower = $"{_slugLower} {TitleLower}";
 
-            // Build a single concatenated lowercase haystack used ONLY as an early-reject
+            // Build a single concatenated normalized haystack used ONLY as an early-reject
             // pre-filter in SearchAsync. Probing each query token against every section's
             // ContentLower scales with every section in every document; one per-doc haystack
             // check lets us skip the full per-section scoring for docs that can't possibly
@@ -791,8 +1178,10 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
         public IReadOnlyList<IndexedSection> Sections { get; }
 
+        public string IdentitySearchableTextLower { get; }
+
         /// <summary>
-        /// Concatenated lowercase text of every searchable field (slug, title, summary,
+        /// Concatenated normalized text of every searchable field (slug, title, summary,
         /// each section heading + content), separated by single spaces. Used by
         /// <c>SearchAsync</c> as a fast reject filter: if none of the query tokens appear
         /// anywhere in this haystack, the document cannot score &gt; 0 and we skip the
@@ -806,22 +1195,22 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     /// </summary>
     private sealed class IndexedSection(LlmsSection source)
     {
-        public string HeadingLower { get; } = source.Heading.ToLowerInvariant();
+        public string HeadingLower { get; } = NormalizeSearchText(source.Heading);
 
-        public string ContentLower { get; } = source.Content.ToLowerInvariant();
+        public string ContentLower { get; } = NormalizeSearchText(source.Content);
 
         public IReadOnlyList<string> CodeSpans { get; } =
         [
             .. CodeBlockRegex()
                 .Matches(source.Content)
-                .Select(static m => m.Groups[1].Value.ToLowerInvariant())
+                .Select(static m => NormalizeSearchText(m.Groups[1].Value))
         ];
 
         public IReadOnlyList<string> Identifiers { get; } =
         [
             .. IdentifierRegex()
                 .Matches(source.Content)
-                .Select(static m => m.Value.ToLowerInvariant())
+                .Select(static m => NormalizeSearchText(m.Value))
         ];
     }
 }

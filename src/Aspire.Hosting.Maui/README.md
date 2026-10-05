@@ -106,9 +106,11 @@ This method automatically:
 When you configure OTLP with dev tunnel, the following environment variables are automatically set:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: The dev tunnel URL for the OTLP endpoint
-- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `grpc` (standard Aspire configuration)
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `http/protobuf` for the preferred dashboard OTLP/HTTP endpoint, or `grpc` when only OTLP/gRPC is available
 - `OTEL_SERVICE_NAME`: The resource name
 - `OTEL_RESOURCE_ATTRIBUTES`: Service instance ID
+
+When both dashboard OTLP endpoints are available, MAUI dev tunnels prefer OTLP/HTTP. Android and iOS environment targets are reevaluated when their resource restarts so updated tunnel settings are applied to the relaunched app.
 
 ## Example: Complete Aspire App with MAUI
 
@@ -185,6 +187,36 @@ builder.Build().Run();
 # List connected Android devices
 adb devices
 ```
+
+## Build Queue
+
+When multiple MAUI platform targets reference the same project (e.g., Android, iOS, and Mac Catalyst all using the same `.csproj`), MSBuild cannot handle concurrent builds of the same project file. The hosting integration automatically serializes these builds using a per-project queue.
+
+### How It Works
+
+1. When you start multiple platform resources simultaneously, only one builds at a time
+2. Other platforms show a **"Queued"** state in the dashboard while waiting
+3. Each build shows a **"Building"** state with live MSBuild output in the resource logs
+4. After a build completes and the app launches, the next queued build starts
+5. You can click **Stop** on a queued or building resource to cancel it — the resource shows an **"Exited"** state with an orange indicator
+
+### Key Behaviors
+
+- **Per-project serialization**: The queue is scoped to each `MauiProjectResource`. If you have two separate MAUI projects, they build in parallel. Only platform targets sharing the same project are serialized.
+- **Cancel support**: Clicking Stop on a Queued resource removes it from the queue. Clicking Stop on a Building resource kills the `dotnet build` process.
+- **Restart after cancel**: You can start a cancelled resource again — it re-enters the queue.
+- **Build timeout**: Builds that take longer than 10 minutes are automatically cancelled to prevent a hung build from blocking the queue.
+- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP invokes the MAUI Run target. Non-Android platforms disable restore/build work and release the queue when DCP reports the launch process as running. Android keeps the normal Run target shape because it performs required fast-deploy/runtime upload work after Build; the queue is released when that short-lived Run process exits, not when the Android app exits. If Android launch work exceeds the handoff timeout, Aspire stops the Run process before releasing the queue so another platform build cannot overlap it.
+- **Android resource state**: After Android deploys successfully, the dashboard resource may show the short-lived Run process as **"Finished"** even though the app remains running on the emulator or device.
+
+### Architecture
+
+The build queue is implemented via:
+
+- **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
+- **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
+- **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:BuildDependsOn= -p:NoBuild=true` for non-Android MAUI projects after the serialized pre-build. Android uses `dotnet build --no-restore /t:Run` so the SDK can perform its required deploy/runtime upload steps.
 
 ## Requirements
 

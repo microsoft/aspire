@@ -5,12 +5,16 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
+using Aspire.Hosting.Dotnet;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
+#pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject is experimental
+#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental
 
 namespace Aspire.Hosting;
 
@@ -20,15 +24,26 @@ namespace Aspire.Hosting;
 [Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class BlazorGatewayExtensions
 {
-    private static readonly string s_dotNetImageTag = GetDotNetImageTag();
+    private static readonly string s_blazorGatewayCliVersion = GetAssemblyMetadataValue("BlazorGatewayCliVersion");
+    private static readonly string s_blazorSdkImageTag = GetAssemblyMetadataValue("BlazorSdkImageTag");
+    private static readonly string s_blazorGatewayAspNetImageTag = GetAssemblyMetadataValue("BlazorGatewayAspNetImageTag");
     private const string DotNetSdkImageRepo = "mcr.microsoft.com/dotnet/sdk";
     private const string DotNetAspNetImageRepo = "mcr.microsoft.com/dotnet/aspnet";
+    private const string BlazorGatewayCliPackageId = "Microsoft.AspNetCore.Components.Gateway.Cli";
 
     /// <summary>
-    /// Registers the built-in Blazor Gateway as a file-based C# app.
-    /// The gateway is shipped as Gateway.cs alongside this library and launched
-    /// via <c>AddCSharpApp</c>. No separate project is needed.
+    /// Registers the built-in Blazor Gateway.
+    /// During development the gateway runs from the official .NET tool. Publishing continues
+    /// to use the file-based app shipped with this package.
     /// </summary>
+    /// <remarks>
+    /// Development requires a .NET SDK compatible with the configured gateway tool package.
+    /// When publishing attached Blazor WebAssembly apps, each client must target a single framework
+    /// supported by this package. The client's selected SDK must be available locally and is
+    /// installed in the build image. The AppHost and client projects must also
+    /// be contained by a common ancestor directory with a <c>.sln</c> or <c>.slnx</c> file; that
+    /// directory is used as the Docker build context.
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<ProjectResource> AddBlazorGateway(
         this IDistributedApplicationBuilder builder,
@@ -39,6 +54,7 @@ public static class BlazorGatewayExtensions
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
+        ConfigureGatewayToolForRunMode(gateway, builder.AppHostDirectory, builder.Environment.EnvironmentName);
         if (builder.ExecutionContext.IsPublishMode)
         {
             var gatewayDir = Path.GetDirectoryName(gatewayPath)!;
@@ -50,7 +66,7 @@ public static class BlazorGatewayExtensions
                     var logger = ctx.Services.GetService<ILogger<BlazorWasmAppResource>>();
 
                     ctx.Builder
-                        .From($"{DotNetSdkImageRepo}:{s_dotNetImageTag}", "build")
+                        .From($"{DotNetSdkImageRepo}:{s_blazorSdkImageTag}", "build")
                         .WorkDir("/src")
                         .Copy("Gateway.cs", ".")
                         .Run("dotnet publish Gateway.cs -c Release -o /app/publish");
@@ -58,7 +74,7 @@ public static class BlazorGatewayExtensions
                     ctx.Builder.AddContainerFilesStages(ctx.Resource, logger);
 
                     ctx.Builder
-                        .From($"{DotNetAspNetImageRepo}:{s_dotNetImageTag}")
+                        .From($"{DotNetAspNetImageRepo}:{s_blazorGatewayAspNetImageTag}")
                         .WorkDir("/app")
                         .CopyFrom("build", "/app/publish", ".")
                         .AddContainerFiles(ctx.Resource, "/app", logger)
@@ -68,6 +84,96 @@ public static class BlazorGatewayExtensions
         }
 
         return gateway;
+    }
+
+    /// <summary>
+    /// Registers the built-in Blazor Gateway backed by an experimental <see cref="DotnetProjectResource"/>
+    /// from <c>Aspire.Hosting.Dotnet</c> (the run/watch-capable .NET resource), rather than the
+    /// <see cref="ProjectResource"/> used by <see cref="AddBlazorGateway"/>.
+    /// </summary>
+    /// <remarks>
+    /// During development, the gateway runs from the official .NET tool. Publishing uses the
+    /// file-based <c>Gateway.cs</c> app shipped with this package. The development and publish
+    /// prerequisites are the same as for <see cref="AddBlazorGateway"/>.
+    /// </remarks>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The name of the gateway resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the gateway resource.</returns>
+    /// <ats-summary>Adds the built-in Blazor gateway as a .NET program resource.</ats-summary>
+    /// <ats-param name="builder">The distributed application builder.</ats-param>
+    /// <ats-param name="name">The name of the gateway resource.</ats-param>
+    /// <ats-returns>The gateway resource builder.</ats-returns>
+    [AspireExport]
+    public static IResourceBuilder<DotnetProjectResource> AddDotnetProjectBlazorGateway(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name)
+    {
+        var gatewayPath = GetScriptPath("Gateway.cs");
+        var gateway = builder.AddDotnetProject(name, gatewayPath)
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        ConfigureGatewayToolForRunMode(gateway, builder.AppHostDirectory, builder.Environment.EnvironmentName);
+
+        return gateway;
+    }
+
+    private static void ConfigureGatewayToolForRunMode<TGateway>(
+        IResourceBuilder<TGateway> gateway,
+        string workingDirectory,
+        string environmentName)
+        where TGateway : class, IResourceWithArgs
+    {
+        if (!gateway.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return;
+        }
+
+        // Keep the project-shaped resource and its dashboard/endpoint behavior, but force process
+        // execution so IDEs do not launch the file-based app represented by the project metadata.
+        gateway
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "Project",
+                Properties = [
+                    new(CustomResourceKnownProperties.Source, string.Empty)
+                ]
+            })
+            .WithAnnotation(new ForceProcessExecutionAnnotation())
+            .WithLaunchToolArgs(context =>
+            {
+                context.Args.Add("tool");
+                context.Args.Add("exec");
+                context.Args.Add(BlazorGatewayCliPackageId);
+                context.Args.Add("--version");
+                context.Args.Add(s_blazorGatewayCliVersion);
+                context.Args.Add("--yes");
+                context.Args.Add("--");
+            }, showInCommandLine: false)
+            .WithArgs(
+                "--environment", environmentName,
+                "--Logging:LogLevel:Microsoft=Warning",
+                "--Logging:LogLevel:Microsoft.Hosting.Lifetime=Information",
+                "--Logging:LogLevel:System.Net.Http.HttpClient.OtlpExporter=Warning")
+            .WithRequiredCommand("dotnet");
+
+        if (gateway.Resource is ProjectResource)
+        {
+            gateway
+                .WithAnnotation(new ExecutableAnnotation
+                {
+                    Command = "dotnet",
+                    WorkingDirectory = workingDirectory
+                })
+                .WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["run"]));
+        }
+        else if (gateway.Resource is ExecutableResource executableResource)
+        {
+            var executableAnnotation = executableResource.Annotations.OfType<ExecutableAnnotation>().Last();
+            executableAnnotation.Command = "dotnet";
+            executableAnnotation.WorkingDirectory = workingDirectory;
+            executableAnnotation.WorkingDirectoryExplicitlySet = true;
+        }
     }
 
     /// <summary>
@@ -133,6 +239,9 @@ public static class BlazorGatewayExtensions
     /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
+    /// <remarks>
+    /// For development and publish prerequisites, see <see cref="AddBlazorGateway"/>.
+    /// </remarks>
     [AspireExport]
     public static IResourceBuilder<ProjectResource> WithBlazorClientApp(
         this IResourceBuilder<ProjectResource> gateway,
@@ -140,6 +249,48 @@ public static class BlazorGatewayExtensions
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
         bool proxyTelemetry = true)
+        => gateway.WithBlazorClientAppCore(wasmApp, apiPrefix, otlpPrefix, proxyTelemetry);
+
+    /// <summary>
+    /// Attaches a Blazor WebAssembly app to a <see cref="DotnetProjectResource"/>-backed Gateway created via
+    /// <see cref="AddDotnetProjectBlazorGateway"/>. Behaves identically to
+    /// <see cref="WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>.
+    /// </summary>
+    /// <param name="gateway">The gateway resource builder.</param>
+    /// <param name="wasmApp">The Blazor WebAssembly app to attach to the gateway.</param>
+    /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
+    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
+    /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the gateway resource.</returns>
+    /// <ats-summary>
+    /// Attaches a Blazor WebAssembly app to the gateway. The app's resource name becomes its URL path prefix,
+    /// and its service references are forwarded to the gateway for proxying.
+    /// </ats-summary>
+    /// <ats-param name="gateway">The gateway resource builder.</ats-param>
+    /// <ats-param name="wasmApp">The Blazor WebAssembly app to attach to the gateway.</ats-param>
+    /// <ats-param name="apiPrefix">The URL path prefix for API proxy routes. The default is <c>"_api"</c>.</ats-param>
+    /// <ats-param name="otlpPrefix">The URL path prefix for telemetry proxy routes. The default is <c>"_otlp"</c>.</ats-param>
+    /// <ats-param name="proxyTelemetry"><see langword="true"/> to expose the telemetry proxy for the client app; otherwise, <see langword="false"/>.</ats-param>
+    /// <ats-returns>The gateway resource builder.</ats-returns>
+    /// <remarks>
+    /// For development and publish prerequisites, see <see cref="AddBlazorGateway"/>.
+    /// </remarks>
+    [AspireExport("withDotnetProjectBlazorClientApp", MethodName = "withBlazorClientApp")]
+    public static IResourceBuilder<DotnetProjectResource> WithBlazorClientApp(
+        this IResourceBuilder<DotnetProjectResource> gateway,
+        IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
+        bool proxyTelemetry = true)
+        => gateway.WithBlazorClientAppCore(wasmApp, apiPrefix, otlpPrefix, proxyTelemetry);
+
+    private static IResourceBuilder<TGateway> WithBlazorClientAppCore<TGateway>(
+        this IResourceBuilder<TGateway> gateway,
+        IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string apiPrefix,
+        string otlpPrefix,
+        bool proxyTelemetry)
+        where TGateway : class, IResourceWithServiceDiscovery, IResourceWithEnvironment
     {
         var pathPrefix = wasmApp.Resource.Name;
 
@@ -171,7 +322,38 @@ public static class BlazorGatewayExtensions
 
         gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
+        // Register browser debugging support: create a hidden child debugger resource
+        // parented to the gateway, and a "Debug in Browser" command on the WASM app resource.
+        if (!gateway.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            BrowserDebuggerHelper.AddBrowserDebuggerResource(
+                gateway.ApplicationBuilder,
+                gateway.Resource,
+                wasmApp,
+                wasmApp.Resource.ProjectPath,
+                relativePath: pathPrefix,
+                browser: wasmApp.Resource.DebuggerBrowser);
+        }
+
         return gateway;
+    }
+
+    /// <summary>
+    /// Configures the browser launched when starting a debug session for the Blazor WebAssembly app.
+    /// The value is read when the debugger is registered on the gateway, so call this before
+    /// <see cref="WithBlazorClientApp(IResourceBuilder{ProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>
+    /// or <see cref="WithBlazorClientApp(IResourceBuilder{DotnetProjectResource}, IResourceBuilder{BlazorWasmAppResource}, string, string, bool)"/>
+    /// attaches the app.
+    /// </summary>
+    /// <param name="wasmApp">The Blazor WebAssembly app resource builder.</param>
+    /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
+    [AspireExport]
+    public static IResourceBuilder<BlazorWasmAppResource> WithBlazorDebuggerBrowser(
+        this IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string browser = "msedge")
+    {
+        wasmApp.Resource.DebuggerBrowser = browser;
+        return wasmApp;
     }
 
     /// <summary>
@@ -180,15 +362,16 @@ public static class BlazorGatewayExtensions
     /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
     /// into the Gateway as environment variables.
     /// </summary>
-    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
-    internal static IResourceBuilder<ProjectResource> WithBlazorApp(
-        this IResourceBuilder<ProjectResource> gateway,
+    [AspireExportIgnore(Reason = "Internal open-generic implementation helper; polyglot AppHosts use the exported WithBlazorClientApp methods.")]
+    internal static IResourceBuilder<TGateway> WithBlazorApp<TGateway>(
+        this IResourceBuilder<TGateway> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix,
         GatewayAppService[] services,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
         bool proxyTelemetry = true)
+        where TGateway : class, IResourceWithServiceDiscovery, IResourceWithEnvironment
     {
         var registration = new GatewayAppRegistration(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
@@ -272,19 +455,46 @@ public static class BlazorGatewayExtensions
     private static ProjectInfo GetProjectInfo(string projectPath, string appHostDirectory)
     {
         var projectDir = Path.GetDirectoryName(projectPath)!;
-        var solutionRoot = Path.GetFullPath(Path.Combine(appHostDirectory, ".."));
+        var solutionRoot = GetSolutionRoot(appHostDirectory, projectDir);
         var relativeProjectPath = Path.GetRelativePath(solutionRoot, projectDir)
             .Replace('\\', '/');
         return new ProjectInfo(solutionRoot, relativeProjectPath);
     }
 
-    private static void MirrorGatewayStateToClients(IResourceBuilder<ProjectResource> gateway)
+    internal static string GetSolutionRoot(string appHostDirectory, string projectDirectory)
+    {
+        for (var directory = new DirectoryInfo(appHostDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (ContainsPath(directory.FullName, projectDirectory)
+                && (directory.EnumerateFiles("*.sln", SearchOption.TopDirectoryOnly).Any()
+                    || directory.EnumerateFiles("*.slnx", SearchOption.TopDirectoryOnly).Any()))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Publishing the Blazor WebAssembly project '{projectDirectory}' requires a .sln or .slnx file " +
+            $"in an ancestor of the AppHost directory '{appHostDirectory}' that also contains the client project. " +
+            "This boundary is used as the Docker build context.");
+
+        static bool ContainsPath(string parentPath, string childPath)
+        {
+            var relativePath = Path.GetRelativePath(parentPath, childPath);
+            return !Path.IsPathRooted(relativePath)
+                && relativePath != ".."
+                && !relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
+        }
+    }
+
+    private static void MirrorGatewayStateToClients<TGateway>(IResourceBuilder<TGateway> gateway)
+        where TGateway : class, IResource
     {
         // Subscribe to the gateway's InitializeResourceEvent to start a background watcher
         // that mirrors state changes from the gateway to all registered WASM app resources.
         // This mirrors the pattern used by ApplicationOrchestrator.SetChildResourceAsync for
         // container children, but uses ResourceNotificationService.WatchAsync since the
-        // orchestrator does not propagate state for ProjectResource parents.
+        // orchestrator does not propagate state for the gateway resource's parents.
         gateway.ApplicationBuilder.Eventing.Subscribe<InitializeResourceEvent>(gateway.Resource, (e, ct) =>
         {
             var notificationService = e.Notifications;
@@ -293,10 +503,11 @@ public static class BlazorGatewayExtensions
         });
     }
 
-    private static async Task WatchGatewayStateAsync(
-        ProjectResource gateway,
+    private static async Task WatchGatewayStateAsync<TGateway>(
+        TGateway gateway,
         ResourceNotificationService notificationService,
         CancellationToken cancellationToken)
+        where TGateway : class, IResource
     {
         await foreach (var resourceEvent in notificationService.WatchAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -403,10 +614,11 @@ public static class BlazorGatewayExtensions
         return true;
     }
 
-    private static void CreatePublishCompanion(
-        IResourceBuilder<ProjectResource> gateway,
+    private static void CreatePublishCompanion<TGateway>(
+        IResourceBuilder<TGateway> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string pathPrefix)
+        where TGateway : class, IResource
     {
         var publishResourceName = $"{wasmApp.Resource.Name}publish";
         var project = GetProjectInfo(wasmApp.Resource.ProjectPath, gateway.ApplicationBuilder.AppHostDirectory);
@@ -427,22 +639,17 @@ public static class BlazorGatewayExtensions
             .WithImage("placeholder")
             .WithContainerFilesSource("/app/output");
 
-        companion.WithDockerfileFactory(project.SolutionRoot, ctx =>
+        companion.WithDockerfileFactory(project.SolutionRoot, async context =>
         {
-            return $$"""
-                FROM {{DotNetSdkImageRepo}}:{{s_dotNetImageTag}} AS build
-                WORKDIR /src
-                COPY . .
-                RUN dotnet publish "{{relativeProjectPath}}" -c Release -o /app/publish
-
-                # Prefix asset paths and add SPA fallback endpoint
-                RUN mkdir -p /app/output/wwwroot/{{pathPrefix}} && \
-                    cp -r /app/publish/wwwroot/* /app/output/wwwroot/{{pathPrefix}}/ && \
-                    dotnet run "{{scriptRelativePath}}" -- \
-                        /app/publish/*.staticwebassets.endpoints.json \
-                        {{pathPrefix}} \
-                        /app/output/{{pathPrefix}}.endpoints.json
-                """;
+            ILogger logger = context.Services.GetService<ILogger<BlazorWasmAppResource>>() is { } typedLogger
+                ? typedLogger
+                : Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
+            var properties = await BlazorWasmAppBuilder.GetPublishPropertiesAsync(
+                wasmApp.Resource.ProjectPath,
+                logger,
+                context.CancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"Unable to determine publish properties for '{wasmApp.Resource.ProjectPath}'.");
+            return BuildBlazorWasmPublishDockerfile(relativeProjectPath, scriptRelativePath, pathPrefix, properties.NETCoreSdkVersion, properties.TargetFramework);
         });
 
         gateway.WithAnnotation(new ContainerFilesDestinationAnnotation
@@ -450,6 +657,75 @@ public static class BlazorGatewayExtensions
             Source = companion.Resource,
             DestinationPath = "."
         });
+    }
+
+    internal static string BuildBlazorWasmPublishDockerfile(
+        string relativeProjectPath,
+        string scriptRelativePath,
+        string pathPrefix,
+        string clientSdkVersion,
+        string targetFramework)
+    {
+        var numericVersion = clientSdkVersion.Split('-', 2)[0];
+        if (!Version.TryParse(numericVersion, out var version)
+            || version.Major is < 8 or > 11
+            || clientSdkVersion.Any(character => !char.IsAsciiLetterOrDigit(character) && character is not '.' and not '-'))
+        {
+            throw new NotSupportedException($"Publishing a Blazor WebAssembly project with SDK '{clientSdkVersion}' is not supported. Use a .NET SDK from 8 through 11.");
+        }
+
+        ValidateBlazorWasmPublishTargetFramework(targetFramework);
+        var projectDirectory = Path.GetDirectoryName(relativeProjectPath)?.Replace('\\', '/');
+        var projectFileName = Path.GetFileName(relativeProjectPath);
+        var containerProjectDirectory = string.IsNullOrEmpty(projectDirectory)
+            ? "/src"
+            : $"/src/{projectDirectory}";
+
+        return $$"""
+            FROM {{DotNetSdkImageRepo}}:{{s_blazorSdkImageTag}} AS build
+            RUN curl --fail --show-error --location https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && \
+                bash /tmp/dotnet-install.sh --version {{clientSdkVersion}} --install-dir /opt/client-dotnet --no-path && \
+                rm /tmp/dotnet-install.sh
+            WORKDIR /src
+            COPY . .
+            WORKDIR {{containerProjectDirectory}}
+            RUN /opt/client-dotnet/dotnet publish "{{projectFileName}}" -f {{targetFramework}} -c Release -o /app/publish
+
+            # Prefix asset paths and add SPA fallback endpoint
+            WORKDIR /tmp
+            RUN mkdir -p /app/output/wwwroot/{{pathPrefix}} && \
+                cp -r /app/publish/wwwroot/* /app/output/wwwroot/{{pathPrefix}}/ && \
+                cp "/src/{{scriptRelativePath}}" /tmp/PrefixEndpoints.cs && \
+                dotnet run /tmp/PrefixEndpoints.cs -- \
+                    /app/publish/*.staticwebassets.endpoints.json \
+                    {{pathPrefix}} \
+                    /app/output/{{pathPrefix}}.endpoints.json
+            """;
+    }
+
+    internal static void ValidateBlazorWasmPublishTargetFramework(string targetFramework)
+    {
+        const int MaximumSupportedMajorVersion = 11;
+
+        if (targetFramework.Contains(';', StringComparison.Ordinal))
+        {
+            throw new NotSupportedException(
+                $"Publishing a multi-targeted Blazor WebAssembly project ('{targetFramework}') is not supported. Select one target framework.");
+        }
+
+        var versionSeparator = targetFramework.IndexOf('.');
+        var majorText = versionSeparator > 3
+            ? targetFramework.AsSpan(3, versionSeparator - 3)
+            : default;
+        if (!targetFramework.StartsWith("net", StringComparison.OrdinalIgnoreCase)
+            || majorText.IsEmpty
+            || !int.TryParse(majorText, out var majorVersion)
+            || !Version.TryParse(targetFramework[3..], out _)
+            || majorVersion > MaximumSupportedMajorVersion)
+        {
+            throw new NotSupportedException(
+                $"Publishing a Blazor WebAssembly project targeting '{targetFramework}' is not supported by the .NET {MaximumSupportedMajorVersion} SDK image.");
+        }
     }
 
     private static string GetScriptPath(string scriptName)
@@ -530,9 +806,10 @@ public static class BlazorGatewayExtensions
     /// <c>https+http://_endpointName.serviceName</c>). When all endpoints are referenced,
     /// all endpoints are forwarded so YARP can resolve by scheme.
     /// </summary>
-    private static void ForwardEndpointReference(
-        IResourceBuilder<ProjectResource> gateway,
+    private static void ForwardEndpointReference<TGateway>(
+        IResourceBuilder<TGateway> gateway,
         EndpointReferenceAnnotation endpointRef)
+        where TGateway : class, IResourceWithEnvironment
     {
         var svcResource = (IResourceWithServiceDiscovery)endpointRef.Resource;
 
@@ -619,7 +896,7 @@ public static class BlazorGatewayExtensions
         DistributedApplicationModel? model;
         try
         {
-            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+            model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
         }
         catch (InvalidOperationException)
         {
@@ -649,62 +926,14 @@ public static class BlazorGatewayExtensions
         public string RelativeProjectPath { get; } = relativeProjectPath;
     }
 
-    /// <summary>
-    /// Resolves the Docker image tag for .NET base images. Uses the maximum of the build-time
-    /// stamped version and the actual runtime version, with pre-release suffix when applicable.
-    /// </summary>
-    private static string GetDotNetImageTag()
+    private static string GetAssemblyMetadataValue(string key)
     {
-        var runtimeMajor = Environment.Version.Major;
-        var runtimeMinor = Environment.Version.Minor;
-
-        var stampedMajor = runtimeMajor;
-        var stampedMinor = runtimeMinor;
-
-        var stampedValue = typeof(BlazorGatewayExtensions).Assembly
+        return typeof(BlazorGatewayExtensions).Assembly
             .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), inherit: false)
             .OfType<System.Reflection.AssemblyMetadataAttribute>()
-            .FirstOrDefault(a => a.Key == "BlazorGatewayDotNetImageTag")
-            ?.Value;
-
-        if (!string.IsNullOrEmpty(stampedValue))
-        {
-            var parts = stampedValue.Split('.');
-            if (parts.Length >= 2
-                && int.TryParse(parts[0], out var sMajor)
-                && int.TryParse(parts[1], out var sMinor))
-            {
-                stampedMajor = sMajor;
-                stampedMinor = sMinor;
-            }
-        }
-
-        var major = Math.Max(runtimeMajor, stampedMajor);
-        var minor = (major == runtimeMajor && major == stampedMajor)
-            ? Math.Max(runtimeMinor, stampedMinor)
-            : (major == runtimeMajor ? runtimeMinor : stampedMinor);
-
-        var tag = $"{major}.{minor}";
-
-        // Append pre-release suffix when the runtime version won and is pre-release.
-        if (major == runtimeMajor && minor == runtimeMinor)
-        {
-            var informationalVersion = (System.Reflection.AssemblyInformationalVersionAttribute?)
-                Attribute.GetCustomAttribute(typeof(object).Assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
-
-            if (informationalVersion is not null)
-            {
-                if (informationalVersion.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase))
-                {
-                    tag += "-preview";
-                }
-                else if (informationalVersion.InformationalVersion.Contains("-rc", StringComparison.OrdinalIgnoreCase))
-                {
-                    tag += "-rc";
-                }
-            }
-        }
-
-        return tag;
+            .FirstOrDefault(attribute => attribute.Key == key)
+            ?.Value
+            ?? throw new InvalidOperationException($"Assembly metadata '{key}' is required.");
     }
+
 }

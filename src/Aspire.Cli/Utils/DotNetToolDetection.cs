@@ -8,7 +8,6 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class DotNetToolDetection
 {
-    private static readonly AsyncLocal<string?> s_processPathOverride = new();
     private static readonly string[] s_toolPackageRuntimeIdentifiers =
     [
         "win-x64",
@@ -20,19 +19,9 @@ internal static class DotNetToolDetection
         "osx-arm64"
     ];
 
-    internal static bool IsRunningAsDotNetTool()
-    {
-        return GetDotNetToolUpdateCommand() is not null;
-    }
-
     internal static bool IsRunningAsDotNetTool(string? processPath)
     {
         return GetDotNetToolUpdateCommand(processPath) is not null;
-    }
-
-    internal static string? GetDotNetToolUpdateCommand()
-    {
-        return GetDotNetToolUpdateCommand(s_processPathOverride.Value ?? Environment.ProcessPath);
     }
 
     internal static string? GetDotNetToolUpdateCommand(string? processPath)
@@ -274,8 +263,9 @@ internal static class DotNetToolDetection
 
     private static bool IsSupportedToolTargetFramework(string targetFramework)
     {
-        return string.Equals(targetFramework, "any", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(targetFramework, "net10.0", StringComparison.OrdinalIgnoreCase);
+        // eng/clipack packs the RID-specific tool as self-contained, so the SDK always lays the
+        // NativeAOT binary out under tools/any/<rid>/ (and the pointer package under tools/any/any/).
+        return string.Equals(targetFramework, "any", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSupportedToolRuntimeIdentifier(string runtimeIdentifier)
@@ -284,24 +274,9 @@ internal static class DotNetToolDetection
             string.Equals(runtimeIdentifier, "any", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static IDisposable UseProcessPathForTesting(string? processPath)
-    {
-        var previousValue = s_processPathOverride.Value;
-        s_processPathOverride.Value = processPath;
-        return new ProcessPathOverrideScope(previousValue);
-    }
-
     private static bool IsAspireExecutable(string executable)
     {
         return string.Equals(executable, "aspire", StringComparison.OrdinalIgnoreCase)
             || string.Equals(executable, "aspire.exe", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed class ProcessPathOverrideScope(string? previousValue) : IDisposable
-    {
-        public void Dispose()
-        {
-            s_processPathOverride.Value = previousValue;
-        }
     }
 }

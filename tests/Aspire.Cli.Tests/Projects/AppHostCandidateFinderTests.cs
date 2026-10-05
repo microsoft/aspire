@@ -7,6 +7,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -18,7 +19,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_WithEmptyPatterns_ReturnsEmptyResultAndDoesNotCallGit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var gitCalled = false;
         var gitRepository = new TestGitRepository
         {
@@ -41,7 +42,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_UsesGitIncludedFilesAsSource()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var gitListedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var diskOnlyAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "legacy/AppHost.csproj");
         var gitRepository = CreateGitRepository(gitListedAppHost.FullName);
@@ -58,7 +59,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_PassesSearchDirectoryToGitRepository()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var searchDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
         var appHost = await WriteFileAsync(searchDirectory, "App/AppHost.csproj");
         DirectoryInfo? capturedSearchRoot = null;
@@ -85,7 +86,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_AppliesSkipListAndDropsMissingFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var skipListedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "Node_Modules/pkg/AppHost.csproj");
         var missingAppHost = Path.Combine(workspace.WorkspaceRoot.FullName, "Removed", "AppHost.csproj");
@@ -100,9 +101,86 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_ExcludesAgentSkillSnippets()
+    {
+        // Skills under .agents/skills and .claude/skills ship apphost.ts files as code samples, not
+        // runnable AppHosts. See https://github.com/microsoft/aspire/issues/18398.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var agentSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".agents/skills/demo/snippets/apphost.ts");
+        var claudeSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".claude/skills/demo/snippets/apphost.ts");
+        var gitRepository = CreateGitRepository(agentSkillSnippetAppHost.FullName, claudeSkillSnippetAppHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(result.Files);
+        Assert.Equal(0, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_ExcludesPathScopedSkillSnippets()
+    {
+        // .github and .opencode hold more than skills, so only the .github/skills and .opencode/skill
+        // subpaths are excluded; a real AppHost elsewhere under .github is still discovered.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var gitHubSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/skills/demo/snippets/apphost.ts");
+        var openCodeSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".opencode/skill/demo/snippets/apphost.ts");
+        var gitHubNonSkillAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/AppHost/apphost.ts");
+        var gitRepository = CreateGitRepository(gitHubSkillSnippetAppHost.FullName, openCodeSkillSnippetAppHost.FullName, gitHubNonSkillAppHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var path = Assert.Single(result.Files).FullName;
+        Assert.Equal(gitHubNonSkillAppHost.FullName, path);
+        Assert.Equal(1, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_FilesystemFallback_ExcludesPathScopedSkillSnippets()
+    {
+        // The filesystem-walk fallback (no git repository) applies the same subpath exclusions as git mode.
+        // The kept AppHost lives under a non-hidden directory ("src"): on Unix, .NET reports dot-prefixed
+        // directories (.github/.opencode/.agents/.claude) as FileAttributes.Hidden, and the walk's
+        // enumeration skips hidden directories by default, so an AppHost under a dot-directory would not be
+        // discovered there regardless of the skip-list. Git mode (which enumerates tracked dot-directories
+        // on every platform) covers keeping a non-skill AppHost under .github.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await WriteFileAsync(workspace.WorkspaceRoot, ".github/skills/demo/snippets/apphost.ts");
+        await WriteFileAsync(workspace.WorkspaceRoot, ".opencode/skill/demo/snippets/apphost.ts");
+        var nonSkillAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "src/AppHost/apphost.ts");
+        var finder = CreateFinder();
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var paths = result.Files.Select(file => file.FullName).ToHashSet();
+        var path = Assert.Single(paths);
+        Assert.Equal(nonSkillAppHost.FullName, path);
+        Assert.Equal(1, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_DoesNotPruneWhenSearchRootIsNamedLikeExcludedDirectory()
+    {
+        // The skip-list matches only segments below the search root, so a repo checked out under a
+        // folder named like an excluded directory (here the root itself is "obj") keeps its AppHosts.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var searchRoot = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "obj"));
+        var appHost = await WriteFileAsync(searchRoot, "AppHost/apphost.ts");
+        var gitRepository = CreateGitRepository(appHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(searchRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var path = Assert.Single(result.Files).FullName;
+        Assert.Equal(appHost.FullName, path);
+        Assert.Equal(1, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_DoesNotApplySkipListToFileName()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostNamedLikeExcludedDirectory = await WriteFileAsync(workspace.WorkspaceRoot, "bin");
         var appHostInExcludedDirectory = await WriteFileAsync(workspace.WorkspaceRoot, "obj/bin");
         var gitRepository = CreateGitRepository(appHostNamedLikeExcludedDirectory.FullName, appHostInExcludedDirectory.FullName);
@@ -119,7 +197,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_ExcludesNuGetCachePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var cachedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "nuget-cache/packages/template/AppHost.csproj");
         var gitRepository = CreateGitRepository(appHost.FullName, cachedAppHost.FullName);
@@ -136,12 +214,12 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_EmitsProfilingActivities()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var gitRepository = CreateGitRepository(appHost.FullName);
@@ -167,7 +245,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_WhenGitUnavailable_FallsBackToFilesystemWithSkipList()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         await WriteFileAsync(workspace.WorkspaceRoot, "node_modules/pkg/AppHost.csproj");
         var gitCallCount = 0;
@@ -192,12 +270,12 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_FilesystemWalk_EmitsProfilingActivities()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var startedActivities = new List<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
 
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         await WriteFileAsync(workspace.WorkspaceRoot, "node_modules/pkg/AppHost.csproj");
@@ -229,7 +307,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_FilesystemFallback_ExcludesNuGetCacheButNotSiblingPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var siblingAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "nuget-cache-extra/AppHost.csproj");
         var cachedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "nuget-cache/packages/template/AppHost.csproj");
@@ -254,7 +332,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
             Assert.Skip("Case-insensitive path comparison only applies to Windows and macOS.");
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var cachedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "nuget-cache/packages/template/AppHost.csproj");
         var finder = CreateFinder();
@@ -271,7 +349,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_AllFilesScope_IncludesSkipListedDirectoriesAndDoesNotCallGit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var skipListedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "node_modules/pkg/AppHost.csproj");
         var gitCalled = false;
@@ -298,7 +376,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_AllFilesScope_ExcludesNuGetCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var cachedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "nuget-cache/packages/template/AppHost.csproj");
         var finder = CreateFinder();
@@ -316,7 +394,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_ExplicitDirectoryScope_AppliesSkipListAndDoesNotCallGit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         await WriteFileAsync(workspace.WorkspaceRoot, "node_modules/pkg/AppHost.csproj");
         var gitCalled = false;
@@ -341,7 +419,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_MaxDepthZero_MatchesOnlySearchDirectoryFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var directAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "AppHost.csproj");
         var nestedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var finder = CreateFinder();
@@ -357,7 +435,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_MaxDepthZero_DoesNotMatchDirectoryAwarePatternsBelowSearchDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nestedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var finder = CreateFinder();
 
@@ -371,7 +449,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFilteredGitMode_MaxDepthZero_MatchesOnlySearchDirectoryFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var directAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "AppHost.csproj");
         var nestedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var gitRepository = CreateGitRepository(directAppHost.FullName, nestedAppHost.FullName);
@@ -388,7 +466,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_ReturnsUniqueFilesAndCountsEveryPattern()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var csAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var tsAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "Ts/apphost.ts");
         var finder = CreateFinder();
@@ -409,7 +487,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_GitMatching_ObservesCancellation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var gitRepository = CreateGitRepository(appHost.FullName);
         var finder = CreateFinder(gitRepository);
@@ -423,7 +501,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_FilesystemWalk_ObservesCancellation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var finder = CreateFinder();
         using var cancellationTokenSource = new CancellationTokenSource();
@@ -436,7 +514,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_PatternWithDirectorySegment_MatchesFromSearchRoot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         await WriteFileAsync(workspace.WorkspaceRoot, "Other/AppHost.csproj");
         var finder = CreateFinder();
@@ -452,7 +530,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     public async Task FindCandidateFilesAsync_DefaultFiltered_WithRealGitRepository_ComposesGitignoreMatchingAndSkipList()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -483,7 +561,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     public async Task FindCandidateFilesAsync_DefaultFiltered_WithRealGitRepository_ScopesSubdirectorySearch()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -505,15 +583,15 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
 
     private static AppHostCandidateFinder CreateFinder(TestGitRepository? gitRepository = null, ProfilingTelemetry? profilingTelemetry = null)
     {
-        return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
+        return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), new TestEnvironment(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
     }
 
     private static AppHostCandidateFinder CreateFinderWithRealGit(DirectoryInfo workingDirectory)
     {
         var executionContext = CreateExecutionContext(workingDirectory);
         var profilingTelemetry = CreateProfilingTelemetry();
-        var gitRepository = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
-        return new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
+        var gitRepository = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
+        return new AppHostCandidateFinder(gitRepository, new TestEnvironment(), profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
     }
 
     private static TestGitRepository CreateGitRepository(params string[] includedPaths)
@@ -540,7 +618,7 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var sdksDirectory = settingsDirectory.CreateSubdirectory("sdks");
         var logsDirectory = settingsDirectory.CreateSubdirectory("logs");
 
-        return new Aspire.Cli.CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory, "test.log");
+        return new Aspire.Cli.CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory, "test.log", identityChannel: "local");
     }
 
     private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)
@@ -549,17 +627,5 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
         return new ProfilingTelemetry(configuration);
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

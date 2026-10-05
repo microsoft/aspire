@@ -138,6 +138,51 @@
   <data name="MissingCommandNotificationTitle" xml:space="preserve">
     <value>Missing command</value>
   </data>
+  <data name="ResourcePropertyContainerArgumentsDisplayName" xml:space="preserve">
+    <value>Container arguments</value>
+  </data>
+  <data name="ResourcePropertyContainerCommandDisplayName" xml:space="preserve">
+    <value>Container command</value>
+  </data>
+  <data name="ResourcePropertyContainerIdDisplayName" xml:space="preserve">
+    <value>Container ID</value>
+  </data>
+  <data name="ResourcePropertyContainerImageDisplayName" xml:space="preserve">
+    <value>Container image</value>
+  </data>
+  <data name="ResourcePropertyContainerLifetimeDisplayName" xml:space="preserve">
+    <value>Container lifetime</value>
+  </data>
+  <data name="ResourcePropertyContainerPortsDisplayName" xml:space="preserve">
+    <value>Container ports</value>
+  </data>
+  <data name="ResourcePropertyExecutableArgumentsDisplayName" xml:space="preserve">
+    <value>Executable arguments</value>
+  </data>
+  <data name="ResourcePropertyExecutablePathDisplayName" xml:space="preserve">
+    <value>Executable path</value>
+  </data>
+  <data name="ResourcePropertyExecutableProcessIdDisplayName" xml:space="preserve">
+    <value>Process ID</value>
+  </data>
+  <data name="ResourcePropertyExecutableWorkingDirectoryDisplayName" xml:space="preserve">
+    <value>Working directory</value>
+  </data>
+  <data name="ResourcePropertyParameterValueDisplayName" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="ResourcePropertyProjectLaunchProfileDisplayName" xml:space="preserve">
+    <value>Launch profile</value>
+  </data>
+  <data name="ResourcePropertyProjectPathDisplayName" xml:space="preserve">
+    <value>Project path</value>
+  </data>
+  <data name="ResourcePropertyToolPackageDisplayName" xml:space="preserve">
+    <value>Tool package</value>
+  </data>
+  <data name="ResourcePropertyToolVersionDisplayName" xml:space="preserve">
+    <value>Tool version</value>
+  </data>
   <data name="RequiredCommandNotFound" xml:space="preserve">
     <value>Required command '{0}' was not found on PATH or at the specified location.</value>
   </data>

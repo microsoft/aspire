@@ -246,4 +246,23 @@ internal static class AsyncTestHelpers
 
         return tcs.Task;
     }
+
+    /// <summary>
+    /// Returns a task that completes <em>successfully</em> when <paramref name="token"/> is cancelled.
+    /// Unlike <see cref="WaitForCancellationAsync(CancellationToken)"/>, which completes as cancelled
+    /// (throwing <see cref="OperationCanceledException"/> when awaited), this is intended for tests that
+    /// want to await the cancellation edge as a normal signal without an exception.
+    /// </summary>
+    public static Task WaitUntilCancelledAsync(this CancellationToken token)
+    {
+        if (token.IsCancellationRequested)
+        {
+            return Task.CompletedTask;
+        }
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var registration = token.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), tcs);
+        tcs.Task.ContinueWith(static (_, state) => ((CancellationTokenRegistration)state!).Dispose(), registration, TaskScheduler.Default);
+        return tcs.Task;
+    }
 }

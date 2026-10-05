@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "Cible net8.0",
   "symbols/Framework/choices/net9.0/description": "Cible net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/XUnitVersion/description": "Version de xUnit.net à utiliser.",
   "symbols/XUnitVersion/displayName": "version xUnit.net",
   "symbols/XUnitVersion/choices/v2/displayName": "v2",

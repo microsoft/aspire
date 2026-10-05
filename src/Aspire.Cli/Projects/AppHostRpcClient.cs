@@ -38,12 +38,13 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     public static async Task<AppHostRpcClient> ConnectAsync(
         string socketPath,
         string authenticationToken,
+        IEnvironment environment,
         ProfilingTelemetry? profilingTelemetry,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(authenticationToken);
 
-        var stream = await ConnectToServerAsync(socketPath, cancellationToken);
+        var stream = await ConnectToServerAsync(socketPath, environment, cancellationToken);
         JsonRpc? jsonRpc = null;
 
         try
@@ -108,6 +109,10 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     /// <inheritdoc />
     public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
         => InvokeCodeGenerationAsync<Commands.Sdk.CapabilitiesInfo>("getCapabilities", [assemblyNames], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<JsonElement> ExportApiAsync(string languageId, string packageName, string packageVersion, CancellationToken cancellationToken)
+        => InvokeCodeGenerationAsync<JsonElement>("exportApi", [languageId, packageName, packageVersion], cancellationToken);
 
     /// <inheritdoc />
     public Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
@@ -178,12 +183,12 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     /// <summary>
     /// Connects to the RPC server using platform-appropriate transport.
     /// </summary>
-    private static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
+    private static async Task<Stream> ConnectToServerAsync(string socketPath, IEnvironment environment, CancellationToken cancellationToken)
     {
         var startTime = DateTimeOffset.UtcNow;
         const int ConnectionTimeoutSeconds = 30;
 
-        if (OperatingSystem.IsWindows())
+        if (environment.IsWindows())
         {
             var pipeClient = new NamedPipeClientStream(".", socketPath, PipeDirection.InOut, PipeOptions.Asynchronous);
             try
@@ -247,11 +252,11 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
 /// <summary>
 /// Factory for creating <see cref="IAppHostRpcClient"/> instances.
 /// </summary>
-internal sealed class AppHostRpcClientFactory : IAppHostRpcClientFactory
+internal sealed class AppHostRpcClientFactory(IEnvironment environment) : IAppHostRpcClientFactory
 {
     /// <inheritdoc />
     public async Task<IAppHostRpcClient> ConnectAsync(string socketPath, string authenticationToken, CancellationToken cancellationToken)
     {
-        return await AppHostRpcClient.ConnectAsync(socketPath, authenticationToken, profilingTelemetry: null, cancellationToken).ConfigureAwait(false);
+        return await AppHostRpcClient.ConnectAsync(socketPath, authenticationToken, environment, profilingTelemetry: null, cancellationToken).ConfigureAwait(false);
     }
 }

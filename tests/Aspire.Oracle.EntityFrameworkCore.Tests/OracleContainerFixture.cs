@@ -26,13 +26,12 @@ public sealed class OracleContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             _diagnosticMessageSink.OnMessage(new DiagnosticMessage("Oracle container initialization starting..."));
-            Container = new OracleBuilder()
+            Container = new OracleBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/gvenzl/oracle-xe:21.3.0-slim-faststart")
                 .WithPortBinding(1521, true)
                 .WithHostname("localhost")
-                .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/gvenzl/oracle-xe:21.3.0-slim-faststart")
                 .WithWaitStrategy(Wait
                     .ForUnixContainer()
                     .UntilMessageIsLogged("Completed: ALTER DATABASE OPEN")

@@ -10,6 +10,7 @@ internal static class DashboardUrls
 {
     public const string ResourcesBasePath = "";
     public const string ConsoleLogBasePath = "consolelogs";
+    public const string TerminalsBasePath = "terminals";
     public const string MetricsBasePath = "metrics";
     public const string StructuredLogsBasePath = "structuredlogs";
     public const string TracesBasePath = "traces";
@@ -47,6 +48,17 @@ internal static class DashboardUrls
     {
         var url = $"/{ConsoleLogBasePath}";
         if (resource != null)
+        {
+            url += $"/resource/{Uri.EscapeDataString(resource)}";
+        }
+
+        return url;
+    }
+
+    public static string TerminalsUrl(string? resource = null)
+    {
+        var url = $"/{TerminalsBasePath}";
+        if (resource is not null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
         }

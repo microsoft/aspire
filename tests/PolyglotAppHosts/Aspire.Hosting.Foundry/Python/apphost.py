@@ -1,4 +1,4 @@
-from aspire_app import create_builder
+from aspire_app import FoundryModel, create_builder
 
 
 with create_builder() as builder:
@@ -10,24 +10,26 @@ with create_builder() as builder:
         model_version="1",
         format="Microsoft")
 
-    model = {
-        "name": "gpt-4.1-mini",
-        "version": "1",
-        "format": "OpenAI"
+    model: FoundryModel = {
+        "Name": "gpt-4.1-mini",
+        "Version": "1",
+        "Format": "OpenAI"
     }
 
     _chat_from_model = foundry.add_deployment("chat-from-model", model)
 
-    local_foundry = builder.add_foundry("local-foundry").run_as_foundry_local()
+    local_foundry = builder.add_foundry("local-foundry").run_as_foundry_local(
+        endpoint="http://windows-host:5273")
     _local_chat = local_foundry.add_deployment(
         "local-chat",
         "Phi-3.5-mini-instruct",
         model_version="1",
         format="Microsoft")
+    _local_chat.local_model_id = "Phi-3.5-mini-instruct-generic-gpu:1"
 
     registry = builder.add_azure_container_registry("registry")
     key_vault = builder.add_azure_key_vault("vault")
-    app_insights = builder.add_azure_application_insights("insights")
+    app_insights = builder.add_azure_app_insights("insights")
     cosmos = builder.add_azure_cosmos_db("cosmos")
     storage = builder.add_azure_storage("storage")
     search = builder.add_azure_search("search")
@@ -96,13 +98,7 @@ with create_builder() as builder:
         model_version="1",
         format="Microsoft")
     _project_model = project.add_model_deployment("project-model", model)
-    hosted_agent = builder.add_executable(
-        "hosted-agent",
-        "node",
-        ".",
-        [
-            "-e",
-            """
+    hosted_agent_script = """
 const http = require('node:http');
 const port = Number(process.env.DEFAULT_AD_PORT ?? '8088');
 const server = http.createServer((req, res) => {
@@ -116,17 +112,39 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ output: 'hello from validation app host' }));
     return;
   }
+  if (req.url === '/invocations') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ response: 'hello from validation app host' }));
+    return;
+  }
   res.writeHead(404);
   res.end();
 });
 server.listen(port, '127.0.0.1');
 """
-        ])
+    hosted_agent = builder.add_executable(
+        "hosted-agent",
+        "node",
+        ".",
+        ["-e", hosted_agent_script])
 
     hosted_agent.as_hosted_agent(project=project)
 
+    hosted_agent_with_protocol = builder.add_executable(
+        "hosted-agent-with-protocol",
+        "node",
+        ".",
+        ["-e", hosted_agent_script])
+    # Both hosted agents run as plain host processes (not containers), so they must not share the
+    # default 8088 target port or the second process fails to bind with EADDRINUSE.
+    hosted_agent_with_protocol.with_http_endpoint(target_port=8089)
+    hosted_agent_with_protocol.as_hosted_agent_with_protocol(
+        project,
+        "Invocations",
+        "1.0.0")
+
     api = builder.add_container("api", "nginx")
-    foundry.with_container_registry_role_assignments(registry)
+    foundry.with_container_registry_role_assignments(registry, ["AcrPull"])
 
     _deployment_name = chat.deployment_name
     _model_name = chat.model_name

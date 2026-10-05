@@ -1,0 +1,53 @@
+trigger: none
+
+pr: none
+
+schedules:
+- cron: "0 0 * * *"
+  displayName: Daily source indexing
+  branches:
+    include:
+    - main
+  always: true
+
+resources:
+  repositories:
+  - repository: 1ESPipelineTemplates
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    settings:
+      networkIsolationPolicy: Permissive,CFSClean,CFSClean2
+    featureFlags:
+      autoEnablePREfastWithNewRuleset: false
+      autoEnableRoslynWithNewRuleset: false
+    sdl:
+      componentgovernance:
+        ignoreDirectories: $(Build.SourcesDirectory)/.packages
+      policheck:
+        enabled: true
+        exclusionsFile: $(Build.SourcesDirectory)\.config\PoliCheckExclusions.xml
+      eslint:
+        enabled: false
+        justificationForDisabling: 'see https://portal.microsofticm.com/imp/v3/incidents/incident/482258316/summary'
+      sourceAnalysisPool:
+        name: NetCore1ESPool-Internal
+        image: windows.vs2026preview.scout.amd64
+        os: windows
+      tsa:
+        enabled: true
+    stages:
+    - stage: source_index
+      displayName: Source Index
+      jobs:
+      - template: /eng/common/templates-official/jobs/jobs.yml@self
+        parameters:
+          enableSourceIndex: true
+          sourceIndexParams:
+            # Use the repository wrapper so standalone restore receives its NuGet
+            # audit warning policy; Arcade's default command bypasses that wrapper.
+            sourceIndexBuildCommand: .\build.cmd -restore -build -binarylog -ci

@@ -132,11 +132,20 @@ yarp.WithConfiguration(builder =>
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
 // of the dashboard. It is not required in end developer code. Comment out this code
-// or build with `/p:SkipDashboardReference=true`, to test end developer
-// dashboard launch experience, Refer to Directory.Build.props for the path to
-// the dashboard binary (defaults to the Aspire.Dashboard bin output in the
-// artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+// or build with `/p:SkipDashboardProjectReference=true` to test the end developer
+// dashboard launch experience. The opt-out and project reference are defined in
+// playground/Directory.Build.targets. The repo-root Directory.Build.props sets the
+// default dashboard binary path to the Aspire.Dashboard output in the artifacts dir.
+var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is { Length: > 0 } dashboardOtlpEndpoint)
+{
+    // The AppHost normally points every project at its own dashboard. Preserve an explicitly configured
+    // external endpoint for dashboard self-telemetry so its activities can be inspected separately.
+    dashboardBuilder
+        .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", dashboardOtlpEndpoint)
+        .WithEnvironment("OTEL_EXPORTER_OTLP_PROTOCOL", builder.Configuration["OTEL_EXPORTER_OTLP_PROTOCOL"] ?? "grpc")
+        .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", builder.Configuration["OTEL_EXPORTER_OTLP_HEADERS"] ?? string.Empty);
+}
 #endif
 
 builder.Build().Run();

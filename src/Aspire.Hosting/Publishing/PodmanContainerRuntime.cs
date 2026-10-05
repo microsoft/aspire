@@ -6,6 +6,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,7 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContainerRuntime>
 {
-    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger) : base(logger)
+    public PodmanContainerRuntime(ILogger<PodmanContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
 
@@ -55,7 +56,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         };
 
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+        var (pendingProcessResult, processDisposable) = ProcessRunner.Run(spec);
 
         await using (processDisposable)
         {
@@ -147,6 +148,11 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             ? $"{options.ImageName}:{options.Tag}"
             : options?.ImageName ?? throw new ArgumentException("ImageName must be provided in options.", nameof(options));
 
+        if (options.ImageFormat == ContainerImageFormat.Oci && string.IsNullOrEmpty(options.OutputPath))
+        {
+            throw new ArgumentException("OutputPath must be provided when ImageFormat is Oci.", nameof(options));
+        }
+
         var arguments = $"build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
 
         // Add platform support if specified
@@ -167,13 +173,17 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             arguments += $" --format \"{format}\"";
         }
 
-        // Add output support if specified
-        if (!string.IsNullOrEmpty(options?.OutputPath))
-        {
-            // Extract resource name from imageName for the file name
-            var resourceName = imageName.Split('/').Last().Split(':').First();
-            arguments += $" --output \"{Path.Combine(options.OutputPath, resourceName)}.tar\"";
-        }
+        // Archive output is deliberately NOT handled here.
+        //
+        // `podman build` has no image-archive output flag. Its `--output`/`-o` is a *filesystem* export
+        // (`-o type=local,dest=...`), not the image-archive equivalent of
+        // `docker buildx build --output type=oci,dest=...`, and it is rejected outright when talking to
+        // a remote/machine-backed service:
+        //   Error: '--output' option is not supported in remote mode
+        // The image-archive equivalent is a normal tagged build followed by `podman save`, which
+        // RunPodmanSaveAsync performs once the build below succeeds.
+        // See https://docs.podman.io/en/latest/markdown/podman-build.1.html and
+        // https://docs.podman.io/en/latest/markdown/podman-save.1.html
 
         // Add build arguments if specified
         arguments += BuildArgumentsString(buildArguments);
@@ -213,6 +223,62 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 processResult.ProcessOutput,
                 processResult.TotalProcessOutputLineCount);
         }
+
+        if (!string.IsNullOrEmpty(options?.OutputPath))
+        {
+            await RunPodmanSaveAsync(imageName, options, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Exports an already-built image to an archive, which is how Podman produces the equivalent of
+    /// <c>docker buildx build --output type=oci,dest=...</c>.
+    /// </summary>
+    private async Task RunPodmanSaveAsync(string imageName, ContainerImageBuildOptions options, CancellationToken cancellationToken)
+    {
+        var arguments = BuildSaveArguments(imageName, options);
+
+        var processResult = await ExecuteContainerCommandWithResultAsync(
+            arguments,
+            "Podman save for {ImageName} failed with exit code {ExitCode}.",
+            "Podman save for {ImageName} succeeded.",
+            cancellationToken,
+            new object[] { imageName },
+            retainOutput: true).ConfigureAwait(false);
+
+        if (processResult.ExitCode != 0)
+        {
+            throw new ProcessFailedException(
+                $"Podman save failed with exit code {processResult.ExitCode}.",
+                processResult.ExitCode,
+                processResult.ProcessOutput,
+                processResult.TotalProcessOutputLineCount);
+        }
+    }
+
+    /// <summary>
+    /// Builds the <c>podman save</c> arguments that export <paramref name="imageName"/> to an image archive.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// save --format "oci-archive" --output "/out/myapp-latest.tar" "myapp:latest"
+    /// </code>
+    /// </example>
+    internal static string BuildSaveArguments(string imageName, ContainerImageBuildOptions options)
+    {
+        var format = options.ImageFormat switch
+        {
+            ContainerImageFormat.Oci => "oci-archive",
+            // The .NET SDK and Docker both treat an unspecified format as the Docker manifest type.
+            ContainerImageFormat.Docker or null => "docker-archive",
+            _ => throw new ArgumentOutOfRangeException(nameof(options), options.ImageFormat, "Invalid container image format")
+        };
+
+        // Derive the archive path through the shared helper so that this runtime, the Docker runtime, and
+        // ContainerImageReference (which hands the path to consumers) all resolve the same file.
+        var archivePath = ResourceExtensions.GetContainerImageArchivePath(options.OutputPath!, imageName);
+
+        return $"save --format \"{format}\" --output \"{archivePath}\" \"{imageName}\"";
     }
 
     public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
@@ -237,10 +303,159 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
                 "Podman is running and healthy.",
                 cancellationToken,
                 Array.Empty<object>()).ConfigureAwait(false);
-            
+
             return exitCode == 0;
         }
         catch
+        {
+            return false;
+        }
+    }
+
+    public override async Task<ContainerImageManifestInspectionResult> InspectImageManifestAsync(string imageName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(imageName);
+        var remoteImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageName
+            : $"docker://{imageName}";
+
+        string manifest;
+        try
+        {
+            manifest = await ExecuteContainerCommandForOutputAsync(
+                ["manifest", "inspect", remoteImageName],
+                "inspect image manifest",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                rawJson: null,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        if (!IsJsonObjectOrArray(manifest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                manifest,
+                $"Podman returned an invalid image manifest for '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        if (!IsPlainSingleImageManifest(manifest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Succeeded,
+                manifest,
+                errorMessage: null,
+                (operatingSystem, architecture) => FindManifest(manifest, operatingSystem, architecture));
+        }
+
+        // Podman returns a plain OCI/Docker manifest for a single-architecture tag:
+        //   { "schemaVersion": 2, "config": { ... }, "layers": [ ... ] }
+        // Unlike its manifest-list output, that shape has no digest. Query the local image
+        // metadata so the sandbox deployer can still pin the tag to an immutable reference.
+        var localImageName = imageName.StartsWith("docker://", StringComparison.OrdinalIgnoreCase)
+            ? imageName["docker://".Length..]
+            : imageName;
+        string imageMetadata;
+        try
+        {
+            await ExecuteContainerCommandForOutputAsync(
+                ["pull", remoteImageName],
+                "pull image for metadata inspection",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+            imageMetadata = await ExecuteContainerCommandForOutputAsync(
+                ["image", "inspect", "--format", """{"Digest":{{json .Digest}},"Os":{{json .Os}},"Architecture":{{json .Architecture}}}""", localImageName],
+                "inspect image metadata",
+                imageName,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (DistributedApplicationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                manifest,
+                ex.Message,
+                manifestAccessor: null);
+        }
+
+        string? digest;
+        string? os;
+        string? architecture;
+        try
+        {
+            using var metadataDocument = JsonDocument.Parse(imageMetadata);
+            var metadata = metadataDocument.RootElement;
+            digest = metadata.TryGetProperty("Digest", out var digestProperty) ? digestProperty.GetString() : null;
+            os = metadata.TryGetProperty("Os", out var osProperty) ? osProperty.GetString() : null;
+            architecture = metadata.TryGetProperty("Architecture", out var architectureProperty) ? architectureProperty.GetString() : null;
+        }
+        catch (JsonException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
+                manifestAccessor: null);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman returned invalid image metadata for '{imageName}': {ex.Message}",
+                manifestAccessor: null);
+        }
+
+        if (digest is null || !ContainerImageManifest.IsValidDigest(digest))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman did not return an immutable digest for image '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        if (string.IsNullOrWhiteSpace(os) || string.IsNullOrWhiteSpace(architecture))
+        {
+            return new ContainerImageManifestInspectionResult(
+                ContainerImageInspectionStatus.Failed,
+                imageMetadata,
+                $"Podman did not return platform metadata for image '{imageName}'.",
+                manifestAccessor: null);
+        }
+
+        var inspectedManifest = new ContainerImageManifest(digest, os, architecture);
+        return new ContainerImageManifestInspectionResult(
+            ContainerImageInspectionStatus.Succeeded,
+            imageMetadata,
+            errorMessage: null,
+            (requestedOperatingSystem, requestedArchitecture) =>
+                string.Equals(requestedOperatingSystem, inspectedManifest.OperatingSystem, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(requestedArchitecture, inspectedManifest.Architecture, StringComparison.OrdinalIgnoreCase)
+                    ? inspectedManifest
+                    : null);
+    }
+
+    private static bool IsPlainSingleImageManifest(string manifest)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(manifest);
+            var root = document.RootElement;
+            return root.ValueKind == JsonValueKind.Object &&
+                root.TryGetProperty("schemaVersion", out _) &&
+                root.TryGetProperty("config", out _) &&
+                root.TryGetProperty("layers", out _) &&
+                !root.TryGetProperty("manifests", out _);
+        }
+        catch (JsonException)
         {
             return false;
         }

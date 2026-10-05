@@ -31,34 +31,35 @@ public class IdentityChannelReaderTests
 
         var reader = new IdentityChannelReader(assembly);
 
-        Assert.Equal("pr-12345", reader.ReadChannel());
+        Assert.True(reader.TryReadChannel(out var channel, out _));
+        Assert.Equal("pr-12345", channel);
     }
 
     [Fact]
-    public void ReadChannel_AssemblyMissingChannelMetadata_ThrowsWithAssemblyName()
+    public void ReadChannel_AssemblyMissingChannelMetadata_ReturnsFalseWithError()
     {
         const string assemblyName = "FakeCli_NoChannel";
         var assembly = BuildFakeAssemblyWithChannelMetadata(assemblyName, channelValue: null);
 
         var reader = new IdentityChannelReader(assembly);
 
-        var ex = Assert.Throws<InvalidOperationException>(reader.ReadChannel);
-        Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
-        Assert.Contains(assemblyName, ex.Message, StringComparison.Ordinal);
+        Assert.False(reader.TryReadChannel(out _, out var error));
+        Assert.Contains(ChannelMetadataKey, error, StringComparison.Ordinal);
+        Assert.Contains(assemblyName, error, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ReadChannel_AssemblyHasInvalidChannelMetadata_Throws()
+    public void ReadChannel_AssemblyHasInvalidChannelMetadata_ReturnsFalseWithError()
     {
-        // Integration smoke that an invalid baked value surfaces as InvalidOperationException
+        // Integration smoke that an invalid baked value surfaces as a failure
         // through the reader. The exhaustive invalid-value matrix is in
         // IsValidChannel_MatchesExpectedTruthTable below.
         var assembly = BuildFakeAssemblyWithChannelMetadata("FakeCli_Invalid", "pr");
 
         var reader = new IdentityChannelReader(assembly);
 
-        var ex = Assert.Throws<InvalidOperationException>(reader.ReadChannel);
-        Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
+        Assert.False(reader.TryReadChannel(out _, out var error));
+        Assert.Contains(ChannelMetadataKey, error, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -73,7 +74,8 @@ public class IdentityChannelReaderTests
 
         var reader = new IdentityChannelReader(assembly);
 
-        Assert.Equal("staging", reader.ReadChannel());
+        Assert.True(reader.TryReadChannel(out var channel, out _));
+        Assert.Equal("staging", channel);
     }
 
     [Fact]
@@ -85,8 +87,8 @@ public class IdentityChannelReaderTests
 
         var reader = new IdentityChannelReader(assembly);
 
-        var ex = Assert.Throws<InvalidOperationException>(reader.ReadChannel);
-        Assert.Contains(ChannelMetadataKey, ex.Message, StringComparison.Ordinal);
+        Assert.False(reader.TryReadChannel(out _, out var error));
+        Assert.Contains(ChannelMetadataKey, error, StringComparison.Ordinal);
     }
 
     // IsValidChannel is the gate for the baked value. We assert its exact

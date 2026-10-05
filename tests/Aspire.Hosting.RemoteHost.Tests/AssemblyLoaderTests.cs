@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -171,8 +172,6 @@ public class AssemblyLoaderTests
     [Fact]
     public void GetAssemblies_AddsAssemblyNamesToProfilingSpan()
     {
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -181,7 +180,10 @@ public class AssemblyLoaderTests
             })
             .Build();
 
-        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, new RemoteHostProfilingTelemetry(configuration));
+        var telemetry = new RemoteHostProfilingTelemetry(configuration);
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
+        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, telemetry);
 
         var assemblies = loader.GetAssemblies();
 
@@ -191,6 +193,60 @@ public class AssemblyLoaderTests
         Assert.Contains("Aspire.Hosting", requestedNames);
         var loadedNames = Assert.IsType<string[]>(activity.GetTagItem(RemoteHostProfilingTelemetry.Tags.AssemblyLoadedNames));
         Assert.Contains("Aspire.Hosting", loadedNames);
+    }
+
+    [Fact]
+    public void TryGetPackageAssemblyNamesFromProbePaths_UsesManifestIdentityForCopiedClosureAssets()
+    {
+        using var manifestDirectory = new TemporaryDirectory();
+        using var closureDirectory = new TemporaryDirectory();
+
+        var firstAssemblyPath = System.IO.Path.Combine(closureDirectory.Path, "Aspire.Hosting.Test.First.dll");
+        var secondAssemblyPath = System.IO.Path.Combine(closureDirectory.Path, "Aspire.Hosting.Test.Second.dll");
+        File.WriteAllText(firstAssemblyPath, string.Empty);
+        File.WriteAllText(secondAssemblyPath, string.Empty);
+
+        var manifestPath = System.IO.Path.Combine(manifestDirectory.Path, IntegrationPackageProbeManifest.FileName);
+        WriteProbeManifest(
+            manifestPath,
+            managedAssemblies:
+            [
+                new
+                {
+                    Name = "Aspire.Hosting.Test.First",
+                    PackageId = "Aspire.Hosting.Test.Package",
+                    PackageVersion = "1.2.3",
+                    Path = firstAssemblyPath
+                },
+                new
+                {
+                    Name = "Aspire.Hosting.Test.Second",
+                    PackageId = "Aspire.Hosting.Test.Package",
+                    PackageVersion = "1.2.3",
+                    Path = secondAssemblyPath
+                }
+            ]);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH"] = manifestPath
+            })
+            .Build();
+        var loader = new AssemblyLoader(
+            configuration,
+            NullLogger<AssemblyLoader>.Instance,
+            CreateProfilingTelemetry());
+
+        Assert.True(loader.TryGetPackageAssemblyNamesFromProbePaths(
+            "aspire.hosting.test.package",
+            "1.2.3",
+            out var assemblyNames,
+            out var canonicalPackageId));
+        Assert.Equal("Aspire.Hosting.Test.Package", canonicalPackageId);
+        Assert.Equal(
+            ["Aspire.Hosting.Test.First", "Aspire.Hosting.Test.Second"],
+            assemblyNames);
     }
 
     private static void WriteProbeManifest(string manifestPath, IEnumerable<object>? managedAssemblies = null, IEnumerable<object>? nativeLibraries = null)
@@ -238,18 +294,5 @@ public class AssemblyLoaderTests
     private static RemoteHostProfilingTelemetry CreateProfilingTelemetry()
     {
         return new RemoteHostProfilingTelemetry(new ConfigurationBuilder().Build());
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 }

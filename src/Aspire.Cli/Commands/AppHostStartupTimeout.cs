@@ -4,6 +4,7 @@
 using System.Globalization;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Commands;
@@ -32,5 +33,26 @@ internal static class AppHostStartupTimeout
             RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable,
             CliConfigNames.AppHostStartupTimeout));
         return false;
+    }
+
+    public static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
+    {
+        var configuredValue = configuration[KnownConfigNames.CliBackchannelConnectTimeoutSeconds];
+        if (double.TryParse(configuredValue, CultureInfo.InvariantCulture, out var seconds)
+            && double.IsFinite(seconds)
+            && seconds >= 0
+            && seconds <= TimeSpan.MaxValue.TotalSeconds)
+        {
+            return TimeSpan.FromSeconds(seconds);
+        }
+
+        var timeout = TimeSpan.FromSeconds(WaitCommand.DefaultTimeoutSeconds);
+        var configuredStartupTimeout = configuration[CliConfigNames.AppHostStartupTimeout];
+        if (int.TryParse(configuredStartupTimeout, CultureInfo.InvariantCulture, out var startupTimeoutSeconds) && startupTimeoutSeconds > timeout.TotalSeconds)
+        {
+            timeout = TimeSpan.FromSeconds(startupTimeoutSeconds);
+        }
+
+        return timeout;
     }
 }

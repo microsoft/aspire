@@ -29,4 +29,11 @@
         IconRest="MetricsIcon()"
         IconActive="MetricsIcon(active: true)"
         Text="@Loc[nameof(Layout.NavMenuMetricsTab)]" />
+    @if (DashboardClient.IsEnabled && HasResourceTerminals)
+    {
+        <FluentAppBarItem Href="@DashboardUrls.TerminalsUrl()"
+            IconRest="TerminalsIcon()"
+            IconActive="TerminalsIcon(active: true)"
+            Text="@Loc[nameof(Layout.NavMenuTerminalsTab)]" />
+    }
 </FluentAppBar>

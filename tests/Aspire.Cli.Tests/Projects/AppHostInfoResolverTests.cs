@@ -5,7 +5,6 @@ using System.Text.Json;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -15,7 +14,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_UsesDiskCacheWhenPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var runner = new TestDotNetCliRunner
         {
@@ -56,7 +55,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_CachesSuccessfulMsBuildEvaluationInMemory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var msbuildCalls = 0;
         var runner = new TestDotNetCliRunner
@@ -80,7 +79,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_DoesNotCacheFailedMsBuildEvaluationInMemory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var msbuildCalls = 0;
         var runner = new TestDotNetCliRunner
@@ -106,7 +105,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_CoalescesConcurrentMsBuildEvaluationInMemory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var complete = new TaskCompletionSource<(int ExitCode, JsonDocument? Output)>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -137,7 +136,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_CallerCancellationDoesNotCancelSharedEvaluation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var complete = new TaskCompletionSource<(int ExitCode, JsonDocument? Output)>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -169,15 +168,17 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_RequestsComputeRunArgumentsTarget()
+    public async Task GetAppHostInfoAsync_RequestsOnlyEvaluationSafeTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
+        string[]? capturedProperties = null;
         string[]? capturedTargets = null;
         var runner = new TestDotNetCliRunner
         {
-            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, properties, targets, _, _) =>
             {
+                capturedProperties = properties;
                 capturedTargets = targets;
                 return (0, CreateAppHostInfoJson());
             },
@@ -190,14 +191,20 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         // The direct-launch path reads RunCommand/RunArguments/RunWorkingDirectory, which the
         // SDK only populates after ComputeRunArguments has run. The resolver must request that
         // target on its single MSBuild probe so the cached run metadata is correct.
+        Assert.NotNull(capturedProperties);
+        Assert.Equal(
+            ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
+            capturedProperties);
         Assert.NotNull(capturedTargets);
-        Assert.Contains("ComputeRunArguments", capturedTargets);
+        Assert.Equal(["ComputeRunArguments"], capturedTargets);
     }
 
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace)
     {
+        // Write a realistic AppHost project so the XML pre-filter detects it from the project
+        // content (the Aspire.AppHost.Sdk reference), not just from the "*.AppHost.csproj" file name.
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost.csproj");
-        File.WriteAllText(path, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        File.WriteAllText(path, "<Project Sdk=\"Microsoft.NET.Sdk;Aspire.AppHost.Sdk/9.5.0\" />");
         return new FileInfo(path);
     }
 

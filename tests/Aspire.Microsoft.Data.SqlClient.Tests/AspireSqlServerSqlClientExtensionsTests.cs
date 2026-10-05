@@ -14,27 +14,29 @@ public class AspireSqlServerSqlClientExtensionsTests
     private const string ConnectionString = "Data Source=fake;Database=master;Encrypt=True";
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ReadsFromConnectionStringsCorrectly(bool useKeyed)
+    [InlineData(true, "sqlconnection", "ConnectionStrings:sqlconnection")]
+    [InlineData(false, "sqlconnection", "ConnectionStrings:sqlconnection")]
+    [InlineData(true, "9-sql.connection", "ConnectionStrings:_9_sql_connection")]
+    [InlineData(false, "9-sql.connection", "ConnectionStrings:_9_sql_connection")]
+    public void ReadsFromConnectionStringsCorrectly(bool useKeyed, string connectionName, string connectionStringKey)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("ConnectionStrings:sqlconnection", ConnectionString)
+            new KeyValuePair<string, string?>(connectionStringKey, ConnectionString)
         ]);
 
         if (useKeyed)
         {
-            builder.AddKeyedSqlServerClient("sqlconnection");
+            builder.AddKeyedSqlServerClient(connectionName);
         }
         else
         {
-            builder.AddSqlServerClient("sqlconnection");
+            builder.AddSqlServerClient(connectionName);
         }
 
         using var host = builder.Build();
         var connection = useKeyed ?
-            host.Services.GetRequiredKeyedService<SqlConnection>("sqlconnection") :
+            host.Services.GetRequiredKeyedService<SqlConnection>(connectionName) :
             host.Services.GetRequiredService<SqlConnection>();
 
         Assert.Equal(ConnectionString, connection.ConnectionString);
@@ -129,5 +131,18 @@ public class AspireSqlServerSqlClientExtensionsTests
         Assert.Contains("fake1", connection1.ConnectionString);
         Assert.Contains("fake2", connection2.ConnectionString);
         Assert.Contains("fake3", connection3.ConnectionString);
+    }
+
+    // Regression guard: SqlClient 7.0 moved the Entra ID (Active Directory) auth providers into
+    // Microsoft.Data.SqlClient.Extensions.Azure. This integration references that package, so they must resolve here;
+    // otherwise the Authentication="Active Directory Default" connection strings Aspire emits fail at runtime.
+    [Theory]
+    [InlineData(SqlAuthenticationMethod.ActiveDirectoryDefault)]
+    [InlineData(SqlAuthenticationMethod.ActiveDirectoryManagedIdentity)]
+    public void EntraIdAuthenticationProviderIsRegistered(SqlAuthenticationMethod method)
+    {
+        var provider = SqlAuthenticationProvider.GetProvider(method);
+
+        Assert.NotNull(provider);
     }
 }

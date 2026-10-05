@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Profiling;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -16,7 +15,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCreate_ReturnsNull_WhenCaptureProfileIsNotSpecified()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var options = ProfileCaptureOptions.TryCreate(["run"], TimeProvider.System, workspace.WorkspaceRoot, CreatePortProvider());
 
@@ -26,7 +25,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCreate_IgnoresCaptureProfileAfterDelimiter()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var options = ProfileCaptureOptions.TryCreate(["run", "--", "--capture-profile"], TimeProvider.System, workspace.WorkspaceRoot, CreatePortProvider());
 
@@ -36,7 +35,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCreate_UsesExplicitOutputDelayAndAllocatedPorts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "profiles", "startup.zip");
 
         var options = ProfileCaptureOptions.TryCreate(
@@ -57,7 +56,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCreate_DefaultOutputPathIsUnderWorkingDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var options = ProfileCaptureOptions.TryCreate(["--capture-profile", "ls"], TimeProvider.System, workspace.WorkspaceRoot, CreatePortProvider());
 
@@ -71,7 +70,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCreate_UsesDefaultOutputFileNameWhenOutputIsExistingDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "profiles"));
 
         var options = ProfileCaptureOptions.TryCreate(
@@ -89,7 +88,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCreate_UsesDefaultOutputFileNameWhenOutputEndsInDirectorySeparator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "profiles") + Path.DirectorySeparatorChar;
 
         var options = ProfileCaptureOptions.TryCreate(
@@ -105,45 +104,45 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveRepoLocalManagedPath_ReturnsNullWithoutRepoRoot()
+    public void ResolveRepoLocalDashboardPath_ReturnsNullWithoutRepoRoot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var managedBaseDirectory = Directory.CreateDirectory(Path.Combine(
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dashboardBaseDirectory = Directory.CreateDirectory(Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "artifacts",
             "bin",
-            "Aspire.Managed",
+            "Aspire.Dashboard",
             "Debug",
-            "net10.0"));
-        var expectedManagedPath = Path.Combine(
-            managedBaseDirectory.FullName,
-            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        File.WriteAllText(expectedManagedPath, string.Empty);
+            "net11.0"));
+        var expectedDashboardPath = Path.Combine(
+            dashboardBaseDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(expectedDashboardPath, string.Empty);
 
-        var resolvedPath = ProfileCaptureService.ResolveRepoLocalManagedPath(repoRoot: null);
+        var resolvedPath = ProfileCaptureService.ResolveRepoLocalDashboardPath(repoRoot: null);
 
         Assert.Null(resolvedPath);
     }
 
     [Fact]
-    public void ResolveRepoLocalManagedPath_UsesOptInRepoRoot()
+    public void ResolveRepoLocalDashboardPath_UsesOptInRepoRoot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var managedBaseDirectory = Directory.CreateDirectory(Path.Combine(
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dashboardBaseDirectory = Directory.CreateDirectory(Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "artifacts",
             "bin",
-            "Aspire.Managed",
+            "Aspire.Dashboard",
             "Debug",
-            "net10.0"));
-        var expectedManagedPath = Path.Combine(
-            managedBaseDirectory.FullName,
-            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        File.WriteAllText(expectedManagedPath, string.Empty);
+            "net11.0"));
+        var expectedDashboardPath = Path.Combine(
+            dashboardBaseDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(expectedDashboardPath, string.Empty);
 
-        var resolvedPath = ProfileCaptureService.ResolveRepoLocalManagedPath(workspace.WorkspaceRoot.FullName);
+        var resolvedPath = ProfileCaptureService.ResolveRepoLocalDashboardPath(workspace.WorkspaceRoot.FullName);
 
-        Assert.Equal(expectedManagedPath, resolvedPath);
+        Assert.Equal(expectedDashboardPath, resolvedPath);
     }
 
     [Fact]

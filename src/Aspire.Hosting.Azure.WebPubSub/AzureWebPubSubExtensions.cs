@@ -149,6 +149,7 @@ public static class AzureWebPubSubExtensions
 
         var resource = new AzureWebPubSubResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("MailMultiple")
             .WithDefaultRoleAssignments(WebPubSubBuiltInRole.GetBuiltInRoleName,
                 WebPubSubBuiltInRole.WebPubSubServiceOwner);
     }

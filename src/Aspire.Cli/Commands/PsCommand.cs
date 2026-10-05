@@ -7,10 +7,9 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -73,9 +72,19 @@ internal sealed partial class PsCommandJsonContext : JsonSerializerContext
 internal sealed partial class PsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
-    private readonly IInteractionService _interactionService;
+
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
+    private readonly IEnvironment _environment;
+    private readonly OrphanedAppHostCollector _collector;
     private readonly ILogger<PsCommand> _logger;
+    private readonly IProcessIdentityProvider _processIdentityProvider;
+    private readonly TimeProvider _timeProvider;
+    private readonly TrayProtocolOutput _protocolOutput;
+    private static readonly Option<PsOutput> s_outputOption = new("--output")
+    {
+        Description = PsCommandStrings.OutputOptionDescription,
+        DefaultValueFactory = _ => PsOutput.Default
+    };
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
         Description = PsCommandStrings.JsonOptionDescription
@@ -87,22 +96,42 @@ internal sealed partial class PsCommand : BaseCommand
     };
 
     public PsCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<PsCommand> logger)
-        : base("ps", PsCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        IEnvironment environment,
+        OrphanedAppHostCollector collector,
+        IProcessIdentityProvider processIdentityProvider,
+        TimeProvider timeProvider,
+        TrayProtocolOutput protocolOutput,
+        ILogger<PsCommand> logger,
+        CommonCommandServices services)
+        : base("ps", PsCommandStrings.Description, services)
     {
-        _interactionService = interactionService;
         _backchannelMonitor = backchannelMonitor;
+        _environment = environment;
+        _collector = collector;
         _logger = logger;
+        _processIdentityProvider = processIdentityProvider;
+        _timeProvider = timeProvider;
+        _protocolOutput = protocolOutput;
 
         Options.Add(s_formatOption);
         Options.Add(s_followOption);
+        Options.Add(s_outputOption);
+
+        Validators.Add(result =>
+        {
+            if (result.GetResult(s_outputOption) is { } outputResult
+                && outputResult.Tokens.Any(token =>
+                    !token.Value.Equals(nameof(PsOutput.Default), StringComparison.OrdinalIgnoreCase)
+                    && !token.Value.Equals(nameof(PsOutput.Snapshot), StringComparison.OrdinalIgnoreCase)))
+            {
+                result.AddError(PsCommandStrings.InvalidOutputMode);
+            }
+        });
     }
+
+    protected override bool IsJsonFormatRequested(ParseResult parseResult)
+        => parseResult.GetValue(s_outputOption) == PsOutput.Snapshot || base.IsJsonFormatRequested(parseResult);
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -110,16 +139,33 @@ internal sealed partial class PsCommand : BaseCommand
 
         var format = parseResult.GetValue(s_formatOption);
 
+        if (parseResult.GetValue(s_outputOption) == PsOutput.Snapshot)
+        {
+            if (!parseResult.GetValue(s_followOption) || format != OutputFormat.Json)
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.SnapshotRequiresFollowJson);
+            }
+
+            var stream = new TrayWatchStream(_backchannelMonitor, _processIdentityProvider, _timeProvider, _logger);
+            return CommandResult.FromExitCode(await stream.RunAsync(_protocolOutput.WriteLineAsync, cancellationToken).ConfigureAwait(false));
+        }
+
         if (parseResult.GetValue(s_followOption))
         {
             return await ExecuteFollowAsync(format, cancellationToken).ConfigureAwait(false);
         }
 
+        // Collect AppHosts whose launching CLI has died before listing, so the output reflects reality and
+        // leaked aspire-managed/AppHost processes are cleaned up. Best effort: CollectAsync swallows scan/stop
+        // failures (only cancellation propagates), so a collection hiccup never fails `aspire ps`. The listing
+        // scan below still surfaces its own failures.
+        await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+
         // Scan for running AppHosts (same as ListAppHostsTool). JSON output must not go
         // through status rendering because non-interactive status text shares stdout.
         var connections = format == OutputFormat.Json
             ? await ScanForConnectionsAsync(cancellationToken).ConfigureAwait(false)
-            : await _interactionService.ShowStatusAsync(
+            : await InteractionService.ShowStatusAsync(
                 SharedCommandStrings.ScanningForRunningAppHosts,
                 async () => await ScanForConnectionsAsync(cancellationToken).ConfigureAwait(false));
 
@@ -128,11 +174,11 @@ internal sealed partial class PsCommand : BaseCommand
             if (format == OutputFormat.Json)
             {
                 // Structured output always goes to stdout.
-                _interactionService.DisplayRawText("[]", ConsoleOutput.Standard);
+                InteractionService.DisplayRawText("[]", ConsoleOutput.Standard);
             }
             else
             {
-                _interactionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
+                InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
             }
             return CommandResult.Success();
         }
@@ -149,7 +195,7 @@ internal sealed partial class PsCommand : BaseCommand
         {
             var json = JsonSerializer.Serialize(appHostInfos, PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
             // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
@@ -164,6 +210,12 @@ internal sealed partial class PsCommand : BaseCommand
         await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
 
         return _backchannelMonitor.Connections.ToList();
+    }
+
+    private enum PsOutput
+    {
+        Default,
+        Snapshot
     }
 
     private abstract record PsFollowUpdate;
@@ -271,7 +323,7 @@ internal sealed partial class PsCommand : BaseCommand
 
             try
             {
-                _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+                InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
                 return true;
             }
             catch (Exception ex) when (ex is IOException or ObjectDisposedException)
@@ -291,9 +343,9 @@ internal sealed partial class PsCommand
         return string.Concat(appHost.AppHostPath, "\0", appHost.AppHostPid.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static StringComparer GetAppHostKeyComparer()
+    private StringComparer GetAppHostKeyComparer()
     {
-        return OperatingSystem.IsWindows()
+        return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
     }
@@ -356,6 +408,10 @@ internal sealed partial class PsCommand
                     }
                 }
             }
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                // The AppHost may disconnect after the connection snapshot was taken.
+            }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "Failed to get AppHost SDK version for {AppHostPath}", info.AppHostPath);
@@ -367,6 +423,10 @@ internal sealed partial class PsCommand
             {
                 var dashboardUrls = await connection.GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
                 dashboardUrl = dashboardUrls?.BaseUrlWithLoginToken;
+            }
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                // Keep following even when the AppHost disconnects during a dashboard URL request.
             }
             catch (Exception ex)
             {
@@ -406,7 +466,7 @@ internal sealed partial class PsCommand
             return;
         }
 
-        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
+        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList(), _environment);
 
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);
@@ -425,7 +485,7 @@ internal sealed partial class PsCommand
             {
                 if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out _))
                 {
-                    dashboard = MarkupHelpers.SafeLink(_interactionService, appHost.DashboardUrl);
+                    dashboard = MarkupHelpers.SafeLink(InteractionService, appHost.DashboardUrl);
                 }
                 else
                 {
@@ -436,7 +496,7 @@ internal sealed partial class PsCommand
             var columns = new List<string>
             {
                 Markup.Escape(shortPath),
-                Markup.Escape(appHost.Status),
+                GetStatusMarkup(appHost.Status),
                 Markup.Escape(appHost.SdkVersion ?? "-"),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
@@ -447,7 +507,17 @@ internal sealed partial class PsCommand
             table.AddRow(columns.ToArray());
         }
 
-        _interactionService.DisplayRenderable(table);
+        InteractionService.DisplayRenderable(table);
+    }
+
+    internal static string GetStatusMarkup(string status)
+    {
+        return status switch
+        {
+            AppHostDisplayStatus.Running => $"[green]{AppHostDisplayStatus.Running}[/]",
+            AppHostDisplayStatus.Stopped => $"[red]{AppHostDisplayStatus.Stopped}[/]",
+            _ => Markup.Escape(status)
+        };
     }
 
 }

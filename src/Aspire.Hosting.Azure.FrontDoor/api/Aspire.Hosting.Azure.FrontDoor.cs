@@ -10,10 +10,10 @@ namespace Aspire.Hosting
 {
     public static partial class AzureFrontDoorExtensions
     {
-        [AspireExport(Description = "Adds an Azure Front Door resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFrontDoorResource> AddAzureFrontDoor(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an origin (backend) to the Azure Front Door resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFrontDoorResource> WithOrigin<T>(this ApplicationModel.IResourceBuilder<Azure.AzureFrontDoorResource> builder, ApplicationModel.IResourceBuilder<T> resource)
             where T : ApplicationModel.IComputeResource, ApplicationModel.IResourceWithEndpoints { throw null; }
     }

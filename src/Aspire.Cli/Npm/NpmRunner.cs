@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
+using Microsoft.Win32.SafeHandles;
 using Semver;
 
 namespace Aspire.Cli.Npm;
@@ -12,12 +13,16 @@ namespace Aspire.Cli.Npm;
 /// <summary>
 /// Runs npm CLI commands for package management operations.
 /// </summary>
-internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
+internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
 {
     /// <summary>
-    /// The public npm registry URL. Commands that resolve packages from the registry
-    /// pass this explicitly via <c>--registry</c> to avoid inheriting a project-level
-    /// <c>.npmrc</c> that may redirect to a private feed (e.g. Azure DevOps).
+    /// The canonical public npm registry URL. Commands that resolve, pack, or install
+    /// packages pass this explicitly via <c>--registry</c> so resolution and install use
+    /// the public feed and cannot inherit a project-level <c>.npmrc</c> that redirects to a
+    /// private feed (for example an Azure DevOps Artifacts feed). Such a private feed would
+    /// otherwise return 401 for packages (including transitive dependencies) it has not
+    /// mirrored, breaking <c>aspire agent init</c>.
+    /// See https://github.com/microsoft/aspire/issues/19370.
     /// </summary>
     private const string PublicRegistry = "https://registry.npmjs.org/";
 
@@ -68,25 +73,11 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
                 return null;
             }
 
-            // Resolve integrity hash: npm view <package>@<version> dist.integrity
-            var integrityOutput = await RunNpmCommandInDirectoryAsync(
-                npmPath,
-                ["view", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "dist.integrity", "--registry", PublicRegistry],
-                tempDir,
-                cancellationToken);
-
-            if (string.IsNullOrWhiteSpace(integrityOutput))
-            {
-                logger.LogDebug("Could not resolve integrity hash for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-                return null;
-            }
-
-            logger.LogDebug("Resolved {PackageSpecifier} with integrity {Integrity}", NpmPackageInfo.FormatPackageSpecifier(packageName, version), integrityOutput.Trim());
+            logger.LogDebug("Resolved {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
 
             return new NpmPackageInfo
             {
-                Version = version,
-                Integrity = integrityOutput.Trim()
+                Version = version
             };
         }
         finally
@@ -139,67 +130,6 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
     }
 
     /// <inheritdoc />
-    public async Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken)
-    {
-        var npmPath = FindNpmPath();
-        if (npmPath is null)
-        {
-            return false;
-        }
-
-        logger.LogDebug("Auditing npm signatures for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-
-        // npm audit signatures requires a project context (node_modules + package-lock.json).
-        // For global tool installs there is no project, so we create a temporary one.
-        // The package must be installed from the registry (not a local tarball) because
-        // npm audit signatures skips packages with "resolved: file:..." in the lockfile.
-        var tempDir = CreateIsolatedTempDirectory();
-
-        try
-        {
-            // Create minimal package.json
-            var packageJson = Path.Combine(tempDir, "package.json");
-            await File.WriteAllTextAsync(
-                packageJson,
-                """{"name":"aspire-verify","version":"1.0.0","private":true}""",
-                cancellationToken).ConfigureAwait(false);
-
-            // Install the package from the registry to get proper attestation metadata
-            var installOutput = await RunNpmCommandInDirectoryAsync(
-                npmPath,
-                ["install", NpmPackageInfo.FormatPackageSpecifier(packageName, version), "--ignore-scripts", "--registry", PublicRegistry],
-                tempDir,
-                cancellationToken);
-
-            if (installOutput is null)
-            {
-                logger.LogDebug("Failed to install {PackageSpecifier} into temporary project for audit", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-                return false;
-            }
-
-            // Run npm audit signatures in the temporary project directory
-            var auditOutput = await RunNpmCommandInDirectoryAsync(
-                npmPath,
-                ["audit", "signatures"],
-                tempDir,
-                cancellationToken);
-
-            if (auditOutput is null)
-            {
-                logger.LogDebug("Signature audit failed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-                return false;
-            }
-
-            logger.LogDebug("Signature audit passed for {PackageSpecifier}", NpmPackageInfo.FormatPackageSpecifier(packageName, version));
-            return true;
-        }
-        finally
-        {
-            CleanupTempDirectory(tempDir);
-        }
-    }
-
-    /// <inheritdoc />
     public async Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
     {
         var npmPath = FindNpmPath();
@@ -216,9 +146,11 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
 
         try
         {
+            // The root tarball is provenance-verified, but its transitive dependencies are not.
+            // Prevent dependency lifecycle scripts from executing during installation.
             var output = await RunNpmCommandInDirectoryAsync(
                 npmPath,
-                ["install", "-g", tarballPath],
+                ["install", "-g", tarballPath, "--ignore-scripts", "--registry", PublicRegistry],
                 tempDir,
                 cancellationToken);
 
@@ -272,13 +204,23 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
     /// Creates a <see cref="ProcessStartInfo"/> configured to run an npm command.
     /// On Windows, .cmd files are invoked via cmd.exe /c for reliable stdout redirection.
     /// </summary>
-    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory)
+    /// <param name="npmPath">Path to the npm executable or batch wrapper.</param>
+    /// <param name="args">npm arguments.</param>
+    /// <param name="workingDirectory">Working directory for the npm process.</param>
+    /// <param name="environment">Environment used to detect the host platform.</param>
+    /// <param name="standardInput">
+    /// Handle given to npm as stdin; callers pass a null-device handle and keep it alive until the process starts.
+    /// </param>
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment, SafeFileHandle standardInput)
     {
         var startInfo = new ProcessStartInfo
         {
+            // Give npm (and any lifecycle scripts it invokes) a null stdin so reads see EOF
+            // instead of blocking on the CLI's terminal. NpmRunner is intended to be fully
+            // non-interactive. See https://github.com/microsoft/aspire/issues/16791.
+            StandardInputHandle = standardInput,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            UseShellExecute = false,
             CreateNoWindow = true,
             WorkingDirectory = workingDirectory
         };
@@ -290,7 +232,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
         // with ArgumentList (which individually quotes each argument). We must use
         // the Arguments string property and wrap the entire command in an outer set
         // of quotes so cmd.exe preserves interior quoting correctly.
-        if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        if (environment.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
         {
             startInfo.FileName = "cmd.exe";
             startInfo.Arguments = @$"/c """"{npmPath}"" {string.Join(" ", args.Select(a => @$"""{a}"""))}""";
@@ -352,28 +294,22 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
 
         try
         {
-            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
+            using var nullInput = File.OpenNullHandle();
+            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment, nullInput);
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
-            process.Start();
-            activity.SetProcessId(process.Id);
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            activity.SetProcessId(result.ProcessId);
+            activity.SetProcessExitCode(result.ExitStatus.ExitCode);
 
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"npm exited with code {process.ExitCode}.");
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
+                activity.SetError($"npm exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            return await outputTask.ConfigureAwait(false);
+            return result.StandardOutput;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

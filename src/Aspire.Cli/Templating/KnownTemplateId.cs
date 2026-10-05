@@ -57,4 +57,9 @@ internal static class KnownTemplateId
     /// The template ID for the Go starter template (Redis + Go HTTP API).
     /// </summary>
     public const string GoStarter = "aspire-go-starter";
+
+    /// <summary>
+    /// The template ID for the Java starter template (Express API + React frontend, Java AppHost).
+    /// </summary>
+    public const string JavaStarter = "aspire-java-starter";
 }

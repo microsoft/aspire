@@ -225,4 +225,7 @@
   <data name="DeleteParameterPrimaryButtonText" xml:space="preserve">
     <value>Delete</value>
   </data>
+  <data name="CommandProgressCancelButtonText" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
 </root>

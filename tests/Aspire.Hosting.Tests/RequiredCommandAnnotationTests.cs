@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Hosting.Eventing;
@@ -466,6 +465,30 @@ public class RequiredCommandAnnotationTests
 
         // Channel should be empty since the second call was coalesced
         Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+    }
+
+    [Fact]
+    public void RequiredCommandValidationContext_Success_ReturnsValidResult()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var context = new RequiredCommandValidationContext("/usr/bin/test", services, CancellationToken.None);
+
+        var result = context.Success();
+
+        Assert.True(result.IsValid);
+        Assert.Null(result.ValidationMessage);
+    }
+
+    [Fact]
+    public void RequiredCommandValidationContext_Failure_ReturnsInvalidResultWithMessage()
+    {
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var context = new RequiredCommandValidationContext("/usr/bin/test", services, CancellationToken.None);
+
+        var result = context.Failure("command is too old");
+
+        Assert.False(result.IsValid);
+        Assert.Equal("command is too old", result.ValidationMessage);
     }
 
     /// <summary>

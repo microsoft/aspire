@@ -1,20 +1,22 @@
-# Aspire.Hosting.MySql library
+# MySQL hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a MySQL resource.
+Use this integration to model, configure, and orchestrate a MySQL resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire MySQL Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.MySql` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.MySql
+```bash
+aspire add Aspire.Hosting.MySql
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a MySQL resource and consume the connection using the following methods:
+In the AppHost, add a MySQL resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var db = builder.AddMySql("mysql").AddDatabase("mydb");
@@ -22,6 +24,39 @@ var db = builder.AddMySql("mysql").AddDatabase("mydb");
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(db);
 ```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addMySql("mysql").addDatabase("mydb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(db);
+```
+
+## MySQL REPL
+
+Call `WithRepl()` to opt into a **REPL** command on the MySQL server resource in the dashboard:
+
+```csharp
+builder.AddMySql("mysql").WithRepl();
+```
+
+```typescript
+await builder.addMySql("mysql").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell uses the resource's configured credentials and is not read-only. Sharing the dashboard
+through a tunnel, Codespaces, or VS Code remote development also exposes this capability to users who can
+execute resource commands.
+
+Use `quit` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `mysql` running inside the container. Stopping the container also ends any remaining REPL processes.
+
+When the container is running, the command opens the bundled `mysql` client in the terminal dock, authenticated as `root` with the resource's configured password. No local MySQL client installation is required.
+
+The password is passed through an environment variable, not command-line arguments or SQL history. The command uses the configured Docker or Podman runtime and is not added in publish mode.
 
 ## Connection Properties
 
@@ -54,7 +89,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/databases/mysql/
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/databases/mysql/mysql-host/
 
 ## Feedback & contributing
 

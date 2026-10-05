@@ -11,19 +11,29 @@ import { join } from "path";
 const app = express();
 const port = process.env.PORT || 5000;
 
-/** Returns a random 5-day weather forecast as JSON. */
-app.get("/api/weatherforecast", (_req, res) => {
-  const summaries = ["Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"];
-  const forecasts = Array.from({ length: 5 }, (_, i) => {
-    const temperatureC = Math.floor(Math.random() * 75) - 20;
-    return {
-      date: new Date(Date.now() + (i + 1) * 86400000).toISOString(),
-      temperatureC,
-      temperatureF: 32 + Math.trunc(temperatureC / 0.5556),
-      summary: summaries[Math.floor(Math.random() * summaries.length)],
-    };
-  });
-  res.json(forecasts);
+// Injected by the AppHost's withReference(forecast). Service discovery names the variable after the
+// resource and endpoint, so the API never has to know which port Aspire handed the Java service.
+const forecastServiceUrl = process.env.services__forecast__http__0;
+
+/** Proxies the 5-day forecast produced by the Java service. */
+app.get("/api/weatherforecast", async (_req, res) => {
+  if (!forecastServiceUrl) {
+    res.status(503).json({ error: "The forecast service is not configured. Run this API through the AppHost." });
+    return;
+  }
+
+  try {
+    const response = await fetch(new URL("/forecast", forecastServiceUrl));
+
+    if (!response.ok) {
+      res.status(502).json({ error: `Forecast service returned ${response.status}` });
+      return;
+    }
+
+    res.json(await response.json());
+  } catch (error) {
+    res.status(502).json({ error: `Forecast service is unreachable: ${error}` });
+  }
 });
 
 app.get("/health", (_req, res) => {

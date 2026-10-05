@@ -4,9 +4,9 @@
     "language": "go"
   },
   "features": {
-    "experimentalPolyglot:go": true
+    "experimentalPolyglotGo": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.KeyVault": ""
+    "Aspire.Hosting.Azure.Provisioning.KeyVault": ""
   }
 }

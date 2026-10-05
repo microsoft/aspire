@@ -43,12 +43,23 @@ public class DcpCliArgsTests
     }
 
     [Fact]
+    public void TestDcpContainerTunnelBaseImagePopulatesConfig()
+    {
+        var builder = DistributedApplication.CreateBuilder([
+            "--dcp-container-tunnel-base-image", "example.com/tunnel-base:custom",
+            ]);
+
+        Assert.Equal("example.com/tunnel-base:custom", builder.Configuration["DcpPublisher:ContainerTunnelBaseImage"]);
+    }
+
+    [Fact]
     public void TestDcpOptionsPopulated()
     {
         var builder = DistributedApplication.CreateBuilder(
             [
             "--dcp-cli-path", "/not/a/valid/path",
             "--dcp-container-runtime", "not-a-valid-container-runtime",
+            "--dcp-container-tunnel-base-image", "example.com/tunnel-base:custom",
             "--dcp-dependency-check-timeout", "42",
             "--dcp-dashboard-path", "/not/a/valid/path"
             ]);
@@ -57,9 +68,22 @@ public class DcpCliArgsTests
         var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
 
         Assert.Equal("not-a-valid-container-runtime", dcpOptions.ContainerRuntime);
+        Assert.Equal("example.com/tunnel-base:custom", dcpOptions.ContainerTunnelBaseImage);
         Assert.Equal(42, dcpOptions.DependencyCheckTimeout);
         Assert.Equal("/not/a/valid/path", dcpOptions.CliPath);
         Assert.Equal("/not/a/valid/path", dcpOptions.DashboardPath);
+    }
+
+    [Fact]
+    public void KnownConfigContainerTunnelBaseImagePopulatesDcpOptions()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration[KnownConfigNames.ContainerTunnelBaseImage] = "example.com/tunnel-base:custom";
+
+        using var app = builder.Build();
+        var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
+
+        Assert.Equal("example.com/tunnel-base:custom", dcpOptions.ContainerTunnelBaseImage);
     }
 
     [Fact]
@@ -119,19 +143,71 @@ public class DcpCliArgsTests
         Assert.Equal(bundleDashboardPath, dcpOptions.DashboardPath);
     }
 
-    [Fact]
-    public void DcpOptionsValidationFailsForWhitespacePaths()
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false)]
+    public void DcpOptionsValidationRequiresPathsOnlyInRunMode(DistributedApplicationOperation operation, bool shouldFail)
     {
-        var validator = new ValidateDcpOptions();
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(operation));
         var result = validator.Validate(null, new DcpOptions
         {
             CliPath = " ",
             DashboardPath = "\t",
         });
 
+        Assert.Equal(shouldFail, result.Failed);
+        if (shouldFail)
+        {
+            Assert.Contains("The path to the DCP executable used for Aspire orchestration is required.", result.FailureMessage);
+            Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.FailureMessage);
+        }
+    }
+
+    [Fact]
+    public void DcpOptionsValidationStillFailsForInvalidProxylessEndpointPortRangeInPublishMode()
+    {
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+        var result = validator.Validate(null, new DcpOptions
+        {
+            ProxylessEndpointPortRangeStart = 32767,
+            ProxylessEndpointPortRangeEnd = 10000,
+        });
+
         Assert.True(result.Failed);
-        Assert.Contains("The path to the DCP executable used for Aspire orchestration is required.", result.FailureMessage);
-        Assert.Contains("The path to the Aspire Dashboard binaries is missing.", result.FailureMessage);
+        Assert.Contains(
+            "The proxyless endpoint port range start must be less than or equal to the range end.",
+            Assert.Single(result.Failures!));
+    }
+
+    [Fact]
+    public void KnownConfigProxylessEndpointPortRangeOverridesDcpPublisherConfiguration()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["DcpPublisher:ProxylessEndpointPortRangeStart"] = "10000",
+            ["DcpPublisher:ProxylessEndpointPortRangeEnd"] = "10001",
+            [KnownConfigNames.ProxylessEndpointPortRange] = "20000-20001",
+        });
+
+        using var app = builder.Build();
+        var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
+
+        Assert.Equal(20000, dcpOptions.ProxylessEndpointPortRangeStart);
+        Assert.Equal(20001, dcpOptions.ProxylessEndpointPortRangeEnd);
+    }
+
+    [Fact]
+    public void KnownConfigProxylessEndpointPortRangeRequiresStartEndFormat()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration[KnownConfigNames.ProxylessEndpointPortRange] = "20000";
+        using var app = builder.Build();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => app.Services.GetRequiredService<IOptions<DcpOptions>>().Value);
+
+        Assert.Contains(KnownConfigNames.ProxylessEndpointPortRange, exception.Message);
+        Assert.Contains("start-end", exception.Message);
     }
 
     private static void AddDcpPublisherPathConfigurationOverride(ConfigurationManager configuration, string cliPath, string dashboardPath)

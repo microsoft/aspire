@@ -50,7 +50,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsHeader", resourceCulture);
             }
         }
-        
+
         public static string ConsoleLogsSelectResourceToolbar {
             get {
                 return ResourceManager.GetString("ConsoleLogsSelectResourceToolbar", resourceCulture);
@@ -72,6 +72,24 @@ namespace Aspire.Dashboard.Resources {
         public static string ConsoleLogsNoLogsFound {
             get {
                 return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
+            }
+        }
+
+        public static string ConsoleLogsNotCapturedForRun {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNotCapturedForRun", resourceCulture);
+            }
+        }
+        
+        public static string ConsoleLogsNoLogsMatchFilter {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNoLogsMatchFilter", resourceCulture);
+            }
+        }
+        
+        public static string ConsoleLogsTextFilter {
+            get {
+                return ResourceManager.GetString("ConsoleLogsTextFilter", resourceCulture);
             }
         }
         
@@ -146,6 +164,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsPauseActive", resourceCulture);
             }
         }
+
+        public static string PauseInProgressText {
+            get {
+                return ResourceManager.GetString("PauseInProgressText", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsPauseDetails {
             get {
@@ -170,5 +194,6 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoWrapLogs", resourceCulture);
             }
         }
+        
     }
 }

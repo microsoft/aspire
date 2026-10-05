@@ -33,6 +33,7 @@ public class SpectreConsoleLoggerProviderTests
         var systemLogger = new SpectreConsoleLogger(output, "System.Test", bufferContext);
 
         // Act & Assert
+        Assert.False(aspireLogger.IsEnabled(LogLevel.Trace));
         Assert.True(aspireLogger.IsEnabled(LogLevel.Debug));
         Assert.True(aspireLogger.IsEnabled(LogLevel.Information));
         Assert.True(aspireLogger.IsEnabled(LogLevel.Warning));

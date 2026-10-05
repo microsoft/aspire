@@ -22,20 +22,20 @@ public class ConformanceTests : ConformanceTests<TestDbContext, AzureNpgsqlEntit
     // https://github.com/npgsql/npgsql/blob/ef9db1ffe9e432c1562d855b46dfac3514726b1b/src/Npgsql.OpenTelemetry/TracerProviderBuilderExtensions.cs#L18
     protected override string ActivitySourceName => "Npgsql";
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.ChangeTracking",
-        "Microsoft.EntityFrameworkCore.Infrastructure",
-        "Microsoft.EntityFrameworkCore.Database.Command",
-        "Microsoft.EntityFrameworkCore.Query",
-        "Microsoft.EntityFrameworkCore.Database.Transaction",
-        "Microsoft.EntityFrameworkCore.Database.Connection",
-        "Microsoft.EntityFrameworkCore.Model",
-        "Microsoft.EntityFrameworkCore.Model.Validation",
-        "Microsoft.EntityFrameworkCore.Update",
-        "Microsoft.EntityFrameworkCore.Migrations"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.ChangeTracking"),
+        new("Microsoft.EntityFrameworkCore.Infrastructure"),
+        new("Microsoft.EntityFrameworkCore.Database.Command"),
+        new("Microsoft.EntityFrameworkCore.Query"),
+        new("Microsoft.EntityFrameworkCore.Database.Transaction"),
+        new("Microsoft.EntityFrameworkCore.Database.Connection"),
+        new("Microsoft.EntityFrameworkCore.Model"),
+        new("Microsoft.EntityFrameworkCore.Model.Validation"),
+        new("Microsoft.EntityFrameworkCore.Update"),
+        new("Microsoft.EntityFrameworkCore.Migrations"),
+    ];
 
     // we don't want to have both EF and Npgsql loggers to be enabled
     protected override string[] NotAcceptableLogCategories => new string[]
@@ -48,7 +48,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, AzureNpgsqlEntit
         "Npgsql.Exception"
     };
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override string ValidJsonConfig => """
         {
@@ -78,7 +78,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, AzureNpgsqlEntit
     public ConformanceTests(PostgreSQLContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
                                         ? _containerFixture.GetConnectionString()
                                         : "Server=localhost;User ID=root;Password=password;Database=test_aspire_mysql";
     }
@@ -131,7 +131,7 @@ public class ConformanceTests : ConformanceTests<TestDbContext, AzureNpgsqlEntit
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
                 RunWithConnectionString(connectionStringToUse, obj =>

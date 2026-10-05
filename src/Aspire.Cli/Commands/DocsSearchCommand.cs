@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -39,14 +37,10 @@ internal sealed class DocsSearchCommand : BaseCommand
     };
 
     public DocsSearchCommand(
-        IInteractionService interactionService,
         IDocsSearchService docsSearchService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
-        ILogger<DocsSearchCommand> logger)
-        : base("search", DocsCommandStrings.SearchDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DocsSearchCommand> logger,
+        CommonCommandServices services)
+        : base("search", DocsCommandStrings.SearchDescription, services)
     {
         _docsSearchService = docsSearchService;
         _logger = logger;

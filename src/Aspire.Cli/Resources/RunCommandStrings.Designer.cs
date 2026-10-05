@@ -254,7 +254,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostExitedWithCode", resourceCulture);
             }
         }
-        
+
         public static string AppHostFailedToBuild {
             get {
                 return ResourceManager.GetString("AppHostFailedToBuild", resourceCulture);
@@ -332,5 +332,6 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoBuildNotSupportedWithWatchMode", resourceCulture);
             }
         }
+
     }
 }

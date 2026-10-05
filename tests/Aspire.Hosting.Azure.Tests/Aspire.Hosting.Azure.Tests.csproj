@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Dotnet\Aspire.Hosting.Dotnet.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppConfiguration\Aspire.Hosting.Azure.AppConfiguration.csproj" />
@@ -17,6 +21,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ApplicationInsights\Aspire.Hosting.Azure.ApplicationInsights.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.CognitiveServices\Aspire.Hosting.Azure.CognitiveServices.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ConnectorNamespace\Aspire.Hosting.Azure.ConnectorNamespace.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.CosmosDB\Aspire.Hosting.Azure.CosmosDB.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.EventHubs\Aspire.Hosting.Azure.EventHubs.csproj" />
@@ -28,6 +33,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.OperationalInsights\Aspire.Hosting.Azure.OperationalInsights.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.PostgreSQL\Aspire.Hosting.Azure.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Redis\Aspire.Hosting.Azure.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Sandboxes\Aspire.Hosting.Azure.Sandboxes.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Search\Aspire.Hosting.Azure.Search.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ServiceBus\Aspire.Hosting.Azure.ServiceBus.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.SignalR\Aspire.Hosting.Azure.SignalR.csproj" />
@@ -60,6 +66,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" />
     <PackageReference Include="Microsoft.Azure.SignalR.Management" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 

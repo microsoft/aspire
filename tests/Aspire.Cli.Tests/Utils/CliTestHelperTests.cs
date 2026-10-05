@@ -14,7 +14,7 @@ public class CliTestHelperTests(ITestOutputHelper outputHelper)
         string logFilePath;
         string workspacePath;
 
-        using (var workspace = TemporaryWorkspace.Create(outputHelper))
+        using (var workspace = TemporaryWorkspace.CreateForCli(outputHelper))
         {
             workspacePath = workspace.WorkspaceRoot.FullName;
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);

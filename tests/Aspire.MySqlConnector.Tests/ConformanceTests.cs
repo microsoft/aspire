@@ -21,17 +21,18 @@ public class ConformanceTests : ConformanceTests<MySqlDataSource, MySqlConnector
     // https://github.com/mysql-net/MySqlConnector/blob/d895afc013a5849d33a123a7061442e2cbb9ce76/src/MySqlConnector/Utilities/ActivitySourceHelper.cs#L61
     protected override string ActivitySourceName => "MySqlConnector";
 
-    protected override string[] RequiredLogCategories => [
-        "MySqlConnector.ConnectionPool",
-        "MySqlConnector.MySqlBulkCopy",
-        "MySqlConnector.MySqlCommand",
-        "MySqlConnector.MySqlConnection",
-        "MySqlConnector.MySqlDataSource",
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("MySqlConnector.ConnectionPool"),
+        new("MySqlConnector.MySqlBulkCopy"),
+        new("MySqlConnector.MySqlCommand"),
+        new("MySqlConnector.MySqlConnection"),
+        new("MySqlConnector.MySqlDataSource"),
     ];
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override string? ConfigurationSectionName => "Aspire:MySqlConnector";
 
@@ -57,7 +58,7 @@ public class ConformanceTests : ConformanceTests<MySqlDataSource, MySqlConnector
     public ConformanceTests(MySqlContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
                                         ? _containerFixture.GetConnectionString()
                                         : "Server=localhost;User ID=root;Password=password;Database=test_aspire_mysql";
     }
@@ -123,14 +124,14 @@ public class ConformanceTests : ConformanceTests<MySqlDataSource, MySqlConnector
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, obj => obj.ActivitySourceTest(key: null)),
             ConnectionString, Output);
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, obj => obj.ActivitySourceTest(key: "key")),

@@ -17,9 +17,16 @@
   "license": "MIT",
   "dependencies": {
     "express": "^5.2.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.6"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "nodemon": "^3.1.14"
+  },
+  "overrides": {
+    "brace-expansion@>=5": "5.0.12",
+    "body-parser": "2.3.0",
+    "minimatch@3.1.5": {
+      "brace-expansion": "2.1.7"
+    }
   }
 }

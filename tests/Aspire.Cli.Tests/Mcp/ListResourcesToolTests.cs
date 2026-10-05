@@ -34,7 +34,7 @@ public class ListResourcesToolTests
             ResourceSnapshots = [],
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888" }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
@@ -79,7 +79,7 @@ public class ListResourcesToolTests
             ],
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888" }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
@@ -115,7 +115,7 @@ public class ListResourcesToolTests
             ],
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888" }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
@@ -156,7 +156,7 @@ public class ListResourcesToolTests
             ],
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "http://localhost:18888" }
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();

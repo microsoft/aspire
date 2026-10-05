@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.go",
+    "language": "go"
+  },
+  "features": {
+    "experimentalPolyglotGo": true
+  },
+  "packages": {
+    "Aspire.Hosting.Java": ""
+  }
+}

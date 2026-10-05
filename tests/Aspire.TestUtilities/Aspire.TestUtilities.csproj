@@ -11,7 +11,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      TestcontainersPodmanConfiguration and its decision type are internal: they are an implementation
+      detail of RequiresFeatureAttribute, not something tests should call. Grant access so the decision
+      layer can be unit tested without widening the public surface.
+    -->
+    <InternalsVisibleTo Include="Aspire.Hosting.Containers.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="PathLookupHelper.cs" />
+    <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
   </ItemGroup>
 

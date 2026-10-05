@@ -117,7 +117,7 @@ public sealed class ResourceIconHelpersTests
         var projectPath = $"/path/to/project{extension}";
         var properties = new Dictionary<string, ResourcePropertyViewModel>
         {
-            [KnownProperties.Project.Path] = new ResourcePropertyViewModel(KnownProperties.Project.Path, Value.ForString(projectPath), isValueSensitive: false, knownProperty: null, priority: 0)
+            [KnownProperties.Project.Path] = new ResourcePropertyViewModel(KnownProperties.Project.Path, Value.ForString(projectPath), isValueSensitive: false, knownProperty: null, sortOrder: 0, displayName: null, isHighlighted: false)
         };
         var resource = ModelTestHelpers.CreateResource(
             resourceType: KnownResourceTypes.Project,

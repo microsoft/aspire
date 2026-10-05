@@ -5,14 +5,9 @@ using System.CommandLine;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
@@ -20,45 +15,29 @@ namespace Aspire.Cli.Commands;
 /// Legacy command 'aspire mcp init' that delegates to the new AgentInitCommand.
 /// This is kept for backward compatibility but is hidden from help.
 /// </summary>
-internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingCommand
+internal sealed class McpInitCommand : BaseCommand
 {
     private readonly AgentInitCommand _agentInitCommand;
 
-    /// <summary>
-    /// McpInitCommand does not need template package metadata prefetching.
-    /// </summary>
-    public bool PrefetchesTemplatePackageMetadata => false;
-
-    /// <summary>
-    /// McpInitCommand does not need CLI package metadata prefetching.
-    /// </summary>
-    public bool PrefetchesCliPackageMetadata => false;
-
     public McpInitCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IAgentEnvironmentDetector agentEnvironmentDetector,
         IAspireSkillsInstaller aspireSkillsInstaller,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
-        AspireCliTelemetry telemetry)
-        : base("init", McpCommandStrings.InitCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator telemetryHookConfigurator,
+        CommonCommandServices services)
+        : base("init", McpCommandStrings.InitCommand_Description, services)
     {
         // Create the AgentInitCommand to delegate execution to
         _agentInitCommand = new AgentInitCommand(
-            interactionService,
-            features,
-            updateNotifier,
-            executionContext,
             agentEnvironmentDetector,
             aspireSkillsInstaller,
             playwrightCliInstaller,
             gitRepository,
             languageDiscovery,
-            telemetry);
+            telemetryHookConfigurator,
+            services);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -66,7 +45,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
         // Display deprecation warning
         InteractionService.DisplayMarkupLine($"[yellow]⚠ {McpCommandStrings.DeprecatedCommandWarning}[/]");
         InteractionService.DisplayEmptyLine();
-        
+
         // Delegate to the new AgentInitCommand
         return await _agentInitCommand.ExecuteCommandAsync(parseResult, cancellationToken);
     }

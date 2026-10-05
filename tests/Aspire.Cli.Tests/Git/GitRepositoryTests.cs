@@ -6,6 +6,7 @@ using System.Diagnostics;
 using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,10 +18,10 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetIncludedFilesAsync_OutsideRepo_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -31,7 +32,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     public async Task GetIncludedFilesAsync_InGitRepo_ReturnsTrackedAndUntracked_ExcludingIgnored()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -60,7 +61,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
 
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -74,7 +75,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     public async Task GetIncludedFilesAsync_DeletedTrackedFile_StillReturned()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -89,7 +90,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
 
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -101,7 +102,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     public async Task GetIncludedFilesAsync_EmitsProfilingActivityForGitProcess()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -115,12 +116,12 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         // of assuming every observed activity belongs to this git invocation.
         var sessionId = $"git-{Guid.NewGuid():N}";
         var startedActivities = new ConcurrentBag<Activity>();
-        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, sessionId));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
         var executionContext = workspace.CreateExecutionContext();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -154,18 +155,6 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
         return new ProfilingTelemetry(configuration);
-    }
-
-    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStarted = activityStarted
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
 }

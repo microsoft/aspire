@@ -6,11 +6,6 @@ using System.CommandLine.Help;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
-#if DEBUG
-using System.Globalization;
-using System.Diagnostics;
-#endif
-
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Interaction;
@@ -97,6 +92,19 @@ internal sealed class RootCommand : BaseRootCommand
         DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
+    internal static readonly Option<string?> s_logFileOption = new("--log-file")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
+    internal static IReadOnlyList<Option> GlobalOptions { get; } =
+    [
+        DebugOption, DebugLevelOption, NonInteractiveOption, NoLogoOption, BannerOption,
+        WaitForDebuggerOption, CliWaitForDebuggerOption, CaptureProfileOption,
+        CaptureProfileOutputOption, CaptureProfileDelayOption, s_logFileOption
+    ];
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -132,7 +140,6 @@ internal sealed class RootCommand : BaseRootCommand
         }
     }
 
-    private readonly IInteractionService _interactionService;
     private readonly IAnsiConsole _ansiConsole;
 
     public RootCommand(
@@ -148,12 +155,14 @@ internal sealed class RootCommand : BaseRootCommand
         DescribeCommand describeCommand,
         LogsCommand logsCommand,
         IntegrationCommand integrationCommand,
+        TerminalCommand terminalCommand,
         AddCommand addCommand,
         PublishCommand publishCommand,
         DeployCommand deployCommand,
         DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
+        CompletionsCommand completionsCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
@@ -163,6 +172,7 @@ internal sealed class RootCommand : BaseRootCommand
         TelemetryCommand telemetryCommand,
         ExportCommand exportCommand,
         DashboardCommand dashboardCommand,
+        TrayCommand trayCommand,
         DocsCommand docsCommand,
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
@@ -174,49 +184,20 @@ internal sealed class RootCommand : BaseRootCommand
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
         IInteractionService interactionService,
-        IAnsiConsole ansiConsole)
+        IAnsiConsole ansiConsole,
+        CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
-        _interactionService = interactionService;
         _ansiConsole = ansiConsole;
 
-#if DEBUG
-        CliWaitForDebuggerOption.Validators.Add((result) =>
+        foreach (var option in GlobalOptions)
         {
-
-            var waitForDebugger = result.GetValueOrDefault<bool>();
-
-            if (waitForDebugger)
-            {
-                _interactionService.ShowStatus(
-                    string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
-                    () =>
-                    {
-                        while (!Debugger.IsAttached)
-                        {
-                            Thread.Sleep(1000);
-                        }
-
-                        Debugger.Break();
-                    }, emoji: KnownEmojis.Bug);
-            }
-        });
-#endif
-
-        Options.Add(DebugOption);
-        Options.Add(DebugLevelOption);
-        Options.Add(NonInteractiveOption);
-        Options.Add(NoLogoOption);
-        Options.Add(BannerOption);
-        Options.Add(WaitForDebuggerOption);
-        Options.Add(CliWaitForDebuggerOption);
+            Options.Add(option);
+        }
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
             Options.Add(StartDebugSessionOption);
         }
-        Options.Add(CaptureProfileOption);
-        Options.Add(CaptureProfileOutputOption);
-        Options.Add(CaptureProfileDelayOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
@@ -247,9 +228,11 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
         Subcommands.Add(integrationCommand);
+        Subcommands.Add(terminalCommand);
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
+        Subcommands.Add(completionsCommand);
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
@@ -264,6 +247,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
         Subcommands.Add(dashboardCommand);
+        Subcommands.Add(trayCommand);
         Subcommands.Add(secretCommand);
 
 #if DEBUG
@@ -289,6 +273,10 @@ internal sealed class RootCommand : BaseRootCommand
             else if (option is VersionOption versionOption)
             {
                 versionOption.Aliases.Add("-v");
+                // Report the resolved identity version so --version honors ASPIRE_CLI_VERSION /
+                // the install sidecar. Without an override this resolves to the assembly's
+                // informational version, matching the built-in action's output.
+                versionOption.Action = new IdentityVersionAction(executionContext);
             }
         }
 

@@ -24,10 +24,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 var cache = builder.AddRedis("cache");
 
 var api = builder.AddNodeApp("api", "./api", "src/index.ts")
-    .WithReference(cache)
-    .WaitFor(cache)
-    .WithHttpEndpoint(env: "PORT")
-    .WithExternalHttpEndpoints();
+        .WithReference(cache)
+        .WaitFor(cache)
+        .WithHttpEndpoint(env: "PORT")
+        .WithExternalHttpEndpoints();
 
 builder.AddViteApp("frontend", "./frontend")
     .WithReference(api)

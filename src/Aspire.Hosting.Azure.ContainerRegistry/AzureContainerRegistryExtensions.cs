@@ -49,6 +49,7 @@ public static class AzureContainerRegistryExtensions
         else
         {
             resourceBuilder = builder.AddResource(resource)
+                .WithIconName("Archive")
                 .WithAnnotation(new DefaultRoleAssignmentsAnnotation(new HashSet<RoleDefinition>()));
         }
 

@@ -93,6 +93,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string EnsuringDashboardBundle {
+            get {
+                return ResourceManager.GetString("EnsuringDashboardBundle", resourceCulture);
+            }
+        }
+
         public static string DashboardStartTimedOut {
             get {
                 return ResourceManager.GetString("DashboardStartTimedOut", resourceCulture);
@@ -120,6 +126,18 @@ namespace Aspire.Cli.Resources {
         public static string AllowAnonymousOptionDescription {
             get {
                 return ResourceManager.GetString("AllowAnonymousOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string ApplicationNameOptionDescription {
+            get {
+                return ResourceManager.GetString("ApplicationNameOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string PersistenceModeOptionDescription {
+            get {
+                return ResourceManager.GetString("PersistenceModeOptionDescription", resourceCulture);
             }
         }
 

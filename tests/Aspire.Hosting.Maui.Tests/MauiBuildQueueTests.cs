@@ -1,0 +1,1437 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Collections.Concurrent;
+using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Maui.Annotations;
+using Aspire.Hosting.Maui.Lifecycle;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
+
+namespace Aspire.Hosting.Maui.Tests;
+
+/// <summary>
+/// Tests for the MAUI build queue that serializes builds per-project.
+/// Uses a <see cref="TestableBuildQueueSubscriber"/> that overrides
+/// <see cref="MauiBuildQueueEventSubscriber.RunBuildAsync"/> with a
+/// controllable <see cref="TaskCompletionSource"/> per resource.
+/// </summary>
+public class MauiBuildQueueTests
+{
+    [Fact]
+    public void BuildQueueAnnotation_SemaphoreInitializedToOne()
+    {
+        var annotation = new MauiBuildQueueAnnotation();
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public void BuildQueueAnnotation_AddedByAddMauiProject()
+    {
+        var parent = new MauiProjectResource("mauiapp", "/fake/path.csproj");
+        parent.Annotations.Add(new MauiBuildQueueAnnotation());
+        Assert.True(parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out _));
+    }
+
+    [Fact]
+    public void BuildQueueAnnotation_CancelResource_DoesNotSurfaceCallbackExceptions()
+    {
+        var annotation = new MauiBuildQueueAnnotation();
+        var cts = new CancellationTokenSource();
+        using var _ = cts.Token.Register(() => throw new InvalidOperationException("callback failure"));
+        annotation.ResourceCancellations["android"] = cts;
+
+        Assert.True(annotation.CancelResource("android"));
+    }
+
+    [Fact]
+    public async Task SingleResource_AcquiresSemaphore()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // Start the event but don't complete the build yet — semaphore should be held.
+        var eventTask = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(0, annotation!.BuildSemaphore.CurrentCount);
+
+        env.Subscriber.CompleteBuild(env.Android);
+        await eventTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SingleResource_ReleasesSemaphoreAfterBuild()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task SecondResource_BlocksUntilBuildCompletes()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        var queued = WaitForStateAsync(env, env.MacCatalyst, "Queued");
+        var task2 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            CancellationToken.None));
+
+        await queued;
+        Assert.False(task2.IsCompleted, "Second resource should be blocked by the queue.");
+
+        // Complete first build — second should start.
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+
+        // Complete second build.
+        env.Subscriber.CompleteBuild(env.MacCatalyst);
+        await task2.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SecondResource_ShowsQueuedState()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        var queuedSeen = new TaskCompletionSource<bool>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var evt in env.NotificationService.WatchAsync(cts.Token))
+            {
+                if (evt.Resource.Name == env.MacCatalyst.Name && evt.Snapshot.State?.Text == "Queued")
+                {
+                    queuedSeen.TrySetResult(true);
+                    return;
+                }
+            }
+        }, cts.Token);
+
+        var task2 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            CancellationToken.None));
+
+        var result = await queuedSeen.Task.DefaultTimeout();
+        Assert.True(result);
+
+        // Clean up: complete both builds and await their tasks.
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+        env.Subscriber.CompleteBuild(env.MacCatalyst);
+        await task2.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task SingleResource_ShowsBuildingState()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        var buildingSeen = new TaskCompletionSource<bool>();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var evt in env.NotificationService.WatchAsync(cts.Token))
+            {
+                if (evt.Resource.Name == env.Android.Name && evt.Snapshot.State?.Text == "Building")
+                {
+                    buildingSeen.TrySetResult(true);
+                    return;
+                }
+            }
+        }, cts.Token);
+
+        var eventTask = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        var result = await buildingSeen.Task.DefaultTimeout();
+        Assert.True(result);
+
+        env.Subscriber.CompleteBuild(env.Android);
+        await eventTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourcesFromDifferentProjects_RunConcurrently()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateWithTwoProjectsAsync();
+
+        // Start both events WITHOUT completing builds — both should enter Building concurrently.
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        var task2 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android2!, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android2!);
+
+        // Both should be building simultaneously — neither should have completed,
+        // proving they are NOT serialized across different projects.
+        Assert.False(task1.IsCompleted, "Task1 should still be building.");
+        Assert.False(task2.IsCompleted, "Task2 should still be building.");
+
+        // Complete both builds.
+        env.Subscriber.CompleteBuild(env.Android);
+        env.Subscriber.CompleteBuild(env.Android2!);
+
+        await Task.WhenAll(task1, task2).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task FailedBuild_ReleasesQueueAndThrows()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        env.Subscriber.FailBuild(env.Android, "Compilation error");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.Android, env.Services),
+                CancellationToken.None).DefaultTimeout());
+
+        // Semaphore should be released even after failure.
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task CancelledQueuedResource_DoesNotDeadlock()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        using var cts = new CancellationTokenSource();
+        var queued = WaitForStateAsync(env, env.MacCatalyst, "Queued");
+        var task2 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            cts.Token));
+
+        await queued;
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => task2.DefaultTimeout());
+
+        // Complete first build — semaphore should still work for a third resource.
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+
+        env.Subscriber.CompleteBuildImmediately(env.IOSSimulator);
+        var task3 = env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.IOSSimulator, env.Services),
+            CancellationToken.None);
+        await task3.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ThreeResources_ExecuteInSequence()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var completionOrder = new List<string>();
+
+        var task1 = Task.Run(async () =>
+        {
+            await env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.Android, env.Services),
+                CancellationToken.None);
+            lock (completionOrder) { completionOrder.Add("android"); }
+        });
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        var macCatalystQueued = WaitForStateAsync(env, env.MacCatalyst, "Queued");
+        var iosSimulatorQueued = WaitForStateAsync(env, env.IOSSimulator, "Queued");
+
+        var task2 = Task.Run(async () =>
+        {
+            await env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+                CancellationToken.None);
+            lock (completionOrder) { completionOrder.Add("maccatalyst"); }
+        });
+
+        var task3 = Task.Run(async () =>
+        {
+            await env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.IOSSimulator, env.Services),
+                CancellationToken.None);
+            lock (completionOrder) { completionOrder.Add("ios"); }
+        });
+
+        await Task.WhenAll(macCatalystQueued, iosSimulatorQueued);
+
+        Assert.Empty(completionOrder);
+        Assert.False(task2.IsCompleted);
+        Assert.False(task3.IsCompleted);
+
+        // Complete Android — one of the queued resources will acquire the semaphore next.
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+        Assert.Single(completionOrder);
+        Assert.Equal("android", completionOrder[0]);
+
+        // After Android's event handler completes, the semaphore is released.
+        // One of the two waiting tasks acquires it next — order is non-deterministic
+        // since SemaphoreSlim doesn't guarantee FIFO. Wait for either to start.
+        var macTask = env.Subscriber.WaitForBuildStartedAsync(env.MacCatalyst, TimeSpan.FromSeconds(30));
+        var iosTask = env.Subscriber.WaitForBuildStartedAsync(env.IOSSimulator, TimeSpan.FromSeconds(30));
+        var secondStarted = await Task.WhenAny(macTask, iosTask);
+        await secondStarted; // propagate exceptions
+
+        // Complete whichever started, then wait for the other.
+        if (secondStarted == macTask)
+        {
+            env.Subscriber.CompleteBuild(env.MacCatalyst);
+            await task2.DefaultTimeout();
+
+            await iosTask;
+            env.Subscriber.CompleteBuild(env.IOSSimulator);
+            await task3.DefaultTimeout();
+        }
+        else
+        {
+            env.Subscriber.CompleteBuild(env.IOSSimulator);
+            await task3.DefaultTimeout();
+
+            await macTask;
+            env.Subscriber.CompleteBuild(env.MacCatalyst);
+            await task2.DefaultTimeout();
+        }
+
+        // All three completed in sequence (android first, then the other two in either order).
+        Assert.Equal(3, completionOrder.Count);
+        Assert.Equal("android", completionOrder[0]);
+        Assert.Contains("maccatalyst", completionOrder);
+        Assert.Contains("ios", completionOrder);
+    }
+
+    [Fact]
+    public async Task NonMauiResource_IsNotAffected()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        // Parent MauiProjectResource is NOT IMauiPlatformResource — should pass through.
+        var parentTask = env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Parent, env.Services),
+            CancellationToken.None);
+
+        await parentTask.DefaultTimeout(TimeSpan.FromSeconds(2));
+
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceRestart_CanBuildSameResourceTwice()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // First build
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        // Semaphore released after first build
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+
+        // Second build of same resource (restart scenario)
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task MissingBuildQueueAnnotation_SkipsQueue()
+    {
+        // Create a parent without MauiBuildQueueAnnotation
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parent = new MauiProjectResource("mauiapp-no-annotation", "/fake/path.csproj");
+        appBuilder.CreateResourceBuilder(parent);
+
+        var android = new MauiAndroidEmulatorResource("android-no-annotation", parent);
+        appBuilder.AddResource(android);
+
+        var app = appBuilder.Build();
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var execContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        var subscriber = new TestableBuildQueueSubscriber(
+            notificationService,
+            loggerService,
+            app.Services.GetRequiredService<ResourceCommandService>());
+        await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None).DefaultTimeout();
+
+        // Should return immediately — no annotation means no queue
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(android, app.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        await app.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task MissingBuildInfoAnnotation_ThrowsAndReleasesSemaphore()
+    {
+        // Use the real subscriber (not testable) to exercise the RunBuildAsync path
+        // where MauiBuildInfoAnnotation is absent.
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parent = new MauiProjectResource("mauiapp", "/fake/path.csproj");
+        parent.Annotations.Add(new MauiBuildQueueAnnotation());
+        appBuilder.CreateResourceBuilder(parent);
+
+        var android = new MauiAndroidEmulatorResource("android", parent);
+        appBuilder.AddResource(android);
+
+        var app = appBuilder.Build();
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var execContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        // Use real subscriber — android has no MauiBuildInfoAnnotation.
+        // Override ReleaseSemaphoreAfterLaunchAsync to release immediately since
+        // there is no DCP launch phase in the test environment.
+        var subscriber = new RealBuildQueueSubscriberWithImmediateRelease(
+            notificationService,
+            loggerService,
+            app.Services.GetRequiredService<ResourceCommandService>());
+        await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None).DefaultTimeout();
+
+        // Should throw InvalidOperationException — missing annotation means semaphore
+        // would be held indefinitely without this guard.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await eventing.PublishAsync(
+                new BeforeResourceStartedEvent(android, app.Services),
+                CancellationToken.None).DefaultTimeout());
+
+        Assert.Contains("MauiBuildInfoAnnotation", ex.Message);
+
+        // Semaphore should still be released via the finally block
+        Assert.True(parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+
+        await app.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task UnexpectedException_ReleasesSemaphore()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        env.Subscriber.FailBuildWith(env.Android, new ArgumentException("Unexpected error"));
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.Android, env.Services),
+                CancellationToken.None).DefaultTimeout());
+
+        // Semaphore should be released even for unexpected exception types.
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public void BuildInfoAnnotation_StoresAllProperties()
+    {
+        var annotation = new MauiBuildInfoAnnotation(
+            "/path/to/project.csproj",
+            "/path/to",
+            "net10.0-android",
+            "Release",
+            ["-p:RuntimeIdentifier=ios-arm64"]);
+
+        Assert.Equal("/path/to/project.csproj", annotation.ProjectPath);
+        Assert.Equal("/path/to", annotation.WorkingDirectory);
+        Assert.Equal("net10.0-android", annotation.TargetFramework);
+        Assert.Equal("Release", annotation.Configuration);
+        Assert.Equal(["-p:RuntimeIdentifier=ios-arm64"], annotation.AdditionalBuildArguments);
+        Assert.True(annotation.ReleaseBuildLockOnResourceRunning);
+    }
+
+    [Fact]
+    public void BuildInfoAnnotation_NullableProperties()
+    {
+        var annotation = new MauiBuildInfoAnnotation(
+            "/path/to/project.csproj",
+            "/path/to",
+            targetFramework: null);
+
+        Assert.Null(annotation.TargetFramework);
+        Assert.Null(annotation.Configuration);
+        Assert.Empty(annotation.AdditionalBuildArguments);
+        Assert.True(annotation.ReleaseBuildLockOnResourceRunning);
+    }
+
+    [Fact]
+    public async Task CancelQueuedResource_CompletesGracefullyAndDoesNotAcquireSemaphore()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // Hold the semaphore with Android.
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        // Queue MacCatalyst — it should be stuck waiting.
+        var queued = WaitForStateAsync(env, env.MacCatalyst, "Queued");
+        var task2 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            CancellationToken.None));
+
+        await queued;
+        Assert.False(task2.IsCompleted, "MacCatalyst should be queued.");
+
+        // Cancel the queued resource via the subscriber's CancelResource method.
+        env.CancelResource(env.MacCatalyst.Name);
+
+        // The handler re-throws the OCE to prevent DCP from starting the resource.
+        var ex = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => task2.DefaultTimeout());
+        Assert.IsType<OperationCanceledException>(ex);
+
+        // Semaphore should still be held (count 0) — cancellation of queued resource
+        // should NOT release the semaphore because it never acquired it.
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(0, annotation!.BuildSemaphore.CurrentCount);
+
+        // Clean up: complete Android build.
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task StopCommand_QueuedOrBuildingResource_CancelsBuild()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        AddOriginalStopCommand(env.Android);
+
+        var eventTask = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        var stopCommand = env.Android.Annotations
+            .OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.StopCommand);
+
+        Assert.Equal(ResourceCommandState.Enabled, stopCommand.UpdateState(CreateUpdateStateContext(env, "Building")));
+
+        var result = await stopCommand.ExecuteCommand(CreateExecuteCommandContext(env)).DefaultTimeout();
+
+        Assert.True(result.Success);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => eventTask.DefaultTimeout());
+
+        var exitedSeen = WaitForStateAsync(env, env.Android, KnownResourceStates.Exited);
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
+        }).DefaultTimeout();
+
+        await exitedSeen.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task StopCommand_RunningResource_DelegatesToOriginalStopCommand()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        var originalStopInvoked = false;
+        AddOriginalStopCommand(env.Android, () => originalStopInvoked = true);
+
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        var stopCommand = env.Android.Annotations
+            .OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.StopCommand);
+
+        Assert.Equal(ResourceCommandState.Enabled, stopCommand.UpdateState(CreateUpdateStateContext(env, KnownResourceStates.Running)));
+
+        var result = await stopCommand.ExecuteCommand(CreateExecuteCommandContext(env)).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.True(originalStopInvoked);
+    }
+
+    [Fact]
+    public async Task CancelBuildingResource_ReleasesSemaphore()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // Start Android build (it will hold the semaphore and wait for TCS).
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        // Android should be building (semaphore held).
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(0, annotation!.BuildSemaphore.CurrentCount);
+
+        // Cancel via the subscriber — this cancels the CTS, which cancels the TCS via the registration.
+        env.CancelResource(env.Android.Name);
+
+        // The handler re-throws the OCE to prevent DCP from starting the resource.
+        // TaskCanceledException is a subclass of OperationCanceledException, thrown by TCS.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => task1.DefaultTimeout());
+
+        // Semaphore should be released after the building resource is cancelled.
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_NonAndroidSkipsReplayedBuildingAndReleasesOnRunning()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot("Building", KnownResourceStateStyles.Info)
+        }).DefaultTimeout();
+
+        var logger = env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android);
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: true,
+            logger,
+            CancellationToken.None);
+
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+        Assert.False(releaseTask.IsCompleted);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        await releaseTask.DefaultTimeout(TimeSpan.FromSeconds(30));
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task BeforeResourceStarted_UsesPlatformLaunchReleasePolicy()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        env.Android.Annotations.Add(new MauiBuildInfoAnnotation(
+            "/fake/project.csproj",
+            "/fake",
+            "net10.0-android",
+            releaseBuildLockOnResourceRunning: false));
+        env.MacCatalyst.Annotations.Add(new MauiBuildInfoAnnotation(
+            "/fake/project.csproj",
+            "/fake",
+            "net10.0-maccatalyst",
+            releaseBuildLockOnResourceRunning: true));
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        env.Subscriber.CompleteBuildImmediately(env.MacCatalyst);
+        using var startCts = new CancellationTokenSource();
+
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            startCts.Token).DefaultTimeout();
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            startCts.Token).DefaultTimeout();
+
+        Assert.False(env.Subscriber.GetReleaseOnRunning(env.Android));
+        Assert.True(env.Subscriber.GetReleaseOnRunning(env.MacCatalyst));
+        var applicationStopping = env.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+        Assert.Equal(applicationStopping, env.Subscriber.GetLaunchCancellationToken(env.Android));
+        Assert.Equal(applicationStopping, env.Subscriber.GetLaunchCancellationToken(env.MacCatalyst));
+        Assert.NotEqual(startCts.Token, applicationStopping);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidWaitsForTerminalState()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot("Building", KnownResourceStateStyles.Info)
+        }).DefaultTimeout();
+
+        var logger = env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android);
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            logger,
+            CancellationToken.None);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        await Assert.ThrowsAsync<TimeoutException>(() => releaseTask.WaitAsync(TimeSpan.FromMilliseconds(100)));
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot("Terminated", KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        await releaseTask.DefaultTimeout();
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Theory]
+    [InlineData("FailedToStart")]
+    [InlineData("RuntimeUnhealthy")]
+    [InlineData("Exited")]
+    [InlineData("Finished")]
+    [InlineData("Terminated")]
+    [InlineData("terminated")]
+    public void ShouldReleaseBuildLockForLaunchState_ReleasesOnUnavailableOrTerminalState(string state)
+    {
+        Assert.True(MauiBuildQueueEventSubscriber.ShouldReleaseBuildLockForLaunchState(
+            state,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false));
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_NonAndroidReleasesOnLaunchHandoffTimeout()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var timeProvider = ConfigureLaunchHandoffTimeout(subscriber);
+
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.MacCatalyst,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: true,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.MacCatalyst),
+            CancellationToken.None);
+
+        timeProvider.Advance(subscriber.LaunchHandoffTimeout);
+        await releaseTask.DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidStopsLaunchBeforeReleasingOnTimeout()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var stopStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopCompletion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, async context =>
+        {
+            stopStarted.SetResult();
+            await stopCompletion.Task.WaitAsync(context.CancellationToken);
+            return CommandResults.Success();
+        });
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var timeProvider = ConfigureLaunchHandoffTimeout(subscriber);
+
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        timeProvider.Advance(subscriber.LaunchHandoffTimeout);
+        await stopStarted.Task.DefaultTimeout();
+        Assert.False(releaseTask.IsCompleted);
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        stopCompletion.SetResult();
+        await releaseTask.DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidNewStartBreaksTimeoutStopLockCycle()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+
+        var stopStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, async context =>
+        {
+            stopStarted.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            return CommandResults.Success();
+        });
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        await annotation!.BuildSemaphore.WaitAsync();
+        env.Subscriber.UseRealLaunchHandoff = true;
+        var timeProvider = ConfigureLaunchHandoffTimeout(env.Subscriber);
+        var releaseTask = env.Subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        timeProvider.Advance(env.Subscriber.LaunchHandoffTimeout);
+        await stopStarted.Task.DefaultTimeout();
+
+        var nextStartTask = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await releaseTask.DefaultTimeout();
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+        Assert.False(nextStartTask.IsCompleted);
+
+        env.Subscriber.UseRealLaunchHandoff = false;
+        env.Subscriber.CompleteBuild(env.Android);
+        await nextStartTask.DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidRetainsLockWhenStopFails()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var stopAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, _ =>
+        {
+            stopAttempted.SetResult();
+            return Task.FromResult(CommandResults.Failure("Stop failed."));
+        });
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var timeProvider = ConfigureLaunchHandoffTimeout(subscriber);
+
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        timeProvider.Advance(subscriber.LaunchHandoffTimeout);
+        await stopAttempted.Task.DefaultTimeout();
+        Assert.False(releaseTask.IsCompleted);
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot("Terminated", KnownResourceStateStyles.Success)
+        }).DefaultTimeout();
+
+        await releaseTask.DefaultTimeout();
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidStopFailureAllowsReplacementStart()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+
+        var stopAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, _ =>
+        {
+            stopAttempted.SetResult();
+            return Task.FromResult(CommandResults.Failure("Stop failed."));
+        });
+        env.Subscriber.CompleteBuildImmediately(env.Android);
+        await env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None).DefaultTimeout();
+
+        await annotation!.BuildSemaphore.WaitAsync();
+        env.Subscriber.UseRealLaunchHandoff = true;
+        var timeProvider = ConfigureLaunchHandoffTimeout(env.Subscriber);
+        var releaseTask = env.Subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            CancellationToken.None);
+
+        timeProvider.Advance(env.Subscriber.LaunchHandoffTimeout);
+        await stopAttempted.Task.DefaultTimeout();
+        Assert.False(releaseTask.IsCompleted);
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        var nextStartTask = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await releaseTask.DefaultTimeout();
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+        Assert.False(nextStartTask.IsCompleted);
+
+        env.Subscriber.UseRealLaunchHandoff = false;
+        env.Subscriber.CompleteBuild(env.Android);
+        await nextStartTask.DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_AndroidReleasesWhenApplicationCancelsDuringTimeoutStop()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var stopStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AddOriginalStopCommand(env.Android, async context =>
+        {
+            stopStarted.SetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.CancellationToken);
+            return CommandResults.Success();
+        });
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        var timeProvider = ConfigureLaunchHandoffTimeout(subscriber);
+        using var cts = new CancellationTokenSource();
+
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            cts.Token);
+
+        timeProvider.Advance(subscriber.LaunchHandoffTimeout);
+        await stopStarted.Task.DefaultTimeout();
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        await cts.CancelAsync().DefaultTimeout();
+        await releaseTask.DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseSemaphoreAfterLaunchAsync_ReleasesOnCancellation()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        await annotation!.BuildSemaphore.WaitAsync();
+
+        var subscriber = new MauiBuildQueueEventSubscriber(
+            env.NotificationService,
+            env.Services.GetRequiredService<ResourceLoggerService>(),
+            env.Services.GetRequiredService<ResourceCommandService>());
+        using var cts = new CancellationTokenSource();
+        var releaseTask = subscriber.ReleaseSemaphoreAfterLaunchAsync(
+            env.Android,
+            annotation.BuildSemaphore,
+            stateAtCallTime: "Building",
+            releaseOnRunning: false,
+            env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            cts.Token);
+
+        await cts.CancelAsync().DefaultTimeout();
+        await releaseTask.DefaultTimeout();
+
+        Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
+    }
+
+    [Fact]
+    public async Task CancelQueuedResource_NextResourceProceeds()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // Hold the semaphore with Android.
+        var task1 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None));
+
+        await env.Subscriber.WaitForBuildStartedAsync(env.Android);
+
+        // Queue MacCatalyst and iOS.
+        var macCatalystQueued = WaitForStateAsync(env, env.MacCatalyst, "Queued");
+        var iosSimulatorQueued = WaitForStateAsync(env, env.IOSSimulator, "Queued");
+
+        var task2 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.MacCatalyst, env.Services),
+            CancellationToken.None));
+
+        var task3 = Task.Run(() => env.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(env.IOSSimulator, env.Services),
+            CancellationToken.None));
+
+        await Task.WhenAll(macCatalystQueued, iosSimulatorQueued);
+
+        // Cancel MacCatalyst.
+        env.CancelResource(env.MacCatalyst.Name);
+        // The handler re-throws the OCE to prevent DCP from starting the resource.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => task2.DefaultTimeout());
+
+        // Complete Android — iOS should proceed (MacCatalyst was cancelled without acquiring semaphore).
+        env.Subscriber.CompleteBuild(env.Android);
+        await task1.DefaultTimeout();
+
+        // iOS should now be building.
+        await env.Subscriber.WaitForBuildStartedAsync(env.IOSSimulator);
+        Assert.False(task3.IsCompleted, "iOS should be building now.");
+
+        env.Subscriber.CompleteBuild(env.IOSSimulator);
+        await task3.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task BuildTimeout_ThrowsTimeoutException()
+    {
+        await using var env = await BuildQueueTestEnvironment.CreateAsync();
+
+        // Set a very short timeout for testing.
+        env.Subscriber.BuildTimeout = TimeSpan.FromMilliseconds(100);
+
+        // Add a MauiBuildInfoAnnotation so RunBuildAsync doesn't skip the build.
+        env.Android.Annotations.Add(new MauiBuildInfoAnnotation(
+            "/nonexistent/project.csproj",
+            "/nonexistent",
+            "net10.0-android"));
+
+        env.Subscriber.UseRealBuild = true;
+
+        // The real RunBuildAsync will try to start a dotnet process that either fails
+        // immediately or gets killed by the timeout. Either results in an exception.
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => env.Eventing.PublishAsync(
+                new BeforeResourceStartedEvent(env.Android, env.Services),
+            CancellationToken.None)).DefaultTimeout();
+
+        // Semaphore should be released regardless.
+        Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
+        Assert.Equal(1, annotation!.BuildSemaphore.CurrentCount);
+    }
+
+    private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)
+    {
+        AddOriginalStopCommand(resource, _ =>
+        {
+            onExecute?.Invoke();
+            return Task.FromResult(CommandResults.Success());
+        });
+    }
+
+    private static void AddOriginalStopCommand(IResource resource, Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand)
+    {
+        resource.Annotations.Add(new ResourceCommandAnnotation(
+            name: KnownResourceCommands.StopCommand,
+            displayName: "Stop",
+            updateState: _ => ResourceCommandState.Enabled,
+            executeCommand,
+            displayDescription: null,
+            parameter: null,
+            confirmationMessage: null,
+            iconName: "Stop",
+            iconVariant: IconVariant.Filled,
+            isHighlighted: true));
+    }
+
+    private static UpdateCommandStateContext CreateUpdateStateContext(BuildQueueTestEnvironment env, string? state)
+    {
+        return new()
+        {
+            ResourceSnapshot = new CustomResourceSnapshot
+            {
+                Properties = [],
+                ResourceType = "maui",
+                State = state
+            },
+            Services = env.Services
+        };
+    }
+
+    private static ExecuteCommandContext CreateExecuteCommandContext(BuildQueueTestEnvironment env)
+    {
+        return new()
+        {
+            ResourceName = env.Android.Name,
+            Services = env.Services,
+            CancellationToken = CancellationToken.None,
+            Logger = env.Services.GetRequiredService<ResourceLoggerService>().GetLogger(env.Android),
+            Arguments = new InteractionInputCollection([])
+        };
+    }
+
+    private static async Task WaitForStateAsync(BuildQueueTestEnvironment env, IResource resource, string state)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await foreach (var evt in env.NotificationService.WatchAsync(cts.Token))
+        {
+            if (evt.Resource.Name == resource.Name && evt.Snapshot.State?.Text == state)
+            {
+                return;
+            }
+        }
+    }
+
+    private static FakeTimeProvider ConfigureLaunchHandoffTimeout(MauiBuildQueueEventSubscriber subscriber)
+    {
+        var timeProvider = new FakeTimeProvider();
+        subscriber.LaunchHandoffTimeProvider = timeProvider;
+        return timeProvider;
+    }
+
+    // ───────────────────────────────────────────────────────────────────
+    // Test infrastructure
+    // ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A subscriber that overrides <see cref="RunBuildAsync"/> with a controllable
+    /// <see cref="TaskCompletionSource"/> so tests can decide when (and whether) each
+    /// resource's build completes. Exposes a <c>WaitForBuildStartedAsync</c> method for
+    /// deterministic synchronization instead of <c>Task.Delay</c>.
+    /// </summary>
+    private sealed class TestableBuildQueueSubscriber(
+        ResourceNotificationService notificationService,
+        ResourceLoggerService loggerService,
+        ResourceCommandService resourceCommandService) : MauiBuildQueueEventSubscriber(notificationService, loggerService, resourceCommandService)
+    {
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> _buildCompletions = new();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> _buildStarted = new();
+        private readonly ConcurrentDictionary<string, Exception> _buildFailures = new();
+        private readonly ConcurrentDictionary<string, bool> _releaseOnRunningValues = new();
+        private readonly ConcurrentDictionary<string, CancellationToken> _launchCancellationTokens = new();
+
+        /// <summary>When true, delegates to the real <see cref="MauiBuildQueueEventSubscriber.RunBuildAsync"/>.</summary>
+        public bool UseRealBuild { get; set; }
+
+        /// <summary>When true, delegates to the real <see cref="MauiBuildQueueEventSubscriber.ReleaseSemaphoreAfterLaunchAsync"/>.</summary>
+        public bool UseRealLaunchHandoff { get; set; }
+
+        /// <summary>Waits until <see cref="RunBuildAsync"/> is entered for the given resource.</summary>
+        public Task WaitForBuildStartedAsync(IResource resource, TimeSpan? timeout = null)
+        {
+            return GetOrCreateStarted(resource.Name).Task.DefaultTimeout(timeout ?? TimeSpan.FromSeconds(30));
+        }
+
+        /// <summary>Completes the build for the given resource, unblocking the event handler.</summary>
+        public void CompleteBuild(IResource resource)
+        {
+            GetOrCreateCompletion(resource.Name).TrySetResult();
+        }
+
+        /// <summary>Pre-registers a resource whose build should complete immediately.</summary>
+        public void CompleteBuildImmediately(IResource resource)
+        {
+            GetOrCreateCompletion(resource.Name).TrySetResult();
+        }
+
+        public bool GetReleaseOnRunning(IResource resource)
+        {
+            return _releaseOnRunningValues[resource.Name];
+        }
+
+        public CancellationToken GetLaunchCancellationToken(IResource resource)
+        {
+            return _launchCancellationTokens[resource.Name];
+        }
+
+        /// <summary>Pre-registers a resource whose build should fail with an exception.</summary>
+        public void FailBuild(IResource resource, string message)
+        {
+            _buildFailures[resource.Name] = new InvalidOperationException(message);
+            GetOrCreateCompletion(resource.Name).TrySetResult();
+        }
+
+        /// <summary>Pre-registers a resource whose build should fail with a specific exception.</summary>
+        public void FailBuildWith(IResource resource, Exception exception)
+        {
+            _buildFailures[resource.Name] = exception;
+            GetOrCreateCompletion(resource.Name).TrySetResult();
+        }
+
+        internal override async Task RunBuildAsync(IResource resource, ILogger logger, CancellationToken cancellationToken)
+        {
+            if (UseRealBuild)
+            {
+                GetOrCreateStarted(resource.Name).TrySetResult();
+                await base.RunBuildAsync(resource, logger, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            var tcs = GetOrCreateCompletion(resource.Name);
+
+            try
+            {
+                // Signal that the build has started (deterministic sync point for tests).
+                GetOrCreateStarted(resource.Name).TrySetResult();
+
+                using var reg = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+                await tcs.Task.ConfigureAwait(false);
+
+                if (_buildFailures.TryRemove(resource.Name, out var ex))
+                {
+                    throw ex;
+                }
+            }
+            finally
+            {
+                // Always clean up so the same resource can be restarted.
+                _buildCompletions.TryRemove(resource.Name, out _);
+                _buildStarted.TryRemove(resource.Name, out _);
+            }
+        }
+
+        /// <summary>
+        /// In tests there is no DCP launch phase, so release the semaphore immediately.
+        /// </summary>
+        internal override Task ReleaseSemaphoreAfterLaunchAsync(IResource resource, SemaphoreSlim semaphore, string? stateAtCallTime, bool releaseOnRunning, ILogger logger, CancellationToken cancellationToken)
+        {
+            _launchCancellationTokens[resource.Name] = cancellationToken;
+
+            if (UseRealLaunchHandoff)
+            {
+                return base.ReleaseSemaphoreAfterLaunchAsync(resource, semaphore, stateAtCallTime, releaseOnRunning, logger, cancellationToken);
+            }
+
+            _releaseOnRunningValues[resource.Name] = releaseOnRunning;
+            semaphore.Release();
+            return Task.CompletedTask;
+        }
+
+        private TaskCompletionSource GetOrCreateCompletion(string name)
+        {
+            return _buildCompletions.GetOrAdd(name, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        }
+
+        private TaskCompletionSource GetOrCreateStarted(string name)
+        {
+            return _buildStarted.GetOrAdd(name, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+        }
+    }
+
+    /// <summary>
+    /// A subscriber that uses the real <see cref="MauiBuildQueueEventSubscriber.RunBuildAsync"/>
+    /// but overrides <see cref="MauiBuildQueueEventSubscriber.ReleaseSemaphoreAfterLaunchAsync"/>
+    /// to release immediately since there is no DCP launch phase in tests.
+    /// </summary>
+    private sealed class RealBuildQueueSubscriberWithImmediateRelease(
+        ResourceNotificationService notificationService,
+        ResourceLoggerService loggerService,
+        ResourceCommandService resourceCommandService) : MauiBuildQueueEventSubscriber(notificationService, loggerService, resourceCommandService)
+    {
+        internal override Task ReleaseSemaphoreAfterLaunchAsync(IResource resource, SemaphoreSlim semaphore, string? stateAtCallTime, bool releaseOnRunning, ILogger logger, CancellationToken cancellationToken)
+        {
+            semaphore.Release();
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Test environment that creates resources manually and registers only the
+    /// <see cref="TestableBuildQueueSubscriber"/>, avoiding the Android/iOS
+    /// environment subscribers that require services unavailable in unit tests.
+    /// </summary>
+    private sealed class BuildQueueTestEnvironment : IAsyncDisposable
+    {
+        public required DistributedApplication App { get; init; }
+        public required MauiProjectResource Parent { get; init; }
+        public required MauiAndroidEmulatorResource Android { get; init; }
+        public required MauiMacCatalystPlatformResource MacCatalyst { get; init; }
+        public required MauiiOSSimulatorResource IOSSimulator { get; init; }
+        public required TestableBuildQueueSubscriber Subscriber { get; init; }
+        public MauiAndroidEmulatorResource? Android2 { get; init; }
+
+        public IServiceProvider Services => App.Services;
+        public IDistributedApplicationEventing Eventing => App.Services.GetRequiredService<IDistributedApplicationEventing>();
+        public ResourceNotificationService NotificationService => App.Services.GetRequiredService<ResourceNotificationService>();
+
+        /// <summary>Cancels a resource via the annotation's CancelResource method.</summary>
+        public bool CancelResource(string resourceName)
+        {
+            Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation);
+            return annotation!.CancelResource(resourceName);
+        }
+
+        public static async Task<BuildQueueTestEnvironment> CreateAsync()
+        {
+            var appBuilder = DistributedApplication.CreateBuilder();
+
+            var parent = new MauiProjectResource("mauiapp", "/fake/path.csproj");
+            parent.Annotations.Add(new MauiBuildQueueAnnotation());
+            appBuilder.CreateResourceBuilder(parent);
+
+            var android = new MauiAndroidEmulatorResource("android", parent);
+            appBuilder.AddResource(android);
+
+            var macCatalyst = new MauiMacCatalystPlatformResource("maccatalyst", parent);
+            appBuilder.AddResource(macCatalyst);
+
+            var iosSimulator = new MauiiOSSimulatorResource("ios-simulator", parent);
+            appBuilder.AddResource(iosSimulator);
+
+            var app = appBuilder.Build();
+            var subscriber = await InitializeSubscriberAsync(app);
+
+            return new BuildQueueTestEnvironment
+            {
+                App = app,
+                Parent = parent,
+                Android = android,
+                MacCatalyst = macCatalyst,
+                IOSSimulator = iosSimulator,
+                Subscriber = subscriber
+            };
+        }
+
+        public static async Task<BuildQueueTestEnvironment> CreateWithTwoProjectsAsync()
+        {
+            var appBuilder = DistributedApplication.CreateBuilder();
+
+            var parent1 = new MauiProjectResource("mauiapp1", "/fake/path1.csproj");
+            parent1.Annotations.Add(new MauiBuildQueueAnnotation());
+            appBuilder.CreateResourceBuilder(parent1);
+            var android1 = new MauiAndroidEmulatorResource("android1", parent1);
+            appBuilder.AddResource(android1);
+
+            var parent2 = new MauiProjectResource("mauiapp2", "/fake/path2.csproj");
+            parent2.Annotations.Add(new MauiBuildQueueAnnotation());
+            appBuilder.CreateResourceBuilder(parent2);
+            var android2 = new MauiAndroidEmulatorResource("android2", parent2);
+            appBuilder.AddResource(android2);
+
+            var macCatalyst = new MauiMacCatalystPlatformResource("maccatalyst", parent1);
+            appBuilder.AddResource(macCatalyst);
+
+            var iosSimulator = new MauiiOSSimulatorResource("ios-simulator", parent1);
+            appBuilder.AddResource(iosSimulator);
+
+            var app = appBuilder.Build();
+            var subscriber = await InitializeSubscriberAsync(app);
+
+            return new BuildQueueTestEnvironment
+            {
+                App = app,
+                Parent = parent1,
+                Android = android1,
+                MacCatalyst = macCatalyst,
+                IOSSimulator = iosSimulator,
+                Android2 = android2,
+                Subscriber = subscriber
+            };
+        }
+
+        private static async Task<TestableBuildQueueSubscriber> InitializeSubscriberAsync(DistributedApplication app)
+        {
+            var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+            var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+            var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+            var execContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>();
+
+            var resourceCommandService = app.Services.GetRequiredService<ResourceCommandService>();
+            var subscriber = new TestableBuildQueueSubscriber(notificationService, loggerService, resourceCommandService);
+            await subscriber.SubscribeAsync(eventing, execContext, CancellationToken.None).DefaultTimeout();
+            return subscriber;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await App.DisposeAsync().DefaultTimeout();
+        }
+    }
+}

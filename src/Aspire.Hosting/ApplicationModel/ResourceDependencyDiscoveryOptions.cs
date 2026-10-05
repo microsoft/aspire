@@ -19,4 +19,18 @@ public sealed class ResourceDependencyDiscoveryOptions
     /// on subsequent evaluations of the same annotation, rather than re-evaluating the callback each time.
     /// </summary>
     public bool CacheAnnotationCallbackResults { get; init; }
+
+    /// <summary>
+    /// When true, discovery reads only callback results that have already been cached by a prior
+    /// <see cref="ICallbackResourceAnnotation{TContext, TResult}.EvaluateOnceAsync"/> call and never invokes a
+    /// callback itself. Annotations without a completed cached result are skipped.
+    /// </summary>
+    /// <remarks>
+    /// This is for read-only consumers (such as <c>aspire describe</c> inspecting live resource snapshots) that
+    /// must not run resource callbacks. Invoking a callback from such a consumer would execute it with the
+    /// consumer's cancellation token and could poison DCP's cache with a canceled or faulted task that DCP later
+    /// reuses on the resource's execution path. When this is set, <see cref="CacheAnnotationCallbackResults"/> has
+    /// no effect because nothing is executed or newly cached.
+    /// </remarks>
+    internal bool PeekCachedCallbackResultsOnly { get; init; }
 }

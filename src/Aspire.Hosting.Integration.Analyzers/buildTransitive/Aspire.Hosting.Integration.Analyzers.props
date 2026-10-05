@@ -1,0 +1,11 @@
+<Project>
+
+  <!-- This analyzer auto-loads from the package's analyzers/dotnet/cs path, so the polyglot opt-out
+       property must be made compiler-visible here rather than relying on Aspire.Hosting's build assets
+       being imported. Without this, a project that references this package but has no [AspireExport]
+       coverage cannot suppress ASPIREEXPORT017 via <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>. -->
+  <ItemGroup>
+    <CompilerVisibleProperty Include="IsAspirePolyglotCompatible" />
+  </ItemGroup>
+
+</Project>

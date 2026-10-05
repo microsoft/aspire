@@ -1,0 +1,11 @@
+﻿---
+apiVersion: "networking.k8s.io/v1"
+kind: "Ingress"
+metadata:
+  name: "public"
+spec:
+  defaultBackend:
+    service:
+      name: "myapi-service"
+      port:
+        name: "http"

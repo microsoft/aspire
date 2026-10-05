@@ -32,6 +32,11 @@
         <target state="new">No logs found</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsMatchFilter">
+        <source>No logs match the filter</source>
+        <target state="new">No logs match the filter</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
         <source>No resource selected</source>
         <target state="translated">未选择资源</target>
@@ -40,6 +45,11 @@
       <trans-unit id="ConsoleLogsNoWrapLogs">
         <source>Don't wrap log lines</source>
         <target state="translated">不将日志换行</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConsoleLogsNotCapturedForRun">
+        <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
+        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
@@ -65,6 +75,11 @@
       <trans-unit id="ConsoleLogsSettings">
         <source>Settings</source>
         <target state="translated">设置</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ConsoleLogsTextFilter">
+        <source>Console logs filter</source>
+        <target state="new">Console logs filter</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
@@ -106,6 +121,11 @@
         <source>Service log status</source>
         <target state="translated">服务日志状态</target>
         <note />
+      </trans-unit>
+      <trans-unit id="PauseInProgressText">
+        <source>Console logs capture paused at {0}</source>
+        <target state="new">Console logs capture paused at {0}</target>
+        <note>{0} is a time</note>
       </trans-unit>
     </body>
   </file>

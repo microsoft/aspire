@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Shared.ConsoleLogs;
@@ -307,6 +308,367 @@ public class ResourceLoggerServiceTests
     }
 
     [Fact]
+    public async Task AddLogEntries_OverlappingSnapshotAndFollow_DedupesByOccurrence()
+    {
+        await Task.Run(() =>
+        {
+            const string resourceName = "myResource";
+            var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+            var logLines = new List<LogLine>();
+
+            using var subscription = service.Subscribe(resourceName, logLines.AddRange);
+
+            service.AddLogEntries(resourceName,
+                [
+                    CreateLogEntry("snapshot-before-overlap"),
+                    CreateLogEntry("overlap"),
+                    CreateLogEntry("snapshot-after-overlap")
+                ],
+                inMemorySource: false,
+                skipExisting: true);
+            service.AddLogEntries(resourceName,
+                [
+                    CreateLogEntry("overlap"),
+                    CreateLogEntry("follow-only")
+                ],
+                inMemorySource: false,
+                skipExisting: true);
+
+            Assert.Collection(logLines,
+                l => { Assert.Equal(1, l.LineNumber); Assert.Equal("snapshot-before-overlap", l.Content); },
+                l => { Assert.Equal(2, l.LineNumber); Assert.Equal("overlap", l.Content); },
+                l => { Assert.Equal(3, l.LineNumber); Assert.Equal("snapshot-after-overlap", l.Content); },
+                l => { Assert.Equal(4, l.LineNumber); Assert.Equal("follow-only", l.Content); });
+        }).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task AddLogEntries_RepeatedIdenticalLines_ArePreservedWhenDedupingOverlap()
+    {
+        await Task.Run(() =>
+        {
+            const string resourceName = "myResource";
+            var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+            var logLines = new List<LogLine>();
+
+            using var subscription = service.Subscribe(resourceName, logLines.AddRange);
+
+            service.AddLogEntries(resourceName,
+                [
+                    CreateLogEntry("same"),
+                    CreateLogEntry("same")
+                ],
+                inMemorySource: false,
+                skipExisting: true);
+            service.AddLogEntries(resourceName,
+                [
+                    CreateLogEntry("same"),
+                    CreateLogEntry("same"),
+                    CreateLogEntry("same")
+                ],
+                inMemorySource: false,
+                skipExisting: true);
+
+            Assert.Collection(logLines,
+                l => { Assert.Equal(1, l.LineNumber); Assert.Equal("same", l.Content); },
+                l => { Assert.Equal(2, l.LineNumber); Assert.Equal("same", l.Content); },
+                l => { Assert.Equal(3, l.LineNumber); Assert.Equal("same", l.Content); });
+        }).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task Subscribe_DeliversBacklogBeforeLiveLogs_WithContinuousLineNumbers()
+    {
+        const string resourceName = "myResource";
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        var logLines = new List<LogLine>();
+        var logLinesLock = new object();
+        var subscribeRegistered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueBacklogDelivery = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        service.AddLogEntries(resourceName, [CreateLogEntry("backlog")], inMemorySource: true, skipExisting: false);
+        var loggerState = service.GetResourceLoggerState(resourceName);
+        loggerState.SynchronousSubscribeRegistered = () =>
+        {
+            subscribeRegistered.TrySetResult();
+            continueBacklogDelivery.Task.DefaultTimeout().GetAwaiter().GetResult();
+        };
+
+        IDisposable? subscription = null;
+        var subscribeTask = Task.Run(() =>
+        {
+            subscription = service.Subscribe(resourceName, batch =>
+            {
+                lock (logLinesLock)
+                {
+                    logLines.AddRange(batch);
+                }
+            });
+        });
+
+        try
+        {
+            await subscribeRegistered.Task.DefaultTimeout();
+
+            service.AddLogEntries(resourceName, [CreateLogEntry("live-during-backlog-delivery")], inMemorySource: false, skipExisting: false);
+
+            continueBacklogDelivery.SetResult();
+            await subscribeTask.DefaultTimeout();
+
+            service.AddLogEntries(resourceName, [CreateLogEntry("live-after-subscribe")], inMemorySource: false, skipExisting: false);
+
+            lock (logLinesLock)
+            {
+                Assert.Collection(logLines,
+                    l => { Assert.Equal(1, l.LineNumber); Assert.Equal("backlog", l.Content); },
+                    l => { Assert.Equal(2, l.LineNumber); Assert.Equal("live-during-backlog-delivery", l.Content); },
+                    l => { Assert.Equal(3, l.LineNumber); Assert.Equal("live-after-subscribe", l.Content); });
+            }
+        }
+        finally
+        {
+            loggerState.SynchronousSubscribeRegistered = null;
+            continueBacklogDelivery.TrySetResult();
+            subscription?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task WaitForCompletionAsync_CompletesWhenResourceLogStreamCompletes()
+    {
+        const string resourceName = "myResource";
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+
+        var completionTask = service.WaitForCompletionAsync(resourceName, CancellationToken.None);
+        Assert.False(completionTask.IsCompleted);
+
+        service.Complete(resourceName);
+
+        await completionTask.DefaultTimeout();
+        await service.WaitForCompletionAsync(resourceName, CancellationToken.None).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task HasActiveSubscribers_ReturnsFalseAfterCompletion()
+    {
+        await Task.Run(() =>
+        {
+            const string resourceName = "myResource";
+            var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+
+            Assert.False(service.HasActiveSubscribers(resourceName));
+
+            using var subscription = service.Subscribe(resourceName, _ => { });
+
+            Assert.True(service.HasActiveSubscribers(resourceName));
+
+            service.Complete(resourceName);
+
+            Assert.False(service.HasActiveSubscribers(resourceName));
+        }).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetAllAsync_DoesNotReplayNonInMemoryEntries()
+    {
+        var testResource = new TestResource("myResource");
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+
+        using (service.Subscribe(testResource.Name, _ => { }))
+        {
+            service.AddLogEntries(testResource.Name, [CreateLogEntry("dcp-snapshot-log")], inMemorySource: false, skipExisting: false);
+        }
+
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<LogEntry>>();
+        consoleLogsChannel.Writer.TryWrite([CreateLogEntry("dcp-snapshot-log")]);
+        consoleLogsChannel.Writer.Complete();
+
+        service.SetConsoleLogsService(new TestConsoleLogsService(name => name == testResource.Name
+            ? consoleLogsChannel
+            : throw new InvalidOperationException($"Unexpected {name}")));
+
+        var allLogs = new List<LogLine>();
+        await foreach (var logs in service.GetAllAsync(testResource).DefaultTimeout())
+        {
+            allLogs.AddRange(logs);
+        }
+
+        var logLine = Assert.Single(allLogs);
+        Assert.Equal("dcp-snapshot-log", logLine.Content);
+    }
+
+    [Fact]
+    public async Task Subscribe_ConcurrentAddLogEntries_DeliversEachEntryOnceWithUniqueLineNumbers()
+    {
+        const string resourceName = "myResource";
+        const int producerCount = 8;
+        const int entriesPerProducer = 100;
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        var logLines = new List<LogLine>();
+        var logLinesLock = new object();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var subscription = service.Subscribe(resourceName, batch =>
+        {
+            lock (logLinesLock)
+            {
+                logLines.AddRange(batch);
+            }
+        });
+
+        var producerTasks = Enumerable.Range(0, producerCount).Select(async producerIndex =>
+        {
+            await start.Task.DefaultTimeout();
+
+            for (var entryIndex = 0; entryIndex < entriesPerProducer; entryIndex++)
+            {
+                service.AddLogEntries(
+                    resourceName,
+                    [CreateConcurrentLogEntry(producerIndex, entryIndex)],
+                    inMemorySource: false,
+                    skipExisting: false);
+            }
+        });
+
+        start.SetResult();
+        await Task.WhenAll(producerTasks).DefaultTimeout();
+
+        lock (logLinesLock)
+        {
+            Assert.Equal(producerCount * entriesPerProducer, logLines.Count);
+            Assert.Equal(logLines.Count, logLines.Select(l => l.Content).Distinct().Count());
+            Assert.Equal(Enumerable.Range(1, logLines.Count), logLines.Select(l => l.LineNumber).Order());
+        }
+    }
+
+    [Fact]
+    public async Task AddLogEntries_ConcurrentOverlappingBatches_DedupesByOccurrence()
+    {
+        const string resourceName = "myResource";
+        const int producerCount = 16;
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        var logLines = new List<LogLine>();
+        var logLinesLock = new object();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var subscription = service.Subscribe(resourceName, batch =>
+        {
+            lock (logLinesLock)
+            {
+                logLines.AddRange(batch);
+            }
+        });
+
+        var producerTasks = Enumerable.Range(0, producerCount).Select(async _ =>
+        {
+            await start.Task.DefaultTimeout();
+
+            service.AddLogEntries(
+                resourceName,
+                [
+                    CreateLogEntry("same"),
+                    CreateLogEntry("same"),
+                    CreateLogEntry("unique")
+                ],
+                inMemorySource: false,
+                skipExisting: true);
+        });
+
+        start.SetResult();
+        await Task.WhenAll(producerTasks).DefaultTimeout();
+
+        lock (logLinesLock)
+        {
+            Assert.Equal(3, logLines.Count);
+            Assert.Equal(2, logLines.Count(l => l.Content == "same"));
+            Assert.Single(logLines, l => l.Content == "unique");
+            Assert.Equal([1, 2, 3], logLines.Select(l => l.LineNumber).Order());
+        }
+    }
+
+    [Fact]
+    public async Task SubscribeAndDispose_ConcurrentWithLogging_DoesNotThrowOrDeadlock()
+    {
+        const string resourceName = "myResource";
+        const int subscriberCount = 8;
+        const int subscribeIterations = 50;
+        const int producerCount = 4;
+        const int entriesPerProducer = 100;
+        var service = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        var exceptions = new ConcurrentQueue<Exception>();
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var observedByStableSubscription = 0;
+
+        using var stableSubscription = service.Subscribe(resourceName, batch =>
+        {
+            foreach (var line in batch)
+            {
+                if (line.LineNumber <= 0)
+                {
+                    throw new InvalidOperationException("Expected positive line numbers.");
+                }
+            }
+
+            Interlocked.Add(ref observedByStableSubscription, batch.Count);
+        });
+
+        var subscriberTasks = Enumerable.Range(0, subscriberCount).Select(async subscriberIndex =>
+        {
+            await start.Task.DefaultTimeout();
+
+            try
+            {
+                for (var i = 0; i < subscribeIterations; i++)
+                {
+                    using var subscription = service.Subscribe(resourceName, batch =>
+                    {
+                        foreach (var line in batch)
+                        {
+                            if (line.LineNumber <= 0)
+                            {
+                                throw new InvalidOperationException($"Subscriber {subscriberIndex} observed non-positive line number.");
+                            }
+                        }
+                    });
+
+                    await Task.Yield();
+                }
+            }
+            catch (Exception ex)
+            {
+                exceptions.Enqueue(ex);
+            }
+        });
+
+        var producerTasks = Enumerable.Range(0, producerCount).Select(async producerIndex =>
+        {
+            await start.Task.DefaultTimeout();
+
+            try
+            {
+                for (var entryIndex = 0; entryIndex < entriesPerProducer; entryIndex++)
+                {
+                    service.AddLogEntries(
+                        resourceName,
+                        [CreateConcurrentLogEntry(producerIndex, entryIndex)],
+                        inMemorySource: false,
+                        skipExisting: false);
+                }
+            }
+            catch (Exception ex)
+            {
+                exceptions.Enqueue(ex);
+            }
+        });
+
+        start.SetResult();
+        await Task.WhenAll(subscriberTasks.Concat(producerTasks)).DefaultTimeout();
+
+        Assert.Empty(exceptions);
+        Assert.Equal(producerCount * entriesPerProducer, observedByStableSubscription);
+    }
+
+    [Fact]
     public async Task WatchAsyncCompletesOnDispose()
     {
         var testResource = new TestResource("myResource");
@@ -431,6 +793,16 @@ public class ResourceLoggerServiceTests
     private sealed class TestResource(string name) : Resource(name)
     {
 
+    }
+
+    private static LogEntry CreateLogEntry(string content)
+    {
+        return LogEntry.Create(timestamp: null, content, isErrorMessage: false);
+    }
+
+    private static LogEntry CreateConcurrentLogEntry(int producerIndex, int entryIndex)
+    {
+        return CreateLogEntry($"concurrent log from producer {producerIndex}, entry {entryIndex}");
     }
 
     private static Task WatchForSubscribers(ResourceLoggerService service)

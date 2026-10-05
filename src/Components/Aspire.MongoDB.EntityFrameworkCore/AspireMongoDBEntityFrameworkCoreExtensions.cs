@@ -51,7 +51,7 @@ public static class AspireMongoDBEntityFrameworkCoreExtensions
             (settings, section) => section.Bind(settings)
         );
 
-        if (builder.Configuration.GetConnectionString(connectionName) is { } connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ConnectionString = connectionString;
         }

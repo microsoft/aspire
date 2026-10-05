@@ -37,9 +37,7 @@ internal static class McpConfigFileHelper
                 content = preprocessContent(content);
             }
 
-            var config = JsonNode.Parse(content)?.AsObject();
-
-            if (config is null)
+            if (JsonNode.Parse(content) is not JsonObject config)
             {
                 return false;
             }
@@ -61,11 +59,14 @@ internal static class McpConfigFileHelper
     /// Reads an existing MCP config file and parses it into a <see cref="JsonObject"/>, or creates a new one if the file doesn't exist.
     /// </summary>
     /// <param name="configFilePath">The path to the MCP configuration file.</param>
+    /// <param name="preprocessContent">Function to preprocess file content before parsing (e.g., to strip JSONC comments), or null for no preprocessing.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    /// <param name="preprocessContent">Optional function to preprocess file content before parsing (e.g., to strip JSONC comments).</param>
     /// <returns>The parsed <see cref="JsonObject"/> from the file, or a new empty <see cref="JsonObject"/> if the file doesn't exist.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when the file exists but contains malformed JSON, wrapping the underlying <see cref="JsonException"/>.</exception>
-    public static async Task<JsonObject> ReadConfigAsync(string configFilePath, CancellationToken cancellationToken, Func<string, string>? preprocessContent = null)
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the file contains malformed JSON or its root is not an object.
+    /// Malformed JSON exceptions wrap the underlying <see cref="JsonException"/>.
+    /// </exception>
+    public static async Task<JsonObject> ReadConfigAsync(string configFilePath, Func<string, string>? preprocessContent, CancellationToken cancellationToken)
     {
         if (!File.Exists(configFilePath))
         {
@@ -79,14 +80,19 @@ internal static class McpConfigFileHelper
             content = preprocessContent(content);
         }
 
+        JsonNode? root;
         try
         {
-            return JsonNode.Parse(content)?.AsObject() ?? new JsonObject();
+            root = JsonNode.Parse(content);
         }
         catch (JsonException ex)
         {
             throw new InvalidOperationException(
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.MalformedConfigFileError, configFilePath), ex);
         }
+
+        return root as JsonObject
+            ?? throw new InvalidOperationException(
+                string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, configFilePath));
     }
 }

@@ -32,7 +32,11 @@ internal sealed class UserSecretsDeploymentStateManager : DeploymentStateManager
     }
 
     /// <inheritdoc/>
-    protected override async Task SaveStateToStorageAsync(JsonObject state, CancellationToken cancellationToken)
+    protected override async Task SaveStateToStorageAsync(
+        JsonObject state,
+        string? sectionName,
+        JsonObject? originalSectionData,
+        CancellationToken cancellationToken)
     {
         try
         {

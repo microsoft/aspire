@@ -241,6 +241,7 @@ public class OtlpSpan
             KnownSourceFields.NameField => span.Scope.Name,
             KnownTraceFields.NameField => span.Name,
             KnownTraceFields.DurationField => span.Duration.TotalMilliseconds.ToString("R", CultureInfo.InvariantCulture),
+            KnownTraceFields.TimestampField => (span.StartTime.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture),
             _ => span.Attributes.GetValue(field)
         };
     }
@@ -248,6 +249,10 @@ public class OtlpSpan
     public static Dictionary<string, int> GetFieldValuesFromTraces(IEnumerable<OtlpTrace> traces, string attributeName)
     {
         var attributeValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        if (attributeName is KnownTraceFields.DurationField or KnownTraceFields.TimestampField)
+        {
+            return attributeValues;
+        }
 
         foreach (var trace in traces)
         {

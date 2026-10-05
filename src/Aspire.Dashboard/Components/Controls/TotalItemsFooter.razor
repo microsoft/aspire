@@ -2,7 +2,14 @@
 
 <div class="items-footer">
     <span class="result-count" aria-live="polite" aria-atomic="true">
-        @((MarkupString)string.Format(TotalItemCount == 1 ? SingularText : PluralText, TotalItemCount))
+        @if (DisplayedItemCount is { } displayedItemCount && displayedItemCount < TotalItemCount && PartialText is not null)
+        {
+            @((MarkupString)string.Format(PartialText, displayedItemCount, TotalItemCount))
+        }
+        else
+        {
+            @((MarkupString)string.Format(TotalItemCount == 1 ? SingularText : PluralText, TotalItemCount))
+        }
     </span>
 
     @if (PauseText is not null)

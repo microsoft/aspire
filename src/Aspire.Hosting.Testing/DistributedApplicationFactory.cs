@@ -203,8 +203,14 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         SetDefault("DcpPublisher:WaitForResourceCleanup", "true");
 
         // Make sure we have a dashboard URL and OTLP endpoint URL.
-        SetDefault(KnownConfigNames.AspNetCoreUrls, "http://localhost:8080");
+        SetDefault(KnownAspNetCoreConfigNames.Urls, "http://localhost:8080");
         SetDefaultFallback(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl, "http://localhost:4317");
+
+        // Since the testing builder defaults all dashboard/OTLP URLs to HTTP, also allow
+        // unsecured transport by default. This prevents OptionsValidationException when the
+        // user enables the dashboard (DisableDashboard = false) without explicitly setting
+        // ASPIRE_ALLOW_UNSECURED_TRANSPORT. See https://github.com/microsoft/aspire/issues/17622
+        SetDefault(KnownConfigNames.AllowUnsecuredTransport, "true");
 
         var appHostProjectPath = ResolveProjectPath(entryPointAssembly);
         if (!string.IsNullOrEmpty(appHostProjectPath) && Directory.Exists(appHostProjectPath))
@@ -375,7 +381,7 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
                     // This helper launches the target assembly's entry point and hooks into the lifecycle
                     // so we can intercept execution at key stages.
                     var factory = DistributedApplicationEntryPointInvoker.ResolveEntryPoint(
-                        _entryPoint.Assembly,
+                        _entryPoint,
                         onConstructing: OnBuilderCreatingCore,
                         onConstructed: OnBuilderCreatedCore,
                         onBuilding: OnBuildingCore,

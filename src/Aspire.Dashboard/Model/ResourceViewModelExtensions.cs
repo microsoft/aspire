@@ -99,6 +99,26 @@ internal static class ResourceViewModelExtensions
         return resource.TryGetCustomDataBoolArray(KnownProperties.Resource.AppArgsSensitivity, out argParams);
     }
 
+    /// <summary>
+    /// Returns <c>true</c> if the resource has an interactive terminal session available.
+    /// </summary>
+    public static bool HasTerminal(this ResourceViewModel resource)
+    {
+        return resource.Properties.ContainsKey(KnownProperties.Terminal.Enabled);
+    }
+
+    /// <summary>
+    /// Tries to get the per-replica consumer UDS path stamped onto the snapshot
+    /// by the AppHost. Used by the dashboard's terminal WebSocket proxy to
+    /// connect a local HMP v1 client to the terminal host. Returns <c>false</c>
+    /// for resources that don't have a terminal or for snapshots from older
+    /// AppHost builds that don't stamp this property.
+    /// </summary>
+    public static bool TryGetTerminalConsumerUdsPath(this ResourceViewModel resource, [NotNullWhen(returnValue: true)] out string? consumerUdsPath)
+    {
+        return resource.TryGetCustomDataString(KnownProperties.Terminal.ConsumerUdsPath, out consumerUdsPath);
+    }
+    
     public static bool TryGetWaitingForDependencies(this ResourceViewModel resource, out ImmutableArray<string> dependencies)
     {
         return resource.TryGetCustomDataStringArray(KnownProperties.Resource.WaitingFor, out dependencies) && dependencies.Length > 0;

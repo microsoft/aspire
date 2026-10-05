@@ -3,6 +3,7 @@
 
 using System.Text;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Processes;
 
 namespace Aspire.Cli.Layout;
 
@@ -17,6 +18,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
+        bool killOnParentExit = false,
         CancellationToken ct = default)
     {
         var outputBuilder = new StringBuilder();
@@ -27,14 +29,28 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
             SuppressLogging = true,
             StandardOutputCallback = line => outputBuilder.AppendLine(line),
             StandardErrorCallback = line => errorBuilder.AppendLine(line),
+            KillOnParentExit = killOnParentExit,
         };
 
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        using var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options);
+        // The Windows kill-on-close job (KillOnParentExit, above) and the cross-platform cooperative
+        // parent-liveness watchdog (activated by the ASPIRE_CLI_PID identity that
+        // WithOrphanDetectionEnvironment stamps) are two implementations of the SAME "don't outlive the
+        // CLI" policy. Arming BOTH on one child races the job's kernel TerminateProcess against the
+        // watchdog's Environment.Exit(124) when the CLI exits, which can get the child stuck mid-teardown.
+        // So we use exactly one mechanism per child: on Windows the kill-on-close
+        // job is authoritative (kernel-enforced), and we do not use the watchdog.
+        // Everywhere else KillOnParentExit is a no-op, and the cooperative watchdog remains the sole mechanism 
+        // and MUST have relevant environment variables set.
+        var effectiveEnvironment = options.KillOnParentExit && OperatingSystem.IsWindows()
+            ? CopyEnvironment(environmentVariables)
+            : WithOrphanDetectionEnvironment(environmentVariables);
 
-        if (!execution.Start())
+        await using var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options);
+
+        if (!await execution.StartAsync(ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
@@ -45,24 +61,58 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
     }
 
     /// <inheritdoc />
-    public IProcessExecution Start(
+    public async Task<IProcessExecution> StartAsync(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
-        ProcessInvocationOptions? options = null)
+        ProcessInvocationOptions? options = null,
+        bool killOnParentExit = false)
     {
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options ?? new ProcessInvocationOptions());
+        // Clone so the KillOnParentExit flip below never mutates the caller's options instance — the
+        // caller may reuse it across invocations. Falls back to a fresh instance when none was passed.
+        var effectiveOptions = options?.Clone() ?? new ProcessInvocationOptions();
 
-        if (!execution.Start())
+        if (killOnParentExit)
         {
-            execution.Dispose();
+            effectiveOptions.KillOnParentExit = true;
+        }
+
+        // Compare with RunAsync: the same logic applies here.
+        var effectiveEnvironment = effectiveOptions.KillOnParentExit && OperatingSystem.IsWindows()
+            ? CopyEnvironment(environmentVariables)
+            : WithOrphanDetectionEnvironment(environmentVariables);
+
+        var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
+
+        // StartAsync returns a background execution handle. Its caller owns the lifetime and must
+        // explicitly wait, kill, or dispose it; cancellation here would only abort launch setup,
+        // not define how the background process should be stopped after it starts.
+        if (!await execution.StartAsync(CancellationToken.None).ConfigureAwait(false))
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
 
         return execution;
     }
+
+    private static IDictionary<string, string> WithOrphanDetectionEnvironment(IDictionary<string, string>? environmentVariables)
+    {
+        var environment = CopyEnvironment(environmentVariables);
+
+        // Stamp the launching CLI's identity, but never override values the caller already supplied
+        // so an explicit caller override always wins.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(environment, overwrite: false);
+
+        return environment;
+    }
+
+    private static IDictionary<string, string> CopyEnvironment(IDictionary<string, string>? environmentVariables)
+        => environmentVariables is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(environmentVariables, StringComparer.Ordinal);
 }

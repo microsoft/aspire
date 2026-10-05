@@ -77,6 +77,10 @@
         {
           "choice": "net10.0",
           "description": "Target net10.0"
+        },
+        {
+          "choice": "net11.0",
+          "description": "Target net11.0"
         }
       ],
       "replaces": "net8.0",
@@ -180,7 +184,10 @@
         "sourceVariableName": "appHostHttpPort",
         "fallbackVariableName": "appHostHttpPortGenerated"
       },
-      "replaces": "15000"
+      "replaces": "15000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "appHostOtlpHttpPort": {
       "type": "parameter",
@@ -202,7 +209,10 @@
         "sourceVariableName": "appHostOtlpHttpPort",
         "fallbackVariableName": "appHostOtlpHttpPortGenerated"
       },
-      "replaces": "19000"
+      "replaces": "19000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "appHostResourceHttpPort": {
       "type": "parameter",
@@ -224,7 +234,10 @@
         "sourceVariableName": "appHostResourceHttpPort",
         "fallbackVariableName": "appHostResourceHttpPortGenerated"
       },
-      "replaces": "20000"
+      "replaces": "20000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "appHostHttpsPort": {
       "type": "parameter",
@@ -246,7 +259,10 @@
         "sourceVariableName": "appHostHttpsPort",
         "fallbackVariableName": "appHostHttpsPortGenerated"
       },
-      "replaces": "17000"
+      "replaces": "17000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "appHostOtlpHttpsPort": {
       "type": "parameter",
@@ -268,7 +284,10 @@
         "sourceVariableName": "appHostOtlpHttpsPort",
         "fallbackVariableName": "appHostOtlpHttpsPortGenerated"
       },
-      "replaces": "21000"
+      "replaces": "21000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "appHostResourceHttpsPort": {
       "type": "parameter",
@@ -290,7 +309,10 @@
         "sourceVariableName": "appHostResourceHttpsPort",
         "fallbackVariableName": "appHostResourceHttpsPortGenerated"
       },
-      "replaces": "22000"
+      "replaces": "22000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "webHttpPort": {
       "type": "parameter",
@@ -312,7 +334,10 @@
         "sourceVariableName": "webHttpPort",
         "fallbackVariableName": "webHttpPortGenerated"
       },
-      "replaces": "5000"
+      "replaces": "5000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "webHttpsPort": {
       "type": "parameter",
@@ -334,7 +359,10 @@
         "sourceVariableName": "webHttpsPort",
         "fallbackVariableName": "webHttpsPortGenerated"
       },
-      "replaces": "7000"
+      "replaces": "7000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "apiServiceHttpPort": {
       "type": "parameter",
@@ -356,7 +384,10 @@
         "sourceVariableName": "apiServiceHttpPort",
         "fallbackVariableName": "apiServiceHttpPortGenerated"
       },
-      "replaces": "5301"
+      "replaces": "5301",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "apiServiceHttpsPort": {
       "type": "parameter",
@@ -378,7 +409,10 @@
         "sourceVariableName": "apiServiceHttpsPort",
         "fallbackVariableName": "apiServiceHttpsPortGenerated"
       },
-      "replaces": "7301"
+      "replaces": "7301",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
     },
     "skipRestore": {
       "type": "parameter",
@@ -421,7 +455,7 @@
     "LocalhostTld": {
       "type": "parameter",
       "datatype": "bool",
-      "isEnabled": "Framework == net10.0",
+      "isEnabled": "(Framework == net10.0 || Framework == net11.0)",
       "defaultValue": "false",
       "displayName": "Use the .dev.localhost TLD in the application URL",
       "description": "Whether to combine the project name with the .dev.localhost TLD in the application URL for local development, e.g. https://myapp.dev.localhost:12345. Supported on .NET 10 and later."

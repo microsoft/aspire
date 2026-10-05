@@ -18,12 +18,11 @@ public sealed class MongoDbContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             // testcontainers uses mongo:mongo by default,
             // resetting that for tests
-            Container = new MongoDbBuilder()
-                .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{MongoDBContainerImageTags.Image}:{MongoDBContainerImageTags.Tag}")
+            Container = new MongoDbBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{MongoDBContainerImageTags.Image}:{MongoDBContainerImageTags.Tag}")
                 .WithUsername(null)
                 .WithPassword(null)
                 .Build();

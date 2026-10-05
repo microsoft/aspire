@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -19,35 +17,27 @@ internal static class BlazorWasmAppBuilder
     /// </summary>
     public static async Task<bool> BuildAsync(string projectPath, ILogger logger, CancellationToken cancellationToken)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = GetDotNetCommandPath(),
-            Arguments = $"build \"{projectPath}\"",
-            WorkingDirectory = Path.GetDirectoryName(projectPath)!,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
         BlazorGatewayLog.BuildStarted(logger, projectPath);
-        using var process = StartProcess(psi, logger, projectPath);
-        if (process == null)
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            projectPath,
+            "build",
+            [],
+            machineReadableOutput: false,
+            cancellationToken).ConfigureAwait(false);
+
+        if (!result.Started)
         {
+            BlazorGatewayLog.ProcessStartFailed(
+                logger,
+                result.Command,
+                projectPath,
+                result.StartException?.Message ?? "Process.Start returned null.");
             return false;
         }
 
-        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-
-        if (process.ExitCode != 0)
+        if (result.ExitCode != 0)
         {
-            BlazorGatewayLog.BuildFailed(logger, projectPath, stdout, stderr);
+            BlazorGatewayLog.BuildFailed(logger, projectPath, result.StandardOutput, result.StandardError);
             return false;
         }
 
@@ -62,41 +52,38 @@ internal static class BlazorWasmAppBuilder
     public static async Task<(string endpointsManifest, string runtimeManifest)?> GetManifestPathsAsync(
         string projectPath, ILogger logger, CancellationToken cancellationToken)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = GetDotNetCommandPath(),
-            Arguments = $"msbuild \"{projectPath}\" -t:ResolveStaticWebAssetsConfiguration -getProperty:StaticWebAssetEndpointsBuildManifestPath -getProperty:StaticWebAssetDevelopmentManifestPath",
-            WorkingDirectory = Path.GetDirectoryName(projectPath)!,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            projectPath,
+            "msbuild",
+            [
+                "-t:ResolveStaticWebAssetsConfiguration",
+                "-getProperty:StaticWebAssetEndpointsBuildManifestPath",
+                "-getProperty:StaticWebAssetDevelopmentManifestPath",
+                "-nologo"
+            ],
+            machineReadableOutput: true,
+            cancellationToken).ConfigureAwait(false);
 
-        using var process = StartProcess(psi, logger, projectPath);
-        if (process == null)
+        if (!result.Started)
         {
+            BlazorGatewayLog.ProcessStartFailed(
+                logger,
+                result.Command,
+                projectPath,
+                result.StartException?.Message ?? "Process.Start returned null.");
             return null;
         }
 
-        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-
-        if (process.ExitCode != 0)
+        if (result.ExitCode != 0)
         {
-            BlazorGatewayLog.MsBuildTargetFailed(logger, projectPath, stdout, stderr);
+            BlazorGatewayLog.MsBuildTargetFailed(logger, projectPath, result.StandardOutput, result.StandardError);
             return null;
         }
 
         MSBuildPropertiesOutput? output;
         try
         {
-            output = JsonSerializer.Deserialize(stdout.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
+            output = JsonSerializer.Deserialize(result.StandardOutput.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
         }
         catch (JsonException ex)
         {
@@ -122,23 +109,62 @@ internal static class BlazorWasmAppBuilder
         return (endpoints, runtime);
     }
 
-    private static string GetDotNetCommandPath()
+    public static async Task<MSBuildManifestProperties?> GetPublishPropertiesAsync(
+        string projectPath,
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
-        return Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } dotnetHostPath
-            ? dotnetHostPath
-            : "dotnet";
-    }
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            projectPath,
+            "msbuild",
+            [
+                "-property:Configuration=Release",
+                "-getProperty:TargetFramework",
+                "-getProperty:TargetFrameworks",
+                "-getProperty:NETCoreSdkVersion",
+                "-nologo"
+            ],
+            machineReadableOutput: true,
+            cancellationToken).ConfigureAwait(false);
 
-    private static Process? StartProcess(ProcessStartInfo startInfo, ILogger logger, string projectPath)
-    {
-        try
+        if (!result.Started)
         {
-            return Process.Start(startInfo);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
-        {
-            BlazorGatewayLog.ProcessStartFailed(logger, startInfo.FileName, projectPath, ex.Message);
+            BlazorGatewayLog.ProcessStartFailed(
+                logger,
+                result.Command,
+                projectPath,
+                result.StartException?.Message ?? "Process.Start returned null.");
             return null;
         }
+
+        if (result.ExitCode != 0)
+        {
+            BlazorGatewayLog.MsBuildTargetFailed(logger, projectPath, result.StandardOutput, result.StandardError);
+            return null;
+        }
+
+        MSBuildPropertiesOutput? output;
+        try
+        {
+            output = JsonSerializer.Deserialize(result.StandardOutput.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
+        }
+        catch (JsonException ex)
+        {
+            BlazorGatewayLog.ManifestJsonParseFailed(logger, projectPath, ex);
+            return null;
+        }
+
+        var properties = output?.Properties;
+        if (properties is not null && string.IsNullOrEmpty(properties.TargetFramework))
+        {
+            var targetFrameworks = properties.TargetFrameworks
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            properties.TargetFramework = targetFrameworks.Length == 1
+                ? targetFrameworks[0]
+                : properties.TargetFrameworks;
+        }
+
+        return properties;
     }
+
 }

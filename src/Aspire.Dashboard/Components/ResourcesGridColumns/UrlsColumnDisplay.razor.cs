@@ -10,6 +10,13 @@ namespace Aspire.Dashboard.Components;
 
 public partial class UrlsColumnDisplay
 {
+    private const int MaxRenderedOverflowItems = 20;
+
+    internal static string GetTooltipText(DisplayedUrl displayedUrl)
+    {
+        return displayedUrl.Url ?? displayedUrl.OriginalUrlString;
+    }
+
     [Parameter, EditorRequired]
     public required ResourceViewModel Resource { get; set; }
 
@@ -18,9 +25,6 @@ public partial class UrlsColumnDisplay
 
     [Parameter, EditorRequired]
     public required IList<DisplayedUrl> DisplayedUrls { get; set; }
-
-    [Parameter]
-    public string? AdditionalMessage { get; set; }
 
     [Inject]
     public required IStringLocalizer<Columns> Loc { get; init; }

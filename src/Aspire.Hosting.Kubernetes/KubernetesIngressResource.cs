@@ -84,6 +84,14 @@ public class KubernetesIngressResource(
     /// Gets the generated K8S Ingress object, populated during infrastructure processing.
     /// </summary>
     internal Resources.Ingress? GeneratedIngress { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether this ingress is emitted into the deployment artifacts.
+    /// An ingress with neither path rules nor a default backend is skipped, so TLS secret
+    /// collection must not select it — bootstrapping a secret for an Ingress that is never
+    /// created leaves an orphaned self-signed certificate in the cluster.
+    /// </summary>
+    internal bool ShouldMaterialize => Paths.Count > 0 || DefaultBackend is not null;
 }
 
 /// <summary>

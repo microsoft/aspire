@@ -135,6 +135,9 @@
   <data name="FollowOptionDescription" xml:space="preserve">
     <value>Stream telemetry in real-time as it arrives</value>
   </data>
+  <data name="DashboardConnectionLost" xml:space="preserve">
+    <value>The connection to the dashboard was lost.</value>
+  </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
   </data>

@@ -7,6 +7,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Mcp;
 
@@ -24,7 +25,7 @@ internal static class MockPackagingServiceFactory
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(packages)
                 };
-                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache, new TestFeatures())]);
+                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance)]);
             }
         };
     }
@@ -43,15 +44,13 @@ internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
 {
     public IEnumerable<IAppHostAuxiliaryBackchannel> Connections => [];
 
-    public IEnumerable<IAppHostAuxiliaryBackchannel> GetConnectionsByHash(string hash) => [];
-
     public string? SelectedAppHostPath { get; set; }
 
     public IAppHostAuxiliaryBackchannel? SelectedConnection => null;
 
-    public Task ScanAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task ScanAsync(CancellationToken cancellationToken = default, bool pruneOrphanedSockets = true, bool throwOnDiscoveryFailure = false) => Task.CompletedTask;
 
-    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> WatchConnectionsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool readOnly = false)
     {
         await ScanAsync(cancellationToken).ConfigureAwait(false);
         yield return [];
@@ -63,4 +62,3 @@ internal sealed class MockAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
         return [];
     }
 }
-

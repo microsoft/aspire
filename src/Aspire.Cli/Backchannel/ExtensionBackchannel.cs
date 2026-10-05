@@ -22,9 +22,11 @@ internal interface IExtensionBackchannel
 {
     Task ConnectAsync(CancellationToken cancellationToken);
     Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken);
+    Task DisplayMessageAsync(string emojiName, string message, InteractionMessageAction[] actions, CancellationToken cancellationToken);
     Task DisplaySuccessAsync(string message, CancellationToken cancellationToken);
     Task DisplaySubtleMessageAsync(string message, CancellationToken cancellationToken);
     Task DisplayErrorAsync(string error, CancellationToken cancellationToken);
+    Task DisplayErrorAsync(string error, InteractionMessageAction[] actions, CancellationToken cancellationToken);
     Task DisplayEmptyLineAsync(CancellationToken cancellationToken);
     Task DisplayIncompatibleVersionErrorAsync(string requiredCapability, string appHostHostingSdkVersion, CancellationToken cancellationToken);
     Task DisplayCancellationMessageAsync(CancellationToken cancellationToken);
@@ -32,7 +34,7 @@ internal interface IExtensionBackchannel
     Task DisplayDashboardUrlsAsync(DashboardUrlsState dashboardUrls, CancellationToken cancellationToken);
     Task ShowStatusAsync(string? status, CancellationToken cancellationToken);
     Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull;
-    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull;
+    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull;
     Task<bool> ConfirmAsync(string promptText, bool defaultValue, CancellationToken cancellationToken);
     Task<string> PromptForStringAsync(string promptText, string? defaultValue, Func<string, ValidationResult>? validator, bool required, CancellationToken cancellationToken);
     Task<string> PromptForSecretStringAsync(string promptText, Func<string, ValidationResult>? validator, bool required, CancellationToken cancellationToken);
@@ -46,31 +48,49 @@ internal interface IExtensionBackchannel
     Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options, CancellationToken cancellationToken);
     Task DisplayPlainTextAsync(string text, CancellationToken cancellationToken);
     Task WriteDebugSessionMessageAsync(string message, bool stdout, string? textStyle, CancellationToken cancellationToken);
+    Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken);
 }
 
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
 {
     private const string Name = "Aspire Extension";
-
     private readonly ActivitySource _activitySource = new(nameof(ExtensionBackchannel));
     private readonly TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
+    private readonly object _connectionSetupLock = new();
     private readonly string _token;
 
     private TaskCompletionSource? _connectionSetupTcs;
     private readonly ILogger<ExtensionBackchannel> _logger;
     private readonly IExtensionRpcTarget _target;
     private readonly IConfiguration _configuration;
+    private readonly Func<CancellationToken, Task>? _connectCoreAsyncOverride;
+    private int _connected;
 
     public ExtensionBackchannel(ILogger<ExtensionBackchannel> logger, IExtensionRpcTarget target, IConfiguration configuration)
+        : this(logger, target, configuration, connectCoreAsyncOverride: null)
+    {
+    }
+
+    internal ExtensionBackchannel(
+        ILogger<ExtensionBackchannel> logger,
+        IExtensionRpcTarget target,
+        IConfiguration configuration,
+        Func<CancellationToken, Task>? connectCoreAsyncOverride)
     {
         _logger = logger;
         _target = target;
         _configuration = configuration;
+        _connectCoreAsyncOverride = connectCoreAsyncOverride;
         _token = configuration[KnownConfigNames.ExtensionToken]
                       ?? throw new InvalidOperationException(ErrorStrings.ExtensionTokenMustBeSet);
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
+            if (Volatile.Read(ref _connected) == 0)
+            {
+                return;
+            }
+
             try
             {
                 StopDebuggingAsync().GetAwaiter().GetResult();
@@ -86,76 +106,143 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
     public async Task ConnectAsync(CancellationToken cancellationToken)
     {
-        if (_connectionSetupTcs is not null)
+        TaskCompletionSource connectionSetupTcs;
+        var shouldConnect = false;
+
+        lock (_connectionSetupLock)
         {
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var cancellationTask = Task.Delay(Timeout.Infinite, linkedCts.Token);
-            await Task.WhenAny(_connectionSetupTcs.Task, cancellationTask).ConfigureAwait(false);
-            return;
+            if (_connectionSetupTcs is null)
+            {
+                _connectionSetupTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                shouldConnect = true;
+            }
+
+            connectionSetupTcs = _connectionSetupTcs;
         }
 
-        _connectionSetupTcs = new TaskCompletionSource();
+        while (!shouldConnect)
+        {
+            try
+            {
+                await connectionSetupTcs.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // The active connector owns the setup task until its token cancels. Waiters with live
+                // tokens take over by installing a new setup task, while the reference check avoids
+                // clearing a replacement task already installed by another waiter.
+                lock (_connectionSetupLock)
+                {
+                    if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))
+                    {
+                        _connectionSetupTcs = null;
+                    }
+
+                    if (_connectionSetupTcs is null)
+                    {
+                        _connectionSetupTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                        shouldConnect = true;
+                    }
+
+                    connectionSetupTcs = _connectionSetupTcs;
+                }
+            }
+        }
 
         var endpoint = _configuration[KnownConfigNames.ExtensionEndpoint];
         Debug.Assert(endpoint is not null);
 
-        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
-        var connectionAttempts = 0;
-        _logger.LogDebug("Starting backchannel connection to Aspire extension at {Endpoint}", endpoint);
-
-        var startTime = DateTimeOffset.UtcNow;
-
-        do
+        try
         {
-            connectionAttempts++;
+            using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
+            var connectionAttempts = 0;
+            _logger.LogDebug("Starting backchannel connection to Aspire extension at {Endpoint}", endpoint);
 
-            try
+            var startTime = DateTimeOffset.UtcNow;
+
+            do
             {
-                await ConnectCoreAsync().ConfigureAwait(false);
-                _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
-                _connectionSetupTcs.SetResult();
-                return;
-            }
-            catch (SocketException ex)
-            {
-                var waitingFor = DateTimeOffset.UtcNow - startTime;
-                if (waitingFor > TimeSpan.FromSeconds(10))
+                connectionAttempts++;
+
+                try
                 {
-                    _logger.LogDebug("Slow polling for backchannel connection (attempt {ConnectionAttempts}), {SocketException}", connectionAttempts, ex);
-                    await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                    await ConnectCoreAsync().ConfigureAwait(false);
+                    _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
+                    Volatile.Write(ref _connected, 1);
+                    connectionSetupTcs.TrySetResult();
+                    return;
                 }
-                else
+                catch (SocketException ex)
                 {
-                    // We don't want to spam the logs with our early connection attempts.
+                    var waitingFor = DateTimeOffset.UtcNow - startTime;
+                    if (waitingFor > TimeSpan.FromSeconds(10))
+                    {
+                        _logger.LogDebug("Slow polling for backchannel connection (attempt {ConnectionAttempts}), {SocketException}", connectionAttempts, ex);
+                        await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // We don't want to spam the logs with our early connection attempts.
+                    }
                 }
-            }
-            catch (ExtensionIncompatibleException ex)
-            {
-                _logger.LogError(
-                    "The Aspire extension is incompatible with the CLI and must be updated to a version that supports the {RequiredCapability} capability.",
-                    ex.RequiredCapability
-                    );
+                catch (ExtensionIncompatibleException ex)
+                {
+                    _logger.LogError(
+                        "The Aspire extension is incompatible with the CLI and must be updated to a version that supports the {RequiredCapability} capability.",
+                        ex.RequiredCapability
+                        );
 
-                // If the extension is incompatible then there is no point
-                // trying to reconnect, we should propogate the exception
-                // up to the code that needs to back channel so it can display
-                // and error message to the user.
-                _connectionSetupTcs.SetException(ex);
+                    // Keep the faulted setup task in place for incompatible extensions. This is
+                    // a terminal state for the current CLI process, so future callers should see
+                    // the same compatibility error instead of electing another connector and
+                    // retrying the same unsupported protocol.
+                    connectionSetupTcs.TrySetException(ex);
 
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "An unexpected error occurred while trying to connect to the backchannel.");
-                _connectionSetupTcs.SetException(ex);
-                throw;
-            }
-        } while (await timer.WaitForNextTickAsync(cancellationToken));
+                    throw;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    connectionSetupTcs.TrySetCanceled(ex.CancellationToken);
+                    ClearConnectionSetupIfCurrent(connectionSetupTcs);
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "An unexpected error occurred while trying to connect to the backchannel.");
+                    connectionSetupTcs.TrySetException(ex);
+                    ClearConnectionSetupIfCurrent(connectionSetupTcs);
+                    throw;
+                }
+            } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+        }
+        catch (ExtensionIncompatibleException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            connectionSetupTcs.TrySetCanceled(ex.CancellationToken);
+            ClearConnectionSetupIfCurrent(connectionSetupTcs);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            connectionSetupTcs.TrySetException(ex);
+            ClearConnectionSetupIfCurrent(connectionSetupTcs);
+            throw;
+        }
 
         return;
 
         async Task ConnectCoreAsync()
         {
+            if (_connectCoreAsyncOverride is not null)
+            {
+                await _connectCoreAsyncOverride(cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
             try
             {
                 using var activity = _activitySource.StartActivity();
@@ -247,6 +334,17 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         }
     }
 
+    private void ClearConnectionSetupIfCurrent(TaskCompletionSource connectionSetupTcs)
+    {
+        lock (_connectionSetupLock)
+        {
+            if (ReferenceEquals(_connectionSetupTcs, connectionSetupTcs))
+            {
+                _connectionSetupTcs = null;
+            }
+        }
+    }
+
     public async Task DisplayMessageAsync(string emojiName, string message, CancellationToken cancellationToken)
     {
         await ConnectAsync(cancellationToken);
@@ -260,6 +358,22 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         await rpc.InvokeWithCancellationAsync(
             "displayMessage",
             [_token, emojiName, message],
+            cancellationToken);
+    }
+
+    public async Task DisplayMessageAsync(string emojiName, string message, InteractionMessageAction[] actions, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        _logger.LogDebug("Sent message {Message} with {ActionCount} actions", message, actions.Length);
+
+        await rpc.InvokeWithCancellationAsync(
+            "displayMessage",
+            [_token, emojiName, message, actions],
             cancellationToken);
     }
 
@@ -308,6 +422,22 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         await rpc.InvokeWithCancellationAsync(
             "displayError",
             [_token, error],
+            cancellationToken);
+    }
+
+    public async Task DisplayErrorAsync(string error, InteractionMessageAction[] actions, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        _logger.LogDebug("Sent error message with {ActionCount} actions", actions.Length);
+
+        await rpc.InvokeWithCancellationAsync(
+            "displayError",
+            [_token, error, actions],
             cancellationToken);
     }
 
@@ -415,7 +545,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
-        var choicesByFormattedValue = choicesList.ToDictionary(choice => choiceFormatter(choice).RemoveSpectreFormatting(), choice => choice);
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
 
         using var activity = _activitySource.StartActivity();
 
@@ -439,13 +569,16 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        CancellationToken cancellationToken) where T : notnull
+        IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull
     {
         await ConnectAsync(cancellationToken);
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
-        var choicesByFormattedValue = choicesList.ToDictionary(choice => choiceFormatter(choice).RemoveSpectreFormatting(), choice => choice);
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
+        var preSelectedArray = preSelected?
+            .Select(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)))
+            .ToArray() ?? [];
 
         using var activity = _activitySource.StartActivity();
 
@@ -456,7 +589,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         var choicesArray = choicesByFormattedValue.Keys.ToArray();
         var result = await rpc.InvokeWithCancellationAsync<string[]?>(
             "promptForSelections",
-            [_token, promptText, choicesArray],
+            [_token, promptText, choicesArray, preSelectedArray],
             cancellationToken);
 
         if (result is null)
@@ -629,6 +762,20 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             cancellationToken);
     }
 
+    public async Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken)
+    {
+        await ConnectAsync(cancellationToken);
+
+        using var activity = _activitySource.StartActivity();
+
+        var rpc = await _rpcTaskCompletionSource.Task;
+
+        await rpc.InvokeWithCancellationAsync(
+            "writeAppHostLogEntry",
+            [_token, entry],
+            cancellationToken);
+    }
+
     public async Task<bool> HasCapabilityAsync(string capability, CancellationToken cancellationToken)
     {
         var capabilities = await GetCapabilitiesAsync(cancellationToken);
@@ -661,7 +808,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         var rpc = await _rpcTaskCompletionSource.Task;
 
-        _logger.LogDebug("Running project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", arguments));
+        _logger.LogDebug("Running project at {ProjectFile} with {ArgumentCount} arguments", projectFile, arguments.Count);
 
         await rpc.InvokeWithCancellationAsync(
             "launchAppHost",

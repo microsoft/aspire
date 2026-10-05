@@ -10,31 +10,34 @@ namespace Aspire.Hosting
 {
     public static partial class JavaScriptHostingExtensions
     {
-        [AspireExport(Description = "Adds a JavaScript application resource")]
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.BunAppResource> AddBunApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string runScriptName = "dev") { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport(Description = "Adds a Next.js application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string runScriptName = "dev") { throw null; }
 
-        [AspireExport(Description = "Adds a Node.js application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.NodeAppResource> AddNodeApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
 
-        [AspireExport(Description = "Adds a Vite application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.ViteAppResource> AddViteApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string runScriptName = "dev") { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport(Description = "Disables deploy-time build validation checks for the Next.js application.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.NextJsAppResource> DisableBuildValidation(this ApplicationModel.IResourceBuilder<JavaScript.NextJsAppResource> builder) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport(Description = "Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport(Description = "Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.")]
-        public static ApplicationModel.IResourceBuilder<TResource> PublishAsNpmScript<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string startScriptName = "start", string? runScriptArguments = null)
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<TResource> PublishAsPackageScript<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, string scriptName = "start", string? runScriptArguments = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -48,34 +51,34 @@ namespace Aspire.Hosting
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport(Description = "Configures a browser debugger for the JavaScript application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithBrowserDebugger<T>(this ApplicationModel.IResourceBuilder<T> builder, string browser = "msedge")
             where T : JavaScript.JavaScriptAppResource { throw null; }
 
-        [AspireExport(Description = "Specifies an npm script to run before starting the application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithBuildScript<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, string scriptName, string[]? args = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
-        [AspireExport(Description = "Configures Bun as the package manager")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithBun<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
-        [AspireExport(Description = "Configures npm as the package manager")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithNpm<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
-        [AspireExport(Description = "Configures pnpm as the package manager")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithPnpm<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
-        [AspireExport(Description = "Specifies an npm script to run during development")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithRunScript<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, string scriptName, string[]? args = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
-        [AspireExport(Description = "Configures a custom Vite configuration file")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.ViteAppResource> WithViteConfig(this ApplicationModel.IResourceBuilder<JavaScript.ViteAppResource> builder, string configPath) { throw null; }
 
-        [AspireExport(Description = "Configures yarn as the package manager")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithYarn<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
     }
@@ -83,6 +86,12 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.JavaScript
 {
+    [AspireExport(ExposeProperties = true)]
+    public sealed partial class BunAppResource : JavaScriptAppResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
+    {
+        public BunAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
+    }
+
     public sealed partial record CopyFilePattern(string Source, string Destination)
     {
     }

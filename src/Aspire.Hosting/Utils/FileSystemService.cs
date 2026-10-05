@@ -27,7 +27,7 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
 
         // Check configuration to preserve temp files for debugging
         _preserveTempFiles = configuration["ASPIRE_PRESERVE_TEMP_FILES"] is not null;
-        
+
         _tempDirectory = new TempFileSystemService(this);
     }
 

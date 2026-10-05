@@ -18,7 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
-public class KubernetesDeployTests(ITestOutputHelper output)
+public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AddKubernetesEnvironment_AddsDefaultHelmEngine()
@@ -302,13 +302,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task HelmDeployStepIsCreatedInDiagnosticsMode()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -324,10 +324,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify helm-deploy step exists
@@ -343,13 +343,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task HelmDeployStep_DependsOnPublishStep()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -365,10 +365,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify prepare-env depends on publish-env
@@ -383,13 +383,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task HelmDeployStep_DependsOnPushSteps_WhenRegistryConfigured()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -407,10 +407,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify push-api step exists
@@ -424,13 +424,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PrintSummaryStepIsCreated()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -447,10 +447,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify print-summary step exists for the api resource
@@ -464,13 +464,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task HelmUninstallStepIsCreated()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -486,10 +486,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify helm-uninstall step exists
@@ -499,13 +499,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task HelmUninstallStep_RequiredByDestroy()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -521,10 +521,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify helm-uninstall-env depends on destroy-helm-env (the prompt layer)
@@ -533,22 +533,17 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task HelmUninstallStep_DependsOnCheckHelmPrereqs()
+    public async Task HelmUninstallStep_ValidatesHelmVersionBeforeUninstall()
     {
-        // Regression coverage for PR #17491 review feedback: direct uninstall
-        // invokes `helm`, so it must gate on the same prereq check as deploy.
-        // `destroy-helm-{env}` defers the check until saved state exists so the
-        // no-state path can still report "Nothing to destroy" without Helm.
-        using var tempDir = new TestTempDirectory();
-
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeHelm = new FakeHelmRunner { VersionExitCode = 1 };
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+            workspace.Path,
+            step: "helm-uninstall-env");
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
 
         builder.AddKubernetesEnvironment("env");
         builder.AddContainer("api", "myimage");
@@ -556,45 +551,23 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var logs = mockActivityReporter.LoggedMessages
-            .Where(s => s.StepTitle == "diagnostics")
-            .Select(s => s.Message)
-            .ToList();
-
-        var diagnosticLines = string.Join('\n', logs)
-            .Split('\n')
-            .Select(l => l.Trim())
-            .ToList();
-
-        var destroyTargetLine = diagnosticLines.IndexOf("If targeting 'destroy-helm-env':");
-        Assert.InRange(destroyTargetLine, 0, diagnosticLines.Count - 2);
-        Assert.Equal("Direct dependencies: destroy-prereq", diagnosticLines[destroyTargetLine + 1]);
-
-        var uninstallTargetLine = diagnosticLines.IndexOf("If targeting 'helm-uninstall-env':");
-        Assert.InRange(uninstallTargetLine, 0, diagnosticLines.Count - 2);
-        Assert.Equal("Direct dependencies: check-helm-prereqs-env", diagnosticLines[uninstallTargetLine + 1]);
+        Assert.Equal(["version --short"], fakeHelm.Arguments);
+        Assert.True(fakeHelm.WasVersionCalled);
+        Assert.False(fakeHelm.WasUninstallCalled);
     }
 
     [Fact]
-    public async Task PerChartHelmUninstallStep_DependsOnCheckHelmPrereqs()
+    public async Task PerChartHelmUninstallStep_ValidatesHelmVersionBeforeUninstall()
     {
-        // Regression coverage for PR #17491 review feedback: per-chart
-        // `helm-uninstall-{name}` steps created by `AddHelmChart(...).WithDestroy()`
-        // must depend on `check-helm-prereqs-{env}`. The install side is covered
-        // transitively (via `helm-deploy-{env}`), but the uninstall side previously
-        // only set `DependsOnSteps = [DestroyPrereq]`, so a missing or too-old
-        // Helm during chart teardown would bypass the validator and surface as
-        // the cryptic spawn / unknown-flag error this PR exists to prevent.
-        using var tempDir = new TestTempDirectory();
-
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeHelm = new FakeHelmRunner { VersionExitCode = 1 };
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
-            step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+            workspace.Path,
+            step: "helm-uninstall-podinfo");
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
-        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
 
         var k8s = builder.AddKubernetesEnvironment("env");
         k8s.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
@@ -603,26 +576,21 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var logs = mockActivityReporter.LoggedMessages
-            .Where(s => s.StepTitle == "diagnostics")
-            .Select(s => s.Message)
-            .ToList();
-
-        var chartUninstallLines = logs.Where(l => l.Contains("helm-uninstall-podinfo")).ToList();
-        Assert.NotEmpty(chartUninstallLines);
-        Assert.Contains(chartUninstallLines, msg => msg.Contains("check-helm-prereqs-env"));
+        Assert.Equal(["version --short"], fakeHelm.Arguments);
+        Assert.True(fakeHelm.WasVersionCalled);
+        Assert.False(fakeHelm.WasUninstallCalled);
     }
 
     [Fact]
     public async Task MultipleContainersGenerateMultiplePrintSummarySteps()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -641,10 +609,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        output.WriteLine("Diagnostics logs:");
+        outputHelper.WriteLine("Diagnostics logs:");
         foreach (var log in logs)
         {
-            output.WriteLine($"  {log}");
+            outputHelper.WriteLine($"  {log}");
         }
 
         // Verify both print-summary steps exist
@@ -825,9 +793,9 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task WithHelm_PublishThrowsWhenResolvedParameterChartVersionIsInvalid()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var versionParam = builder.AddParameter("chart-version", "not-a-version");
 
@@ -859,9 +827,9 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task WithHelm_PublishWritesChartMetadataToChartYaml()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
             .WithHelm(helm =>
@@ -875,7 +843,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var chartYaml = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "Chart.yaml"));
+        var chartYaml = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "Chart.yaml"));
 
         Assert.Contains("name: \"acme-app\"", chartYaml);
         Assert.Contains("version: \"2.5.0\"", chartYaml);
@@ -886,9 +854,9 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task WithHelm_PublishResolvesParameterChartMetadata()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var nameParam = builder.AddParameter("chart-name", "param-chart");
         var versionParam = builder.AddParameter("chart-version", "3.0.0");
@@ -906,7 +874,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var chartYaml = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "Chart.yaml"));
+        var chartYaml = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "Chart.yaml"));
 
         Assert.Contains("name: \"param-chart\"", chartYaml);
         Assert.Contains("version: \"3.0.0\"", chartYaml);
@@ -917,9 +885,9 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PublishWritesChartNameTemplateLabelOnResources()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
             .WithHelm(helm => helm.WithChartName("custom-chart"));
@@ -928,7 +896,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.RunAsync();
 
-        var deploymentYaml = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "templates", "svc", "deployment.yaml"));
+        var deploymentYaml = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "svc", "deployment.yaml"));
 
         // The label should use the Helm template variable, not the literal chart name.
         Assert.Contains("app.kubernetes.io/name: \"{{ .Chart.Name }}\"", deploymentYaml);
@@ -938,13 +906,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task ContainerRegistryIsWiredIntoDeploymentTarget()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Diagnostics);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -968,8 +936,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PrepareAsync_ResolvesSecretParameterValues()
     {
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "env");
         Directory.CreateDirectory(outputPath);
 
         // Write a values.yaml with empty secret placeholders
@@ -1015,8 +983,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PrepareAsync_NoCapturedValues_DoesNotCreateDeployFile()
     {
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "env");
         Directory.CreateDirectory(outputPath);
 
         await File.WriteAllTextAsync(Path.Combine(outputPath, "values.yaml"), "parameters: {}\nsecrets: {}\nconfig: {}");
@@ -1035,8 +1003,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PrepareAsync_ResolvesMultipleParametersAcrossResources()
     {
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "env");
         Directory.CreateDirectory(outputPath);
 
         await File.WriteAllTextAsync(Path.Combine(outputPath, "values.yaml"), "parameters: {}\nsecrets: {}\nconfig: {}");
@@ -1109,8 +1077,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PrepareAsync_ResolvesCrossResourceReferences()
     {
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "env");
         Directory.CreateDirectory(outputPath);
 
         await File.WriteAllTextAsync(Path.Combine(outputPath, "values.yaml"), "parameters: {}\nsecrets: {}\nconfig: {}");
@@ -1157,13 +1125,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PublishCapturesSecretParameterMappings()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -1190,13 +1158,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PublishCapturesImageReferencesForProjectResources()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -1266,8 +1234,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task PrepareAsync_ResolvesImageReferencesWithRegistryPrefix()
     {
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "env");
         Directory.CreateDirectory(outputPath);
 
         // Write a values.yaml with the default image placeholder
@@ -1307,7 +1275,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         Assert.True(File.Exists(deployValuesPath), "values.env.yaml should be created");
 
         var content = await File.ReadAllTextAsync(deployValuesPath);
-        output.WriteLine(content);
+        outputHelper.WriteLine(content);
 
         // The image should be prefixed with the registry endpoint and repository
         Assert.Contains("myregistry.azurecr.io/myrepo/api:latest", content);
@@ -1316,8 +1284,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task ResolveAndWriteDeployValuesAsync_NoOverrideFileWhenNoCaptures()
     {
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "env");
         Directory.CreateDirectory(outputPath);
 
         var environment = new KubernetesEnvironmentResource("env");
@@ -1336,13 +1304,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     {
         // Simulates the Redis+server scenario: cache has a password, server references it.
         // The values.yaml keys must match the Helm expression paths in templates.
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -1366,11 +1334,11 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         await app.RunAsync();
 
         // Verify: values.yaml should have cache_password key (parameter name) under both cache and server
-        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath), "values.yaml should exist");
         var valuesContent = await File.ReadAllTextAsync(valuesPath);
-        output.WriteLine("=== values.yaml ===");
-        output.WriteLine(valuesContent);
+        outputHelper.WriteLine("=== values.yaml ===");
+        outputHelper.WriteLine(valuesContent);
 
         // The key should be "cache_password" (from parameter name via ValuesKey), not "CACHE_PASSWORD" or "REDIS_PASSWORD"
         Assert.Contains("cache_password", valuesContent);
@@ -1389,12 +1357,12 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             c.Parameter.Name == "cache-password");
 
         // Verify: server's template should reference {{ .Values.secrets.server.cache_password }}
-        var serverSecretsTemplatePath = Path.Combine(tempDir.Path, "templates", "server", "secrets.yaml");
+        var serverSecretsTemplatePath = Path.Combine(workspace.Path, "templates", "server", "secrets.yaml");
         if (File.Exists(serverSecretsTemplatePath))
         {
             var templateContent = await File.ReadAllTextAsync(serverSecretsTemplatePath);
-            output.WriteLine("=== server secrets.yaml template ===");
-            output.WriteLine(templateContent);
+            outputHelper.WriteLine("=== server secrets.yaml template ===");
+            outputHelper.WriteLine(templateContent);
 
             // Template should reference the correct path
             Assert.Contains(".Values.secrets.server.cache_password", templateContent);
@@ -1407,13 +1375,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         // Reproduces the real Redis+WithReference scenario where the password env var
         // is provided as ReferenceExpression.Create($"{PasswordParameter}") — a {0} wrapper.
         // Without the fix, the {0} passthrough converts HelmValue to string, losing ValuesKey.
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -1441,11 +1409,11 @@ public class KubernetesDeployTests(ITestOutputHelper output)
 
         await app.RunAsync();
 
-        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath), "values.yaml should exist");
         var valuesContent = await File.ReadAllTextAsync(valuesPath);
-        output.WriteLine("=== values.yaml ===");
-        output.WriteLine(valuesContent);
+        outputHelper.WriteLine("=== values.yaml ===");
+        outputHelper.WriteLine(valuesContent);
 
         // Critical: the key must be "cache_password" (from parameter name), NOT "CACHE_PASSWORD" (env var name)
         // Without the fix, the {0} passthrough converts HelmValue to string, losing ValuesKey,
@@ -1467,8 +1435,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         // Verifies that Phase 1 and Phase 2 resolution produces a correct override file.
         // Phase 1: Resolves direct ParameterResource values (both cache and server entries)
         // Phase 2: Substitutes Helm expressions in cross-reference templates with Phase 1 values
-        using var tempDir = new TestTempDirectory();
-        var outputPath = Path.Combine(tempDir.Path, "deploy");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "deploy");
         Directory.CreateDirectory(outputPath);
 
         var environment = new KubernetesEnvironmentResource("myenv");
@@ -1504,8 +1472,12 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         Assert.True(File.Exists(overridePath), "Override file should be created");
 
         var content = await File.ReadAllTextAsync(overridePath);
-        output.WriteLine("=== Override file ===");
-        output.WriteLine(content);
+        outputHelper.WriteLine("=== Override file ===");
+        outputHelper.WriteLine(content);
+
+        // Snapshot tests cover YAML scalar style. These assertions only verify that resolution
+        // populated every path, so ignore the quotes required to preserve string values for Helm.
+        content = content.Replace("\"", string.Empty, StringComparison.Ordinal);
 
         // Phase 1: Both cache and server should have the resolved password
         Assert.Contains("cache_password: test-password-123", content);
@@ -1522,13 +1494,13 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     public async Task CrossResourceSecretResolution_EndToEnd_PublishAndResolve()
     {
         // Full end-to-end: publish generates correct captures, then resolve produces correct override
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -1552,14 +1524,14 @@ public class KubernetesDeployTests(ITestOutputHelper output)
 
         // Now simulate deploy-time resolution
         await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
-            tempDir.Path, env, CancellationToken.None);
+            workspace.Path, env, CancellationToken.None);
 
-        var overridePath = Path.Combine(tempDir.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
         Assert.True(File.Exists(overridePath), "Override file should be created");
 
         var content = await File.ReadAllTextAsync(overridePath);
-        output.WriteLine("=== Override file (E2E) ===");
-        output.WriteLine(content);
+        outputHelper.WriteLine("=== Override file (E2E) ===");
+        outputHelper.WriteLine(content);
 
         // The override file should NOT contain any unresolved Helm expressions
         Assert.DoesNotContain("{{ .Values.", content);
@@ -1571,6 +1543,141 @@ public class KubernetesDeployTests(ITestOutputHelper output)
 
         // Verify the actual password is in the resolved values
         Assert.Contains("e2e-test-pw-42", content);
+    }
+
+    [Fact]
+    public async Task EmbeddedParametersInEnvironmentExpressions_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        // Numeric-looking strings must retain their lexical form when the deploy values file is
+        // parsed by Helm instead of being normalized as numeric YAML scalars.
+        var host = builder.AddParameter("host", "01", publishValueAsDefault: true);
+        var token = builder.AddParameter("token", "1.0", secret: true);
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("SOME_URL", $"http://{host}/test")
+            .WithEnvironment("SECRET_URL", $"http://{host}/test?token={token}");
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "host" &&
+            captured.Parameter == host.Resource);
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "secrets" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "token" &&
+            captured.Parameter == token.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
+    public async Task ConditionalParameterWithoutDefault_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Configuration["Parameters:enable-tls"] = "1.0";
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var enableTls = builder.AddParameter("enable-tls");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["TLS_SUFFIX"] = ReferenceExpression.CreateConditional(
+                    enableTls.Resource,
+                    "1.0",
+                    ReferenceExpression.Create($",ssl=true"),
+                    ReferenceExpression.Create($",ssl=false"));
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValues, captured =>
+            captured.Section == "parameters" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "enable_tls" &&
+            captured.Parameter == enableTls.Resource);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(overridePath), "yaml");
+    }
+
+    [Fact]
+    public async Task DeferredValueProvider_EndToEnd_PublishAndResolve()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var envBuilder = builder.AddKubernetesEnvironment("env");
+        var provider = new TestValueProvider("resolved-value", "{outputs.deferred}");
+
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["DEFERRED_VALUE"] = provider;
+            });
+
+        using var app = builder.Build();
+        var env = envBuilder.Resource;
+        await app.RunAsync();
+
+        Assert.Contains(env.CapturedHelmValueProviders, captured =>
+            captured.Section == "config" &&
+            captured.ResourceKey == "myapp" &&
+            captured.ValueKey == "DEFERRED_VALUE" &&
+            captured.ValueProvider == provider);
+
+        await HelmDeploymentEngine.ResolveAndWriteDeployValuesAsync(
+            workspace.Path, env, CancellationToken.None);
+
+        var overridePath = Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env"));
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml")), "yaml")
+            .AppendContentAsFile(
+                await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "myapp", "config.yaml")),
+                "yaml")
+            .AppendContentAsFile(await File.ReadAllTextAsync(overridePath), "yaml");
     }
 
     [Fact]
@@ -1615,50 +1722,59 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         Assert.NotNull(httpEndpoint);
     }
 
-    [Fact]
-    public async Task Dashboard_OtlpConfigured_ForComputeResources()
+    [Theory]
+    [InlineData(OtlpProtocol.Grpc, 18889, "grpc")]
+    [InlineData(OtlpProtocol.HttpProtobuf, 18890, "http/protobuf")]
+    [InlineData(OtlpProtocol.HttpJson, 18890, "http/json")]
+    public async Task Dashboard_HonorsRequiredOtlpProtocol(
+        OtlpProtocol protocol,
+        int expectedPort,
+        string expectedProtocol)
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
 
         var envBuilder = builder.AddKubernetesEnvironment("env");
 
-        // Use a project resource — projects get OtlpExporterAnnotation by default
-        builder.AddProject<Projects.ServiceA>("api");
+        builder.AddProject<Projects.ServiceA>("api")
+            .WithOtlpExporter(protocol);
 
         using var app = builder.Build();
         await app.RunAsync();
 
-        // Check that values.yaml contains OTLP configuration for the project resource
-        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath));
         var content = await File.ReadAllTextAsync(valuesPath);
-        output.WriteLine(content);
+        outputHelper.WriteLine(content);
 
         Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
-        Assert.Contains("env-dashboard-service:18889", content);
+        Assert.Contains($"env-dashboard-service:{expectedPort}", content);
         Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL", content);
+        Assert.Contains(expectedProtocol, content);
         Assert.Contains("OTEL_SERVICE_NAME", content);
+
+        await Verify(content, "yaml")
+            .UseParameters(protocol);
     }
 
     [Fact]
     public async Task Dashboard_Disabled_NoOtlpConfiguration()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Publish);
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
@@ -1673,13 +1789,84 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         await app.RunAsync();
 
         // Check that values.yaml does NOT contain OTLP configuration
-        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath));
         var content = await File.ReadAllTextAsync(valuesPath);
-        output.WriteLine(content);
+        outputHelper.WriteLine(content);
 
         Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", content);
         Assert.DoesNotContain("OTEL_SERVICE_NAME", content);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Dashboard_DenoNativeOpenTelemetryFollowsInjectedEndpoint(bool dashboardEnabled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithDashboard(dashboardEnabled);
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+        outputHelper.WriteLine(content);
+
+        var hasEndpoint = content.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", StringComparison.Ordinal);
+        var hasNativeDenoTelemetry = content.Contains("OTEL_DENO", StringComparison.Ordinal);
+
+        Assert.Equal(dashboardEnabled, hasEndpoint);
+        Assert.Equal(hasEndpoint, hasNativeDenoTelemetry);
+    }
+
+    [Fact]
+    public async Task Dashboard_LastOtlpExporterAnnotationDoesNotApplySupersededActivation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Publish);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("deno", "denoland/deno")
+            .WithOtlpExporterIfEndpointAvailable(OtlpProtocol.HttpProtobuf)
+            .WithOtlpExporterActivationEnvironmentVariable("OTEL_DENO", "true")
+            .WithOtlpExporter();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath));
+        var content = await File.ReadAllTextAsync(valuesPath);
+
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", content);
+        Assert.Contains("OTEL_EXPORTER_OTLP_PROTOCOL: \"grpc\"", content);
+        Assert.False(content.Contains("OTEL_DENO", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1692,14 +1879,16 @@ public class KubernetesDeployTests(ITestOutputHelper output)
 
         Assert.NotNull(dashboard.PrimaryEndpoint);
         Assert.NotNull(dashboard.OtlpGrpcEndpoint);
+        Assert.NotNull(dashboard.OtlpHttpEndpoint);
         Assert.Equal("http", dashboard.PrimaryEndpoint.EndpointName);
         Assert.Equal("otlp-grpc", dashboard.OtlpGrpcEndpoint.EndpointName);
+        Assert.Equal("otlp-http", dashboard.OtlpHttpEndpoint.EndpointName);
     }
 
     [Fact]
     public async Task DestroyHelm_WithState_RunsHelmUninstall()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeHelm = new FakeHelmRunner();
         var stateManager = new InMemoryDeploymentStateManager();
@@ -1709,10 +1898,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             ["Namespace"] = "my-namespace"
         });
 
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Destroy);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
@@ -1727,24 +1916,23 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         using var app = builder.Build();
         await app.RunAsync();
 
-        // Verify helm uninstall was called with saved state values
-        Assert.True(fakeHelm.WasUninstallCalled);
-        Assert.Contains("my-release", fakeHelm.LastArguments!);
-        Assert.Contains("my-namespace", fakeHelm.LastArguments!);
+        Assert.Equal(
+            "uninstall my-release --namespace my-namespace --ignore-not-found",
+            fakeHelm.LastArguments);
     }
 
     [Fact]
     public async Task DestroyHelm_WithNoState_ReportsNothingToDestroy()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
         var stateManager = new InMemoryDeploymentStateManager();
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Destroy);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
@@ -1771,7 +1959,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Fact]
     public async Task DestroyHelm_WhenUninstallFails_PreservesState()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var fakeHelm = new FakeHelmRunner { ExitCode = 1 };
         var stateManager = new InMemoryDeploymentStateManager();
@@ -1781,10 +1969,10 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             ["Namespace"] = "my-namespace"
         });
 
-        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var mockActivityReporter = new TestPipelineActivityReporter(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path,
+            workspace.Path,
             step: WellKnownPipelineSteps.Destroy);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
@@ -1805,5 +1993,104 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         // Verify state was NOT deleted (preserved for retry)
         var stateSection = await stateManager.AcquireSectionAsync("Helm:env");
         Assert.Equal("my-release", stateSection.Data["ReleaseName"]?.ToString());
+    }
+
+    [Fact]
+    public async Task DestroyHelm_WhenReleaseWasAlreadyRemoved_CompletesRetry()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner
+        {
+            CommandResultFactory = arguments =>
+                arguments.Contains(" --ignore-not-found", StringComparison.Ordinal)
+                    ? (0, null)
+                    : (1, "Error: uninstall: Release not loaded: my-release: release: not found")
+        };
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Helm:env", new JsonObject
+        {
+            ["ReleaseName"] = "my-release",
+            ["Namespace"] = "my-namespace"
+        });
+
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(
+            "uninstall my-release --namespace my-namespace --ignore-not-found",
+            Assert.Single(
+                fakeHelm.Arguments,
+                arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)));
+        var stateSection = await stateManager.AcquireSectionAsync("Helm:env");
+        Assert.Empty(stateSection.Data);
+        Assert.Contains(
+            reporter.CompletedSteps,
+            step => step is ("pipeline-execution", "Completed successfully", CompletionState.Completed));
+    }
+
+    [Fact]
+    public async Task DestroyExternalHelmChart_DoesNotIgnoreUnrelatedFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var fakeHelm = new FakeHelmRunner
+        {
+            CommandResultFactory = arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase)
+                ? (1, "Error: Kubernetes cluster unreachable")
+                : (0, null)
+        };
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("HelmChart:env:podinfo", new JsonObject
+        {
+            ["ReleaseName"] = "podinfo",
+            ["Namespace"] = "podinfo"
+        });
+
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: WellKnownPipelineSteps.Destroy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddKubernetesEnvironment("env")
+            .AddHelmChart("podinfo", "oci://example.com/chart", "1.0.0")
+            .WithDestroy();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var uninstallArguments = Assert.Single(
+            fakeHelm.Arguments,
+            arguments => arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(" --ignore-not-found", uninstallArguments, StringComparison.Ordinal);
+        Assert.Equal(
+            "Step 'helm-uninstall-podinfo' failed: helm uninstall for chart 'podinfo' failed: " +
+            "Error: Kubernetes cluster unreachable",
+            reporter.CompletionMessage);
+
+        var stateSection = await stateManager.AcquireSectionAsync("HelmChart:env:podinfo");
+        Assert.Equal("podinfo", stateSection.Data["ReleaseName"]?.ToString());
     }
 }

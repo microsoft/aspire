@@ -1,53 +1,26 @@
 ﻿@namespace Aspire.Dashboard.Components
-@using System.Collections.Immutable
 @inherits FluentComponentBase
 
-@* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
-<FluentMenu Class="aspire-menu-container" @ref="_menu" Anchor="@Anchor" Anchored="@Anchored" Open="@Open" OpenChanged="OnOpenChanged" Style="@Style" VerticalThreshold="@CalculatedVerticalThreshold" HorizontalThreshold="200">
-    @foreach (var item in Items)
-    {
-        @RenderMenuItem(item)
-    }
-</FluentMenu>
-
-@code {
-    private RenderFragment RenderMenuItem(MenuButtonItem item)
-    {
-        if (item.IsDivider)
-        {
-            return @<FluentDivider />;
-        }
-        else
-        {
-            var additionalMenuItemAttributes = new Dictionary<string, object>(item.AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
-            {
-                { "title", !string.IsNullOrEmpty(item.Tooltip) ? item.Tooltip : item.Text ?? string.Empty }
-            };
-
-            return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
-                @if (item.Icon != null)
-                {
-                    <span slot="start">
-                        <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" />
-                    </span>
-                }
-            </FluentMenuItem>;
-        }
-    }
-
-    private RenderFragment? RenderNestedItems(MenuButtonItem item)
-    {
-        if (item.NestedMenuItems is null || item.NestedMenuItems.Count == 0)
-        {
-            return null;
-        }
-
-        // div is required because a single element has to be returned.
-        return @<div>
-            @foreach (var nestedItem in item.NestedMenuItems)
-            {
-                @RenderMenuItem(nestedItem)
-            }
-        </div>;
-    }
+@if (!Anchored)
+{
+    <span id="@Anchor" aria-hidden="true" style="@CursorAnchorStyle"></span>
 }
+
+@* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
+<FluentMenu Class="aspire-menu-container"
+            @ref="_menu"
+            Trigger="@Anchor"
+            OpenedChanged="OnOpenChanged"
+            Style="@Style"
+            PersistOnItemClick="true"
+            aria-labelledby="@HeaderId">
+    <FluentMenuList>
+        @foreach (var item in Items)
+        {
+            <AspireMenuItem @key="item.RenderKey"
+                            Item="item"
+                            OnItemActivated="HandleItemActivatedAsync"
+                            OnSecondaryActionClicked="HandleSecondaryActionClicked" />
+        }
+    </FluentMenuList>
+</FluentMenu>

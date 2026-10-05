@@ -1,8 +1,8 @@
 # Trigger deployment tests from PR comments
 #
-# Usage: Comment `/deployment-test` on a PR
+# Usage: Start a PR comment with `/deployment-test` (trailing content must be separated by whitespace)
 #
-# This workflow validates the commenter is an org member and triggers
+# This workflow validates the commenter has repository write access and triggers
 # the deployment-tests.yml workflow with the PR context.
 #
 name: Deployment Test Command
@@ -18,56 +18,56 @@ permissions:
 
 jobs:
   deployment-test:
-    # Only run when the comment is exactly /deployment-test on a PR
+    # Prefilter command candidates; the script below enforces the command-token boundary.
     if: >-
       ${{
-        github.event.comment.body == '/deployment-test' &&
+        startsWith(github.event.comment.body, '/deployment-test') &&
         github.event.issue.pull_request &&
         github.repository_owner == 'microsoft'
       }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check org membership
-        id: check_membership
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+      - name: Check command and repository write access
+        id: check_permission
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const commenter = context.payload.comment.user.login;
-            
-            try {
-              // Check if user is a member of the dotnet org
-              const { status } = await github.rest.orgs.checkMembershipForUser({
-                org: 'dotnet',
-                username: commenter
-              });
-              
-              if (status === 204 || status === 302) {
-                core.info(`✅ ${commenter} is a member of dotnet org`);
-                core.setOutput('is_member', 'true');
-                return;
-              }
-            } catch (error) {
-              if (error.status === 404) {
-                core.warning(`❌ ${commenter} is not a member of dotnet org`);
-                core.setOutput('is_member', 'false');
-                
-                // Post a comment explaining the restriction
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: context.issue.number,
-                  body: `@${commenter} The \`/deployment-test\` command is restricted to dotnet org members for security reasons (it deploys to real Azure infrastructure).`
-                });
-                return;
-              }
-              throw error;
+            // Accept "/deployment-test" or "/deployment-test\r\n..." (also spaces/tabs),
+            // but not longer tokens such as "/deployment-testing" or "/deployment-test-disabled".
+            // Match case-insensitively like the GitHub Actions startsWith prefilter.
+            if (!/^\/deployment-test(?:\s|$)/i.test(context.payload.comment.body)) {
+              core.info('Ignoring comment without a /deployment-test command token.');
+              core.setOutput('has_write_access', 'false');
+              return;
             }
 
+            const commenter = context.payload.comment.user.login;
+            const { data: permission } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: commenter
+            });
+
+            if (!['admin', 'write'].includes(permission.permission)) {
+              core.setOutput('has_write_access', 'false');
+              core.setFailed(`@${commenter} does not have write access to this repository.`);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `@${commenter} The \`/deployment-test\` command requires write access to this repository for security reasons (it deploys to real Azure infrastructure).`
+              });
+              return;
+            }
+
+            core.info(`Verified ${commenter} has ${permission.permission} access to the repository.`);
+            core.setOutput('has_write_access', 'true');
+
       - name: Get PR details
-        if: steps.check_membership.outputs.is_member == 'true'
+        if: steps.check_permission.outputs.has_write_access == 'true'
         id: pr
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -75,27 +75,46 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
+
+            const baseRepository = `${context.repo.owner}/${context.repo.repo}`;
+            if (pr.head.repo?.full_name !== baseRepository) {
+              throw new Error(`Deployment tests can only run for branches in ${baseRepository}; fork PRs are not supported.`);
+            }
             
             core.setOutput('number', pr.number);
             core.setOutput('head_sha', pr.head.sha);
             core.setOutput('head_ref', pr.head.ref);
 
       - name: Trigger deployment tests
-        if: steps.check_membership.outputs.is_member == 'true'
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        if: steps.check_permission.outputs.has_write_access == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PR_HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
           script: |
+            const headRef = process.env.PR_HEAD_REF;
+            const prNumber = process.env.PR_NUMBER;
+
+            if (!headRef) {
+              throw new Error('PR head ref was not provided.');
+            }
+
+            if (!prNumber || !/^\d+$/.test(prNumber)) {
+              throw new Error('PR number was not provided or is invalid.');
+            }
+
             // Dispatch from the PR's head ref to test the PR's code changes.
-            // Security: Org membership check is the security boundary - only trusted
-            // dotnet org members can trigger this workflow.
+            // PR-controlled values are passed through environment variables so they remain
+            // data instead of being interpolated into this JavaScript source.
             // Note: The triggered workflow posts its own "starting" comment with the run URL.
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'deployment-tests.yml',
-              ref: '${{ steps.pr.outputs.head_ref }}',
+              ref: headRef,
               inputs: {
-                pr_number: '${{ steps.pr.outputs.number }}'
+                pr_number: prNumber
               }
             });
             

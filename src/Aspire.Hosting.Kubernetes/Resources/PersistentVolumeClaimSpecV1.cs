@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Yaml;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Kubernetes.Resources;
@@ -22,10 +23,14 @@ public sealed class PersistentVolumeClaimSpecV1
     /// <remarks>
     /// The DataSource property is used to specify the reference to an existing resource
     /// that serves as the source for the volume. This can be used, for example, to populate
-    /// a PVC using data from an existing snapshot or another volume object.
+    /// a PVC using data from an existing snapshot or another volume object. Defaults to
+    /// <see langword="null"/> so the property is omitted from the serialized YAML when no
+    /// data source has been configured. Eagerly initializing this to <c>new()</c> would
+    /// otherwise emit an invalid empty <c>dataSource: {}</c> mapping that Kubernetes
+    /// rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "dataSource")]
-    public TypedLocalObjectReferenceV1 DataSource { get; set; } = new();
+    public TypedLocalObjectReferenceV1? DataSource { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the storage class required by the PersistentVolumeClaim.
@@ -35,12 +40,14 @@ public sealed class PersistentVolumeClaimSpecV1
     /// provisioning or volume binding for the associated PersistentVolumeClaim. Setting this property
     /// allows the claim to specifically request a volume of a particular storage class. It should match
     /// the name of an existing StorageClass in the Kubernetes cluster.
-    /// If set to null or empty, it indicates that the default StorageClass configured in the cluster
-    /// will be used. If no default StorageClass is configured and this value is not set, the claim cannot
-    /// be dynamically provisioned.
+    /// If set to <see langword="null"/>, Kubernetes can assign the cluster's default StorageClass.
+    /// If set to an empty string, the claim requests no StorageClass and can bind only to volumes
+    /// whose <c>storageClassName</c> is also empty. If no default StorageClass is configured and
+    /// this value is not set, the claim cannot be dynamically provisioned.
     /// </remarks>
     [YamlMember(Alias = "storageClassName")]
-    public string StorageClassName { get; set; } = null!;
+    [PreserveEmptyString]
+    public string? StorageClassName { get; set; } = null;
 
     /// <summary>
     /// Represents the name of the class associated with the attributes of the volume in the
@@ -87,9 +94,13 @@ public sealed class PersistentVolumeClaimSpecV1
     /// The referenced resource should match the type specified, and the reference includes
     /// details such as kind, name, namespace, and API group of the object.
     /// This enables integration with external or heterogeneous resources in a Kubernetes environment.
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML
+    /// when no data source reference has been configured. Eagerly initializing this to
+    /// <c>new()</c> would otherwise emit an invalid empty <c>dataSourceRef: {}</c> mapping
+    /// that Kubernetes rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "dataSourceRef")]
-    public TypedObjectReferenceV1 DataSourceRef { get; set; } = new();
+    public TypedObjectReferenceV1? DataSourceRef { get; set; }
 
     /// <summary>
     /// Gets or sets the label selector used to filter Kubernetes resources.
@@ -98,10 +109,14 @@ public sealed class PersistentVolumeClaimSpecV1
     /// The <c>Selector</c> property allows the specification of a set of filtering criteria using labels.
     /// It supports exact matches with key-value pairs (MatchLabels) as well as more complex filtering rules
     /// using label selector requirements (MatchExpressions). This property is commonly used to dynamically
-    /// select resources like pods or volumes in Kubernetes deployments.
+    /// select resources like pods or volumes in Kubernetes deployments. Defaults to
+    /// <see langword="null"/> so the property is omitted from the serialized YAML when no
+    /// selector has been configured. Eagerly initializing this to <c>new()</c> would
+    /// otherwise emit an invalid empty <c>selector: {}</c> mapping that Kubernetes rejects
+    /// on apply.
     /// </remarks>
     [YamlMember(Alias = "selector")]
-    public LabelSelectorV1 Selector { get; set; } = new();
+    public LabelSelectorV1? Selector { get; set; }
 
     /// <summary>
     /// Defines the access modes for a Persistent Volume Claim.

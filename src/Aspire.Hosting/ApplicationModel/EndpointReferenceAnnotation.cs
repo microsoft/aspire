@@ -24,10 +24,10 @@ public sealed class EndpointReferenceAnnotation(IResourceWithEndpoints resource)
     /// <summary>
     /// Gets the set of specific endpoint names that are referenced. When <see cref="UseAllEndpoints"/> is <see langword="true"/>, this set is ignored.
     /// </summary>
-    public HashSet<string> EndpointNames { get; } = new(StringComparers.EndpointAnnotationName);
+    public ISet<string> EndpointNames { get; } = new HashSet<string>(StringComparers.EndpointAnnotationName);
 
     /// <summary>
     /// Gets or sets the network identifier used as context for resolving endpoint addresses.
     /// </summary>
-    public NetworkIdentifier ContextNetworkID { get; set; } = KnownNetworkIdentifiers.LocalhostNetwork;
+    public NetworkIdentifier ContextNetworkId { get; set; } = KnownNetworkIdentifiers.LocalhostNetwork;
 }

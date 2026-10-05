@@ -32,7 +32,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var realLayoutRoot = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             "WinGet",
@@ -48,7 +48,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var linkPath = Path.Combine(linksDir, "aspire");
         File.CreateSymbolicLink(linkPath, realBinary);
 
-        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = linkPath
         };
@@ -65,7 +65,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var rawLayoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "custom-layout");
         CreateValidBundleLayout(rawLayoutRoot);
 
@@ -77,7 +77,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var linkPath = Path.Combine(rawLayoutRoot, "aspire");
         File.CreateSymbolicLink(linkPath, realBinary);
 
-        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = linkPath
         };
@@ -91,17 +91,22 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DiscoverLayout_ResolvesThroughReparsePoints()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var layoutRoot = workspace.WorkspaceRoot.FullName;
 
         var versionsDir = Path.Combine(layoutRoot, "versions", "v1");
         var versionedManaged = Path.Combine(versionsDir, BundleDiscovery.ManagedDirectoryName);
+        var versionedDashboard = Path.Combine(versionsDir, BundleDiscovery.DashboardDirectoryName);
         var versionedDcp = Path.Combine(versionsDir, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(versionedManaged);
+        Directory.CreateDirectory(versionedDashboard);
         Directory.CreateDirectory(versionedDcp);
         File.WriteAllText(
             Path.Combine(versionedManaged, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "stub");
+        var dashboardPath = Path.Combine(versionedDashboard, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, "stub");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(versionedDcp), "stub");
 
         // Create a single bundle/ link pointing at the versioned directory.
         var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
@@ -113,11 +118,14 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         try
         {
             Environment.SetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar, layoutRoot);
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance);
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment());
             var layout = discovery.DiscoverLayout();
 
             Assert.NotNull(layout);
             Assert.Equal(layoutRoot, layout!.LayoutPath);
+            Assert.Equal(
+                Path.Combine(bundleLink, BundleDiscovery.DashboardDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+                layout.GetDashboardPath());
             Assert.True(discovery.IsBundleModeAvailable());
         }
         finally
@@ -133,7 +141,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         // Simulates a sidecar-less install where the CLI binary lives somewhere
         // unrelated to the extracted bundle (e.g. a Nix store / read-only path)
         // and the bundle is extracted to $ASPIRE_HOME.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var binaryDir = Path.Combine(workspace.WorkspaceRoot.FullName, "opt", "aspire", "bin");
         Directory.CreateDirectory(binaryDir);
@@ -148,7 +156,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         {
             Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
 
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
             {
                 ProcessPathOverride = binaryPath
             };
@@ -174,7 +182,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         // layout left over in $HOME/.aspire from an earlier sidecar-less run.
         // This regression test pins that ordering: when both layouts exist, the
         // relative-to-CLI layout wins.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Colocated (relative) layout: CLI in {layoutRoot}/bin/aspire with the
         // bundle as a sibling of bin/.
@@ -194,7 +202,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         {
             Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
 
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
             {
                 ProcessPathOverride = binaryPath
             };
@@ -211,15 +219,100 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DiscoverLayout_RejectsRelativeLayoutWithoutDcpExecutable(bool useBundleDirectory)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var componentRoot = useBundleDirectory
+            ? Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName)
+            : layoutRoot;
+        var managedDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.ManagedDirectoryName));
+        Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DcpDirectoryName));
+        File.WriteAllText(
+            Path.Combine(managedDir.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "stub");
+        var dashboardDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DashboardDirectoryName));
+        File.WriteAllText(
+            Path.Combine(dashboardDir.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+            "stub");
+        var binaryPath = Path.Combine(layoutRoot, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "stub");
+
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new TestEnvironment())
+        {
+            ProcessPathOverride = binaryPath
+        };
+
+        var layout = discovery.DiscoverLayout();
+
+        Assert.NotEqual(layoutRoot, layout?.LayoutPath);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void DiscoverLayout_RequiresSeparateDashboard(bool useBundleDirectory, bool legacyDashboardExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var componentRoot = useBundleDirectory
+            ? Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName)
+            : layoutRoot;
+        var managedDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.ManagedDirectoryName));
+        var dcpDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DcpDirectoryName));
+        File.WriteAllText(
+            Path.Combine(managedDir.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "stub");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir.FullName), "stub");
+        if (legacyDashboardExists)
+        {
+            File.WriteAllText(
+                Path.Combine(managedDir.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+                "stub");
+        }
+
+        var binaryPath = Path.Combine(layoutRoot, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "stub");
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new TestEnvironment())
+        {
+            ProcessPathOverride = binaryPath
+        };
+
+        Assert.NotEqual(layoutRoot, discovery.DiscoverLayout()?.LayoutPath);
+
+        var dashboardDir = Directory.CreateDirectory(Path.Combine(componentRoot, BundleDiscovery.DashboardDirectoryName));
+        Assert.NotEqual(layoutRoot, discovery.DiscoverLayout()?.LayoutPath);
+
+        var dashboardPath = Path.Combine(dashboardDir.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, "stub");
+
+        var layout = discovery.DiscoverLayout();
+        Assert.NotNull(layout);
+        Assert.Equal(layoutRoot, layout.LayoutPath);
+        Assert.Equal(dashboardPath, layout.GetDashboardPath());
+        Assert.True(discovery.IsBundleModeAvailable());
+    }
+
     private static void CreateValidBundleLayout(string layoutRoot)
     {
         var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
         var managedDir = Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName);
+        var dashboardDir = Path.Combine(bundleDir, BundleDiscovery.DashboardDirectoryName);
         var dcpDir = Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName);
         Directory.CreateDirectory(managedDir);
+        Directory.CreateDirectory(dashboardDir);
         Directory.CreateDirectory(dcpDir);
         File.WriteAllText(
             Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "stub");
+        File.WriteAllText(
+            Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+            "stub");
+        File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDir), "stub");
     }
 }

@@ -3,6 +3,7 @@
   "name": "Хост однофайловых приложений Aspire",
   "description": "Минимальный Aspire AppHost для сценариев с одним файлом (.NET 10+).",
   "symbols/Framework/choices/net10.0/description": "Целевая платформа .NET 10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP OTLP в файле launchSettings.json проекта AppHost.",
   "symbols/appHostResourceHttpPort/description": "Номер порта, который будет использоваться для конечной точки HTTP службы ресурсов в файле launchSettings.json проекта AppHost.",

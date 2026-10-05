@@ -235,7 +235,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1"];
+            return ["baseline.v2", "pipeline-steps.v1", "pipeline-steps.v2"];
         }
     }
 
@@ -277,5 +277,17 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
                 new PipelineStepInfo { Name = "deploy-webapi", DependsOn = ["build-webapi"], Tags = ["deploy-compute"] }
             ]
         };
+    }
+
+    public Func<string, string, CancellationToken, Task<UploadFileResponse>>? UploadFileAsyncCallback { get; set; }
+
+    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken)
+    {
+        if (UploadFileAsyncCallback is not null)
+        {
+            return await UploadFileAsyncCallback(filePath, fileName, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new UploadFileResponse { FileId = Guid.NewGuid().ToString("N") };
     }
 }

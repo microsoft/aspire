@@ -14,6 +14,18 @@ func main() {
 
 	// ── 1. AddAzureKeyVault ──────────────────────────────────────────────────
 	vault := builder.AddAzureKeyVault("vault")
+	_ = vault.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		service := infrastructure.GetKeyVaultService()
+		properties := service.Properties()
+		bicep := infrastructure.Bicep()
+		retention := bicep.Binary(
+			bicep.Integer(20),
+			aspire.BinaryBicepOperatorAdd,
+			bicep.Integer(10))
+		properties.SetEnablePurgeProtection(true)
+		properties.SetSoftDeleteRetentionInDays(retention)
+		properties.Sku().SetName(aspire.KeyVaultSkuNamePremium)
+	})
 
 	// Parameters for secret-based APIs
 	secretParam := builder.AddParameter("secret-param",

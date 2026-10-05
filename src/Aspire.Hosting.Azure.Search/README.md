@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Search library
+# Azure AI Search hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure AI Search Service.
+Use this integration to model, configure, and orchestrate Azure AI Search Service in an Aspire solution.
 
 ## Getting started
 
@@ -8,29 +8,24 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-Install the Aspire Azure AI Search Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Search` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Search
+```bash
+aspire add Aspire.Hosting.Azure.Search
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -38,7 +33,9 @@ automatically.
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an Azure AI Search service and consume the connection using the following methods:
+In the AppHost, add an Azure AI Search service and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var search = builder.AddAzureSearch("search");
@@ -47,10 +44,13 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(search);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `search` in the `MyService` project. In the _Program.cs_ file of `MyService`, the connection can be consumed using the client library [Aspire.Azure.Search.Documents](https://www.nuget.org/packages/Aspire.Azure.Search.Documents):
+**TypeScript**
 
-```csharp
-builder.AddAzureSearchClient("search");
+```typescript
+const search = await builder.addAzureSearch("search");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(search);
 ```
 
 ## Connection Properties
@@ -65,8 +65,9 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://learn.microsoft.com/azure/search/search-howto-dotnet-sdk
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-ai-search/azure-ai-search-host/
+* https://learn.microsoft.com/azure/search/search-what-is-azure-search
 
 ## Feedback & contributing
 

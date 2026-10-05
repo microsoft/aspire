@@ -16,16 +16,15 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class FakeNpmRunner : INpmRunner
 {
-    public bool IsAvailable => true;
+    public bool IsAvailable { get; set; } = true;
+
+    public Func<string, string, CancellationToken, Task<NpmPackageInfo?>>? ResolvePackageAsyncCallback { get; set; }
 
     public Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
-        => Task.FromResult<NpmPackageInfo?>(null);
+        => ResolvePackageAsyncCallback?.Invoke(packageName, versionRange, cancellationToken) ?? Task.FromResult<NpmPackageInfo?>(null);
 
     public Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken)
         => Task.FromResult<string?>(null);
-
-    public Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken)
-        => Task.FromResult(true);
 
     public Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
         => Task.FromResult(true);
@@ -36,7 +35,7 @@ internal sealed class FakeNpmRunner : INpmRunner
 /// </summary>
 internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 {
-    public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, CancellationToken cancellationToken, string? sriIntegrity = null)
+    public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken)
         => Task.FromResult(new ProvenanceVerificationResult
         {
             Outcome = ProvenanceVerificationOutcome.Verified,
@@ -52,6 +51,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
     internal const string AspireInitSkillName = "aspire-init";
     internal const string AspireMonitoringSkillName = "aspire-monitoring";
     internal const string AspireOrchestrationSkillName = "aspire-orchestration";
+    internal const string AspireProjectV2MigrationSkillName = "aspire-project-v2-migration";
 
     private readonly DirectoryInfo _bundleDirectory;
     private readonly AspireSkillsInstallResult? _result;
@@ -75,7 +75,7 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         }
 
         await EnsureBundleAsync(cancellationToken);
-        var bundle = await AspireSkillsBundle.LoadAsync(_bundleDirectory, cancellationToken);
+        var bundle = await new AspireSkillsBundleProvider().LoadAsync(_bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);
     }
 
@@ -144,7 +144,19 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 ---
 
                 # Aspire Orchestration
+                """,
+            [(AspireProjectV2MigrationSkillName, "SKILL.md")] =
                 """
+                ---
+                name: aspire-project-v2-migration
+                description: "Migrate approved project resources in Aspire 13.6 or newer AppHosts"
+                ---
+
+                # Project v2 migration
+                """,
+            [(AspireProjectV2MigrationSkillName, Path.Combine("references", "migration-patterns.md"))] = "# Migration patterns",
+            [(AspireProjectV2MigrationSkillName, Path.Combine("references", "compatibility-and-validation.md"))] = "# Compatibility and validation",
+            [(AspireProjectV2MigrationSkillName, Path.Combine("evals", "eval.yaml"))] = "stimuli: []"
         };
 
         foreach (var ((skillName, relativePath), content) in files)
@@ -169,7 +181,8 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
                 CreateSkill(AspireInitSkillName, ["evals"], files),
                 CreateSkill(AspireMonitoringSkillName, ["evals"], files),
-                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
+                CreateSkill(AspireOrchestrationSkillName, ["evals"], files),
+                CreateSkill(AspireProjectV2MigrationSkillName, ["evals"], files)
             ]
         };
 
@@ -189,16 +202,16 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
                 .Select(entry => new SkillBundleFile
                 {
                     RelativePath = entry.Key.RelativePath,
-                    Sha256 = ComputeSha256(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
+                    Sha512 = ComputeSha512(Path.Combine(_bundleDirectory.FullName, "skills", skillName, entry.Key.RelativePath))
                 })
                 .ToArray()
         };
     }
 
-    private static string ComputeSha256(string path)
+    private static string ComputeSha512(string path)
     {
         using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return Convert.ToHexString(SHA512.HashData(stream)).ToLowerInvariant();
     }
 }
 

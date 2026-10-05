@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Reflection;
 using Aspire.Components.Common.TestUtilities;
 using Aspire.Hosting.RabbitMQ;
 using Aspire.TestUtilities;
@@ -14,12 +15,6 @@ using RabbitMQ.Client;
 using Testcontainers.RabbitMq;
 using Xunit;
 
-#if RABBITMQ_V6
-using RabbitMQ.Client.Logging;
-#else
-using System.Reflection;
-#endif
-
 namespace Aspire.RabbitMQ.Client.Tests;
 
 public class AspireRabbitMQLoggingTests
@@ -31,12 +26,11 @@ public class AspireRabbitMQLoggingTests
     /// and then stop the container. This will cause the RabbitMQ client to log an error message.
     /// </summary>
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11820", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task EndToEndLoggingTest()
     {
-        await using var rabbitMqContainer = new RabbitMqBuilder()
-            .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
+        await using var rabbitMqContainer = new RabbitMqBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
             .Build();
         await rabbitMqContainer.StartAsync();
 
@@ -102,6 +96,35 @@ public class AspireRabbitMQLoggingTests
         Assert.Equal(2, logs.Length);
         Assert.Equal(LogLevel.Warning, logs[1].Level);
         Assert.Equal(warningMessage, logs[1].Message);
+    }
+
+    [Fact]
+    public void ForwardsEventIdWithoutLevelName()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.AddSingleton<RabbitMQEventSourceLogForwarder>();
+
+        var logger = new TestLogger();
+        builder.Services.AddSingleton<ILoggerProvider>(sp => new LoggerProvider(logger));
+
+        using var host = builder.Build();
+        host.Services.GetRequiredService<RabbitMQEventSourceLogForwarder>().Start();
+
+        LogInfo("info");
+        LogWarn("warn");
+        LogError("error", new InvalidOperationException("test"));
+
+        var logs = logger.Logs.ToArray();
+        Assert.Equal(3, logs.Length);
+
+        Assert.Equal(1, logs[0].EventId.Id);
+        Assert.True(string.IsNullOrEmpty(logs[0].EventId.Name));
+
+        Assert.Equal(2, logs[1].EventId.Id);
+        Assert.True(string.IsNullOrEmpty(logs[1].EventId.Name));
+
+        Assert.Equal(3, logs[2].EventId.Id);
+        Assert.True(string.IsNullOrEmpty(logs[2].EventId.Name));
     }
 
     [Fact]
@@ -198,36 +221,22 @@ public class AspireRabbitMQLoggingTests
         Assert.Equal($"{innerException.GetType()}: {innerException.Message}", errorEvent[3].Value?.ToString());
     }
 
-#if !RABBITMQ_V6
     private static readonly object s_log =
         Type.GetType("RabbitMQ.Client.Logging.RabbitMqClientEventSource, RabbitMQ.Client")!
             .GetField("Log", BindingFlags.Static | BindingFlags.Public)!
             .GetValue(null)!;
-#endif
 
     private static void LogInfo(string message)
     {
-#if RABBITMQ_V6
-        RabbitMqClientEventSource.Log.Info(message);
-#else
         s_log.GetType().GetMethod("Info")!.Invoke(s_log, new object[] { message });
-#endif
     }
     private static void LogWarn(string message)
     {
-#if RABBITMQ_V6
-        RabbitMqClientEventSource.Log.Warn(message);
-#else
         s_log.GetType().GetMethod("Warn")!.Invoke(s_log, new object[] { message });
-#endif
     }
     private static void LogError(string message, Exception ex)
     {
-#if RABBITMQ_V6
-        RabbitMqClientEventSource.Log.Error(message, ex);
-#else
         s_log.GetType().GetMethod("Error", [typeof(string), typeof(Exception)])!.Invoke(s_log, new object[] { message, ex });
-#endif
     }
 
     private sealed class LoggerProvider(TestLogger logger) : ILoggerProvider
@@ -239,7 +248,7 @@ public class AspireRabbitMQLoggingTests
 
     private sealed class TestLogger : ILogger
     {
-        public BlockingCollection<(LogLevel Level, string Message, object? State)> Logs { get; } = new();
+        public BlockingCollection<(LogLevel Level, string Message, object? State, EventId EventId)> Logs { get; } = new();
         public Action? LoggedMessage { get; set; }
 
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
@@ -249,7 +258,7 @@ public class AspireRabbitMQLoggingTests
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            Logs.Add((logLevel, formatter(state, exception), state));
+            Logs.Add((logLevel, formatter(state, exception), state, eventId));
             LoggedMessage?.Invoke();
         }
     }

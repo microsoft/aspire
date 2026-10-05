@@ -26,7 +26,7 @@ public sealed class DownloadFailingJobLogsToolTests : IClassFixture<DownloadFail
            at Tests.Namespace.Type.Method() in TestFile.cs:line 42
         """;
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly DownloadFailingJobLogsFixture _fixture;
     private readonly ITestOutputHelper _output;
 
@@ -34,14 +34,15 @@ public sealed class DownloadFailingJobLogsToolTests : IClassFixture<DownloadFail
     {
         _fixture = fixture;
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task DownloadsLogsAndExtractsArtifactsFromFixtureRun()
     {
-        var fixtureDirectory = Path.Combine(_tempDirectory.Path, "fixtures-success");
+        var fixtureDirectory = Path.Combine(_workspace.Path, "fixtures-success");
         Directory.CreateDirectory(fixtureDirectory);
 
         WriteJobsFixture(fixtureDirectory);
@@ -57,18 +58,18 @@ public sealed class DownloadFailingJobLogsToolTests : IClassFixture<DownloadFail
         Assert.Contains("Downloaded artifact to: artifact_0_Sample_linux-latest.zip", result.Output, StringComparison.Ordinal);
         Assert.Contains("Found 1 .trx file(s):", result.Output, StringComparison.Ordinal);
 
-        var logPath = Path.Combine(_tempDirectory.Path, "failed_job_0_Tests___Linux___Sample__Sample____Sample__linux-latest_.log");
+        var logPath = Path.Combine(_workspace.Path, "failed_job_0_Tests___Linux___Sample__Sample____Sample__linux-latest_.log");
         Assert.True(File.Exists(logPath));
         Assert.Contains("Expected 1 but found 2.", File.ReadAllText(logPath), StringComparison.Ordinal);
 
-        var extractedTrx = Path.Combine(_tempDirectory.Path, "artifact_0_Sample_linux-latest", "testresults", "Sample_net10.0.trx");
+        var extractedTrx = Path.Combine(_workspace.Path, "artifact_0_Sample_linux-latest", "testresults", "Sample_net10.0.trx");
         Assert.True(File.Exists(extractedTrx));
     }
 
     [Fact]
     public async Task ReportsMissingArtifactWithoutFailing()
     {
-        var fixtureDirectory = Path.Combine(_tempDirectory.Path, "fixtures-missing-artifact");
+        var fixtureDirectory = Path.Combine(_workspace.Path, "fixtures-missing-artifact");
         Directory.CreateDirectory(fixtureDirectory);
 
         WriteJobsFixture(fixtureDirectory);
@@ -90,7 +91,7 @@ public sealed class DownloadFailingJobLogsToolTests : IClassFixture<DownloadFail
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = _tempDirectory.Path
+            WorkingDirectory = _workspace.Path
         };
 
         processStartInfo.ArgumentList.Add("run");

@@ -18,7 +18,7 @@ public sealed class RedisContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             Container = await CreateContainerAsync();
         }
@@ -34,8 +34,7 @@ public sealed class RedisContainerFixture : IAsyncLifetime
 
     public static async Task<RedisContainer> CreateContainerAsync()
     {
-        var container = new RedisBuilder()
-            .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}")
+        var container = new RedisBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{RedisContainerImageTags.Image}:{RedisContainerImageTags.Tag}")
             .Build();
         await container.StartAsync();
 

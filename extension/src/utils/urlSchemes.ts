@@ -31,3 +31,8 @@ export function isLinkableUrl(url: string): boolean {
         return false;
     }
 }
+
+export function stripResourceSuffix(url: string): string {
+    const idx = url.indexOf('/?resource=');
+    return idx !== -1 ? url.substring(0, idx) : url;
+}

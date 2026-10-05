@@ -32,6 +32,36 @@ namespace Aspire.Cli.Resources {
         internal RootCommandStrings() {
         }
 
+        public static string CompletionsDescription {
+            get {
+                return ResourceManager.GetString("CompletionsDescription", resourceCulture);
+            }
+        }
+
+        public static string CompletionScriptDescription {
+            get {
+                return ResourceManager.GetString("CompletionScriptDescription", resourceCulture);
+            }
+        }
+
+        public static string CompletionShellDescription {
+            get {
+                return ResourceManager.GetString("CompletionShellDescription", resourceCulture);
+            }
+        }
+
+        public static string CompletionShellRequired {
+            get {
+                return ResourceManager.GetString("CompletionShellRequired", resourceCulture);
+            }
+        }
+
+        public static string InvalidCompletionRequest {
+            get {
+                return ResourceManager.GetString("InvalidCompletionRequest", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -75,6 +105,15 @@ namespace Aspire.Cli.Resources {
         public static string BannerVersionFormat {
             get {
                 return ResourceManager.GetString("BannerVersionFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI is emulating identity &apos;{0}&apos; version &apos;{1}&apos;. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar..
+        /// </summary>
+        public static string IdentityOverrideNotice {
+            get {
+                return ResourceManager.GetString("IdentityOverrideNotice", resourceCulture);
             }
         }
 

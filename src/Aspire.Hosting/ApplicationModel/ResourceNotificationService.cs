@@ -90,7 +90,7 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <remarks>
     /// This method returns a task that will complete when the resource reaches the specified target state. If the resource
-    /// is already in the target state, the method will return immediately.<br/>
+    /// is already in the target state, the method will return immediately without logging wait or completion messages.<br/>
     /// If the resource doesn't reach one of the target states before <paramref name="cancellationToken"/> is signaled, this method
     /// will throw <see cref="OperationCanceledException"/>.
     /// </remarks>
@@ -111,7 +111,7 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <remarks>
     /// This method returns a task that will complete when the resource reaches one of the specified target states. If the resource
-    /// is already in the target state, the method will return immediately.<br/>
+    /// is already in the target state, the method will return immediately without logging wait or completion messages.<br/>
     /// If the resource doesn't reach one of the target states before <paramref name="cancellationToken"/> is signaled, this method
     /// will throw <see cref="OperationCanceledException"/>.
     /// </remarks>
@@ -123,19 +123,24 @@ public class ResourceNotificationService : IDisposable
                                                      Justification = "targetState(s) parameters are mutually exclusive.")]
     public async Task<string> WaitForResourceAsync(string resourceName, IEnumerable<string> targetStates, CancellationToken cancellationToken = default)
     {
-        if (_logger.IsEnabled(LogLevel.Debug))
+        var waitTask = WaitForResourceCoreAsync(
+            resourceName,
+            re => re.Snapshot.State?.Text is { Length: > 0 } stateText && targetStates.Contains(stateText, StringComparers.ResourceState),
+            $"Resource '{resourceName}' failed to reach one of the target states: [{string.Join(", ", targetStates)}] before the operation was cancelled.",
+            cancellationToken);
+        var loggedWait = !waitTask.IsCompletedSuccessfully;
+        if (loggedWait && _logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Waiting for resource '{ResourceName}' to enter one of the target state: {TargetStates}", resourceName, string.Join(", ", targetStates));
         }
 
-        var resourceEvent = await WaitForResourceCoreAsync(
-            resourceName,
-            re => re.Snapshot.State?.Text is { Length: > 0 } stateText && targetStates.Contains(stateText, StringComparers.ResourceState),
-            $"Resource '{resourceName}' failed to reach one of the target states: [{string.Join(", ", targetStates)}] before the operation was cancelled.",
-            cancellationToken).ConfigureAwait(false);
-
+        var resourceEvent = await waitTask.ConfigureAwait(false);
         var finalState = resourceEvent.Snapshot.State!.Text!;
-        _logger.LogDebug("Finished waiting for resource '{ResourceName}'. Resource state is '{State}'.", resourceName, finalState);
+        if (loggedWait)
+        {
+            _logger.LogDebug("Finished waiting for resource '{ResourceName}'. Resource state is '{State}'.", resourceName, finalState);
+        }
+
         return finalState;
     }
 
@@ -236,13 +241,36 @@ public class ResourceNotificationService : IDisposable
     /// </remarks>
     public async Task<ResourceEvent> WaitForResourceHealthyAsync(string resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Waiting for resource '{ResourceName}' to enter the '{State}' state.", resourceName, HealthStatus.Healthy);
-        var resourceEvent = await WaitForResourceCoreAsync(
+        if (waitBehavior == WaitBehavior.StopOnResourceUnavailable && !TryGetCurrentState(resourceName, out _))
+        {
+            // TryGetCurrentState returns false both when a resource doesn't exist and when it exists
+            // but hasn't published its first event yet. Check the app model to distinguish the two:
+            // only throw if the resource is definitively absent from the model. When the model is
+            // unavailable (e.g. the obsolete constructor path) we skip the check to preserve
+            // backward compatibility.
+            var appModel = _serviceProvider.GetService<DistributedApplicationModel>();
+            if (appModel is not null && !appModel.Resources.Any(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName)))
+            {
+                _logger.LogError("Stopped waiting for resource '{ResourceName}' to become healthy because it does not exist in the application model.", resourceName);
+                throw new DistributedApplicationException($"Stopped waiting for resource '{resourceName}' to become healthy because it does not exist in the application model.");
+            }
+        }
+
+        var healthyTask = WaitForResourceCoreAsync(
             resourceName,
             re => ShouldYieldHealthyWait(waitBehavior, re.Snapshot),
             $"Resource '{resourceName}' failed to become healthy before the operation was cancelled.",
             waitCondition: "healthy",
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken);
+        // WatchAsync replays the current snapshot synchronously. Skip wait logs when the
+        // resource is already healthy, as repeated dashboard URL requests hit this path.
+        var loggedWait = !healthyTask.IsCompletedSuccessfully;
+        if (loggedWait)
+        {
+            _logger.LogDebug("Waiting for resource '{ResourceName}' to enter the '{State}' state.", resourceName, HealthStatus.Healthy);
+        }
+
+        var resourceEvent = await healthyTask.ConfigureAwait(false);
 
         if (resourceEvent.Snapshot.HealthStatus != HealthStatus.Healthy)
         {
@@ -251,18 +279,35 @@ public class ResourceNotificationService : IDisposable
         }
 
         // Now wait for the resource ready event to be executed (matching behavior of WaitUntilHealthyAsync).
-        _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
-        resourceEvent = await WaitForResourceCoreAsync(
+        var readyTask = WaitForResourceCoreAsync(
             resourceName,
             re => re.ResourceId == resourceEvent.ResourceId && re.Snapshot.ResourceReadyEvent is not null,
             $"Resource '{resourceName}' failed to execute the resource ready event before the operation was cancelled.",
             waitCondition: "resource_ready",
-            cancellationToken: cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken);
+        if (loggedWait || !readyTask.IsCompletedSuccessfully)
+        {
+            _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
+            loggedWait = true;
+        }
+
+        resourceEvent = await readyTask.ConfigureAwait(false);
 
         // Observe the result of the resource ready event task
-        await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var eventTask = resourceEvent.Snapshot.ResourceReadyEvent!.EventTask;
+        if (!eventTask.IsCompletedSuccessfully && !loggedWait)
+        {
+            _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
+            loggedWait = true;
+        }
 
-        _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+        cancellationToken.ThrowIfCancellationRequested();
+        await eventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        if (loggedWait)
+        {
+            _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+        }
 
         return resourceEvent;
     }
@@ -585,14 +630,14 @@ public class ResourceNotificationService : IDisposable
             .Distinct(StringComparers.ResourceName)
             .ToArray();
 
-        // Only transition replicas that are actually starting up to "Waiting".
-        // Replicas already in a Running or terminal state should not be clobbered,
-        // as this broadcast targets ALL replicas of the resource (model-level update),
-        // not just the specific replica being started.
+        // Explicit-start resources should not auto-transition to Waiting even if they have dependencies
+        // (they should be considered Waiting only after an attempt is made to start them).
+        // Resources with no instances managed by Aspire do not "start" from Aspire's perspective, 
+        // so they are always allowed to transition to Waiting if they are waiting on dependencies.
+        var allowNotStarted = !resource.HasAnnotationOfType<ExplicitStartupAnnotation>() || !resource.TryGetInstances(out _);
+
         return PublishUpdateAsync(resource, s =>
-            s.State?.Text is null
-            || s.State?.Text == KnownResourceStates.Starting
-            || s.State?.Text == KnownResourceStates.Waiting
+            CanTransitionToWaiting(s.State?.Text, allowNotStarted)
                 ? s with
                 {
                     State = KnownResourceStates.Waiting,
@@ -600,6 +645,12 @@ public class ResourceNotificationService : IDisposable
                 }
                 : s);
     }
+
+    private static bool CanTransitionToWaiting(string? state, bool allowNotStarted) =>
+        state is null
+        || (allowNotStarted && state == KnownResourceStates.NotStarted)
+        || state == KnownResourceStates.Starting
+        || state == KnownResourceStates.Waiting;
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
     {
@@ -614,6 +665,7 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <remarks>
     /// This method returns a task that will complete when the specified predicate returns <see langword="true" />.<br/>
+    /// If the predicate matches a current resource snapshot, the method will return immediately without logging wait or completion messages.<br/>
     /// If the predicate isn't satisfied before <paramref name="cancellationToken"/> is signaled, this method
     /// will throw <see cref="OperationCanceledException"/>.
     /// </remarks>
@@ -625,13 +677,22 @@ public class ResourceNotificationService : IDisposable
                                                      Justification = "predicate and targetState(s) parameters are mutually exclusive.")]
     public async Task<ResourceEvent> WaitForResourceAsync(string resourceName, Func<ResourceEvent, bool> predicate, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("Waiting for resource '{ResourceName}' to match predicate.", resourceName);
-        var resourceEvent = await WaitForResourceCoreAsync(
+        var waitTask = WaitForResourceCoreAsync(
             resourceName,
             predicate,
             $"Resource '{resourceName}' failed to meet the predicate condition before the operation was cancelled.",
-            cancellationToken).ConfigureAwait(false);
-        _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+            cancellationToken);
+        var loggedWait = !waitTask.IsCompletedSuccessfully;
+        if (loggedWait)
+        {
+            _logger.LogDebug("Waiting for resource '{ResourceName}' to match predicate.", resourceName);
+        }
+
+        var resourceEvent = await waitTask.ConfigureAwait(false);
+        if (loggedWait)
+        {
+            _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
+        }
 
         return resourceEvent;
     }
@@ -748,26 +809,24 @@ public class ResourceNotificationService : IDisposable
             OnResourceUpdated += WriteToChannel;
         }
 
-        // Return the last snapshot for each resource.
-        // We do this after subscribing to the event to avoid missing any updates.
-
-        // Keep track of the versions we have seen so far to avoid duplicates.
-        var versionsSeen = new Dictionary<string, long>();
-
-        foreach (var state in _resourceNotificationStates)
-        {
-            var resourceId = state.Key;
-
-            if (state.Value.LastSnapshot is { } snapshot)
-            {
-                versionsSeen[resourceId] = snapshot.Version;
-
-                yield return new ResourceEvent(state.Value.Resource, resourceId, snapshot);
-            }
-        }
-
         try
         {
+            // Subscribe before replaying snapshots so updates cannot be missed. Keep the
+            // replay inside try so early disposal also removes the event subscription.
+            var versionsSeen = new Dictionary<string, long>();
+
+            foreach (var state in _resourceNotificationStates)
+            {
+                var resourceId = state.Key;
+
+                if (state.Value.LastSnapshot is { } snapshot)
+                {
+                    versionsSeen[resourceId] = snapshot.Version;
+
+                    yield return new ResourceEvent(state.Value.Resource, resourceId, snapshot);
+                }
+            }
+
             await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
                 // Skip events that are older than the max version we have seen so far. This avoids duplicates.
@@ -799,6 +858,10 @@ public class ResourceNotificationService : IDisposable
     /// <param name="resource">The resource to update</param>
     /// <param name="resourceId"> The id of the resource.</param>
     /// <param name="stateFactory">A factory that creates the new state based on the previous state.</param>
+    /// <remarks>
+    /// If the resulting snapshot has the same content as the current snapshot, the update is not
+    /// published and the snapshot version is not incremented.
+    /// </remarks>
     public Task PublishUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
@@ -821,9 +884,6 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
-            // Increment the snapshot version, this is a per resource version.
-            newState = newState with { Version = notificationState.GetNextVersion() };
-
             newState = UpdateCommands(resource, newState);
 
             newState = UpdateIcons(resource, newState);
@@ -837,6 +897,26 @@ public class ResourceNotificationService : IDisposable
                     Properties = newState.Properties.SetResourceProperty(KnownProperties.Resource.ExcludeFromMcp, true)
                 };
             }
+
+            // Producers can recompute a snapshot that is identical to the one already published. DCP is
+            // the common case: its watches are periodically torn down and re-established, and each fresh
+            // watch replays every object that exists, so a resource that never changes again keeps
+            // arriving here. Publishing those would bump the version and wake every subscriber without
+            // anything having changed. Subscribers that start watching later are still seeded from
+            // LastSnapshot, so suppressing here cannot cost anyone an update.
+            // See https://github.com/microsoft/aspire/issues/18869.
+            if (notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState))
+            {
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace("Resource {ResourceName}/{ResourceId} update skipped because the snapshot is unchanged.", resource.Name, resourceId);
+                }
+
+                return Task.CompletedTask;
+            }
+
+            // Increment the snapshot version, this is a per resource version.
+            newState = newState with { Version = notificationState.GetNextVersion() };
 
             notificationState.LastSnapshot = newState;
 
@@ -1066,7 +1146,7 @@ public class ResourceNotificationService : IDisposable
             else
             {
                 // Command already exists in snapshot. Update its state based on annotation callback.
-                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = _serviceProvider });
+                var newState = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = _serviceProvider });
 
                 if (existingCommand.State != newState)
                 {
@@ -1109,16 +1189,14 @@ public class ResourceNotificationService : IDisposable
 
         static ResourceCommandSnapshot CreateCommandFromAnnotation(ResourceCommandAnnotation annotation, CustomResourceSnapshot previousState, IServiceProvider serviceProvider)
         {
-            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, ServiceProvider = serviceProvider });
+            var state = annotation.UpdateState(new UpdateCommandStateContext { ResourceSnapshot = previousState, Services = serviceProvider });
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-#pragma warning disable ASPIREINTERACTION001 // Command arguments intentionally reuse the experimental interaction input model.
             return new ResourceCommandSnapshot(annotation.Name, state, annotation.DisplayName, annotation.DisplayDescription, annotation.Parameter, annotation.ConfirmationMessage, annotation.IconName, annotation.IconVariant, annotation.IsHighlighted)
             {
                 Arguments = annotation.Arguments,
                 Visibility = annotation.Visibility
             };
-#pragma warning restore ASPIREINTERACTION001
 #pragma warning restore CS0618
         }
     }
@@ -1181,6 +1259,10 @@ public class ResourceNotificationService : IDisposable
     /// </summary>
     /// <param name="resource">The resource to update</param>
     /// <param name="stateFactory">A factory that creates the new state based on the previous state.</param>
+    /// <remarks>
+    /// If the resulting snapshot has the same content as the current snapshot, the update is not
+    /// published and the snapshot version is not incremented.
+    /// </remarks>
     public async Task PublishUpdateAsync(IResource resource, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var resourceNames = resource.GetResolvedResourceNames();

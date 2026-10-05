@@ -1,0 +1,9 @@
+{
+  "typeCheckingMode": "basic",
+  "reportArgumentType": "error",
+  "reportAttributeAccessIssue": "error",
+  "reportCallIssue": "error",
+  "reportMissingImports": "error",
+  "reportUnknownMemberType": "error",
+  "reportUnknownParameterType": "error"
+}

@@ -276,7 +276,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="name">Name to give the model deployment</param>
     /// <param name="model">The <see cref="FoundryModel"/> to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the deployment resource.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -315,7 +315,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <summary>
     /// Adds a model deployment to the parent Microsoft Foundry resource of the Microsoft Foundry project.
     /// </summary>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -707,7 +707,7 @@ public static class AzureCognitiveServicesProjectExtensions
     private static AzureContainerRegistryResource CreateDefaultRegistry(IDistributedApplicationBuilder builder, string name)
     {
         var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
-        builder.AddResource(resource);
+        builder.AddResource(resource).WithIconName("Archive");
         return resource;
     }
 

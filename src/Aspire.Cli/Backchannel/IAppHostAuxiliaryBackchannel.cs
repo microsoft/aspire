@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Hosting.Backchannel;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Backchannel;
@@ -12,14 +13,14 @@ namespace Aspire.Cli.Backchannel;
 internal interface IAppHostAuxiliaryBackchannel : IDisposable
 {
     /// <summary>
-    /// Gets the hash identifier for this AppHost instance.
+    /// Gets the socket used by this connection.
     /// </summary>
-    string Hash { get; }
+    IAppHostSocket Socket { get; }
 
     /// <summary>
     /// Gets the socket path for this connection.
     /// </summary>
-    string SocketPath { get; }
+    string SocketPath => Socket.SocketPath;
 
     /// <summary>
     /// Gets the AppHost information.
@@ -52,6 +53,21 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The AppHost information response.</returns>
     Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a value indicating whether the AppHost advertises the
+    /// <c>terminals.v1</c> capability — covers both the per-replica terminal info
+    /// surface returned by <see cref="GetTerminalInfoAsync"/> AND the per-resource
+    /// list returned by <see cref="ListTerminalsAsync"/> (with current grid size,
+    /// attached peer count, and peer details on <see cref="TerminalReplicaInfo"/>).
+    /// These surfaces ship together and are gated by a single capability flag.
+    /// </summary>
+    bool SupportsTerminalsV1 { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether resource snapshots include monotonic versions usable for ordering.
+    /// </summary>
+    bool SupportsResourceSnapshotVersionsV1 { get; }
 
     /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
@@ -171,4 +187,23 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
         string status,
         int timeoutSeconds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    /// <param name="resourceName">The resource name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Terminal information for the resource.</returns>
+    Task<GetTerminalInfoResponse> GetTerminalInfoAsync(
+        string resourceName,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost. Returns an empty list when
+    /// no resource is configured. Each entry includes per-replica current grid size and attached
+    /// peer details (when <see cref="TerminalSummary.IsHostReachable"/> is true). Backs
+    /// <c>aspire terminal ps</c>. Gated on <see cref="SupportsTerminalsV1"/>; older AppHosts
+    /// without this capability return an empty response.
+    /// </summary>
+    Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default);
 }

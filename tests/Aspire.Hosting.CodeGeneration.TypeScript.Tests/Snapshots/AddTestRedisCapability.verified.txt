@@ -1,4 +1,4 @@
-﻿{
+{
   CapabilityId: Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis,
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,
@@ -17,6 +17,7 @@
       }
     ]
   },
+  IsExperimental: false,
   IsObsolete: false,
   Parameters: [
     {
@@ -43,6 +44,7 @@
         TypeId: number,
         ClrType: int,
         IsInterface: false,
+        IsNullable: true,
         IsReadOnly: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,

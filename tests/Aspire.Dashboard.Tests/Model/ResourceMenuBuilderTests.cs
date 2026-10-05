@@ -6,6 +6,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
@@ -19,11 +20,14 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class ResourceMenuBuilderTests
+public sealed class ResourceMenuBuilderTests : IDisposable
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
     private readonly DashboardDialogService _dialogService;
+    private readonly List<DashboardDataSource> _dataSources = [];
+    private readonly List<DashboardDataSourcePool> _databasePools = [];
+    private readonly List<DirectoryInfo> _temporaryDirectories = [];
 
     public ResourceMenuBuilderTests()
     {
@@ -35,18 +39,45 @@ public sealed class ResourceMenuBuilderTests
             dimensionManager);
     }
 
-    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository, TestAIContextProvider aiContextProvider)
+    private ResourceMenuBuilder CreateResourceMenuBuilder(
+        SqliteTelemetryRepository repository,
+        IDashboardClient? dashboardClient = null)
     {
+        dashboardClient ??= new TestDashboardClient();
+        var temporaryDirectory = Directory.CreateTempSubdirectory();
+        _temporaryDirectories.Add(temporaryDirectory);
+        var runStore = new TestDashboardRunStore(databasePath: Path.Combine(temporaryDirectory.FullName, "dashboard.db"));
+        var dataSourcePool = TestDashboardDataSource.CreatePool(repository, dashboardClient, runStore);
+        var dataSource = TestDashboardDataSource.Create(runStore, dataSourcePool);
+        _databasePools.Add(dataSourcePool);
+        _dataSources.Add(dataSource);
+
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
-            repository,
-            aiContextProvider,
+            dataSource,
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
-            new TestStringLocalizer<Resources.AIAssistant>(),
-            new TestStringLocalizer<Resources.AIPrompts>(),
             _iconResolver,
-            _dialogService);
+            _dialogService,
+            dashboardClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var dataSource in _dataSources)
+        {
+            dataSource.Dispose();
+        }
+
+        foreach (var databasePool in _databasePools)
+        {
+            databasePool.Dispose();
+        }
+
+        foreach (var temporaryDirectory in _temporaryDirectories)
+        {
+            temporaryDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -54,9 +85,9 @@ public sealed class ResourceMenuBuilderTests
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource();
-        var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -75,19 +106,19 @@ public sealed class ResourceMenuBuilderTests
         Assert.Collection(menuItems,
             e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
-            e => Assert.Equal("Localized:ExportJson", e.Text));
+            e => Assert.Equal("Localized:ViewJson", e.Text));
     }
 
     [Fact]
-    public void AddMenuItems_UninstrumentedPeer_TraceItem()
+    public async Task AddMenuItems_UninstrumentedPeer_TraceItem()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
-        var repository = TelemetryTestHelpers.CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
-        var aiContextProvider = new TestAIContextProvider();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -107,7 +138,7 @@ public sealed class ResourceMenuBuilderTests
             }
         });
 
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -126,20 +157,20 @@ public sealed class ResourceMenuBuilderTests
         Assert.Collection(menuItems,
             e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
-            e => Assert.Equal("Localized:ExportJson", e.Text),
+            e => Assert.Equal("Localized:ViewJson", e.Text),
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Localized:ResourceActionTracesText", e.Text));
     }
 
     [Fact]
-    public void AddMenuItems_HasTelemetry_TelemetryItems()
+    public async Task AddMenuItems_HasTelemetry_TelemetryItems()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
-        var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -158,7 +189,7 @@ public sealed class ResourceMenuBuilderTests
             }
         });
 
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -177,7 +208,7 @@ public sealed class ResourceMenuBuilderTests
         Assert.Collection(menuItems,
             e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
-            e => Assert.Equal("Localized:ExportJson", e.Text),
+            e => Assert.Equal("Localized:ViewJson", e.Text),
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Localized:ResourceActionStructuredLogsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionTracesText", e.Text),
@@ -193,9 +224,9 @@ public sealed class ResourceMenuBuilderTests
                 new EnvironmentVariableViewModel("SPEC_VAR", "spec-value", fromSpec: true),
                 new EnvironmentVariableViewModel("RUNTIME_VAR", "runtime-value", fromSpec: false)
             ]);
-        var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -214,7 +245,7 @@ public sealed class ResourceMenuBuilderTests
         Assert.Collection(menuItems,
             e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
-            e => Assert.Equal("Localized:ExportJson", e.Text),
+            e => Assert.Equal("Localized:ViewJson", e.Text),
             e => Assert.Equal("Localized:ExportEnv", e.Text));
     }
 
@@ -227,9 +258,9 @@ public sealed class ResourceMenuBuilderTests
                 new EnvironmentVariableViewModel("RUNTIME_VAR1", "value1", fromSpec: false),
                 new EnvironmentVariableViewModel("RUNTIME_VAR2", "value2", fromSpec: false)
             ]);
-        var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -248,7 +279,7 @@ public sealed class ResourceMenuBuilderTests
         Assert.Collection(menuItems,
             e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
-            e => Assert.Equal("Localized:ExportJson", e.Text));
+            e => Assert.Equal("Localized:ViewJson", e.Text));
     }
 
     [Fact]
@@ -275,9 +306,9 @@ public sealed class ResourceMenuBuilderTests
             iconName: string.Empty,
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [startCommand, stopCommand]);
-        var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
         resourceMenuBuilder.AddMenuItems(
@@ -292,10 +323,136 @@ public sealed class ResourceMenuBuilderTests
             showUrls: false);
 
         Assert.Collection(menuItems,
-            e => Assert.Equal("Localized:ExportJson", e.Text),
+            e => Assert.Equal("Localized:ViewJson", e.Text),
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Start", e.Text),
             e => Assert.Equal("Stop", e.Text));
+    }
+
+    [Fact]
+    public void AddMenuItems_ReadOnly_DisablesResourceCommands()
+    {
+        var command = new CommandViewModel(
+            CommandViewModel.StartCommand,
+            CommandViewModelState.Enabled,
+            "Start",
+            "Start the resource.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: true,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(
+            repository,
+            new TestDashboardClient(isReadOnly: true));
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Start", e.Text);
+                Assert.True(e.IsDisabled);
+            });
+    }
+
+    [Fact]
+    public void AddMenuItems_UnresolvableIconName_UsesFallbackIcon()
+    {
+        // A command with an icon name that doesn't map to any FluentUI icon should
+        // get a QuestionCircle fallback instead of null, preventing the overflow issue in #18385.
+        var command = new CommandViewModel(
+            "test-command",
+            CommandViewModelState.Enabled,
+            "Test Command",
+            "A command with a bad icon name.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: "NotARealIconName",
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Test Command", e.Text);
+                Assert.IsType<Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size16.QuestionCircle>(e.Icon);
+            });
+    }
+
+    [Fact]
+    public void AddMenuItems_NoIconName_IconIsNull()
+    {
+        // A command with no icon name should have a null icon in the menu
+        // (menu items have text labels so no fallback icon is needed).
+        var command = new CommandViewModel(
+            "test-command",
+            CommandViewModelState.Enabled,
+            "Test Command",
+            "A command with no icon.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Test Command", e.Text);
+                Assert.Null(e.Icon);
+            });
     }
 
     private sealed class TestNavigationManager : NavigationManager

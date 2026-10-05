@@ -23,13 +23,14 @@ public partial class MetricTable : ChartBase
     private List<ChartExemplar> _exemplars = [];
     private string _unitColumnHeader = string.Empty;
     private IJSObjectReference? _jsModule;
-    private FluentDataGrid<MetricViewBase> _dataGrid = null!;
 
     private OtlpInstrumentSummary? _instrument;
     private bool _showCount;
-    private DateTimeOffset? _lastUpdate;
+    private bool _hasUpdated;
 
-    private IQueryable<MetricViewBase> _metricsView => _metrics.Values.AsEnumerable().Reverse().ToList().AsQueryable();
+    protected override TimeSpan UpdateInterval => TimeSpan.FromSeconds(1);
+
+    private IEnumerable<MetricViewBase> _metricsView => _metrics.Values.Reverse();
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -46,14 +47,6 @@ public partial class MetricTable : ChartBase
     {
         Debug.Assert(_jsModule != null, "The module should be initialized before chart data is sent to control.");
 
-        // Only update the data grid once per second to avoid additional DOM re-renders.
-        if (inProgressDataTime - _lastUpdate < TimeSpan.FromSeconds(1))
-        {
-            return;
-        }
-
-        _lastUpdate = inProgressDataTime;
-
         if (!Equals(_instrument?.Name, InstrumentViewModel.Instrument?.Name) || _showCount != InstrumentViewModel.ShowCount)
         {
             _metrics.Clear();
@@ -66,12 +59,19 @@ public partial class MetricTable : ChartBase
 
         _metrics = UpdateMetrics(out var xValuesToAnnounce, traces, xValues, exemplars);
         _exemplars = exemplars;
+        // A newly activated table can calculate before its first live tick reaches the current data window.
+        // Keep showing the loading state until rows are available or a tick confirms that the window is empty.
+        _hasUpdated |= tickUpdate || _metrics.Count > 0;
+
+        // Render the updated rows before delaying their accessibility announcement.
+        await InvokeAsync(StateHasChanged);
 
         if (xValuesToAnnounce.Count == 0)
         {
             return;
         }
 
+        // Give the data grid time to render the new rows before announcing their positions to screen readers.
         await Task.Delay(500, cancellationToken);
 
         var metricView = _metricsView.ToList();
@@ -109,8 +109,7 @@ public partial class MetricTable : ChartBase
             Title = DialogsLoc[nameof(Dashboard.Resources.Dialogs.ExemplarsDialogTitle)],
             PrimaryAction = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
             SecondaryAction = string.Empty,
-            Width = "800px",
-            Height = "auto"
+            Width = "800px"
         };
         await DialogService.ShowDialogAsync<ExemplarsDialog>(vm, parameters);
     }
@@ -238,16 +237,9 @@ public partial class MetricTable : ChartBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<MetricViewBase>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Controls/Chart/MetricTable.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MetricTable.razor.js"]}");
         }
 
         await base.OnAfterRenderAsync(firstRender);
@@ -305,13 +297,6 @@ public partial class MetricTable : ChartBase
         public required SortedDictionary<int, (string Name, double? Value, ValueDirectionChange Direction)> Percentiles { get; init; }
     }
 
-    public enum ValueDirectionChange
-    {
-        Up,
-        Down,
-        Constant
-    }
-
     private (Icon Icon, string Title)? GetIconAndTitleForDirection(ValueDirectionChange? directionChange)
     {
         return directionChange switch
@@ -327,4 +312,27 @@ public partial class MetricTable : ChartBase
     {
         return value is null ? string.Empty : value.Value.ToString("F3", CultureInfo.CurrentCulture);
     }
+}
+
+// Keep this outside the component: Blazor's component preservation includes nested types and
+// would otherwise retain Enum.GetValues(Type), which requires dynamic code under Native AOT.
+/// <summary>
+/// Describes how a metric value changed relative to its previous value.
+/// </summary>
+public enum ValueDirectionChange
+{
+    /// <summary>
+    /// The value increased.
+    /// </summary>
+    Up,
+
+    /// <summary>
+    /// The value decreased.
+    /// </summary>
+    Down,
+
+    /// <summary>
+    /// The value did not change.
+    /// </summary>
+    Constant
 }

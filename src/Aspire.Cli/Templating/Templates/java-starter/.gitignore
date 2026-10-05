@@ -1,3 +1,12 @@
 .java-build/
 .aspire/
 .modules/
+
+# Frontend dependencies and build output.
+node_modules/
+dist/
+
+# Gradle cache and build output for the api service, including the OpenTelemetry agent
+# downloaded into build/agent during the build.
+.gradle/
+build/

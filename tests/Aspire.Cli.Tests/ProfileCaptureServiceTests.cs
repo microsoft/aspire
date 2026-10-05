@@ -34,9 +34,9 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartAsync_LaunchesPrivateDashboardWithConfiguredPortsAndCollectorEnvironment()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
-        var managedPath = CreateFile(workspace, "aspire-managed");
+        var dashboardPath = CreateFile(workspace, BundleDiscovery.DashboardExecutableName);
         var options = CreateOptions(workspace);
         var processFactory = CreateRunningProcessFactory();
         var handler = new MockHttpMessageHandler(request =>
@@ -48,17 +48,16 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
             fileLoggerProvider,
             processFactory,
             handler,
-            CreateConfiguration((BundleDiscovery.DashboardPathEnvVar, managedPath)));
+            CreateConfiguration((BundleDiscovery.DashboardPathEnvVar, dashboardPath)));
 
         await using var session = await service.StartAsync(options, s_testTimeout, s_testPollInterval, CancellationToken.None);
 
-        Assert.Equal(managedPath, processFactory.LastFileName);
+        Assert.Equal(dashboardPath, processFactory.LastFileName);
         var arguments = processFactory.LastArguments;
         Assert.NotNull(arguments);
         Assert.Equal(
             [
-                "dashboard",
-                $"--{KnownConfigNames.AspNetCoreUrls}={options.DashboardUrl}",
+                $"--{KnownAspNetCoreConfigNames.Urls}={options.DashboardUrl}",
                 $"--{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}={options.OtlpGrpcUrl}",
                 $"--{KnownConfigNames.DashboardOtlpHttpEndpointUrl}={options.OtlpHttpUrl}",
                 $"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
@@ -83,15 +82,79 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         Assert.True(process.Started);
     }
 
-    [Fact]
-    public async Task StartAsync_UsesBundleLayoutManagedPath_WhenOverrideIsAbsent()
+    [Theory]
+    [InlineData(BundleDiscovery.DashboardPathEnvVar, false)]
+    [InlineData(BundleDiscovery.ManagedPathEnvVar, false)]
+    [InlineData(BundleDiscovery.ManagedPathEnvVar, true)]
+    public async Task StartAsync_LaunchesManagedDashboardOverrideWithDashboardCommand(string environmentVariable, bool useDirectory)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
+        var managedPath = CreateFile(workspace, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        var overridePath = useDirectory ? workspace.WorkspaceRoot.FullName : managedPath;
+        var processFactory = CreateRunningProcessFactory();
+        var service = CreateService(
+            fileLoggerProvider,
+            processFactory,
+            new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)),
+            CreateConfiguration((environmentVariable, overridePath)));
+
+        await using var session = await service.StartAsync(CreateOptions(workspace), s_testTimeout, s_testPollInterval, CancellationToken.None);
+
+        Assert.Equal(managedPath, processFactory.LastFileName);
+        Assert.Equal("dashboard", Assert.IsType<string[]>(processFactory.LastArguments)[0]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task StartAsync_RejectsBundleWithoutDashboard(bool legacyDashboardExists)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
         var layoutRoot = workspace.WorkspaceRoot.CreateSubdirectory("bundle");
         var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
         var managedPath = Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
         File.WriteAllText(managedPath, string.Empty);
+        if (legacyDashboardExists)
+        {
+            File.WriteAllText(
+                Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+                string.Empty);
+        }
+
+        var bundleService = new TestBundleService(isBundle: true)
+        {
+            Layout = new LayoutConfiguration { LayoutPath = layoutRoot.FullName }
+        };
+        var processFactory = CreateRunningProcessFactory();
+        var service = CreateService(
+            fileLoggerProvider,
+            processFactory,
+            new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)),
+            CreateConfiguration(),
+            bundleService);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.StartAsync(CreateOptions(workspace), s_testTimeout, s_testPollInterval, CancellationToken.None));
+
+        Assert.Equal(DashboardCommandStrings.ManagedBinaryNotFound, exception.Message);
+        Assert.Empty(processFactory.CreatedExecutions);
+    }
+
+    [Fact]
+    public async Task StartAsync_UsesBundleLayoutDashboardPath_WhenNativeDashboardIsPresent()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
+        var layoutRoot = workspace.WorkspaceRoot.CreateSubdirectory("bundle");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        File.WriteAllText(
+            Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            string.Empty);
+        var dashboardDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.DashboardDirectoryName);
+        var dashboardPath = Path.Combine(dashboardDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
 
         var bundleService = new TestBundleService(isBundle: true)
         {
@@ -107,13 +170,14 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
 
         await using var session = await service.StartAsync(CreateOptions(workspace), s_testTimeout, s_testPollInterval, CancellationToken.None);
 
-        Assert.Equal(managedPath, processFactory.LastFileName);
+        Assert.Equal(dashboardPath, processFactory.LastFileName);
+        Assert.DoesNotContain("dashboard", Assert.IsType<string[]>(processFactory.LastArguments));
     }
 
     [Fact]
     public async Task StartAsync_ThrowsManagedBinaryNotFound_WhenNoManagedBinaryCanBeResolved()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
         var service = CreateService(
             fileLoggerProvider,
@@ -131,7 +195,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartAsync_WrapsProcessFactoryFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
         var managedPath = CreateFile(workspace, "aspire-managed");
         var processFactory = new TestProcessExecutionFactory
@@ -154,7 +218,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartAsync_WrapsProcessStartFailureAndDisposesExecution()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
         var managedPath = CreateFile(workspace, "aspire-managed");
         TestProcessExecution? process = null;
@@ -186,7 +250,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartAsync_DisposesDashboardProcess_WhenReadinessTimesOut()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var fileLoggerProvider = CreateFileLoggerProvider(workspace);
         var managedPath = CreateFile(workspace, "aspire-managed");
         var processFactory = CreateRunningProcessFactory();
@@ -215,7 +279,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitForDashboardAsync_ReturnsAfterTransientConnectionFailures()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = CreateOptions(workspace);
         var attempts = 0;
         var handler = new MockHttpMessageHandler(_ =>
@@ -238,7 +302,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitForDashboardAsync_ThrowsDashboardExited_WhenProcessExitsBeforeReady()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var process = CreateStartedProcess((_, _) => Task.FromResult(42));
         await using var session = CreateSession(
             CreateOptions(workspace),
@@ -254,7 +318,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitForDashboardAsync_ThrowsTimeout_WhenDashboardNeverResponds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var timeProvider = new FakeTimeProvider();
         await using var session = CreateSession(
             CreateOptions(workspace),
@@ -274,7 +338,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DisposeAsync_StopsWaitingForExitAfterBoundedTimeout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hangingExit = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         // Simulate a dashboard process that ignores Kill and never finishes WaitForExitAsync. Without
         // a bounded disposal timeout the CLI would hang on shutdown waiting on this task.
@@ -288,7 +352,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         {
             WaitForExitAsyncCallback = (_, ct) => hangingExit.Task.WaitAsync(ct)
         };
-        Assert.True(process.Start());
+        Assert.True(await process.StartAsync(CancellationToken.None));
 
         var timeProvider = new FakeTimeProvider();
         var session = CreateSession(
@@ -317,7 +381,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportAsync_WritesArchiveAfterSessionSpansReachSteadyState()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nested", "profile.zip");
         var options = CreateOptions(workspace, outputPath: outputPath, sessionId: "session-a");
         var interactionService = new TestInteractionService();
@@ -353,7 +417,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportAsync_WritesArchiveWhenDcpSessionSpansUseDcpSessionAttribute()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = CreateOptions(workspace, sessionId: "session-a");
         var handler = CreateTelemetryHandler(_ => JsonResponse(CreateTracesResponse(
             options.SessionId,
@@ -376,7 +440,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportAsync_ReturnsFailure_WhenNoResourceSpansAreExported()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = CreateOptions(workspace);
         var timeProvider = new FakeTimeProvider();
         var handler = CreateTelemetryHandler(_ => JsonResponse(new TelemetryApiResponse
@@ -397,7 +461,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportAsync_ReturnsFailure_WhenOnlyOtherSessionSpansAreExported()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = CreateOptions(workspace, sessionId: "session-a");
         var timeProvider = new FakeTimeProvider();
         var handler = CreateTelemetryHandler(_ => JsonResponse(CreateTracesResponse("session-b")), timeProvider);
@@ -413,7 +477,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportAsync_ThrowsHttpRequestException_WhenTelemetryApiReturnsHtmlFallback()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = CreateTelemetryHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("<html></html>", Encoding.UTF8, "text/html")
@@ -429,7 +493,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExportAsync_ThrowsJsonException_WhenTelemetryApiReturnsInvalidJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = CreateTelemetryHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
             Content = new StringContent("{", Encoding.UTF8, "application/json")
@@ -456,29 +520,28 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveManagedPathOverride_UsesManagedDirectoryContainingExecutable()
+    public void ResolveDashboardPathOverride_UsesDashboardExecutable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var managedDirectory = workspace.WorkspaceRoot.CreateSubdirectory("managed");
-        var managedPath = Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
-        File.WriteAllText(managedPath, string.Empty);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dashboardPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        File.WriteAllText(dashboardPath, string.Empty);
 
-        var resolvedPath = ProfileCaptureService.ResolveManagedPathOverride(
-            CreateConfiguration((BundleDiscovery.ManagedPathEnvVar, managedDirectory.FullName)));
+        var resolvedPath = ProfileCaptureService.ResolveDashboardPathOverride(
+            CreateConfiguration((BundleDiscovery.DashboardPathEnvVar, dashboardPath)));
 
-        Assert.Equal(managedPath, resolvedPath);
+        Assert.Equal(dashboardPath, resolvedPath);
     }
 
     [Fact]
-    public void ResolveManagedPathOverride_IgnoresMissingOverrides()
+    public void ResolveDashboardPathOverride_IgnoresMissingOverride()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "missing");
 
-        var resolvedPath = ProfileCaptureService.ResolveManagedPathOverride(
-            CreateConfiguration(
-                (BundleDiscovery.DashboardPathEnvVar, missingPath),
-                (BundleDiscovery.ManagedPathEnvVar, missingPath)));
+        var resolvedPath = ProfileCaptureService.ResolveDashboardPathOverride(
+            CreateConfiguration((BundleDiscovery.DashboardPathEnvVar, missingPath)));
 
         Assert.Null(resolvedPath);
     }
@@ -530,7 +593,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         if (process is null)
         {
             process = CreateRunningProcess("aspire-managed", [], env: null, new ProcessInvocationOptions());
-            Assert.True(process.Start());
+            Assert.True(process.StartAsync(CancellationToken.None).GetAwaiter().GetResult());
         }
 
         return new ProfileCaptureService.ProfileCaptureSession(
@@ -557,7 +620,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         {
             WaitForExitAsyncCallback = waitForExitAsync
         };
-        Assert.True(process.Start());
+        Assert.True(process.StartAsync(CancellationToken.None).GetAwaiter().GetResult());
         return process;
     }
 

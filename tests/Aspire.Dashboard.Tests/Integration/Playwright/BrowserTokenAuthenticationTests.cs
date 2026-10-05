@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
@@ -28,7 +28,11 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
     {
         public BrowserTokenDashboardServerWithHttpAndHttpsFixture()
         {
-            Configuration[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://localhost:0;http://localhost:0";
+            // Bind to 127.0.0.1 rather than the "localhost" hostname: Kestrel rejects dynamic-port
+            // binding (":0") on "localhost" with "Dynamic port binding is not supported when binding
+            // to localhost. You must either bind to 127.0.0.1:0 or [::1]:0, or both." The WebKit test
+            // navigates to the resolved address with IgnoreHTTPSErrors, so the loopback IP is fine.
+            Configuration[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;http://127.0.0.1:0";
             Configuration[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.BrowserToken);
             Configuration[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "VALID_TOKEN";
         }
@@ -47,26 +51,55 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
         await RunTestAsync(async page =>
         {
             // Act
-            var response = await page.GotoAsync("/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            var response = await page.GotoAsync("/").DefaultTimeout();
             var uri = new Uri(response!.Url);
 
             Assert.Equal("/login?returnUrl=%2F", uri.PathAndQuery);
 
             var tokenTextBox = page.GetByRole(AriaRole.Textbox);
-            await tokenTextBox.FillAsync("VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            await tokenTextBox.FillAsync("VALID_TOKEN").DefaultTimeout();
 
-            var submitButton = page.GetByRole(AriaRole.Button);
-            await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            var submitButton = SubmitButton(page);
+            await submitButton.ClickAsync().DefaultTimeout();
 
             // Wait for navigation to complete after successful login.
             // The page redirects from /login to / (resources page).
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout();
 
             // Assert
             await Assertions
                 .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
                 .ToBeVisibleAsync()
-                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                .DefaultTimeout();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_LoginPage_SuccessWithWhitespaceToken_RedirectToResources()
+    {
+        // Arrange
+        await RunTestAsync(async page =>
+        {
+            // Act
+            var response = await page.GotoAsync("/").DefaultTimeout();
+            var uri = new Uri(response!.Url);
+
+            Assert.Equal("/login?returnUrl=%2F", uri.PathAndQuery);
+
+            var tokenTextBox = page.GetByRole(AriaRole.Textbox);
+            await tokenTextBox.FillAsync(" VALID_TOKEN ").DefaultTimeout();
+
+            var submitButton = SubmitButton(page);
+            await submitButton.ClickAsync().DefaultTimeout();
+
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout();
+
+            // Assert
+            await Assertions
+                .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
+                .ToBeVisibleAsync()
+                .DefaultTimeout();
         });
     }
 
@@ -78,22 +111,22 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
         await RunTestAsync(async page =>
         {
             // Act
-            var response = await page.GotoAsync("/").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            var response = await page.GotoAsync("/").DefaultTimeout();
             var uri = new Uri(response!.Url);
 
             Assert.Equal("/login?returnUrl=%2F", uri.PathAndQuery);
 
             var tokenTextBox = page.GetByRole(AriaRole.Textbox);
-            await tokenTextBox.FillAsync("INVALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            await tokenTextBox.FillAsync("INVALID_TOKEN").DefaultTimeout();
 
-            var submitButton = page.GetByRole(AriaRole.Button);
-            await submitButton.ClickAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            var submitButton = SubmitButton(page);
+            await submitButton.ClickAsync().DefaultTimeout();
 
             // Assert
             await Assertions
                 .Expect(page.GetByText(Login.InvalidTokenErrorMessage))
                 .ToBeVisibleAsync()
-                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                .DefaultTimeout();
         });
     }
 
@@ -105,13 +138,13 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
         await RunTestAsync(async page =>
         {
             // Act
-            await page.GotoAsync("/login?t=VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            await page.GotoAsync("/login?t=VALID_TOKEN").DefaultTimeout();
 
             // Assert
             await Assertions
                 .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
                 .ToBeVisibleAsync()
-                .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                .DefaultTimeout();
         });
     }
 
@@ -123,14 +156,63 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
         await RunTestAsync(async page =>
         {
             // Act
-            await page.GotoAsync("/login?t=INVALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            await page.GotoAsync("/login?t=INVALID_TOKEN").DefaultTimeout();
 
-            var submitButton = page.GetByRole(AriaRole.Button);
-            var name = await submitButton.GetAttributeAsync("name").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+            var submitButton = SubmitButton(page);
+            var name = await submitButton.GetAttributeAsync("name").DefaultTimeout();
 
             // Assert
             Assert.Equal("submit-token", name);
         });
+    }
+
+    private static ILocator SubmitButton(IPage page) => page.Locator("fluent-button[name='submit-token']");
+}
+
+[RequiresFeature(TestFeature.Playwright)]
+public sealed class BrowserTokenAuthenticationApplicationNameTests(PlaywrightFixture playwrightFixture) : IClassFixture<PlaywrightFixture>
+{
+    private const string BrowserToken = "VALID_TOKEN";
+
+    [Theory]
+    [InlineData("Same application", "Same application", true)]
+    [InlineData("First application", "Second application", false)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task BrowserToken_ApplicationName_ScopesAuthentication(string firstApplicationName, string secondApplicationName, bool canAccessBoth)
+    {
+        await using var firstDashboard = CreateDashboard(firstApplicationName);
+        await using var secondDashboard = CreateDashboard(secondApplicationName);
+        await firstDashboard.StartAsync();
+        await secondDashboard.StartAsync();
+
+        var firstBaseUrl = firstDashboard.FrontendSingleEndPointAccessor().GetResolvedAddress();
+        var secondBaseUrl = secondDashboard.FrontendSingleEndPointAccessor().GetResolvedAddress();
+
+        // Browser cookies are scoped to the loopback host rather than the port, so both dashboards
+        // must be accessed from the same browser context to reproduce localhost cookie sharing.
+        await using var context = await playwrightFixture.Browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+
+        var firstResponse = await page.GotoAsync($"{firstBaseUrl}/login?t={BrowserToken}").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.Equal("/", new Uri(firstResponse!.Url).AbsolutePath);
+
+        var secondResponse = await page.GotoAsync(secondBaseUrl).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        Assert.Equal(canAccessBoth ? "/" : "/login", new Uri(secondResponse!.Url).AbsolutePath);
+    }
+
+    private static DashboardWebApplication CreateDashboard(string applicationName)
+    {
+        var configuration = new Dictionary<string, string?>
+        {
+            [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
+            [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+            [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
+            [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.BrowserToken),
+            [DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = BrowserToken,
+            [DashboardConfigNames.DashboardApplicationName.ConfigKey] = applicationName
+        };
+
+        return DashboardServerFixture.CreateDashboardApp(configuration);
     }
 }
 
@@ -186,30 +268,31 @@ public class BrowserTokenAuthenticationHttpAndHttpsTests : PlaywrightTestsBase<B
         {
             IgnoreHTTPSErrors = true
         });
+        PlaywrightFixture.ConfigureTimeouts(context);
         try
         {
             var page = await context.NewPageAsync();
             try
             {
-                await page.GotoAsync($"{httpsBaseUrl}/login?t=VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                await page.GotoAsync($"{httpsBaseUrl}/login?t=VALID_TOKEN").DefaultTimeout();
                 await Assertions
                     .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
                     .ToBeVisibleAsync()
-                    .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                    .DefaultTimeout();
 
-                await page.GotoAsync($"{httpBaseUrl}/login?t=VALID_TOKEN").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                await page.GotoAsync($"{httpBaseUrl}/login?t=VALID_TOKEN").DefaultTimeout();
                 await Assertions
                     .Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName))
                     .ToBeVisibleAsync()
-                    .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                    .DefaultTimeout();
 
-                await page.GotoAsync($"{httpBaseUrl}/structuredlogs").DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                await page.GotoAsync($"{httpBaseUrl}/structuredlogs").DefaultTimeout();
                 Assert.Equal("/structuredlogs", new Uri(page.Url).AbsolutePath);
                 await Assertions
                     .Expect(page.GetByRole(AriaRole.Button, new() { Name = "submit-token" }))
                     .Not
                     .ToBeVisibleAsync()
-                    .DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                    .DefaultTimeout();
             }
             finally
             {

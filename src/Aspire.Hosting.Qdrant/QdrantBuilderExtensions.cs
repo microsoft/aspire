@@ -1,3 +1,5 @@
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -71,6 +73,7 @@ public static class QdrantBuilderExtensions
         return builder.AddResource(qdrant)
             .WithImage(QdrantContainerImageTags.Image, QdrantContainerImageTags.Tag)
             .WithImageRegistry(QdrantContainerImageTags.Registry)
+            .WithIconName("DatabaseSearch")
             .WithHttpEndpoint(port: grpcPort, targetPort: QdrantPortGrpc, name: QdrantServerResource.PrimaryEndpointName)
             .WithEndpoint(QdrantServerResource.PrimaryEndpointName, endpoint =>
             {
@@ -96,7 +99,7 @@ public static class QdrantBuilderExtensions
                 c.DisplayLocation = UrlDisplayLocation.DetailsOnly;
             })
             .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, c => c.DisplayText = "Qdrant (HTTP)")
-            .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, e => new ResourceUrlAnnotation() { Url = "/dashboard", DisplayText = "Qdrant Dashboard" });
+            .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, e => new ResourceUrlAnnotation() { Url = "/dashboard", DisplayText = "Manage", DisplayOrder = 1 });
     }
 
     /// <summary>
@@ -142,7 +145,7 @@ public static class QdrantBuilderExtensions
     /// <param name="builder">The resource builder for the destination resource.</param>
     /// <param name="qdrantResource">The Qdrant server resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Use the overload that accepts an explicit connection name when calling this API from polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Use the overload that accepts an explicit connection name when calling this API from polyglot AppHosts.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<QdrantServerResource> qdrantResource)
          where TDestination : IResourceWithEnvironment
     {
@@ -154,9 +157,13 @@ public static class QdrantBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder for the destination resource.</param>
     /// <param name="qdrantResource">The Qdrant server resource.</param>
-    /// <param name="connectionName">An override of the source resource's name for the connection string. The resulting connection string will be "ConnectionStrings__connectionName" if this is not null.</param>
+    /// <param name="connectionName">
+    /// An override of the source resource's logical connection name. Physical environment-variable names are derived from this value when it is not <see langword="null"/>,
+    /// unless the source resource specifies <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, in which case that explicit physical name is preserved
+    /// for the gRPC connection and used with an <c>_http</c> suffix for the HTTP connection.
+    /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the generic withReference export.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, IResourceBuilder<QdrantServerResource> qdrantResource, string? connectionName = null)
          where TDestination : IResourceWithEnvironment
     {
@@ -169,7 +176,22 @@ public static class QdrantBuilderExtensions
         var resource = (IResourceWithConnectionString)qdrantResource.Resource;
         connectionName ??= resource.Name;
 
-        var connectionStringName = resource.ConnectionStringEnvironmentVariable ?? $"ConnectionStrings__{connectionName}";
+        var connectionStringNames = ConnectionStringEnvironmentVariableNames.Create(resource, connectionName);
+        var httpLogicalName = $"{connectionName}_{QdrantServerResource.HttpEndpointName}";
+        var httpConnectionStringNames = connectionStringNames.IsExplicit
+            ? new ConnectionStringEnvironmentVariableNames(
+                httpLogicalName,
+                $"{connectionStringNames.OriginalName}_{QdrantServerResource.HttpEndpointName}",
+                $"{connectionStringNames.PortableName}_{QdrantServerResource.HttpEndpointName}",
+                isExplicit: true)
+            : ConnectionStringEnvironmentVariableNames.Create(resource, httpLogicalName);
+        var httpConnectionStringExpression = qdrantResource.Resource.HttpConnectionStringExpression;
+        var httpReference = new ConnectionStringReference(
+            resource,
+            optional: false,
+            httpConnectionStringNames,
+            nameof(QdrantServerResource.HttpConnectionStringExpression),
+            httpConnectionStringExpression);
 
         // Determine what to inject based on the annotation on the destination resource
         var injectionAnnotation = builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var annotation) ? annotation : null;
@@ -179,11 +201,13 @@ public static class QdrantBuilderExtensions
         {
             builder.WithEnvironment(context =>
             {
-                // primary endpoint (gRPC)
-                context.EnvironmentVariables[$"{connectionStringName}"] = qdrantResource.Resource.ConnectionStringExpression;
+                ResourceBuilderExtensions.ValidateConnectionStringReference(context, httpReference);
+                context.EnvironmentVariables[httpConnectionStringNames.OriginalName] = httpReference;
 
-                // HTTP endpoint
-                context.EnvironmentVariables[$"{connectionStringName}_{QdrantServerResource.HttpEndpointName}"] = qdrantResource.Resource.HttpConnectionStringExpression;
+                if (!string.Equals(httpConnectionStringNames.OriginalName, httpConnectionStringNames.PortableName, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.EnvironmentVariables[httpConnectionStringNames.PortableName] = httpReference;
+                }
             });
         }
 

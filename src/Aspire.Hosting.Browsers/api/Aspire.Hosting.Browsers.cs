@@ -12,7 +12,7 @@ namespace Aspire.Hosting
     public static partial class BrowserLogsBuilderExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithBrowserLogs<T>(this ApplicationModel.IResourceBuilder<T> builder, string? browser = null, string? profile = null, BrowserUserDataMode? userDataMode = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
     }

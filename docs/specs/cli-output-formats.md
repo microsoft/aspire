@@ -10,6 +10,34 @@ Streaming output should be the streamed form of the command's JSON content rathe
 
 Most JSON output uses camel-case property names. Properties whose values are not available can be omitted or written as `null`, depending on the command-specific serializer.
 
+## Pipeline steps
+
+`aspire do --list-steps --format json` starts the selected AppHost in inspection mode and returns pipeline steps registered while building the application model. Inspection does not run `BeforeStart` callbacks, raise publish events, or execute pipeline steps. The AppHost still starts its registered hosted services so the CLI backchannel can connect. Steps added dynamically by `BeforeStart` are not included. Supplying a step name filters the result to that step and its transitive dependencies.
+
+```json
+[
+  {
+    "name": "deploy-api",
+    "description": "Deploy the API",
+    "dependsOn": [
+      "publish-api"
+    ],
+    "tags": [
+      "deploy-compute"
+    ],
+    "resourceName": "api"
+  }
+]
+```
+
+| Field | Description |
+| ----- | ----------- |
+| `name` | Unique pipeline step name. |
+| `description` | Optional description of the step. |
+| `dependsOn` | Names of direct dependencies. |
+| `tags` | Tags associated with the step. |
+| `resourceName` | Name of the associated resource, when applicable. |
+
 ## AppHost discovery and lifecycle
 
 ### `aspire ls`
@@ -82,6 +110,12 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 
 ### `aspire ps`
 
+`--output <default|snapshot>` selects the output mode; `--format` selects the
+encoding. Omitting `--output` is equivalent to `--output default` and preserves
+the existing table, JSON array, and follow-mode delta output described below.
+`--output snapshot` requires `--follow --format json` and selects the
+[full snapshot stream](#snapshot-output) for monitoring tools.
+
 `aspire ps --format json` lists running AppHosts:
 
 ```json
@@ -105,6 +139,156 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"running"}
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
+
+#### Snapshot output
+
+`--output snapshot` is a public, opt-in stream for tools that need complete
+AppHost lists, process identities, aggregate resource health, and liveness
+notifications. The native tray companion is one consumer; the mode is not
+tray-specific. It does not change the default output formats.
+
+```bash
+aspire ps --output snapshot --follow --format json --non-interactive --nologo
+```
+
+Messages retain an in-band `version` field (currently `1`); no command-line
+protocol version is needed. Consumers should reject unsupported versions and
+ignore additional fields in supported versions. The shared DTOs,
+source-generated JSON context, and limits are defined in
+`src/Shared/TrayCliProtocol.cs`.
+
+Only protocol messages appear on stdout, as compact newline-delimited JSON.
+Diagnostics go to stderr; progress, banners, and update notifications do not
+appear on stdout. Unknown output modes and invalid arguments exit nonzero.
+Help and parser failures, and invalid `ps` invocations, may produce no protocol
+message. Consumers must reject missing or malformed responses rather than parse
+diagnostic text.
+
+##### Discovery stream
+
+`ps` requires both `--follow` and `--format json`. Discovery is read-only: it
+does not collect orphaned AppHosts, prune sockets, or create discovery directories.
+The first message is a complete snapshot **after initial discovery finishes**,
+including an empty list when there are no AppHosts:
+
+```json
+{"version":1,"type":"snapshot","appHosts":[]}
+{"version":1,"type":"snapshot","appHosts":[{"appHostPath":"/absolute/path/apphost.cs","appHostPid":12345,"processStartTimeUnixMilliseconds":1789250000000,"dashboardUrl":"http://localhost:18888/login?t=token","health":"healthy"}]}
+{"version":1,"type":"heartbeat"}
+{"version":1,"type":"snapshot","appHosts":[]}
+```
+
+Each snapshot replaces the previous list; removal is represented by absence, not
+a `stopped` delta. Lists are ordered by ordinal path, PID, start time, then dashboard
+URL. Identical snapshots are suppressed. Discovery polls once per second, and a
+capacity-one, latest-wins queue coalesces changes when the consumer is slow.
+The initial snapshot is never coalesced away. Heartbeats are emitted every ten
+seconds after the first snapshot and do not modify the consumer's state.
+
+`processStartTimeUnixMilliseconds` is the stable process lifetime read from the
+operating system using `ProcessStartTimeHelper`. It is omitted when unavailable;
+such a row can be displayed and its dashboard opened, but it must not enable Stop.
+`dashboardUrl` is optional. Lookups run with at most eight concurrent RPCs, a
+two-second deadline per lookup, and a five-second enrichment budget per snapshot.
+Timed-out, failed, or not-yet-started lookups leave the URL unavailable without
+removing the AppHost or failing discovery. Cancellation stops outstanding waits;
+it does not disconnect or stop AppHosts. An RPC that has not acknowledged cancellation
+retains its concurrency slot across snapshots, and is not retried while outstanding.
+Paths and PIDs identify AppHosts, not launcher CLI
+processes. Dashboard URLs may contain login tokens and should not be logged.
+
+`health` is an additive, optional field in protocol version 1. Known values are
+`healthy`, `warning`, and `unhealthy`. Missing or unrecognized values mean **unknown**,
+not healthy, so older producers remain compatible. Health does not change the
+AppHost's process identity.
+
+The CLI maintains one resource snapshot subscription per discovered AppHost
+lifetime, using the existing backchannel snapshot watcher and its version
+reconciliation. Resource transitions publish complete snapshots without waiting
+for discovery changes. They use the same latest-wins output queue, and do not
+initiate dashboard URL lookups or poll individual AppHosts for resource health.
+
+The aggregate uses visible resources, excluding both the hidden flag and legacy
+`Hidden` state. Successfully completed jobs and resources without a lifetime
+(no state or `Active`, with no health reports) are neutral. Failed starts, unhealthy
+runtimes, nonzero terminal exit codes, error state styles, and failed health checks
+produce `unhealthy`. Waiting, starting, building, stopping, not-started resources,
+missing parameter values, degraded health, and pending initial checks produce
+`warning`. A failed check takes precedence over another pending check. Running
+resources with healthy checks, or no registered checks as in the dashboard, are
+healthy; all applicable resources must be healthy for the aggregate to be healthy.
+An empty or entirely non-applicable resource set is unknown.
+
+Health is unknown until the initial resource load completes, and becomes unknown
+again if the resource stream ends or fails. Resource-stream failures are logged
+without removing a still-discovered AppHost or failing discovery. Removed or
+replaced AppHosts cancel their subscriptions; a new connection never inherits
+the previous lifetime's health.
+
+A discovery failure is not an empty snapshot. It emits a terminal error and exits
+nonzero. Exceeding 1,000 AppHosts or 1,048,576 UTF-16 characters per serialized
+message also emits a terminal error rather than truncating the list:
+
+```json
+{"version":1,"type":"error","errorCode":"discovery_failed"}
+{"version":1,"type":"error","errorCode":"limit_exceeded"}
+```
+
+The producer cancels and observes its watcher when stdout closes or cancellation
+is requested. Heartbeat writes detect a disconnected consumer even if the AppHost
+list has not changed. Consumer disconnect is normal completion (exit code 0), not
+a discovery error; it does not emit an error message or the failure-log notice.
+An already-detected discovery or limit failure still exits nonzero if writing its
+terminal error encounters a closed pipe.
+End-of-file ends the stream; there is no `complete` message. If monitoring must
+continue, restart discovery and replace state with the next initial snapshot.
+Treat a stream without an initial snapshot as unavailable, not as an empty list.
+
+### Experimental exact stop response
+
+The native tray's lifetime-guarded stop mode remains a separate experimental,
+hidden protocol. `--output` is a `ps` option, not a `stop` option.
+
+```bash
+aspire stop --protocol-version 1 --format json --apphost /absolute/path/apphost.cs --pid 12345 --started-at 1789250000000 --non-interactive --nologo
+```
+
+The protocol requires `--apphost` with an absolute file path, a positive AppHost
+`--pid`, and a positive `--started-at` Unix-millisecond value copied from the
+selected snapshot. `--all` and `--force` are forbidden. Directories are not
+searched; the full path and PID must match exactly (case-insensitive paths only
+on Windows).
+
+Supplying `--started-at` without `--protocol-version 1 --format json` is rejected
+before discovery or any stop RPC. A lifetime-guarded request never falls back to
+legacy PID-only stopping when the version or format is missing or unsupported.
+
+After selecting one live connection, the CLI re-reads the process's stable
+lifetime and requires exact equality with `--started-at` before sending any RPC.
+It retains that original connection through shutdown: no re-selection, process
+tree escalation, launcher termination, sibling batching, or persistent cleanup.
+Success is reported only after the connection-bound stop request succeeds and
+exit of that lifetime is verified within the existing ten-second shutdown budget.
+
+Exactly one result is emitted for an executed stop request, with `exitCode` equal
+to the process exit code:
+
+```json
+{"version":1,"outcome":"stopped","exitCode":0}
+```
+
+| Outcome | Meaning |
+| ------- | ------- |
+| `stopped` | The selected AppHost lifetime exited successfully. |
+| `not_found` | No live connection matches the requested full path and PID. |
+| `ambiguous` | More than one connection matches; nothing is stopped. |
+| `identity_mismatch` | The PID belongs to a different process lifetime; no RPC is sent. |
+| `identity_unavailable` | The stable lifetime cannot be read; no RPC is sent. |
+| `stop_failed` | Discovery, RPC, or shutdown verification failed, or the request was cancelled. |
+| `invalid_request` | Required arguments are missing/invalid, incompatible flags were supplied, or the version is unsupported. |
+
+Every outcome other than `stopped` has a nonzero exit code. Without
+`--protocol-version`, existing `stop --pid` behavior is unchanged.
 
 ### `aspire describe`
 
@@ -427,6 +611,18 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 {
   "checks": [
     {
+      "category": "environment",
+      "name": "operating-system",
+      "status": "pass",
+      "message": "Operating system: Linux Ubuntu 24.04",
+      "metadata": {
+        "osType": "Linux",
+        "displayName": "Linux Ubuntu",
+        "version": "24.04",
+        "description": "Ubuntu 24.04.2 LTS"
+      }
+    },
+    {
       "category": "sdk",
       "name": "dotnet-sdk",
       "status": "pass",
@@ -439,17 +635,32 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
       "message": "Container runtime is not running.",
       "fix": "Start Docker Desktop.",
       "link": "https://learn.microsoft.com/dotnet/aspire/"
+    },
+    {
+      "category": "devtools",
+      "name": "vscode-extension",
+      "status": "warning",
+      "message": "VS Code is installed, but the Aspire extension is not installed",
+      "fix": "Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.",
+      "link": "https://aka.ms/aspire/vscode-extension",
+      "metadata": {
+        "vsCodeInstalled": true,
+        "extensionInstalled": false,
+        "extensionId": "microsoft-aspire.aspire-vscode"
+      }
     }
   ],
   "summary": {
-    "passed": 1,
-    "warnings": 1,
+    "passed": 2,
+    "warnings": 2,
     "failed": 0
   }
 }
 ```
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
+
+The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
 
 ### `aspire config info`
 
@@ -480,6 +691,8 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
   ]
 }
 ```
+
+The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
 
 ## MCP tooling
 
@@ -546,7 +759,7 @@ The top-level arrays are:
 
 | Field | Description |
 | ----- | ----------- |
-| `packages` | Packages or projects scanned for capabilities. |
+| `packages` | Packages or projects scanned for capabilities. `version` is the version that was **requested**, not the one NuGet resolved: package restore uses a minimum-version reference, so the assembly actually scanned may be newer. Use `aspire sdk export` when the version label has to be exact. Project references are omitted because they have no version. |
 | `capabilities` | Builder methods and other callable capabilities. |
 | `handleTypes` | Resource or builder handle types. |
 | `dtoTypes` | DTO types used by capabilities. |
@@ -554,4 +767,12 @@ The top-level arrays are:
 | `exportedValues` | Exported constants or structured values. |
 | `diagnostics` | Errors, warnings, and informational diagnostics from capability discovery. |
 
+Each entry in `capabilities` includes an `isExperimental` boolean indicating whether the callable API is experimental. It is `true` when `System.Diagnostics.CodeAnalysis.ExperimentalAttribute` applies to the member (including a property accessor), an enclosing type, its module, or its assembly; otherwise it is `false` (the default). Consumers of older output that omits this field should treat it as `false`.
+
 `aspire sdk dump --format ci` emits a stable text format intended for diffs rather than JSON parsing.
+
+### `aspire sdk export`
+
+`aspire sdk export --package Name@Version --language typescript` restores the exact integration package version and writes one canonical JSON document to standard output. `Aspire.Hosting` can only be exported at the CLI's SDK version. The selected language's code-generation package cannot be exported because it supplies the generator instead of an integration API surface. Omit `--package` to export `Aspire.Hosting` at the running CLI's SDK version. Diagnostics are written to standard error.
+
+The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.

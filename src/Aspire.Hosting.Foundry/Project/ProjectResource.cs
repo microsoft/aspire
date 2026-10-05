@@ -212,9 +212,48 @@ public class AzureCognitiveServicesProjectResource :
     /// Get the address for the particular agent's endpoint.
     /// </summary>
     ReferenceExpression IComputeEnvironmentResource.GetHostAddressExpression(EndpointReference endpointReference)
+        => GetAgentAddressExpression(endpointReference);
+
+    /// <summary>
+    /// Produces the endpoint property expression for a hosted agent endpoint owned by this Foundry project.
+    /// </summary>
+    /// <remarks>
+    /// The agent address is already a fully-qualified <c>https</c> URL
+    /// (for example <c>https://{account}.services.ai.azure.com/.../agents/{name}</c>), so it is
+    /// returned directly for URL-shaped properties. The default
+    /// <see cref="IComputeEnvironmentResource.GetEndpointPropertyExpression"/> implementation composes
+    /// <c>{scheme}://{host}</c>, which would produce a malformed double-scheme value
+    /// (for example <c>http://https://...</c>). Only the properties that <c>WithReference</c> emits for a
+    /// hosted agent endpoint are supported.
+    /// </remarks>
+    ReferenceExpression IComputeEnvironmentResource.GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+
+        var property = endpointReferenceExpression.Property;
+        return property switch
+        {
+            EndpointProperty.Url => GetAgentAddressExpression(endpointReferenceExpression.Endpoint),
+            EndpointProperty.Scheme => ReferenceExpression.Create($"https"),
+            _ => throw new InvalidOperationException(
+                $"The endpoint property '{property}' is not supported for Foundry hosted agent endpoints. Only 'Url' and 'Scheme' are supported.")
+        };
+    }
+
+    private ReferenceExpression GetAgentAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
-        return ReferenceExpression.Create($"{Endpoint}/agents/{resource.Name}");
+
+        // For hosted agents, deployment creates the Foundry agent version using the wrapper
+        // AzureHostedAgentResource.Name (e.g. "agent-ha" for a target named "agent"), not the
+        // target resource name. The published cross-environment URL must point at that deployed
+        // agent name, so prefer the hosted-agent deployment target's name when one exists and fall
+        // back to the resource name for plain (non-hosted) agents.
+        var agentName = resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget is AzureHostedAgentResource hostedAgent
+            ? hostedAgent.Name
+            : resource.Name;
+
+        return ReferenceExpression.Create($"{Endpoint}/agents/{agentName}");
     }
 
     /// <summary>

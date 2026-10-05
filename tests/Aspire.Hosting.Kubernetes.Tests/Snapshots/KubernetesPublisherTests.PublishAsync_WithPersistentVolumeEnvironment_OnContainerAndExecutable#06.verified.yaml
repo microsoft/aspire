@@ -1,0 +1,9 @@
+﻿parameters:
+  executable:
+    executable_image: "executable:latest"
+secrets: {}
+config:
+  container:
+    DATA_PATH: "/srv/container"
+  executable:
+    DATA_PATH: "/srv/executable"

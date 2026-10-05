@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Confluent.Kafka;
 using HealthChecks.Kafka;
 using Microsoft.Extensions.DependencyInjection;
@@ -52,21 +53,20 @@ public static class KafkaBuilderExtensions
 
         var healthCheckKey = $"{name}_check";
 
-        // NOTE: We cannot use AddKafka here because it registers the health check as a singleton
-        //       which means if you have multiple Kafka resources the factory callback will end
-        //       up using the connection string of the last Kafka resource that was added. The
-        //       client packages also have to work around this issue.
-        //
-        //       SEE: https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks/issues/2298
+        // DI must own the check so its producer is reused and disposed with the AppHost.
+        // Key it per resource to avoid sharing the last resource's connection string:
+        // https://github.com/Xabaril/AspNetCore.Diagnostics.HealthChecks/issues/2298
+        builder.Services.AddKeyedSingleton<KafkaHealthCheck>(healthCheckKey, (sp, _) =>
+        {
+            var options = new KafkaHealthCheckOptions();
+            options.Configuration = new ProducerConfig();
+            options.Configuration.BootstrapServers = connectionString ?? throw new InvalidOperationException("Connection string is unavailable");
+            return new KafkaHealthCheck(options);
+        });
+
         var healthCheckRegistration = new HealthCheckRegistration(
             healthCheckKey,
-            sp =>
-            {
-                var options = new KafkaHealthCheckOptions();
-                options.Configuration = new ProducerConfig();
-                options.Configuration.BootstrapServers = connectionString ?? throw new InvalidOperationException("Connection string is unavailable");
-                return new KafkaHealthCheck(options);
-            },
+            sp => sp.GetRequiredKeyedService<KafkaHealthCheck>(healthCheckKey),
             failureStatus: default,
             tags: default);
         builder.Services.AddHealthChecks().Add(healthCheckRegistration);
@@ -76,6 +76,7 @@ public static class KafkaBuilderExtensions
             .WithEndpoint(targetPort: KafkaInternalBrokerPort, name: KafkaServerResource.InternalEndpointName)
             .WithImage(KafkaContainerImageTags.Image, KafkaContainerImageTags.Tag)
             .WithImageRegistry(KafkaContainerImageTags.Registry)
+            .WithIconName("MailMultiple")
             .WithEnvironment(context => ConfigureKafkaContainer(context, kafka))
             .WithHealthCheck(healthCheckKey);
     }
@@ -100,6 +101,7 @@ public static class KafkaBuilderExtensions
         {
             var builderForExistingResource = builder.ApplicationBuilder.CreateResourceBuilder(existingKafkaUIResource);
             configureContainer?.Invoke(builderForExistingResource);
+            builderForExistingResource.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
             return builder;
         }
         else
@@ -110,8 +112,25 @@ public static class KafkaBuilderExtensions
             var kafkaUiBuilder = builder.ApplicationBuilder.AddResource(kafkaUi)
                 .WithImage(KafkaContainerImageTags.KafkaUiImage, KafkaContainerImageTags.KafkaUiTag)
                 .WithImageRegistry(KafkaContainerImageTags.Registry)
-                .WithHttpEndpoint(targetPort: KafkaUIPort)
+                .WithIconName("WindowDatabase")
+                .WithHttpEndpoint(targetPort: KafkaUIPort, name: KafkaUIContainerResource.PrimaryEndpointName)
                 .ExcludeFromManifest();
+
+            kafkaUiBuilder.WithHidden();
+            builder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
+            {
+                foreach (var kafkaResource in @event.Model.Resources.OfType<KafkaServerResource>())
+                {
+                    kafkaUiBuilder.WithRelationship(kafkaResource, KnownRelationshipTypes.Manages);
+                    builder.ApplicationBuilder.CreateResourceBuilder(kafkaResource).WithUrlForEndpoint(kafkaUi.PrimaryEndpoint, url =>
+                    {
+                        url.DisplayText = "Manage";
+                        url.DisplayOrder = 1;
+                    });
+                }
+
+                return Task.CompletedTask;
+            });
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(kafkaUi, (e, ct) =>
             {
@@ -131,6 +150,8 @@ public static class KafkaBuilderExtensions
             });
 
             configureContainer?.Invoke(kafkaUiBuilder);
+
+            kafkaUiBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }

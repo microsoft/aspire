@@ -62,11 +62,6 @@
         <target state="translated">必须提供至少一个模板工厂。</target>
         <note />
       </trans-unit>
-      <trans-unit id="CertificateTrustError">
-        <source>An error occurred while trusting the certificates: {0}</source>
-        <target state="translated">信任证书时出错: {0}</target>
-        <note>{0} is an exception message</note>
-      </trans-unit>
       <trans-unit id="CreateNugetConfigConfirmation">
         <source>Create NuGet.config for selected channels?</source>
         <target state="translated">是否为所选通道创建 NuGet.config?</target>
@@ -100,6 +95,11 @@
       <trans-unit id="No">
         <source>No</source>
         <target state="translated">否</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoMatchingLocalTemplatePackage">
+        <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
+        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFound">
@@ -176,6 +176,11 @@
         <source>The template installation failed with exit code {0}.</source>
         <target state="new">The template installation failed with exit code {0}.</target>
         <note>{0} is a number</note>
+      </trans-unit>
+      <trans-unit id="TemplateVersionNotFound">
+        <source>Template version '{0}' was not found.</source>
+        <target state="new">Template version '{0}' was not found.</target>
+        <note />
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>

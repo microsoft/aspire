@@ -7,6 +7,16 @@
         <target state="translated">基于 NuGet.config</target>
         <note>Source details text shown for packages from implicit channel or channels without Aspire* package source mappings</note>
       </trans-unit>
+      <trans-unit id="PackagesOverrideDirectoryHasDuplicateVersions">
+        <source>The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</source>
+        <target state="new">The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</target>
+        <note>{0} is the packages override directory path. {1} is a semicolon-separated list of conflicting package ids with their versions, for example "Aspire.Hosting (13.4.1, 13.4.2)".</note>
+      </trans-unit>
+      <trans-unit id="PackagesOverrideDirectoryNotFound">
+        <source>The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</source>
+        <target state="new">The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</target>
+        <note>{0} is the configured packages override directory path. Shown when ASPIRE_CLI_PACKAGES or the sidecar 'packages' field points at a directory that is missing.</note>
+      </trans-unit>
       <trans-unit id="StagingChannelUnavailableOnDailyCli">
         <source>The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</source>
         <target state="new">The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</target>

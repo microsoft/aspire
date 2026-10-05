@@ -9,6 +9,13 @@ internal record ResourceSource(string Value, string OriginalValue)
 {
     public static ResourceSource? GetSourceModel(string? resourceType, IReadOnlyDictionary<string, string?> properties)
     {
+        // An explicitly empty source suppresses the inferred project, executable, or container source.
+        if (properties.TryGetValue(KnownProperties.Resource.Source, out var explicitSource) &&
+            explicitSource is { Length: 0 })
+        {
+            return null;
+        }
+
         // NOTE project and tools are also executables, so check for those first
         if (string.Equals(resourceType, KnownResourceTypes.Project, StringComparisons.ResourceType) &&
             properties.TryGetValue(KnownProperties.Project.Path, out var projectPath) &&

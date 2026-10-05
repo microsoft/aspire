@@ -42,6 +42,62 @@ public class ExecutableResourceFailureLoggingTests(ITestOutputHelper testOutputH
         Assert.Contains(logLines, x => x.EndsWith("Hello from Stderr"));
     }
 
+    [Fact]
+    public async Task ExecutableDoesNotExist()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executable = builder.AddExecutable("exe", "does-not-exist", ".");
+        AddFakeLogging(executable);
+
+        FakeLogCollector logCollector;
+        using (var app = builder.Build())
+        {
+            logCollector = app.Services.GetFakeLogCollector();
+            await app.StartAsync(cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+            await app.ResourceNotifications.WaitForResourceAsync(executable.Resource.Name, KnownResourceStates.FailedToStart, cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+            var logLines = GetLogLines(logCollector);
+            AssertSingleLogLine(
+                logLines,
+                x => x.Contains("[sys] Failed to start a process:") && x.Contains("executable file not found"),
+                "process start failure");
+            AssertSingleLogLine(
+                logLines,
+                x => x.Contains("[sys] The Executable failed to start:"),
+                "executable failed-to-start status");
+        }
+    }
+
+    [Fact]
+    public async Task ExecutableWorkingDirectoryDoesNotExist()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var relativeWorkingDirectory = Path.Combine("missing-working-directories", Guid.NewGuid().ToString("N"));
+        var executable = builder.AddExecutable("exe", "dotnet", ".")
+            .WithArgs("--info")
+            .WithWorkingDirectory(relativeWorkingDirectory);
+        AddFakeLogging(executable);
+
+        Assert.False(Directory.Exists(executable.Resource.WorkingDirectory));
+
+        using var app = builder.Build();
+        var logCollector = app.Services.GetFakeLogCollector();
+        await app.StartAsync(cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.ResourceNotifications.WaitForResourceAsync(executable.Resource.Name, KnownResourceStates.FailedToStart, cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        var logLines = GetLogLines(logCollector);
+        AssertSingleLogLine(
+            logLines,
+            line => line.Contains("[sys] Failed to start a process:")
+                && line.Contains($"WorkingDirectory = {executable.Resource.WorkingDirectory}")
+                && line.Contains("Error ="),
+            "process start failure with working directory");
+    }
+
     private static void AddFakeLogging<T>(IResourceBuilder<T> builder)
         where T : IResource
     {
@@ -55,5 +111,20 @@ public class ExecutableResourceFailureLoggingTests(ITestOutputHelper testOutputH
                 .Select(x => x.StructuredState?.SingleOrDefault(x => x.Key == "LineContent"))
                 .Where(x => x is not null)
                 .Select(x => x?.Value!)];
+    }
+
+    private static void AssertSingleLogLine(List<string> logLines, Func<string, bool> predicate, string expected)
+    {
+        var matches = logLines.Where(predicate).ToList();
+        Assert.True(
+            matches.Count == 1,
+            $"Expected exactly one log line for {expected}, but found {matches.Count}.{Environment.NewLine}Captured resource logs:{Environment.NewLine}{FormatLogLines(logLines)}");
+    }
+
+    private static string FormatLogLines(List<string> logLines)
+    {
+        return logLines.Count == 0
+            ? "<none>"
+            : string.Join(Environment.NewLine, logLines.Select((line, index) => $"{index + 1}: {line}"));
     }
 }

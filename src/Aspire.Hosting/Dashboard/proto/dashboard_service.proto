@@ -17,6 +17,10 @@ message ApplicationInformationRequest {
 
 message ApplicationInformationResponse {
     string application_name = 1;
+    // The minimum dashboard version (semantic version, e.g. "13.5.0") required to fully
+    // support this AppHost's features. If the dashboard's current version is lower than
+    // this value, it should display a warning to the user indicating that an update is needed.
+    string min_dashboard_version = 2;
 }
 
 ////////////////////////////////////////////
@@ -220,6 +224,11 @@ message ResourceProperty {
     // Whether the value is sensitive and should be masked in the UI by default.
     // Defaults to false. When true, the user must explicitly unmask the value to view it.
     optional bool is_sensitive = 4;
+    // A flag that indicates whether the property is highlighted in the UI.
+    // Highlighted properties are shown by default even when they are not known to the dashboard.
+    bool is_highlighted = 5;
+    // Optional sort order used when displaying the property in the UI.
+    optional int32 sort_order = 6;
 }
 
 // Models the full state of an resource (container, executable, project, etc) at a particular point in time.
@@ -358,6 +367,8 @@ message WatchInteractionsRequestUpdate {
         InteractionMessageBox message_box = 3;
         InteractionInputsDialog inputs_dialog = 4;
         InteractionNotification notification = 5;
+        InteractionPromptProgress prompt_progress = 7;
+        InteractionPromptTerminal prompt_terminal = 8;
     }
 
     // A flag indicating that the message is an update and shouldn't complete the interaction.
@@ -382,6 +393,8 @@ message WatchInteractionsResponseUpdate {
         InteractionMessageBox message_box = 17;
         InteractionInputsDialog inputs_dialog = 18;
         InteractionNotification notification = 19;
+        InteractionPromptProgress prompt_progress = 20;
+        InteractionPromptTerminal prompt_terminal = 21;
     }
 }
 // Represents the completion of an interaction.
@@ -398,6 +411,16 @@ message InteractionNotification {
     optional bool result = 2;
     string link_text = 3;
     string link_url = 4;
+}
+// Represents a progress interaction, which is a modal dialog with an indeterminate progress indicator.
+message InteractionPromptProgress {
+    optional bool result = 1;
+}
+// A modal view onto a caller-owned terminal. Work completion or cancellation closes the interaction,
+// independently of the terminal process lifetime.
+message InteractionPromptTerminal {
+    string terminal_id = 1;
+    optional bool result = 2;
 }
 // Represents a dialog that collects inputs from the user.
 message InteractionInputsDialog {
@@ -420,6 +443,9 @@ message InteractionInput {
     bool update_state_on_change = 13;
     string name = 14;
     bool disabled = 15;
+    int64 max_file_size = 16;
+    bool allow_multiple_files = 17;
+    string file_filter = 18;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;
@@ -436,6 +462,101 @@ enum InputType {
     INPUT_TYPE_CHOICE = 3;
     INPUT_TYPE_BOOLEAN = 4;
     INPUT_TYPE_NUMBER = 5;
+    INPUT_TYPE_FILE = 6;
+}
+
+////////////////////////////////////////////
+
+message UploadFileChunk {
+    bytes data = 1;
+    // The original file name provided by the user (sent in the first chunk).
+    string file_name = 2;
+    // The interaction that owns the upload (sent in the first chunk).
+    int32 interaction_id = 3;
+    // The interaction input that owns the upload (sent in the first chunk).
+    string input_name = 4;
+}
+
+message UploadFileResponse {
+    // An opaque reference ID for the uploaded file. Used as the Value for file inputs.
+    string file_id = 1;
+}
+
+////////////////////////////////////////////
+
+// A message sent by the dashboard to the AppHost for a terminal session.
+//
+// The stream carries an opaque HMP1 (Hex1b Muxer Protocol v1) byte stream, tunneled
+// so that the terminal can be owned by the AppHost process itself rather than by a
+// separate terminal host process reachable over a Unix domain socket. Neither the
+// dashboard nor this service interprets `data`; both sides are byte-level relays
+// between the browser's HMP1 client and the AppHost's HMP1 server.
+message TerminalClientFrame {
+    // A chunk of the HMP1 byte stream flowing from the browser to the AppHost.
+    // Empty on the first frame, which only carries the session selector.
+    bytes data = 1;
+
+    // The terminal to attach to (sent in the first frame).
+    string terminal_id = 2;
+}
+
+// A message sent by the AppHost to the dashboard for a terminal session.
+message TerminalServerFrame {
+    // A chunk of the HMP1 byte stream flowing from the AppHost to the browser.
+    bytes data = 1;
+
+    // The workload has ended. Sent separately from HMP1 bytes so it also works before
+    // the HMP1 handshake and does not depend on Hex1b delivering its Exit frame.
+    bool ended = 2;
+}
+
+////////////////////////////////////////////
+
+// A terminal owned by the AppHost and displayed as a tab in the dashboard's terminal dock.
+message TerminalDescriptor {
+    string terminal_id = 1;
+    string title = 2;
+}
+
+enum TerminalChangeType {
+    TERMINAL_CHANGE_TYPE_UNSPECIFIED = 0;
+    TERMINAL_CHANGE_TYPE_ADDED = 1;
+    TERMINAL_CHANGE_TYPE_REMOVED = 2;
+    TERMINAL_CHANGE_TYPE_RETITLED = 3;
+    // The AppHost called Show() on this terminal. Dashboards should reveal the dock
+    // and switch to this terminal's tab.
+    TERMINAL_CHANGE_TYPE_ACTIVATED = 4;
+}
+
+message WatchTerminalsRequest {
+}
+
+message TerminalDescriptorList {
+    repeated TerminalDescriptor terminals = 1;
+    // A recovery snapshot can coalesce a pending Show() request. A nonempty id reveals
+    // the dock and selects that terminal if it is still listed. The id can refer to a
+    // terminal removed before recovery; reveal the dock without recreating its tab.
+    string activated_terminal_id = 2;
+}
+
+message TerminalChangeNotification {
+    TerminalChangeType change_type = 1;
+    TerminalDescriptor terminal = 2;
+}
+
+message WatchTerminalsUpdate {
+    oneof kind {
+        // Sent first, and again to replace buffered changes when a watcher falls behind.
+        TerminalDescriptorList snapshot = 1;
+        TerminalChangeNotification change = 2;
+    }
+}
+
+message CloseTerminalRequest {
+    string terminal_id = 1;
+}
+
+message CloseTerminalResponse {
 }
 
 ////////////////////////////////////////////
@@ -446,4 +567,8 @@ service DashboardService {
     rpc WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest) returns (stream WatchResourceConsoleLogsUpdate);
     rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
     rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
+    rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
+    rpc AttachTerminal(stream TerminalClientFrame) returns (stream TerminalServerFrame);
+    rpc WatchTerminals(WatchTerminalsRequest) returns (stream WatchTerminalsUpdate);
+    rpc CloseTerminal(CloseTerminalRequest) returns (CloseTerminalResponse);
 }

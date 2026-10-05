@@ -125,6 +125,45 @@ public class TemporaryNuGetConfigTests
         Assert.Equal(".nugetpackages", globalPackagesFolder!.Attributes!["value"]!.Value);
     }
 
+    [Fact]
+    public async Task CreateAsync_WithExplicitGlobalPackagesFolderOverride_UsesOverrideValue()
+    {
+        // Callers that need the cache to outlive the temp config (e.g. PrebuiltAppHostServer's
+        // staging path) supply an absolute, persistent path so BundleNuGetService manifest paths
+        // remain valid after TemporaryNuGetConfig.Dispose deletes the temp directory.
+        var overrideValue = Path.Combine(Path.GetTempPath(), "aspire-tests", "stable-cache", "deadbeef");
+
+        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(
+            [new PackageMapping("Aspire.*", "https://example.com/feed")],
+            configureGlobalPackagesFolder: true,
+            globalPackagesFolderValue: overrideValue);
+
+        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
+        var xmlDoc = new XmlDocument();
+        xmlDoc.LoadXml(configContent);
+
+        var globalPackagesFolder = xmlDoc.SelectSingleNode("//config/add[@key='globalPackagesFolder']");
+        Assert.NotNull(globalPackagesFolder);
+        Assert.Equal(overrideValue, globalPackagesFolder!.Attributes!["value"]!.Value);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithoutConfiguredGlobalPackagesFolder_IgnoresOverride()
+    {
+        // When configureGlobalPackagesFolder is false the override is irrelevant — no
+        // <config><add key="globalPackagesFolder"/> element should be emitted at all.
+        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(
+            [new PackageMapping("Aspire.*", "https://example.com/feed")],
+            configureGlobalPackagesFolder: false,
+            globalPackagesFolderValue: "/should/not/appear");
+
+        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
+        var xmlDoc = new XmlDocument();
+        xmlDoc.LoadXml(configContent);
+
+        Assert.Null(xmlDoc.SelectSingleNode("//config/add[@key='globalPackagesFolder']"));
+    }
+
     [Theory]
     [InlineData("https://example.com/feed")]
     [InlineData("/var/folders/X/hives/pr-17105/packages")]

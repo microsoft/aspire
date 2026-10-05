@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
@@ -19,13 +18,14 @@ internal interface ICliDownloader
 }
 
 internal class CliDownloader(
+    IEnvironment environment,
     ILogger<CliDownloader> logger,
     IInteractionService interactionService,
     IPackagingService packagingService) : ICliDownloader
 {
     private const int ArchiveDownloadTimeoutSeconds = 600;
     private const int ChecksumDownloadTimeoutSeconds = 120;
-    
+
     private static readonly HttpClient s_httpClient = new();
 
     public async Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken)
@@ -33,7 +33,7 @@ internal class CliDownloader(
         // Get the channel information from PackagingService
         var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
-        
+
         if (channel is null)
         {
             throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
@@ -46,9 +46,8 @@ internal class CliDownloader(
 
         var baseUrl = channel.CliDownloadBaseUrl.TrimEnd('/');
 
-        var (os, arch) = DetectPlatform();
-        var runtimeIdentifier = $"{os}-{arch}";
-        var extension = os == "win" ? "zip" : "tar.gz";
+        var runtimeIdentifier = GetDownloadRid();
+        var extension = environment.IsWindows() ? "zip" : "tar.gz";
         var archiveFilename = $"aspire-cli-{runtimeIdentifier}.{extension}";
         var checksumFilename = $"{archiveFilename}.sha512";
         var archiveUrl = $"{baseUrl}/{archiveFilename}";
@@ -70,7 +69,7 @@ internal class CliDownloader(
 
                 logger.LogDebug("Downloading checksum from {Url} to {Path}", checksumUrl, checksumPath);
                 await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
-                
+
                 return 0; // Return dummy value for ShowStatusAsync
             });
 
@@ -121,54 +120,30 @@ internal class CliDownloader(
         return $"{fileName} from {source}";
     }
 
-    private static (string os, string arch) DetectPlatform()
+    private string GetDownloadRid()
     {
         var os = DetectOperatingSystem();
         var arch = DetectArchitecture();
-        return (os, arch);
+        return $"{os}-{arch}";
     }
 
-    private static string DetectOperatingSystem()
+    private string DetectOperatingSystem()
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (environment.IsWindows())
         {
             return "win";
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        else if (environment.IsLinux())
         {
             // Check if it's musl-based (Alpine, etc.)
-            try
+            if (environment.RuntimeIdentifier.Contains("musl", StringComparison.OrdinalIgnoreCase))
             {
-                var lddPath = "/usr/bin/ldd";
-                if (File.Exists(lddPath))
-                {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = lddPath,
-                        Arguments = "--version",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false
-                    };
-                    using var process = Process.Start(psi);
-                    if (process is not null)
-                    {
-                        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-                        process.WaitForExit();
-                        if (output.Contains("musl", StringComparison.OrdinalIgnoreCase))
-                        {
-                            return "linux-musl";
-                        }
-                    }
-                }
+                return "linux-musl";
             }
-            catch
-            {
-                // Fall back to regular linux
-            }
+
             return "linux";
         }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        else if (environment.IsMacOS())
         {
             return "osx";
         }

@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Hosting.Utils;
 using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Mcp.Tools;
@@ -55,16 +56,12 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
             });
         }
 
-        // Resolve the path to an absolute path
-        string resolvedPath;
-        if (Path.IsPathRooted(appHostPath))
-        {
-            resolvedPath = Path.GetFullPath(appHostPath);
-        }
-        else
-        {
-            resolvedPath = Path.GetFullPath(Path.Combine(executionContext.WorkingDirectory.FullName, appHostPath));
-        }
+        // Preserve the caller's spelling for diagnostics while using a canonical identity for matching.
+        var displayPath = Path.GetFullPath(
+            Path.IsPathRooted(appHostPath)
+                ? appHostPath
+                : Path.Combine(executionContext.WorkingDirectory.FullName, appHostPath));
+        var canonicalPath = PathNormalizer.ResolveToFilesystemPath(displayPath);
 
         // Check if there's a running AppHost with this path
         var matchingConnection = auxiliaryBackchannelMonitor.Connections
@@ -74,8 +71,10 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 {
                     return false;
                 }
-                var candidatePath = Path.GetFullPath(c.AppHostInfo.AppHostPath);
-                return string.Equals(candidatePath, resolvedPath, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath),
+                    canonicalPath,
+                    StringComparisons.FileSystemPath);
             });
 
         if (matchingConnection == null)
@@ -86,7 +85,7 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 .Select(c => c.AppHostInfo!.AppHostPath)
                 .ToList();
 
-            var message = $"No running AppHost found at path '{resolvedPath}'.";
+            var message = $"No running AppHost found at path '{displayPath}'.";
             if (availableAppHosts.Count > 0)
             {
                 message += $" Available AppHosts:\n{string.Join("\n", availableAppHosts.Select(p => $"  - {p}"))}";
@@ -104,11 +103,11 @@ internal sealed class SelectAppHostTool(IAuxiliaryBackchannelMonitor auxiliaryBa
         }
 
         // Set the selected AppHost path
-        auxiliaryBackchannelMonitor.SelectedAppHostPath = resolvedPath;
+        auxiliaryBackchannelMonitor.SelectedAppHostPath = canonicalPath;
 
         return ValueTask.FromResult(new CallToolResult
         {
-            Content = [new TextContentBlock { Text = $"Selected AppHost: {resolvedPath}" }]
+            Content = [new TextContentBlock { Text = $"Selected AppHost: {displayPath}" }]
         });
     }
 }

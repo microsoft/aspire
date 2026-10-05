@@ -42,6 +42,11 @@
         <target state="new">Verify the dashboard is running and the URL is correct.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardConnectionLost">
+        <source>The connection to the dashboard was lost.</source>
+        <target state="new">The connection to the dashboard was lost.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardLoginTokenFailed">
         <source>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</source>
         <target state="new">Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</target>

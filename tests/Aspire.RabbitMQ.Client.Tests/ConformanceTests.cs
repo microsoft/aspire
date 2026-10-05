@@ -1,19 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.TestUtilities;
 using Aspire.Components.ConformanceTests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using RabbitMQ.Client;
-using Xunit;
-
-#if !RABBITMQ_V6
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Trace;
-#endif
+using RabbitMQ.Client;
+using Xunit;
 
 namespace Aspire.RabbitMQ.Client.Tests;
 
@@ -25,7 +22,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     public ConformanceTests(RabbitMQContainerFixture? containerFixture, ITestOutputHelper? output = null) : base(output)
     {
         _containerFixture = containerFixture;
-        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        ConnectionString = (_containerFixture is not null && RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
                                     ? _containerFixture.GetConnectionString()
                                     : "amqp://localhost:5672";
     }
@@ -35,17 +32,13 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     // IConnectionMultiplexer can be created only via call to ConnectionMultiplexer.Connect
     protected override bool CanCreateClientWithoutConnectingToServer => false;
 
-    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker);
+    protected override bool CanConnectToServer => RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers);
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
-#if RABBITMQ_V6
-    protected override string ActivitySourceName => "Aspire.RabbitMQ.Client";
-#else
     protected override string ActivitySourceName => "RabbitMQ.Client.Publisher";
-#endif
 
     protected override string? ConfigurationSectionName => "Aspire:RabbitMQ:Client";
 
@@ -115,15 +108,6 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
 
     protected override void TriggerActivity(IConnection service)
     {
-#if RABBITMQ_V6
-        var channel = service.CreateModel();
-        channel.QueueDeclare("test-queue");
-        channel.BasicPublish(
-            exchange: "",
-            routingKey: "test-queue",
-            basicProperties: null,
-            body: "hello world"u8.ToArray());
-#else
         Task.Run(async () =>
         {
             using var channel = await service.CreateChannelAsync();
@@ -133,7 +117,6 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
                 routingKey: "test-queue",
                 body: "hello world"u8.ToArray());
         }).Wait();
-#endif
     }
 
     protected override void SetupConnectionInformationIsDelayValidated()
@@ -141,16 +124,15 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
         Assert.Skip("RabbitMQ connects to localhost by default if the connection information isn't available.");
     }
 
-#if !RABBITMQ_V6
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, static obj => obj.RunActivitySourceTest(key: null)),
             ConnectionString, Output);
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.Testcontainers)]
     public void TracingEnablesTheRightActivitySource_Keyed()
         => RemoteInvokeWithLogging(static connectionStringToUse =>
             RunWithConnectionString(connectionStringToUse, static obj => obj.RunActivitySourceTest(key: "key")),
@@ -183,5 +165,4 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
 
     private static void RunWithConnectionString(string connectionString, Action<ConformanceTests> test)
         => test(new ConformanceTests(null) { ConnectionString = connectionString });
-#endif
 }

@@ -4,12 +4,11 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <NoWarn>$(NoWarn);CS8002</NoWarn> <!-- Milvus.Client packages are not signed -->
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Milvus\Aspire.Hosting.Milvus.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.Milvus.Client\Aspire.Milvus.Client.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
 
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>

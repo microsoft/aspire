@@ -10,11 +10,28 @@ portable installs, the Aspire home used for hives and local state.
 ## File contract
 
 `.aspire-install.json` sits beside the running `aspire` binary
-(`<binaryDir>/.aspire-install.json`) and contains exactly one field:
+(`<binaryDir>/.aspire-install.json`). The install route writes the required
+`source` field and may add identity fields consumed by `IdentityResolver`:
 
 ```json
-{ "source": "<route>" }
+{
+  "source": "<route>",
+  "channel": "<stable|staging|daily|local|pr-N>",
+  "version": "<informational version>",
+  "commit": "<source commit>"
+}
 ```
+
+Identity fields are optional so sidecars written by older installers remain
+valid. `aspire update --self` atomically updates `channel` in an existing
+sidecar after replacing and verifying the executable, while preserving
+`source` and fields unrelated to executable identity. Existing `version` and
+`commit` values are removed so the resolver reads those values from the
+replacement binary rather than retaining identity from the executable that was
+replaced. A legacy sidecar-less install remains sidecar-less because self-update
+cannot infer its original route. Persisting the selected channel is required
+when a staging download contains a ship-candidate binary that is deliberately
+stamped `stable`.
 
 | `source` value | Install route                                          |
 |----------------|--------------------------------------------------------|
@@ -24,18 +41,21 @@ portable installs, the Aspire home used for hives and local state.
 | `script`       | `get-aspire-cli.{sh,ps1}`                              |
 | `pr`           | `get-aspire-cli-pr.{sh,ps1}`                           |
 | `localhive`    | `localhive.{sh,ps1}` (locally-built dev install)       |
+| `nix`          | Nix package / flake                                    |
 
 `BundleService.ComputeDefaultExtractDir` maps `source` to extract-dir shape:
 
 - `winget` / `brew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
 - `script` / `pr` / `localhive` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
+- `nix` → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`) because package outputs live under the read-only Nix store.
 - missing, unreadable, malformed, or unknown `source` sidecar → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 
 `CliPathHelper.GetAspireHomeDirectory` maps sidecar-owned portable installs to
 their install prefix so hives, caches, logs, and SDK state stay with the
 install. `script` and `localhive` use the parent of `bin`; `pr` uses the parent
-of `dogfood/pr-<N>/bin`. Package-manager installs and sidecar-less binaries keep
-the default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
+of `dogfood/pr-<N>/bin`. Package-manager installs, including Nix, and sidecar-less
+binaries keep the default Aspire home (`ASPIRE_HOME` when set, otherwise
+`$HOME/.aspire`).
 
 ## Per-route authorship
 
@@ -49,6 +69,7 @@ the default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 | PR script   | shared per-RID archive                 | `eng/scripts/get-aspire-cli-pr.{sh,ps1}` (post-extraction)          |
 | dotnet-tool | route-exclusive nupkg                  | payload-embedded (staged by `Aspire.Cli.csproj` `_PreparePreBuiltCliBinaryForPackTool`) |
 | localhive   | local-only (no shared archive)         | `localhive.{sh,ps1}` writes the sidecar after copying the CLI binary into `<prefix>/bin/`. When `--output PATH` is used, the sidecar is written inside the output dir, which is appropriate because localhive archives are route-exclusive (only consumed as localhive installs). |
+| nix         | shared per-RID archive                 | Nix derivation writes the sidecar next to the packaged native binary under `$out/lib/aspire-cli` |
 
 The dotnet-tool nupkg is the one exception that payload-embeds the sidecar: the nupkg is route-exclusive (only `dotnet tool install` consumes it), so the embedded sidecar cannot leak into another route's prefix.
 
@@ -67,10 +88,37 @@ Two mechanical checks guard the contract:
 
 ## Reader-side invariants (runtime)
 
-`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
+`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values and known read-only package routes such as `nix` fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
 
 `CliPathHelper.GetAspireHomeDirectory` is the single point of truth for Aspire-home selection. It reads the same sidecar but only changes home for Aspire-owned portable routes (`script`, `pr`, and `localhive`); package-manager routes use the user-profile home because their install roots are package-manager-owned. Coverage lives in `tests/Aspire.Cli.Tests/Utils/CliPathHelperTests.cs`.
 
 > **Discovery scope (dotnet-tool route).** Install discovery walks the default `dotnet tool install -g` location at `~/.dotnet/tools/.store/aspire.cli` only. Custom `--tool-path` installs are not discovered today: the dotnet CLI has no machine-wide registry of arbitrary `--tool-path` installs to enumerate, and walking the filesystem would balloon the cost of `aspire doctor`. Users with a custom-`--tool-path` install can confirm it directly with `<tool-path>/aspire doctor --self`.
 
 For read-only install discovery (`aspire doctor --format json`), sidecar existence is the trust signal for peer probing. A candidate with any readable sidecar is probed even when `source` is not in the known route table; the raw `source` string is surfaced as the installation `route` so future package-manager routes can appear before this consumer updates. Sidecar-less, unreadable, or malformed candidates are listed without executing the binary.
+
+## Install-source telemetry
+
+The `aspire/cli/main` event reports `aspire.cli.install.source` for the running
+executable, independently of its effective release channel
+(`aspire.cli.identity.channel`). Values are `script`, `pr`, `localhive`,
+`winget`, `brew`, `dotnet-tool`, `nix`, `npm`, `mise`, or `unknown`. Bash and
+PowerShell installers both report `script`.
+
+`InstallSourceDetector` resolves the executable's symlink and prefers a known
+sidecar source. Without one, it checks WinGet's registry ownership, the npm
+launcher's package marker, mise's installation path, and .NET-tool detection,
+in that order. WinGet attribution does not require writing a sidecar, so it
+also works before bundle extraction and on read-only installations.
+
+mise detection matches `mise/installs/aspire/<version>/aspire` (also allowing a
+`bin` directory beneath the version, or the `github-microsoft-aspire` tool
+directory for explicit GitHub-backend installs). Custom roots are recognized through
+`MISE_INSTALLS_DIR`, `MISE_SYSTEM_INSTALLS_DIR`, or `MISE_DATA_DIR`, but only
+when the executable actually occupies the matching Aspire installation path.
+Unrecognized layouts, missing provenance, and failed probes report `unknown`;
+arbitrary sidecar values and installation paths are never exported.
+
+Detection runs only when a main activity is created. It does not launch package
+managers, enumerate other Aspire installations, or modify installation files.
+The property is not added to other activities or to the separately reported
+agent-hook event.

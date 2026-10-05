@@ -1,0 +1,19 @@
+﻿FROM docker.io/library/rust:1.97-alpine3.24 AS build
+WORKDIR /app
+COPY . .
+RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,id=aspire-rust-{cacheId},target=/build/target,sharing=locked \
+    for candidate in /build/target/release/my-service /build/target/*/release/my-service; do if [ -f "$candidate" ]; then rm -f "$candidate"; fi; done && \
+    cargo build --features grpc-tonic,tls-ring --release --no-default-features --locked --target-dir /build/target && \
+    count=0 && \
+    for candidate in /build/target/release/my-service /build/target/*/release/my-service; do if [ -f "$candidate" ]; then bin="$candidate"; count=$((count+1)); fi; done && \
+    if [ "$count" = 0 ]; then echo "no" 'my-service under /build/target' >&2; exit 1; fi && \
+    if [ "$count" != 1 ]; then echo "found $count" 'my-service under /build/target after cargo build' >&2; exit 1; fi && \
+    mkdir -p /build/bin && \
+    cp "$bin" /build/bin/my-service
+
+FROM docker.io/library/alpine:3.24
+RUN if ! id -u app > /dev/null 2>&1; then (addgroup -S app || groupadd --system app || true) && (adduser -S -G app app || useradd --system --gid app --no-create-home app); fi
+WORKDIR /app
+COPY --from=build /build/bin/my-service /app/my-service
+USER app
+ENTRYPOINT ["/app/my-service"]

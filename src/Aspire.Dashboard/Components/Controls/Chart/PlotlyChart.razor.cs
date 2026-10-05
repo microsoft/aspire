@@ -65,7 +65,7 @@ public partial class PlotlyChart : ChartBase
             Y = t.DiffValues,
             X = xValues,
             Tooltips = t.Tooltips,
-            TraceData = new List<object?>()
+            TraceData = []
         }).ToArray();
 
         var exemplarTraceDto = CalculateExemplarsTrace(xValues, exemplars);
@@ -73,7 +73,7 @@ public partial class PlotlyChart : ChartBase
         if (!tickUpdate)
         {
             // The chart mostly shows numbers but some localization is needed for displaying time ticks.
-            var is24Hour = DateTimeFormatInfo.CurrentInfo.LongTimePattern.StartsWith("H", StringComparison.Ordinal);
+            var is24Hour = BrowserTimeProvider.Is24HourFormat(TimeProvider.ResolvedTimeFormat);
             // Plotly uses d3-time-format https://d3js.org/d3-time-format
             var time = is24Hour ? "%H:%M:%S" : "%-I:%M:%S %p";
             var userLocale = new PlotlyUserLocale
@@ -151,7 +151,7 @@ public partial class PlotlyChart : ChartBase
             Y = new List<double?>(),
             X = new List<DateTimeOffset>(),
             Tooltips = new List<string?>(),
-            TraceData = new List<object?>()
+            TraceData = []
         };
 
         foreach (var exemplar in exemplarGroups.SelectMany(g => g.Value))
@@ -177,7 +177,7 @@ public partial class PlotlyChart : ChartBase
             exemplarTraceDto.X.Add(exemplar.Start);
             exemplarTraceDto.Y.Add(exemplar.Value);
             exemplarTraceDto.Tooltips.Add(tooltip);
-            exemplarTraceDto.TraceData.Add(new { TraceId = exemplar.TraceId, SpanId = exemplar.SpanId });
+            exemplarTraceDto.TraceData.Add(new PlotlyTraceData(exemplar.TraceId, exemplar.SpanId));
         }
 
         return exemplarTraceDto;
@@ -187,7 +187,7 @@ public partial class PlotlyChart : ChartBase
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-metrics.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-metrics.js"]}");
         }
 
         await base.OnAfterRenderAsync(firstRender);

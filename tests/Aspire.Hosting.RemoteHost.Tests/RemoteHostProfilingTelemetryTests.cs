@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.RemoteHost.Diagnostics;
+using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -14,8 +15,8 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void StartRemoteHostRun_RestoresConfiguredParentAndSession()
     {
-        using var parentListener = CreateActivityListener("test-remotehost-parent", _ => { });
         using var parentSource = new ActivitySource("test-remotehost-parent");
+        using var parentListener = ActivityListenerHelper.Create(parentSource, onActivityStopped: _ => { });
         ActivityTraceId parentTraceId;
         ActivitySpanId parentSpanId;
         string traceParent;
@@ -30,13 +31,13 @@ public class RemoteHostProfilingTelemetryTests
             traceState = parent.TraceStateString;
         }
 
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (RemoteHostProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"),
             (RemoteHostProfilingTelemetry.EnvironmentVariables.TraceParent, traceParent),
             (RemoteHostProfilingTelemetry.EnvironmentVariables.TraceState, traceState)));
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (telemetry.StartRemoteHostRun())
         {
@@ -53,9 +54,9 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void StartRemoteHostRun_DoesNotStartWhenProfilingIsDisabled()
     {
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration());
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (telemetry.StartRemoteHostRun())
         {
@@ -67,10 +68,10 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void CapabilityScan_AddsLowCardinalityCounts()
     {
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (var scope = telemetry.StartCapabilityScan(assemblyCount: 3, firstScan: true))
         {
@@ -94,10 +95,10 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void AssemblyLoad_AddsAssemblyNames()
     {
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (var scope = telemetry.StartAssemblyLoad(cacheHit: false))
         {
@@ -116,10 +117,10 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void JsonRpcInvokeCapability_AddsCapabilityAndArgumentShape()
     {
-        var activities = new List<Activity>();
-        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
         var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetry.ActivitySource, onActivityStopped: activities.Add);
 
         using (telemetry.StartJsonRpcInvokeCapability(
             "aspire.redis/addRedis@1",
@@ -144,24 +145,23 @@ public class RemoteHostProfilingTelemetryTests
     [Fact]
     public void JsonRpcServerCall_UsesJsonRpcRemoteParent()
     {
+        var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
+            (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (RemoteHostProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
         var activities = new List<Activity>();
         using var listener = new ActivityListener
         {
-            ShouldListenTo = source => source.Name is RemoteHostProfilingTelemetry.ActivitySourceName or "test.client" or "test.jsonrpc",
+            ShouldListenTo = source => ReferenceEquals(source, telemetry.ActivitySource) || source.Name is "test.client" or "test.jsonrpc",
             Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity =>
             {
-                if (activity.Source.Name == RemoteHostProfilingTelemetry.ActivitySourceName)
+                if (ReferenceEquals(activity.Source, telemetry.ActivitySource))
                 {
                     activities.Add(activity);
                 }
             }
         };
         ActivitySource.AddActivityListener(listener);
-
-        var telemetry = new RemoteHostProfilingTelemetry(CreateConfiguration(
-            (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
-            (RemoteHostProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
         using var clientSource = new ActivitySource("test.client");
         using var jsonRpcSource = new ActivitySource("test.jsonrpc");
         var clientActivity = clientSource.StartActivity("client", ActivityKind.Client);
@@ -193,19 +193,6 @@ public class RemoteHostProfilingTelemetryTests
         Assert.False(RemoteHostProfilingTelemetry.ShouldConfigureExporter(CreateConfiguration(
             (RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             ("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", "http://localhost:18889"))));
-    }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
     }
 
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)

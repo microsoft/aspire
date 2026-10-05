@@ -243,7 +243,7 @@ internal sealed class ReferenceExpressionRef
             var parts = SplitFormatString(Format!);
             foreach (var part in parts)
             {
-                if (part.StartsWith("{") && part.EndsWith("}") &&
+                if (part.StartsWith("{", StringComparison.Ordinal) && part.EndsWith("}", StringComparison.Ordinal) &&
                     int.TryParse(part[1..^1], out var index) &&
                     index >= 0 && index < valueProviders.Length)
                 {

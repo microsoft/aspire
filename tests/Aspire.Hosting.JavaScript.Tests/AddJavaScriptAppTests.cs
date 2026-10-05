@@ -14,24 +14,26 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class AddJavaScriptAppTests
+public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
 {
+    private const string PublicNpmRegistry = "https://registry.npmjs.org/";
+
     [Fact]
     public async Task VerifyDockerfile()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var yarnApp = builder.AddJavaScriptApp("js", appDir)
             .WithYarn(installArgs: ["--immutable"])
             .WithBuildScript("do", ["--build"]);
 
-        await ManifestUtils.GetManifest(yarnApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(yarnApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
         var dockerBuildAnnotation = yarnApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
@@ -41,10 +43,10 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithoutSpaFallback()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var yarnApp = builder.AddJavaScriptApp("js", appDir)
@@ -52,19 +54,19 @@ public class AddJavaScriptAppTests
             .WithBuildScript("do", ["--build"])
             .PublishAsStaticWebsite();
 
-        await ManifestUtils.GetManifest(yarnApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(yarnApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsNodeServer()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var yarnApp = builder.AddJavaScriptApp("js", appDir)
@@ -72,19 +74,19 @@ public class AddJavaScriptAppTests
             .WithBuildScript("do", ["--build"])
             .PublishAsNodeServer(".output/server/index.mjs", ".output");
 
-        await ManifestUtils.GetManifest(yarnApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(yarnApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsPackageScript()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var yarnApp = builder.AddJavaScriptApp("js", appDir)
@@ -92,9 +94,9 @@ public class AddJavaScriptAppTests
             .WithBuildScript("do", ["--build"])
             .PublishAsPackageScript("start", "-- --port $PORT");
 
-        await ManifestUtils.GetManifest(yarnApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(yarnApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
@@ -103,11 +105,11 @@ public class AddJavaScriptAppTests
     [InlineData(false)]
     public async Task VerifyPnpmDockerfile(bool hasLockFile)
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
         // Create directory to ensure manifest generates correct relative build context path
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         if (hasLockFile)
@@ -119,12 +121,44 @@ public class AddJavaScriptAppTests
             .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
             .WithBuildScript("mybuild");
 
-        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
 
         await Verify(dockerfileContents);
+    }
+
+    [Fact]
+    public async Task VerifyPnpmDockerfileUsesBootstrapRegistryOnlyForNpm()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
+            .WithBuildScript("mybuild");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfileLines = await File.ReadAllLinesAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        var registryAndInstallLines = dockerfileLines
+            .Where(line =>
+                line.StartsWith("ARG NPM_", StringComparison.Ordinal) ||
+                line.StartsWith("RUN npm install", StringComparison.Ordinal) ||
+                line.Contains(" pnpm install", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.Equal(
+            [
+                $"ARG NPM_REGISTRY={PublicNpmRegistry}",
+                "RUN npm install --global --registry \"$NPM_REGISTRY\" pnpm@10.30.1",
+                "RUN --mount=type=cache,target=/pnpm/store pnpm install --prefer-frozen-lockfile"
+            ],
+            registryAndInstallLines);
     }
 
     [Theory]
@@ -132,10 +166,10 @@ public class AddJavaScriptAppTests
     [InlineData(false)]
     public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScript(bool hasLockFile)
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         if (hasLockFile)
@@ -148,9 +182,9 @@ public class AddJavaScriptAppTests
             .WithBuildScript("mybuild")
             .PublishAsPackageScript("start");
 
-        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
 
         await Verify(dockerfileContents);
@@ -159,14 +193,14 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishWithExistingDockerfileThrowsWhenRunScriptNameIsExplicit()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         var app = builder.AddJavaScriptApp("js", appDir, "migrate")
             .WithBun();
 
-        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, workspace.Path));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
@@ -176,16 +210,16 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishModelWithExistingDockerfileThrowsWhenRunScriptNameIsExplicit()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         builder.AddJavaScriptApp("js", appDir, "migrate")
             .WithBun();
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifestForModel(appModel, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifestForModel(appModel, workspace.Path));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
@@ -195,15 +229,15 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishWithExistingDockerfileThrowsWhenWithRunScriptOverridesDefault()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         var app = builder.AddJavaScriptApp("js", appDir)
             .WithBun()
             .WithRunScript("migrate");
 
-        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, workspace.Path));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
@@ -213,11 +247,11 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishPipelineWithExistingDockerfileThrowsFromValidationStepWhenRunScriptNameIsExplicit()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-javascript-dockerfile-run-script-js").WithResourceCleanUp(true);
         builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         builder.AddJavaScriptApp("js", appDir, "migrate")
             .WithBun();
 
@@ -240,14 +274,14 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishWithExistingDockerfileAllowsImplicitDefaultRunScript()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         var app = builder.AddJavaScriptApp("js", appDir)
             .WithBun();
 
-        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 
         Assert.Equal("container.v1", manifest["type"]?.ToString());
     }
@@ -255,17 +289,17 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishWithExistingDockerfileAllowsExplicitEntrypointOverride()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         var app = builder.AddJavaScriptApp("js", appDir, "migrate")
             .WithBun()
             .PublishAsDockerFile(container => container
                 .WithEntrypoint("bun")
                 .WithArgs("src/migrate.ts"));
 
-        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 
         Assert.Equal("bun", manifest["entrypoint"]?.ToString());
         Assert.Contains("src/migrate.ts", manifest.ToJsonString());
@@ -274,17 +308,17 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishWithExistingDockerfileAllowsWithRunScriptMatchingDefault()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         var app = builder.AddJavaScriptApp("js", appDir)
             .WithBun()
             // Re-stating the default script name explicitly should not be treated as a conflict
             // with the existing Dockerfile, because the effective run script still matches the default.
             .WithRunScript("dev");
 
-        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 
         Assert.Equal("container.v1", manifest["type"]?.ToString());
     }
@@ -292,15 +326,15 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task PublishWithExistingDockerfileThrowsAndIncludesArgsWhenDefaultScriptHasArgs()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var appDir = CreateJavaScriptAppWithDockerfile(workspace.Path);
         var app = builder.AddJavaScriptApp("js", appDir)
             .WithBun()
             .WithRunScript("dev", ["--port", "8080"]);
 
-        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, workspace.Path));
 
         Assert.Contains("run script 'dev'", exception.Message);
         Assert.Contains("with args [--port, 8080]", exception.Message);
@@ -310,10 +344,10 @@ public class AddJavaScriptAppTests
     [Fact]
     public async Task VerifyPnpmDockerfileCopiesWorkspaceFileBeforeInstall()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         File.WriteAllText(Path.Combine(appDir, "pnpm-workspace.yaml"), "allowBuilds: {}\n");
@@ -322,9 +356,9 @@ public class AddJavaScriptAppTests
             .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
             .WithBuildScript("mybuild");
 
-        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileLines = await File.ReadAllLinesAsync(dockerfilePath);
 
         var copyLineIndex = Array.FindIndex(
@@ -339,15 +373,173 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    public async Task VerifyPnpmDockerfileUsesPackageManagerVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            """
+            {
+              "packageManager": "pnpm@10.30.1+sha512.3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Contains($"ARG NPM_REGISTRY={PublicNpmRegistry}", dockerfile);
+        Assert.Contains("npm pack --json pnpm@10.30.1 --registry \"$NPM_REGISTRY\"", dockerfile);
+        Assert.Contains("createHash(algorithm)", dockerfile);
+        Assert.Contains("\"sha512\" \"3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a\" \"$archive\"", dockerfile);
+        Assert.Contains("npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\"", dockerfile);
+    }
+
+    [Theory]
+    [InlineData("sha224")]
+    [InlineData("sha256")]
+    [InlineData("sha384")]
+    [InlineData("sha512")]
+    public async Task VerifyPnpmDockerfileUsesNodeForPackageManagerIntegrity(string algorithm)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            $$"""
+            {
+              "packageManager": "pnpm@10.30.1+{{algorithm}}.abcdef"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build")
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        var integrityLines = dockerfile
+            .Split('\n')
+            .Where(line => line.Contains("createHash(algorithm)", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(3, integrityLines.Length);
+        Assert.All(integrityLines, line => Assert.Contains($"\"{algorithm}\" \"abcdef\" \"$archive\"", line));
+    }
+
+    [Fact]
+    public async Task VerifyPnpmDockerfileNormalizesPackageManagerIntegrityHash()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            """
+            {
+              "packageManager": "pnpm@10.30.1+sha512.ABCDEF"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Contains("\"sha512\" \"abcdef\" \"$archive\"", dockerfile);
+    }
+
+    [Theory]
+    [InlineData("10.30.1")]
+    [InlineData("v10.30.1")]
+    [InlineData("10.30.1-beta.1")]
+    public async Task VerifyPnpmDockerfileUsesValidPackageManagerVersion(string version)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(appDir, "package.json"),
+            $$"""
+            {
+              "packageManager": "pnpm@{{version}}"
+            }
+            """);
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm()
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Contains($"npm install --global --registry \"$NPM_REGISTRY\" pnpm@{version}", dockerfile);
+    }
+
+    [Theory]
+    [InlineData("pnpm@")]
+    [InlineData("pnpm@10")]
+    [InlineData("pnpm@10.30")]
+    [InlineData("pnpm@01.30.1")]
+    [InlineData("pnpm@10.030.1")]
+    [InlineData("pnpm@10.30.01")]
+    [InlineData("pnpm@10.30.1/invalid")]
+    [InlineData("pnpm@10.30.1-alpha..1")]
+    [InlineData("pnpm@10.30.1+")]
+    [InlineData("pnpm@10.30.1+sha1.abcdef")]
+    [InlineData("pnpm@10.30.1+sha512")]
+    [InlineData("pnpm@10.30.1+sha512.")]
+    [InlineData("pnpm@10.30.1+sha512.not-hex")]
+    public void VerifyPnpmRejectsInvalidPackageManagerSpecification(string packageManager)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        var packageJsonPath = Path.Combine(appDir, "package.json");
+        File.WriteAllText(
+            packageJsonPath,
+            $$"""
+            {
+              "packageManager": "{{packageManager}}"
+            }
+            """);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => builder.AddJavaScriptApp("js", appDir).WithPnpm());
+
+        Assert.Equal(
+            $"The packageManager value '{packageManager}' in '{packageJsonPath}' is invalid. Expected 'pnpm@<version>' or 'pnpm@<version>+<sha224|sha256|sha384|sha512>.<hex hash>'.",
+            exception.Message);
+    }
+
+    [Fact]
+	[RequiresFeature(TestFeature.Docker | TestFeature.ContainerImageBuild)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
     public async Task VerifyPnpmDockerfileBuildSucceeds()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
         // Create app directory
-        var appDir = Path.Combine(tempDir.Path, "pnpm-app");
+        var appDir = Path.Combine(workspace.Path, "pnpm-app");
         Directory.CreateDirectory(appDir);
 
         // Create a minimal package.json with no dependencies
@@ -355,6 +547,7 @@ public class AddJavaScriptAppTests
             {
               "name": "pnpm-test-app",
               "version": "1.0.0",
+                            "packageManager": "pnpm@10.30.1+sha512.3590e550d5384caa39bd5c7c739f72270234b2f6059e13018f975c313b1eb9fefcc09714048765d4d9efe961382c312e624572c0420762bdc5d5940cdf9be73a",
               "scripts": {
                 "build": "echo 'build completed'"
               }
@@ -366,14 +559,17 @@ public class AddJavaScriptAppTests
             .WithPnpm()
             .WithBuildScript("build");
 
-        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "pnpm-app.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "pnpm-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
 
-        // Read the generated Dockerfile and verify it contains the corepack enable pnpm command
+        // Read the generated Dockerfile and verify it installs pnpm through npm.
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains("corepack enable pnpm", dockerfileContent);
+        Assert.Contains($"ARG NPM_REGISTRY={PublicNpmRegistry}", dockerfileContent);
+        Assert.Contains("npm pack --json pnpm@10.30.1 --registry \"$NPM_REGISTRY\"", dockerfileContent);
+        Assert.Contains("createHash(algorithm)", dockerfileContent);
+        Assert.Contains("npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\"", dockerfileContent);
 
         // Modify the Dockerfile to add NODE_TLS_REJECT_UNAUTHORIZED=0 for test environments
         // that may have corporate proxies with self-signed certificates
@@ -431,20 +627,21 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
-    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [RequiresFeature(TestFeature.Docker | TestFeature.ContainerImageBuild)]
     [OuterloopTest("Builds and runs a Docker image to verify the generated pnpm PublishAsPackageScript Dockerfile works")]
     public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScriptRunsWithoutNetwork()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "pnpm-app");
+        var appDir = Path.Combine(workspace.Path, "pnpm-app");
         Directory.CreateDirectory(appDir);
 
         var packageJson = """
             {
               "name": "pnpm-runtime-test-app",
               "version": "1.0.0",
+              "packageManager": "pnpm@10.30.1+sha384.06222487b91b2da4282562ca67a7e77b00ebce036cc416deb4f136696811d9fd9b804bb8c967547525717d8f7b069229",
               "scripts": {
                 "build": "echo 'build completed'",
                 "start": "node -e \"console.log('runtime ok')\""
@@ -458,13 +655,16 @@ public class AddJavaScriptAppTests
             .WithBuildScript("build")
             .PublishAsPackageScript("start");
 
-        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(pnpmApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "pnpm-app.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "pnpm-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
 
         var dockerfileContent = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains("RUN corepack enable pnpm && pnpm --version", dockerfileContent);
+        Assert.Contains($"ARG NPM_REGISTRY={PublicNpmRegistry}", dockerfileContent);
+        Assert.Contains("npm pack --json pnpm@10.30.1 --registry \"$NPM_REGISTRY\"", dockerfileContent);
+        Assert.Contains("createHash(algorithm)", dockerfileContent);
+        Assert.Contains("npm install --global --registry \"$NPM_REGISTRY\" \"./$archive\"", dockerfileContent);
 
         var dockerfileInContext = Path.Combine(appDir, "Dockerfile");
         await File.WriteAllTextAsync(dockerfileInContext, dockerfileContent);

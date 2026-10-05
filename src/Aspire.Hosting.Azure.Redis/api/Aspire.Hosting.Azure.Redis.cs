@@ -10,10 +10,10 @@ namespace Aspire.Hosting
 {
     public static partial class AzureManagedRedisExtensions
     {
-        [AspireExport(Description = "Adds an Azure Managed Redis resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> AddAzureManagedRedis(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures Azure Managed Redis to run in a local container", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource>>? configureContainer = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]

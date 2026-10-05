@@ -10,7 +10,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateOrReplace_CreatesReparsePointToTargetDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target = Path.Combine(root, "real");
@@ -37,7 +37,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateOrReplace_ReplacesExistingReparsePoint()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target1 = Path.Combine(root, "t1");
@@ -71,7 +71,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         // CreateOrReplace must refuse to remove a real directory to prevent
         // accidental data loss. Callers must handle migration explicitly.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var real = Path.Combine(root, "link");
@@ -93,7 +93,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsReparsePoint_ReturnsFalseForRegularDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = Path.Combine(workspace.WorkspaceRoot.FullName, "plain");
         Directory.CreateDirectory(dir);
 
@@ -103,14 +103,14 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsReparsePoint_ReturnsFalseForMissingPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Assert.False(ReparsePoint.IsReparsePoint(Path.Combine(workspace.WorkspaceRoot.FullName, "nope")));
     }
 
     [Fact]
     public void RemoveIfExists_RemovesReparsePointWithoutTouchingTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target = Path.Combine(root, "target");
@@ -130,7 +130,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RemoveIfExists_RemovesRegularDirectoryRecursively()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = Path.Combine(workspace.WorkspaceRoot.FullName, "plain");
         Directory.CreateDirectory(Path.Combine(dir, "nested"));
         File.WriteAllText(Path.Combine(dir, "nested", "f"), "x");
@@ -143,14 +143,14 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RemoveIfExists_DoesNothingForMissingPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         ReparsePoint.RemoveIfExists(Path.Combine(workspace.WorkspaceRoot.FullName, "missing"));
     }
 
     [Fact]
     public void ResolveTargetPath_ResolvesRelativeTargetAgainstLinkDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var link = Path.Combine(root, "bundle");
@@ -164,7 +164,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CanFollowDirectoryReparsePoint_ReturnsFalseWhenSymlinkTargetCannotBeOpened()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var link = Path.Combine(root, "bundle");
@@ -204,7 +204,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Directory junctions are Windows-only.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target = Path.Combine(root, "real");
@@ -235,7 +235,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Directory junctions are Windows-only.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target = Path.Combine(root, "real");
@@ -274,7 +274,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Directory junctions are Windows-only.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target = Path.Combine(root, "real");
@@ -298,7 +298,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Directory junctions are Windows-only.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var target = Path.Combine(root, "real");
@@ -342,7 +342,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Directory junctions are Windows-only.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         var targetV1 = Path.Combine(root, "v1");
@@ -395,7 +395,7 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Directory junctions are Windows-only.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
         // Probe: can we create and evaluate symlinks on this machine? If not, skip —

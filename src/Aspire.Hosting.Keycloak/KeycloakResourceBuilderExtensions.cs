@@ -70,6 +70,7 @@ public static class KeycloakResourceBuilderExtensions
             .WithImage(KeycloakContainerImageTags.Image)
             .WithImageRegistry(KeycloakContainerImageTags.Registry)
             .WithImageTag(KeycloakContainerImageTags.Tag)
+            .WithIconName("PersonLock")
             .WithHttpEndpoint(port: port, targetPort: DefaultContainerPort)
             .WithHttpEndpoint(targetPort: ManagementInterfaceContainerPort, name: ManagementEndpointName)
             .WithEndpoint(ManagementEndpointName, e => e.ExcludeReferenceEndpoint = true)
@@ -310,7 +311,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The keycloak resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{KeycloakResource}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<KeycloakResource> WithOtlpExporter(this IResourceBuilder<KeycloakResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -349,7 +350,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The keycloak resource builder.</param>
     /// <param name="protocol">The protocol to use for the OTLP exporter. If not set, it will try gRPC then Http.</param>
     /// <returns>The <see cref="IResourceBuilder{KeycloakResource}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withOtlpExporter dispatcher export.")]
     public static IResourceBuilder<KeycloakResource> WithOtlpExporter(this IResourceBuilder<KeycloakResource> builder, OtlpProtocol protocol)
     {
         ArgumentNullException.ThrowIfNull(builder);

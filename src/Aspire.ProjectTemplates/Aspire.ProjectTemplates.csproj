@@ -100,6 +100,8 @@
       <Replacements Include="$(MicrosoftAspNetCoreOpenApiVersion)" />
       <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_10_VERSION!!" />
       <Replacements Include="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
+      <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_11_VERSION!!" />
+      <Replacements Include="$(MicrosoftAspNetCoreOpenApiNet11Version)" />
       <Replacements Include="!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!" />
       <Replacements Include="$(MicrosoftExtensionsHttpResilienceVersion)" />
       <Replacements Include="!!REPLACE_WITH_SERVICE_DISCOVERY_VERSION!!" />
@@ -137,6 +139,38 @@
           StandardErrorImportance="Normal" />
   </Target>
 
+  <!-- Refresh dependency inputs before planning independent, restore-only template graphs. -->
+  <Target Name="RefreshTemplatePackageInputsForCgManifest">
+    <Copy SourceFiles="@(TemplateProjectFiles);@(TemplateConfigFiles)"
+          DestinationFiles="@(TemplateProjectFilesObj);@(TemplateConfigFilesObj)" />
+  </Target>
+
+  <!-- Invoked after the managed repository pack, not this project's Build/Pack: restoring
+       template graphs requires the other Aspire packages from the same build to exist. -->
+  <Target Name="GenerateTemplateCgManifest"
+          DependsOnTargets="RefreshTemplatePackageInputsForCgManifest;ReplacePackageVersionOnTemplates">
+    <PropertyGroup>
+      <TemplateCgManifestPath Condition="'$(TemplateCgManifestPath)' == ''">$([MSBuild]::NormalizePath('$(RepoRoot)', 'artifacts', 'cg', 'templates', 'cgmanifest.json'))</TemplateCgManifestPath>
+      <TemplateCgPackageDirectory Condition="'$(TemplateCgPackageDirectory)' == ''">$([MSBuild]::NormalizePath('$(ArtifactsShippingPackagesDir)', '.'))</TemplateCgPackageDirectory>
+      <_TemplateCgGeneratorProject>$([MSBuild]::NormalizePath('$(RepoRoot)', 'tools', 'GenerateTemplateManifest', 'GenerateTemplateManifest.csproj'))</_TemplateCgGeneratorProject>
+      <_TemplateCgSourceDirectory>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', 'templates'))</_TemplateCgSourceDirectory>
+      <_TemplateCgProcessedDirectory>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'content', 'templates'))</_TemplateCgProcessedDirectory>
+      <_TemplateCgNuGetConfig>$([MSBuild]::NormalizePath('$(RepoRoot)', 'NuGet.config'))</_TemplateCgNuGetConfig>
+      <_TemplateCgRestoreDirectory>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'template-cg-restore'))</_TemplateCgRestoreDirectory>
+      <_TemplateCgManifestCommand>dotnet run --project &quot;$(_TemplateCgGeneratorProject)&quot; --no-launch-profile -- &quot;$(_TemplateCgSourceDirectory)&quot; &quot;$(_TemplateCgProcessedDirectory)&quot; &quot;$(TemplateCgManifestPath)&quot; &quot;$(_TemplateCgNuGetConfig)&quot; &quot;$(TemplateCgPackageDirectory)&quot; &quot;$(_TemplateCgRestoreDirectory)&quot;</_TemplateCgManifestCommand>
+    </PropertyGroup>
+    <Delete Files="$(TemplateCgManifestPath)" />
+    <Exec Command="$(_TemplateCgManifestCommand)" />
+    <RemoveDir Directories="$(_TemplateCgRestoreDirectory)" />
+    <OnError ExecuteTargets="_CleanTemplateCgRestore" />
+  </Target>
+
+  <Target Name="_CleanTemplateCgRestore">
+    <!-- CG scans assets files independently of cgmanifest.json. Keep only the final inventory,
+         not the synthetic graph inputs/caches that would register our same-build packages again. -->
+    <RemoveDir Directories="$(_TemplateCgRestoreDirectory)" />
+  </Target>
+
   <!-- Grabs the contents of the templates folder and copies them to IntermediateOutputPath directory -->
   <Target Name="CopyTemplatesToIntermediateOutputPath"
           Inputs="@(TemplateFiles);@(TemplateProjectFiles)"
@@ -149,6 +183,37 @@
           DestinationFiles="@(TemplateProjectFilesObj)"
           SkipUnchangedFiles="true" />
 
+  </Target>
+
+  <!--
+    Generate a catalog (.cat) file covering template JS files for VS signing compliance.
+    Template JS files (Bootstrap, eslint configs) are customer-modifiable — users edit them
+    after project creation. Authenticode signing would append a visible // SIG // block and
+    break on modification. Catalog signing hashes the files into a .cat without modifying them.
+    The .cat is signed by Arcade (FileExtensionSignInfo in eng/Signing.props) and included in
+    the NuGet so it flows through dotnet-project-system -> Aspire.vsix -> VS.
+    Only runs on Windows (makecat.exe requires Windows SDK).
+
+    Runs after ReplacePackageVersionOnTemplates (not just after the copy) so the catalog always
+    hashes the final shipped bytes. Version replacement doesn't touch the current .js files, but
+    binding here keeps the hashes correct if a cataloged file ever carries a version token.
+  -->
+  <Target Name="GenerateCatalogFiles"
+          AfterTargets="ReplacePackageVersionOnTemplates"
+          BeforeTargets="AddTemplatesToPackageAsContent"
+          Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PropertyGroup>
+      <_ContentRoot>$(IntermediateOutputPath)content\templates</_ContentRoot>
+      <_CatOutputPath>$(IntermediateOutputPath)aspire-templates.cat</_CatOutputPath>
+      <_ErrorFlag Condition="'$(ContinuousIntegrationBuild)' == 'true' or '$(OfficialBuild)' == 'true'">-ErrorIfMakecatNotFound</_ErrorFlag>
+    </PropertyGroup>
+
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; '$(RepoRoot)eng\generate-catalog.ps1' -RootPath '$(_ContentRoot)' -CatOutputPath '$(_CatOutputPath)' -Filter '*.js' -RunMakecat $(_ErrorFlag)&quot;"
+          StandardOutputImportance="High" />
+
+    <ItemGroup Condition="Exists('$(_CatOutputPath)')">
+      <Content Include="$(_CatOutputPath)" PackagePath="content/templates/" />
+    </ItemGroup>
   </Target>
 
 </Project>

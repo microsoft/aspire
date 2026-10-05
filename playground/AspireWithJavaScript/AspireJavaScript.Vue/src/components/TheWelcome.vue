@@ -6,13 +6,11 @@ interface WeatherForecast {
   summary: string
 };
 
-type Forecasts = WeatherForecast[];
-
 export default {
   name: 'TheWelcome',
   data() {
     return {
-      forecasts: [],
+      forecasts: [] as WeatherForecast[],
       loading: true,
       error: null
     }
@@ -42,7 +40,7 @@ export default {
       </tr>
     </thead>
     <tbody>
-      <tr v-for="forecast in (forecasts as Forecasts)">
+      <tr v-for="forecast in forecasts" :key="forecast.date">
         <td>{{ forecast.date }}</td>
         <td>{{ forecast.temperatureC }}</td>
         <td>{{ forecast.temperatureF }}</td>

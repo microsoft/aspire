@@ -34,7 +34,6 @@ internal abstract class CustomResource : KubernetesObject, IMetadata<V1ObjectMet
     public const string OtelServiceInstanceIdAnnotation = "otel-service-instance-id";
     public const string ResourceStateAnnotation = "resource-state";
     public const string ResourceAppArgsAnnotation = "resource-app-args";
-    public const string ResourceProjectArgsAnnotation = "resource-project-args";
     public const string ResourceReplicaCount = "resource-replica-count";
     public const string ResourceReplicaIndex = "resource-replica-index";
 

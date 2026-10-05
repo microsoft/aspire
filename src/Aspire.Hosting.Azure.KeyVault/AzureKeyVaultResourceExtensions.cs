@@ -143,6 +143,7 @@ public static partial class AzureKeyVaultResourceExtensions
 
         var resource = new AzureKeyVaultResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Vault")
             .WithDefaultRoleAssignments(KeyVaultBuiltInRole.GetBuiltInRoleName,
                 KeyVaultBuiltInRole.KeyVaultSecretsUser);
     }
@@ -247,7 +248,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="name">The name of the secret. Must follow Azure Key Vault naming rules.</param>
     /// <param name="parameterResource">The parameter resource containing the secret value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
     public static IResourceBuilder<AzureKeyVaultSecretResource> AddSecret(this IResourceBuilder<AzureKeyVaultResource> builder, string name, IResourceBuilder<ParameterResource> parameterResource)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -297,7 +298,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, name, builder.Resource, parameterResource);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     /// <summary>
@@ -307,7 +308,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="name">The name of the secret. Must follow Azure Key Vault naming rules.</param>
     /// <param name="value">The reference expression containing the secret value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
     public static IResourceBuilder<AzureKeyVaultSecretResource> AddSecret(this IResourceBuilder<AzureKeyVaultResource> builder, string name, ReferenceExpression value)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -318,7 +319,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, name, builder.Resource, value);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     /// <summary>
@@ -329,7 +330,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="secretName">The name of the secret. Must follow Azure Key Vault naming rules.</param>
     /// <param name="parameterResource">The parameter resource containing the secret value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
     public static IResourceBuilder<AzureKeyVaultSecretResource> AddSecret(this IResourceBuilder<AzureKeyVaultResource> builder, [ResourceName] string name, string secretName, IResourceBuilder<ParameterResource> parameterResource)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -357,7 +358,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, secretName, builder.Resource, parameterResource);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     /// <summary>
@@ -368,7 +369,7 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="secretName">The name of the secret. Must follow Azure Key Vault naming rules.</param>
     /// <param name="value">The reference expression containing the secret value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addSecret dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addSecret dispatcher export.")]
     public static IResourceBuilder<AzureKeyVaultSecretResource> AddSecret(this IResourceBuilder<AzureKeyVaultResource> builder, [ResourceName] string name, string secretName, ReferenceExpression value)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -379,7 +380,7 @@ public static partial class AzureKeyVaultResourceExtensions
         var secret = new AzureKeyVaultSecretResource(name, secretName, builder.Resource, value);
         builder.Resource.Secrets.Add(secret);
 
-        return builder.ApplicationBuilder.AddResource(secret).ExcludeFromManifest();
+        return builder.ApplicationBuilder.AddResource(secret).WithIconName("LockClosed").ExcludeFromManifest();
     }
 
     private static void ValidateSecretName(string secretName)

@@ -1,0 +1,35 @@
+.chart-filter-popover-container ::deep .chart-filter-popover::part(dialog) {
+    position-anchor: var(--chart-filter-anchor);
+    /* Fluent sets the dialog insets inline; the anchor position must override them. */
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
+    position-try-fallbacks: flip-block;
+    box-sizing: border-box;
+    max-width: 400px;
+    width: max-content;
+}
+
+.dimension-popup-container {
+    min-width: 0;
+}
+
+.dimension-popup-container ::deep .dimension-popup {
+    min-width: 0;
+    row-gap: 4px;
+    width: 100%;
+}
+
+.dimension-popup-container ::deep .dimension-popup > fluent-field {
+    cursor: pointer;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    width: 100%;
+}
+
+.dimension-popup-container ::deep .dimension-popup > fluent-field > label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

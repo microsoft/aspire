@@ -2,12 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Xml.Linq;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Resources;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Tests.Model;
 
@@ -28,7 +30,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
 
         // Assert
         var referencedName = Assert.Single(dto.ReferencedNames);
@@ -50,7 +52,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
 
         // Assert
         Assert.Collection(dto.ReferencedNames,
@@ -69,7 +71,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
 
         // Assert
         Assert.Empty(dto.ReferencedNames);
@@ -88,7 +90,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver);
 
         // Assert
         Assert.Contains("hidden-app", dto.ReferencedNames);
@@ -109,7 +111,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
 
         // Assert
         Assert.Null(dto.EndpointUrl);
@@ -131,9 +133,53 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
 
         // Assert - non-parameter resources should always have endpoint text (even if "No endpoints")
         Assert.NotNull(dto.EndpointText);
+    }
+
+    [Fact]
+    public void MapResource_ReferenceToResourceExcludedFromGraph_Ignored()
+    {
+        var resource = ModelTestHelpers.CreateResource("app", displayName: "app", relationships: [new RelationshipViewModel("api-key", "Reference")]);
+        var parameter = ModelTestHelpers.CreateResource(
+            "api-key",
+            displayName: "api-key",
+            resourceType: KnownResourceTypes.Parameter,
+            relationships: ImmutableArray<RelationshipViewModel>.Empty);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [resource.Name] = resource,
+            [parameter.Name] = parameter,
+        };
+
+        var dto = ResourceGraphMapper.MapResource(resource, [resource], resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+
+        Assert.Empty(dto.ReferencedNames);
+    }
+
+    [Fact]
+    public void GetIconPathData_SinglePath_ReturnsPathData()
+    {
+        var icon = new Icons.Filled.Size24.Box();
+        var expectedPathData = XElement.Parse(icon.Content).Attribute("d")!.Value;
+
+        var pathData = ResourceGraphMapper.GetIconPathData(icon);
+
+        Assert.Equal(expectedPathData, pathData);
+    }
+
+    [Fact]
+    public void GetIconPathData_MultiplePaths_ReturnsCombinedPathData()
+    {
+        var icon = new Icons.Filled.Size24.DocumentMultiple();
+        var iconContent = XElement.Parse($"<svg>{icon.Content}</svg>");
+        var expectedPaths = iconContent.Elements().Select(e => e.Attribute("d")!.Value).ToArray();
+        Assert.Equal(3, expectedPaths.Length);
+
+        var pathData = ResourceGraphMapper.GetIconPathData(icon);
+
+        Assert.Equal(string.Join(' ', expectedPaths), pathData);
     }
 }

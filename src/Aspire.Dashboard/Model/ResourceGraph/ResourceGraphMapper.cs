@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Model.ResourceGraph;
 
 public static class ResourceGraphMapper
 {
-    public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
+    public static ResourceDto MapResource(ResourceViewModel r, IEnumerable<ResourceViewModel> graphResources, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
     {
         var resolvedNames = new List<string>();
 
@@ -21,7 +21,7 @@ public static class ResourceGraphMapper
 
         foreach (var resourceRelationships in filteredRelationships.GroupBy(r => r.ResourceName, StringComparers.ResourceName))
         {
-            var matches = resourcesByName.Values
+            var matches = graphResources
                 .Where(r => string.Equals(r.DisplayName, resourceRelationships.Key, StringComparisons.ResourceName))
                 .Where(r => !r.IsResourceHidden(showHiddenResources))
                 .ToList();
@@ -86,8 +86,21 @@ public static class ResourceGraphMapper
 
     public static string GetIconPathData(Icon icon)
     {
-        var p = icon.Content;
-        var e = XElement.Parse(p);
-        return e.Attribute("d")!.Value;
+        // Fluent UI icon content is an SVG fragment. Most icons contain one path:
+        //   <path d="M..." />
+        // Some icons, such as DocumentMultiple, contain sibling paths:
+        //   <path d="M..." /><path d="M..." />
+        // Wrap the fragment so XML parsing accepts both shapes, then combine the path data into one compound SVG path.
+        var iconContent = XElement.Parse($"<svg>{icon.Content}</svg>");
+        var pathData = iconContent.Elements()
+            .Select(e => e.Attribute("d")?.Value ?? throw new InvalidOperationException($"Icon '{icon.Name}' contains an element without path data."))
+            .ToArray();
+
+        if (pathData.Length == 0)
+        {
+            throw new InvalidOperationException($"Icon '{icon.Name}' doesn't contain path data.");
+        }
+
+        return string.Join(' ', pathData);
     }
 }

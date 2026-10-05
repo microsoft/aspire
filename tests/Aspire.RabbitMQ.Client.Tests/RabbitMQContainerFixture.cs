@@ -18,7 +18,7 @@ public sealed class RabbitMQContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Docker))
+        if (RequiresFeatureAttribute.IsFeatureSupported(TestFeature.Testcontainers))
         {
             _container = await CreateContainerAsync();
         }
@@ -34,8 +34,7 @@ public sealed class RabbitMQContainerFixture : IAsyncLifetime
 
     public static async Task<RabbitMqContainer> CreateContainerAsync()
     {
-        var container = new RabbitMqBuilder()
-            .WithImage($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
+        var container = new RabbitMqBuilder($"{ComponentTestConstants.AspireTestContainerRegistry}/{RabbitMQContainerImageTags.Image}:{RabbitMQContainerImageTags.Tag}")
             .Build();
         await container.StartAsync();
 

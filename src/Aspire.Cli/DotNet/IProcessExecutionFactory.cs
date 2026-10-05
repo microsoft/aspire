@@ -23,4 +23,19 @@ internal interface IProcessExecutionFactory
         IDictionary<string, string>? env,
         DirectoryInfo workingDirectory,
         ProcessInvocationOptions options);
+
+    /// <summary>
+    /// Creates a configured process execution from a fully-populated <see cref="System.Diagnostics.ProcessStartInfo"/>.
+    /// Unlike the <c>(fileName, args, env, ...)</c> overload — which overlays <c>env</c> on the parent
+    /// environment — this overload treats <paramref name="startInfo"/>'s environment as the authoritative,
+    /// complete view the child should see, so caller removals (<c>startInfo.Environment.Remove(key)</c>) are
+    /// honored. Used by the AppHost server and guest spawn paths, which build a complete
+    /// <see cref="System.Diagnostics.ProcessStartInfo"/> (including explicit env suppression).
+    /// </summary>
+    /// <param name="startInfo">The fully-populated start info describing the child to launch.</param>
+    /// <param name="options">Invocation options for the command.</param>
+    /// <returns>A configured <see cref="IProcessExecution"/> ready to be started.</returns>
+    IProcessExecution CreateExecution(
+        System.Diagnostics.ProcessStartInfo startInfo,
+        ProcessInvocationOptions options);
 }

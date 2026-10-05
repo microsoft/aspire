@@ -7,7 +7,6 @@
   <ItemGroup>
     <None Include="$(RepoRoot)src\Components\Aspire.Azure.AI.OpenAI\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Azure.AI.OpenAI\Aspire.Azure.AI.OpenAI.csproj" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />

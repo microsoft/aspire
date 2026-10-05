@@ -399,6 +399,72 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
 
     #endregion
 
+    #region Invoke-AspireCliBundleSetup
+
+    [Fact]
+    public async Task InvokeAspireCliBundleSetup_InvokesSetupAndPropagatesFailure()
+    {
+        using var env = new TestEnvironment();
+        var cliPath = Path.Combine(env.TempDirectory, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
+        var capturePath = Path.Combine(env.TempDirectory, "setup-args.txt");
+        var contents = OperatingSystem.IsWindows()
+            ? $"""
+                @echo off
+                > "{capturePath}" echo %~1
+                exit /b 23
+                """
+            : $$"""
+                #!/bin/sh
+                printf '%s\n' "$@" > "{{capturePath}}"
+                exit 23
+                """;
+        await File.WriteAllTextAsync(cliPath, contents.ReplaceLineEndings(OperatingSystem.IsWindows() ? "\r\n" : "\n"));
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(cliPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var escapedCliPath = cliPath.Replace("'", "''");
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"Invoke-AspireCliBundleSetup -CliPath '{escapedCliPath}' -TargetOS (Get-OperatingSystem) -TargetArchitecture (Get-CLIArchitectureFromArchitecture '<auto>')",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal("setup", (await File.ReadAllTextAsync(capturePath)).Trim());
+        Assert.Contains("bundle setup failed", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("23", result.Output);
+    }
+
+    [Fact]
+    public async Task InvokeAspireCliBundleSetup_UnsupportedHostArchitecture_SkipsSetup()
+    {
+        using var env = new TestEnvironment();
+        var cliPath = Path.Combine(env.TempDirectory, "setup-invoked.txt");
+        var escapedCliPath = cliPath.Replace("'", "''");
+        var expression = $$"""
+            function Get-MachineArchitecture { 'mips' }
+            Invoke-AspireCliBundleSetup -CliPath '{{escapedCliPath}}' -TargetOS (Get-OperatingSystem) -TargetArchitecture 'x64'
+            """;
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            expression,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping Aspire CLI bundle setup because the current platform could not be detected", result.Output);
+        Assert.Contains("not supported", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(cliPath));
+    }
+
+    #endregion
+
     #region Get-AspireExtensionUrl
 
     [Theory]

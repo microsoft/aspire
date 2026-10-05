@@ -13,10 +13,10 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "logAnalyticsWorkspace parameter cannot be made optional in ATS. Use the single-parameter overload with WithLogAnalyticsWorkspace instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<Azure.AzureLogAnalyticsWorkspaceResource>? logAnalyticsWorkspace) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Application Insights resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures the Application Insights resource to use a Log Analytics Workspace")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(this ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureLogAnalyticsWorkspaceResource> logAnalyticsWorkspace) { throw null; }
 
         [AspireExportIgnore(Reason = "BicepOutputReference is not ATS-compatible. Use the IResourceBuilder<AzureLogAnalyticsWorkspaceResource> overload instead.")]

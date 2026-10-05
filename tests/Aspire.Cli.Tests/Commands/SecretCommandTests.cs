@@ -17,7 +17,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SecretPathCommand_PrintsSecretsPath_ForDotNetAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         var userSecretsId = Guid.NewGuid().ToString("N");
@@ -43,7 +43,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SecretPathCommand_PrintsSecretsPath_ForGuestAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         var userSecretsId = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
@@ -342,6 +342,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         public bool IsUnsupported { get; set; }
         public string LanguageId => "test";
         public string DisplayName => "Test";
+        public bool SupportsLaunchProfiles => false;
         public string? AppHostFileName => null;
 
         public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken) => throw new NotSupportedException();

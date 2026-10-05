@@ -13,7 +13,7 @@
     <!-- Disable playwright tests on helix/linux. Issue: https://github.com/microsoft/aspire/issues/4921 -->
     <DisablePlaywrightTests Condition="'$(OS)' != 'Windows_NT'">true</DisablePlaywrightTests>
 
-    <DotNetCliVersion>$(DotNetSdkPreviousVersionForTesting)</DotNetCliVersion>
+    <DotNetCliVersion>$(DotNetSdkNet8VersionForTesting)</DotNetCliVersion>
 
     <!-- dotnet-coverage tool version -->
     <_DotNetToolJsonPath>$(RepoRoot).config/dotnet-tools.json</_DotNetToolJsonPath>

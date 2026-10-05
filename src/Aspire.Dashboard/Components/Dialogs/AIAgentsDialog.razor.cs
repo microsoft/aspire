@@ -3,18 +3,16 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Markdown;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 using DialogsLoc = Aspire.Dashboard.Resources.Dialogs;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class AIAgentsDialog : IDialogContentComponent
+public partial class AIAgentsDialog
 {
     private MarkdownProcessor? _markdownProcessor;
 
@@ -41,7 +39,10 @@ public partial class AIAgentsDialog : IDialogContentComponent
     private string GetDashboardUrl()
     {
         var options = Options.CurrentValue;
-        var baseUrl = AIHelpers.GetDashboardUrl(options);
+        var frontendEndpoints = options.Frontend.GetEndpointAddresses();
+        var baseUrl = options.Frontend.PublicUrl
+            ?? frontendEndpoints.FirstOrDefault(e => string.Equals(e.Scheme, "https", StringComparison.Ordinal))?.ToString()
+            ?? frontendEndpoints.FirstOrDefault(e => string.Equals(e.Scheme, "http", StringComparison.Ordinal))?.ToString();
 
         if (baseUrl is null)
         {

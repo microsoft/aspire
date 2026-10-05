@@ -19,6 +19,14 @@ public class DashboardUrlsTests
     private const string PlaceholderAllCharactersEncoded = "%21%40%23";
     private const string PlaceholderAllButExclamationMarkEncoded = "!@%23";
 
+    [Theory]
+    [InlineData(null, "/terminals")]
+    [InlineData("terminal #1/?%+", "/terminals/resource/terminal%20%231%2F%3F%25%2B")]
+    public void TerminalsUrl_CorrectlyEscaped(string? resource, string expected)
+    {
+        Assert.Equal(expected, DashboardUrls.TerminalsUrl(resource));
+    }
+
     [Fact]
     public void ConsoleLogsUrl_HtmlValues_CorrectlyEscaped()
     {

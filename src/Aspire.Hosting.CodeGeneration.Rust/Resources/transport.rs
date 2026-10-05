@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -13,6 +13,27 @@ use serde_json::{json, Value};
 type Connection = std::fs::File;
 #[cfg(not(target_os = "windows"))]
 type Connection = std::os::unix::net::UnixStream;
+
+/// Whether ATS diagnostics are written to stderr, enabled by setting `ASPIRE_DEBUG`.
+///
+/// This matches the gate the other Aspire language SDKs use. The traces are off by default
+/// because an AppHost launched from an editor sends stderr to the debug console, and the
+/// JSON-RPC payloads carry resource values such as connection strings and generated secrets.
+fn is_debug_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("ASPIRE_DEBUG").is_some())
+}
+
+/// Writes an ATS diagnostic to stderr when `ASPIRE_DEBUG` is set.
+///
+/// Arguments are passed through `format_args!` so a disabled trace does not format or allocate.
+macro_rules! ats_debug {
+    ($($arg:tt)*) => {
+        if is_debug_enabled() {
+            eprintln!("[Rust ATS] {}", format_args!($($arg)*));
+        }
+    };
+}
 
 /// Standard ATS error codes.
 pub mod ats_error_codes {
@@ -260,7 +281,7 @@ impl AspireClient {
         *self.conn.lock().unwrap() = Some(conn);
         self.connected.store(true, Ordering::SeqCst);
         
-        eprintln!("[Rust ATS] Connected to AppHost server");
+        ats_debug!("Connected to AppHost server");
         Ok(())
     }
 
@@ -344,12 +365,12 @@ impl AspireClient {
             "params": params
         });
 
-        eprintln!("[Rust ATS] Sending request {} with id={}", method, request_id);
+        ats_debug!("Sending request {} with id={}", method, request_id);
         self.write_message(&message)?;
 
         loop {
             let response = self.read_message()?;
-            eprintln!("[Rust ATS] Received response: {:?}", response);
+            ats_debug!("Received response: {:?}", response);
 
             // Check if this is a callback request from the server
             if response.get("method").is_some() {
@@ -517,14 +538,14 @@ fn open_connection(socket_path: &str) -> Result<Connection, Box<dyn std::error::
         .and_then(|n| n.to_str())
         .unwrap_or(socket_path);
     let pipe_path = format!("\\\\.\\pipe\\{}", pipe_name);
-    eprintln!("[Rust ATS] Opening Windows named pipe: {}", pipe_path);
+    ats_debug!("Opening Windows named pipe: {}", pipe_path);
     
     let file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .open(&pipe_path)?;
     
-    eprintln!("[Rust ATS] Named pipe opened successfully");
+    ats_debug!("Named pipe opened successfully");
     Ok(file)
 }
 
@@ -532,9 +553,9 @@ fn open_connection(socket_path: &str) -> Result<Connection, Box<dyn std::error::
 fn open_connection(socket_path: &str) -> Result<Connection, Box<dyn std::error::Error>> {
     use std::os::unix::net::UnixStream;
     
-    eprintln!("[Rust ATS] Opening Unix domain socket: {}", socket_path);
+    ats_debug!("Opening Unix domain socket: {}", socket_path);
     let stream = UnixStream::connect(socket_path)?;
-    eprintln!("[Rust ATS] Unix domain socket opened successfully");
+    ats_debug!("Unix domain socket opened successfully");
     Ok(stream)
 }
 

@@ -48,13 +48,13 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
                     // We're given a URL from the point of view of the host, so need to figure how to modify the URL to be correct from the point of view of the container.
                     // This could simply be replacing the hostname, but if the container tunnel is running, we may need to translate the port as well.
                     // Without doing this, we wouldn't be able to resolve the OTEL address correctly from a container as it currently depends on HostUrl rather than the dashboard endpoints.
-                    var options = context.ExecutionContext.ServiceProvider.GetRequiredService<IOptions<DcpOptions>>();
+                    var options = context.ExecutionContext.Services.GetRequiredService<IOptions<DcpOptions>>();
 
-                    var infoService = context.ExecutionContext.ServiceProvider.GetRequiredService<IDcpDependencyCheckService>();
+                    var infoService = context.ExecutionContext.Services.GetRequiredService<IDcpDependencyCheckService>();
                     var dcpInfo = await infoService.GetDcpInfoAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
                     var containerHostName = dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;
-                    var model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+                    var model = context.ExecutionContext.Services.GetService<DistributedApplicationModel>();
                     EndpointReference? targetEndpoint = null;
 
                     if (options.Value.EnableAspireContainerTunnel && model is { })
@@ -107,9 +107,9 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
             var replacementHost = KnownHostNames.DockerDesktopHostBridge;
             if (context.ExecutionContext?.IsRunMode == true)
             {
-                var options = context.ExecutionContext.ServiceProvider.GetRequiredService<IOptions<DcpOptions>>();
+                var options = context.ExecutionContext.Services.GetRequiredService<IOptions<DcpOptions>>();
 
-                var infoService = context.ExecutionContext.ServiceProvider.GetRequiredService<IDcpDependencyCheckService>();
+                var infoService = context.ExecutionContext.Services.GetRequiredService<IDcpDependencyCheckService>();
                 var dcpInfo = await infoService.GetDcpInfoAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
                 replacementHost = options.Value.EnableAspireContainerTunnel ? KnownHostNames.DefaultContainerTunnelHostName : dcpInfo?.Containers?.ContainerHostName ?? KnownHostNames.DockerDesktopHostBridge;

@@ -97,7 +97,8 @@ public static class DockerComposeEnvironmentExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        return builder.AddResource(resource);
+        return builder.AddResource(resource)
+            .WithIconName("BoxMultiple");
     }
 
     /// <summary>

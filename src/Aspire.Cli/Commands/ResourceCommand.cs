@@ -10,12 +10,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -24,7 +22,6 @@ internal sealed class ResourceCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ResourceManagement;
 
-    private readonly IInteractionService _interactionService;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly IProjectLocator _projectLocator;
     private readonly AppHostConnectionResolver _connectionResolver;
@@ -79,20 +76,16 @@ internal sealed class ResourceCommand : BaseCommand
     };
 
     public ResourceCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<ResourceCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("resource", ResourceCommandStrings.CommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("resource", ResourceCommandStrings.CommandDescription, services)
     {
-        _interactionService = interactionService;
         _backchannelMonitor = backchannelMonitor;
         _projectLocator = projectLocator;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = connectionResolver;
         _logger = logger;
 
         Arguments.Add(s_resourceArgument);
@@ -122,6 +115,12 @@ internal sealed class ResourceCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        // Route human-readable status messages to stderr so that structured command output
+        // (e.g., JSON) on stdout remains valid and pipeable (e.g., | jq).
+        // Always route to stderr unconditionally because we cannot know ahead of time whether
+        // the resource command will produce structured output.
+        InteractionService.Console = ConsoleOutput.Error;
+
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
@@ -138,7 +137,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToFindProject));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, InteractionService, CliExitCodes.FailedToFindProject));
         }
 
         var connection = result.Connection!;
@@ -161,7 +160,7 @@ internal sealed class ResourceCommand : BaseCommand
         {
             return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(
                 connection,
-                _interactionService,
+                InteractionService,
                 _logger,
                 resourceName,
                 commandName,
@@ -174,7 +173,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
-            _interactionService,
+            InteractionService,
             _logger,
             resourceName,
             commandName,
@@ -670,7 +669,7 @@ internal sealed class ResourceCommand : BaseCommand
                 return await ResolveExplicitConnectionForAvailableCommandsAsync(appHostProjectFile, cancellationToken).ConfigureAwait(false);
             }
 
-            var inScopeConnections = await command._interactionService.ShowStatusAsync(
+            var inScopeConnections = await command.InteractionService.ShowStatusAsync(
                 SharedCommandStrings.ScanningForRunningAppHosts,
                 async () =>
                 {
@@ -705,8 +704,8 @@ internal sealed class ResourceCommand : BaseCommand
                 return null;
             }
 
-            var targetPath = Path.GetFullPath(selectedAppHostProjectFile.FullName);
-            var matchingConnections = await command._interactionService.ShowStatusAsync(
+            var targetPath = PathNormalizer.ResolveToFilesystemPath(selectedAppHostProjectFile.FullName);
+            var matchingConnections = await command.InteractionService.ShowStatusAsync(
                 SharedCommandStrings.ScanningForRunningAppHosts,
                 async () =>
                 {
@@ -722,7 +721,10 @@ internal sealed class ResourceCommand : BaseCommand
         private static bool IsMatchingAppHostPath(string? appHostPath, string targetPath)
         {
             return !string.IsNullOrEmpty(appHostPath) &&
-                string.Equals(Path.GetFullPath(appHostPath), targetPath, StringComparison.OrdinalIgnoreCase);
+                string.Equals(
+                    PathNormalizer.ResolveToFilesystemPath(appHostPath),
+                    targetPath,
+                    StringComparisons.FileSystemPath);
         }
 
         private static bool TryGetResourceOnlyHelp(ParseResult parseResult, [NotNullWhen(true)] out string? resourceName)

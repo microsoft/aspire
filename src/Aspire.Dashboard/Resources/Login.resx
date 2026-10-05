@@ -144,6 +144,9 @@
     <value>{0} login</value>
     <comment>{0} is an application name</comment>
   </data>
+  <data name="SignOut" xml:space="preserve">
+    <value>Sign out</value>
+  </data>
   <data name="TextFieldPlaceholder" xml:space="preserve">
     <value>Enter token to log in...</value>
   </data>

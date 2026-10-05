@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.SqlServer.Infrastructure.Internal;
@@ -359,6 +360,19 @@ public class AspireSqlServerEFCoreSqlClientExtensionsTests
 #else
         Assert.Equal(expectedConnectionString, actualConnectionString);
 #endif
+    }
+
+    // Regression guard: EF Core's SqlServer provider pulls in SqlClient 7.0, which moved the Entra ID (Active
+    // Directory) auth providers into Microsoft.Data.SqlClient.Extensions.Azure. This integration references that
+    // package, so they must resolve here; otherwise the Authentication="Active Directory Default" strings Aspire emits fail.
+    [Theory]
+    [InlineData(SqlAuthenticationMethod.ActiveDirectoryDefault)]
+    [InlineData(SqlAuthenticationMethod.ActiveDirectoryManagedIdentity)]
+    public void EntraIdAuthenticationProviderIsRegistered(SqlAuthenticationMethod method)
+    {
+        var provider = SqlAuthenticationProvider.GetProvider(method);
+
+        Assert.NotNull(provider);
     }
 
     public class TestDbContext2 : DbContext

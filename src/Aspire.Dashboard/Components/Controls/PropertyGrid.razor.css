@@ -1,3 +1,3 @@
-::deep.property-grid td.multiline-text {
-    overflow-x: hidden !important;
+.property-grid ::deep td[multiline] {
+    overflow: clip;
 }

@@ -17,9 +17,10 @@ public class ConformanceTests : ConformanceTests<IChatClient, AzureOpenAISetting
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
-    protected override string[] RequiredLogCategories => [
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
         // since we don't have a way to connect to the server, we can't test the actual calls
-        "Azure.Identity"
+        new("Azure.Identity"),
     ];
 
     protected override bool SupportsKeyedRegistrations => true;

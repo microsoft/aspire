@@ -24,6 +24,12 @@ resource api 'Microsoft.App/containerApps@2025-07-01' = {
         {
           image: 'myimage:latest'
           name: 'api'
+          env: [
+            {
+              name: 'DATA_PATH'
+              value: '/path1'
+            }
+          ]
           volumeMounts: [
             {
               volumeName: 'v0'

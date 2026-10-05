@@ -69,6 +69,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SourceDirectoryNotFound {
+            get {
+                return ResourceManager.GetString("SourceDirectoryNotFound", resourceCulture);
+            }
+        }
+
         public static string SourceWithCredentialsCannotBePersisted {
             get {
                 return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
@@ -208,6 +214,18 @@ namespace Aspire.Cli.Resources {
         public static string NoChannelFoundMatching {
             get {
                 return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
+            }
+        }
+
+        public static string NoMatchingLocalTemplatePackage {
+            get {
+                return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
+            }
+        }
+
+        public static string NoTemplateVersionsFoundInChannel {
+            get {
+                return ResourceManager.GetString("NoTemplateVersionsFoundInChannel", resourceCulture);
             }
         }
     }

@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.py",
+    "language": "python"
+  },
+  "features": {
+    "experimentalPolyglotPython": true
+  },
+  "packages": {
+    "Aspire.Hosting.Java": ""
+  }
+}

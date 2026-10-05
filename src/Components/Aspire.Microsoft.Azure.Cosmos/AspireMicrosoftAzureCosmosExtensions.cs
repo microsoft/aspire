@@ -7,6 +7,7 @@ using Aspire.Microsoft.Azure.Cosmos;
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -16,6 +17,7 @@ namespace Microsoft.Extensions.Hosting;
 public static class AspireMicrosoftAzureCosmosExtensions
 {
     private const string DefaultConfigSectionName = "Aspire:Microsoft:Azure:Cosmos";
+    private const string HealthCheckName = "Microsoft.Azure.Cosmos";
 
     /// <summary>
     /// Registers <see cref="CosmosClient" /> as a singleton in the services provided by the <paramref name="builder"/>.
@@ -36,6 +38,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
         var settings = builder.GetSettings(connectionName, configureSettings);
         var clientOptions = builder.GetClientOptions(settings, configureClientOptions);
         builder.Services.AddSingleton(sp => GetCosmosClient(connectionName, settings, clientOptions));
+        builder.AddCosmosHealthCheck(settings, serviceKey: null);
     }
 
     /// <summary>
@@ -100,6 +103,7 @@ public static class AspireMicrosoftAzureCosmosExtensions
             var client = GetCosmosClient(name, settings, clientOptions);
             return client;
         });
+        builder.AddCosmosHealthCheck(settings, serviceKey: name);
     }
 
     /// <summary>
@@ -185,13 +189,30 @@ public static class AspireMicrosoftAzureCosmosExtensions
         return cosmosDatabaseBuilder;
     }
 
+    private static void AddCosmosHealthCheck(this IHostApplicationBuilder builder, MicrosoftAzureCosmosSettings settings, object? serviceKey)
+    {
+        if (settings.DisableHealthChecks)
+        {
+            return;
+        }
+
+        builder.TryAddHealthCheck(new HealthCheckRegistration(
+            serviceKey is null ? HealthCheckName : $"{HealthCheckName}_{serviceKey}",
+            sp => new AzureCosmosDbHealthCheck(
+                serviceKey is null
+                    ? sp.GetRequiredService<CosmosClient>()
+                    : sp.GetRequiredKeyedService<CosmosClient>(serviceKey)),
+            failureStatus: default,
+            tags: default,
+            timeout: default));
+    }
+
     internal static CosmosConnectionInfo? GetCosmosConnectionInfo(this IHostApplicationBuilder builder, string connectionName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
 
-        var connectionString = builder.Configuration.GetConnectionString(connectionName);
-        if (string.IsNullOrEmpty(connectionString))
+        if (!builder.Configuration.TryGetConnectionString(connectionName, out var connectionString) || string.IsNullOrEmpty(connectionString))
         {
             return null;
         }

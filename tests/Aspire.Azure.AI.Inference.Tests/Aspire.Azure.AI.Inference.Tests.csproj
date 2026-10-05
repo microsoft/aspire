@@ -1,10 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="..\Aspire.Azure.Security.KeyVault.Tests\MockTransport.cs" />
         <None Include="$(RepoRoot)src\Components\Aspire.Azure.AI.Inference\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 

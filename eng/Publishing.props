@@ -6,6 +6,17 @@
       <AutoGenerateSymbolPackages>false</AutoGenerateSymbolPackages>
    </PropertyGroup>
 
+  <!-- CLI NativeAOT debug symbols ship to MSDL through two arcade publishing routes:
+       loose-file FilesToPublishToSymbolServer for Windows .pdb (the glob
+       below), and .symbols.nupkg for Linux .dbg / macOS .dwarf (produced by
+       eng/clipack/Aspire.Cli.NativeSymbols.proj on the per-RID build agent
+       and staged into Shipping by
+       eng/pipelines/templates/download_native_symbols.yml on the publish
+       agent). See docs/ci/cli-native-symbols.md#pipeline-architecture. -->
+  <ItemGroup>
+    <FilesToPublishToSymbolServer Include="$(ArtifactsDir)native-symbols\$(Configuration)\**\aspire.pdb" />
+  </ItemGroup>
+
   <PropertyGroup>
     <_UploadPathRoot>aspire</_UploadPathRoot>
     <!-- Already-signed native archives (macOS/Linux) are downloaded to a separate directory
@@ -40,6 +51,8 @@
       <_ExtensionSignatureFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.signature.p7s" />
       <_CliToolPackagesToPublish Include="$(ArtifactsShippingPackagesDir)**\Aspire.Cli*.nupkg"
                                   Exclude="$(ArtifactsShippingPackagesDir)**\*.symbols.nupkg" />
+      <_CliNpmPackagesToPublish Include="$(ArtifactsShippingPackagesDir)**\microsoft-aspire-cli*.tgz" />
+      <_CliNpmPackageSignaturesToPublish Include="$(ArtifactsShippingPackagesDir)**\microsoft-aspire-cli*.tgz.sig" />
     </ItemGroup>
 
     <!-- Validate VS Code extension artifacts: we expect exactly 1 VSIX and 1 manifest file.
@@ -87,11 +100,85 @@
       <_CliPointerToolPackages Include="@(_CliToolPackagesToPublish)" Exclude="@(_CliRidSpecificToolPackageFilesWithRid)" />
     </ItemGroup>
 
+    <ItemGroup Label="Validation of CLI npm packages">
+      <_CliRidSpecificNpmPackageFiles Include="@(_CliNpmPackagesToPublish)"
+                                      Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(_CliNpmPackagesToPublish.FileName)', '^microsoft-aspire-cli-\d'))" />
+
+      <!-- Extract the rid from filenames like microsoft-aspire-cli-linux-x64-9.0-dev and microsoft-aspire-cli-linux-arm64-9.4.0-preview.1.25358.11 -->
+      <_CliRidSpecificNpmPackageFilesWithRid Include="@(_CliRidSpecificNpmPackageFiles)">
+        <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match('%(_CliRidSpecificNpmPackageFiles.FileName)', '^microsoft-aspire-cli-(.*?)-\d+.*').Groups[1].Value)</ExtractedRid>
+      </_CliRidSpecificNpmPackageFilesWithRid>
+
+      <_MissingCliNpmPackageRids Include="@(_ExpectedCliRids)" Exclude="@(_CliRidSpecificNpmPackageFilesWithRid -> '%(ExtractedRid)')" />
+      <_UnexpectedCliNpmPackageRids Include="@(_CliRidSpecificNpmPackageFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_ExpectedCliRids)" />
+      <_CliPointerNpmPackages Include="@(_CliNpmPackagesToPublish)" Exclude="@(_CliRidSpecificNpmPackageFilesWithRid)" />
+    </ItemGroup>
+
+    <ItemGroup Label="Validation of CLI native AOT symbols">
+      <!-- Windows: loose aspire.pdb per RID, downloaded from native_symbols_<rid>
+           build artifacts by eng/pipelines/templates/download_native_symbols.yml
+           into artifacts/native-symbols/<config>/native_symbols_<rid_underscored>/
+           aspire.pdb. The same glob feeds FilesToPublishToSymbolServer above
+           (loose-PDB path to MSDL). -->
+      <_WindowsExpectedSymbolRids Include="@(_ExpectedCliRids)"
+                                  Condition="$([System.String]::new('%(Identity)').StartsWith('win-'))" />
+
+      <_LooseSymbolPdbFiles Include="$(ArtifactsDir)native-symbols\$(Configuration)\**\aspire.pdb" />
+      <_LooseSymbolPdbFilesWithRid Include="@(_LooseSymbolPdbFiles)">
+        <!-- Reverse the hyphen→underscore substitution that build_sign_native.yml
+             applies to artifact names to recover the RID. -->
+        <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match('%(Identity)', 'native_symbols_([^/\\]+)').Groups[1].Value.Replace('_', '-'))</ExtractedRid>
+      </_LooseSymbolPdbFilesWithRid>
+
+      <_MissingPdbRids Include="@(_WindowsExpectedSymbolRids)" Exclude="@(_LooseSymbolPdbFilesWithRid -> '%(ExtractedRid)')" />
+      <_UnexpectedPdbRids Include="@(_LooseSymbolPdbFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_WindowsExpectedSymbolRids)" />
+
+      <!-- Linux + macOS: Aspire.Cli.<rid>.<version>.symbols.nupkg in Shipping
+           (alongside the per-RID Aspire.Cli.<rid>.<version>.nupkg). Routed to
+           MSDL by arcade's _ExistingSymbolPackage filter -> SymbolUploadHelper. -->
+      <_NonWindowsExpectedSymbolRids Include="@(_ExpectedCliRids)"
+                                     Condition="!$([System.String]::new('%(Identity)').StartsWith('win-'))" />
+
+      <_NativeSymbolPackages Include="$(ArtifactsShippingPackagesDir)**\Aspire.Cli.*.symbols.nupkg" />
+      <_NativeSymbolPackagesWithRid Include="@(_NativeSymbolPackages)">
+        <!-- Same shape as Aspire.Cli.<rid>.<version>.nupkg used by
+             _CliRidSpecificToolPackageFilesWithRid above. -->
+        <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match('%(_NativeSymbolPackages.FileName)', '^Aspire\.Cli\.(.*?)\.\d+.*').Groups[1].Value)</ExtractedRid>
+      </_NativeSymbolPackagesWithRid>
+
+      <_MissingSymbolPackageRids Include="@(_NonWindowsExpectedSymbolRids)" Exclude="@(_NativeSymbolPackagesWithRid -> '%(ExtractedRid)')" />
+      <_UnexpectedSymbolPackageRids Include="@(_NativeSymbolPackagesWithRid -> '%(ExtractedRid)')" Exclude="@(_NonWindowsExpectedSymbolRids)" />
+    </ItemGroup>
+
+    <!-- Defensive: surface a clear failure if any ExtractedRid metadata is
+         empty (the per-item RID-extraction regex did not match the filename).
+         Without this, an unmatched item flows an empty entry into the
+         _MissingXRids list ('' doesn't match any expected RID), so the build
+         still fails — but with a confusing "all expected RIDs missing"
+         message instead of "we couldn't parse these filenames." -->
+    <ItemGroup>
+      <_FilesWithUnparseableRid Include="@(_ArchiveFilesWithRid)" Condition="'%(ExtractedRid)' == ''" />
+      <_FilesWithUnparseableRid Include="@(_CliRidSpecificToolPackageFilesWithRid)" Condition="'%(ExtractedRid)' == ''" />
+      <_FilesWithUnparseableRid Include="@(_CliRidSpecificNpmPackageFilesWithRid)" Condition="'%(ExtractedRid)' == ''" />
+      <_FilesWithUnparseableRid Include="@(_LooseSymbolPdbFilesWithRid)" Condition="'%(ExtractedRid)' == ''" />
+      <_FilesWithUnparseableRid Include="@(_NativeSymbolPackagesWithRid)" Condition="'%(ExtractedRid)' == ''" />
+    </ItemGroup>
+
+    <Error Condition="@(_FilesWithUnparseableRid->Count()) > 0"
+           Text="Could not extract RID from one or more artifact filenames (regex did not match). Files: @(_FilesWithUnparseableRid, ', '). This indicates an artifact-naming contract drift; check the RID-extraction regexes in this file against the actual filenames under artifacts/." />
+
     <Warning Condition="@(_UnexpectedArchiveRids->Count()) > 0" Text="Found unexpected CLI archives for @(_UnexpectedArchiveRids, ',') . These are all the cli archives found - @(_ArchiveFiles, ', ')" />
     <Warning Condition="@(_UnexpectedCliPackageRids->Count()) > 0" Text="Found unexpected Aspire.Cli RID-specific packages for @(_UnexpectedCliPackageRids, ',') . These are all the CLI tool packages found - @(_CliToolPackagesToPublish, ', ')" />
+    <Warning Condition="@(_UnexpectedCliNpmPackageRids->Count()) > 0" Text="Found unexpected Aspire CLI npm RID-specific packages for @(_UnexpectedCliNpmPackageRids, ',') . These are all the CLI npm packages found - @(_CliNpmPackagesToPublish, ', ')" />
+    <Warning Condition="@(_UnexpectedPdbRids->Count()) > 0" Text="Found unexpected Aspire.Cli native AOT pdbs for @(_UnexpectedPdbRids, ', '). These are all the pdbs found - @(_LooseSymbolPdbFiles, ', ')" />
+    <Warning Condition="@(_UnexpectedSymbolPackageRids->Count()) > 0" Text="Found unexpected Aspire.Cli native AOT symbol packages for @(_UnexpectedSymbolPackageRids, ', '). These are all the symbol packages found - @(_NativeSymbolPackages, ', ')" />
     <Error Condition="@(_MissingArchiveRids->Count()) > 0" Text="Missing CLI archive(s) for runtime identifiers: @(_MissingArchiveRids, ', '). These are all the cli archives found - @(_ArchiveFiles, ', ')" />
     <Error Condition="@(_MissingCliPackageRids->Count()) > 0" Text="Missing Aspire.Cli RID-specific package(s) for runtime identifiers: @(_MissingCliPackageRids, ', '). These are all the CLI tool packages found - @(_CliToolPackagesToPublish, ', ')" />
+    <Error Condition="@(_MissingCliNpmPackageRids->Count()) > 0" Text="Missing Aspire CLI npm RID-specific package(s) for runtime identifiers: @(_MissingCliNpmPackageRids, ', '). These are all the CLI npm packages found - @(_CliNpmPackagesToPublish, ', ')" />
+    <Error Condition="@(_MissingPdbRids->Count()) > 0" Text="Missing Aspire.Cli native AOT pdb(s) for runtime identifiers: @(_MissingPdbRids, ', '). These are all the pdbs found - @(_LooseSymbolPdbFiles, ', '). The pdbs are downloaded by eng/pipelines/templates/download_native_symbols.yml from native_symbols_&lt;rid&gt; build artifacts published by eng/pipelines/templates/build_sign_native.yml; see docs/ci/cli-native-symbols.md." />
+    <Error Condition="@(_MissingSymbolPackageRids->Count()) > 0" Text="Missing Aspire.Cli native AOT symbol package(s) for runtime identifiers: @(_MissingSymbolPackageRids, ', '). These are all the symbol packages found - @(_NativeSymbolPackages, ', '). The packages are staged into Shipping by eng/pipelines/templates/download_native_symbols.yml from native_symbols_&lt;rid&gt; build artifacts published by eng/pipelines/templates/build_sign_native.yml; see docs/ci/cli-native-symbols.md." />
     <Error Condition="@(_CliPointerToolPackages->Count()) != 1" Text="Expected exactly one Aspire.Cli pointer package but found @(_CliPointerToolPackages->Count()). Files: @(_CliPointerToolPackages, ', ')" />
+    <Error Condition="@(_CliPointerNpmPackages->Count()) != 1" Text="Expected exactly one Aspire CLI npm pointer package but found @(_CliPointerNpmPackages->Count()). Files: @(_CliPointerNpmPackages, ', ')" />
 
     <!-- Validate aspire-cli archive file extensions match expected format for each RID -->
     <ItemGroup>
@@ -130,7 +217,7 @@
     </MSBuild>
 
     <!-- Zip each VSIX file for publishing to blob feed, as certain file types, such as .tar.gz or .zip are allowed to be published, and .vsix is not included -->
-    <Exec Command="powershell -NoProfile -Command &quot;'@(_ExtensionFilesToPublish)' -split ';' | Where-Object { $_ } | ForEach-Object { Compress-Archive -Path $_ -DestinationPath ($_ + '.zip') -Force }&quot;"
+    <Exec Command="pwsh -NoProfile -Command &quot;'@(_ExtensionFilesToPublish)' -split ';' | Where-Object { $_ } | ForEach-Object { Compress-Archive -Path $_ -DestinationPath ($_ + '.zip') -Force }&quot;"
           Condition="'@(_ExtensionFilesToPublish)' != ''" />
 
     <!-- Replace VSIX files with their zipped versions -->
@@ -177,6 +264,16 @@
         <IsShipping>true</IsShipping>
         <Kind>Package</Kind>
       </ItemsToPushToBlobFeed>
+      <ItemsToPushToBlobFeed Include="@(_CliNpmPackagesToPublish)">
+        <IsShipping>true</IsShipping>
+        <PublishFlatContainer>true</PublishFlatContainer>
+        <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
+      </ItemsToPushToBlobFeed>
+      <ItemsToPushToBlobFeed Include="@(_CliNpmPackageSignaturesToPublish)">
+        <IsShipping>true</IsShipping>
+        <PublishFlatContainer>true</PublishFlatContainer>
+        <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
+      </ItemsToPushToBlobFeed>
       <ItemsToPushToBlobFeed Include="@(_ExtensionFilesToPublish)">
         <IsShipping>false</IsShipping>
         <PublishFlatContainer>true</PublishFlatContainer>
@@ -211,6 +308,8 @@
     <Message Importance="High" Text="Aspire publish items to push: @(ItemsToPushToBlobFeed->Count()) total; @(_PackageItemsToPush->Count()) NuGet package(s); @(_FlatBlobItemsToPush->Count()) flat blob artifact(s)." />
     <Message Importance="High" Text="Aspire NuGet packages: @(_PackageItemsToPush->Count()) total; @(_ShippingPackageItemsToPush->Count()) shipping." Condition="@(_PackageItemsToPush->Count()) > 0" />
     <Message Importance="High" Text="Aspire CLI packages: @(_CliPointerToolPackages->Count()) pointer; @(_CliRidSpecificToolPackageFilesWithRid->Count())/@(_ExpectedCliRids->Count()) RID-specific; RIDs=@(_CliRidSpecificToolPackageFilesWithRid -> '%(ExtractedRid)', ', ')." Condition="@(_CliToolPackagesToPublish->Count()) > 0" />
+    <Message Importance="High" Text="Aspire CLI npm packages: @(_CliPointerNpmPackages->Count()) pointer; @(_CliRidSpecificNpmPackageFilesWithRid->Count())/@(_ExpectedCliRids->Count()) RID-specific; RIDs=@(_CliRidSpecificNpmPackageFilesWithRid -> '%(ExtractedRid)', ', ')." Condition="@(_CliNpmPackagesToPublish->Count()) > 0" />
+    <Message Importance="High" Text="Aspire CLI npm detached signatures: @(_CliNpmPackageSignaturesToPublish->Count()) sidecar(s)." Condition="@(_CliNpmPackageSignaturesToPublish->Count()) > 0" />
     <Message Importance="High" Text="Aspire flat blob artifacts: @(_FlatBlobItemsToPush->Count()) total; @(_ShippingFlatBlobItemsToPush->Count()) shipping; @(_NonShippingFlatBlobItemsToPush->Count()) non-shipping." Condition="@(_FlatBlobItemsToPush->Count()) > 0" />
     <Message Importance="High"
              Text="Aspire flat blob item: %(_FlatBlobItemsToPush.Filename)%(_FlatBlobItemsToPush.Extension) | IsShipping=%(_FlatBlobItemsToPush.IsShipping) | RelativeBlobPath=%(_FlatBlobItemsToPush.RelativeBlobPath)" />

@@ -1,0 +1,30 @@
+.accordion-marker {
+    position: relative;
+    width: 28px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+fluent-accordion-item[expanded] > .accordion-marker[slot="marker-collapsed"],
+fluent-accordion-item:not([expanded]) > .accordion-marker[slot="marker-expanded"] {
+    display: none;
+}
+
+.accordion-marker::before {
+    position: absolute;
+    z-index: 0;
+    width: 28px;
+    height: 28px;
+    content: "";
+    border-radius: 6px;
+    background-color: var(--accordion-marker-background);
+}
+
+.accordion-marker ::deep svg {
+    position: relative;
+    z-index: 1;
+    width: 12px !important;
+    height: 12px;
+}

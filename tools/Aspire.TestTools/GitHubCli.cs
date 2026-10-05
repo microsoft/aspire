@@ -20,6 +20,12 @@ public static class GitHubCli
     }
 
     public static Task<string> GetStringAsync(string endpoint, CancellationToken cancellationToken)
+        => GetStringAsync(endpoint, allowEscapeSequences: false, cancellationToken);
+
+    // allowEscapeSequences passes `--allow-escape-sequences` to `gh api`. Required for endpoints whose
+    // payload can contain terminal control characters; `gh` refuses to write those to a non-TTY stdout
+    // and fails the whole call otherwise.
+    public static Task<string> GetStringAsync(string endpoint, bool allowEscapeSequences, CancellationToken cancellationToken)
     {
         if (TryGetFixturePath(endpoint, ".json", out var fixturePath))
         {
@@ -36,7 +42,20 @@ public static class GitHubCli
             return Task.FromException<string>(new InvalidOperationException(File.ReadAllText(fixturePath)));
         }
 
-        return RunGhAsync(["api", "-H", "Accept: application/vnd.github+json", endpoint], cancellationToken);
+        return RunGhAsync(BuildApiArguments(endpoint, allowEscapeSequences), cancellationToken);
+    }
+
+    private static IReadOnlyList<string> BuildApiArguments(string endpoint, bool allowEscapeSequences)
+    {
+        List<string> arguments = ["api", "-H", "Accept: application/vnd.github+json"];
+        if (allowEscapeSequences)
+        {
+            arguments.Add("--allow-escape-sequences");
+        }
+
+        arguments.Add(endpoint);
+
+        return arguments;
     }
 
     public static async Task DownloadFileAsync(string endpoint, string outputPath, CancellationToken cancellationToken)
@@ -210,8 +229,19 @@ public static class GitHubCli
 
     private static readonly TimeSpan s_defaultProcessTimeout = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Test seam that replaces the string-returning <c>gh</c> invocation so tests can observe the argument
+    /// list that would be passed to the process. Production code never sets this.
+    /// </summary>
+    internal static Func<IReadOnlyList<string>, CancellationToken, Task<string>>? GhInvokerOverride { get; set; }
+
     private static async Task<string> RunGhAsync(IReadOnlyList<string> arguments, CancellationToken cancellationToken)
     {
+        if (GhInvokerOverride is { } invoker)
+        {
+            return await invoker(arguments, cancellationToken).ConfigureAwait(false);
+        }
+
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(s_defaultProcessTimeout);
 

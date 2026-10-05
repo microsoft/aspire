@@ -10,7 +10,6 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Storage;
@@ -20,7 +19,9 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using IToastService = Microsoft.FluentUI.AspNetCore.Components.INotificationService;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
@@ -82,7 +83,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required ILogger<ConsoleLogs> Logger { get; init; }
@@ -92,12 +95,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     [Inject]
     public required IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIAssistant> AIAssistantLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIPrompts> AIPromptsLoc { get; init; }
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -113,9 +110,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -134,6 +128,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+
+    [Inject]
+    public required IToastService ToastService { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
@@ -160,7 +157,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private readonly object _updateLogsLock = new object();
     private CancellationTokenSource? _showNoLogsMessageCts;
     private Task? _showNoLogsMessageDelayTask;
-    private AIContext? _aiContext;
     private LogViewer? _logViewerRef;
 
     // UI
@@ -176,6 +172,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
     private bool _showNoLogsMessage;
+    private bool _consoleLogsWereLoaded = true;
+    private string _logFilter = string.Empty;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
 
@@ -186,10 +184,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
         _resourceSubscriptionToken = _resourceSubscriptionCts.Token;
-        _logEntries = new(Options.Value.Frontend.MaxConsoleLogCount);
+        _logEntries = new(DashboardUIHelpers.GetVirtualizedItemCount(Options.Value.Frontend.MaxConsoleLogCount));
         _allResource = new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] };
         PageViewModel = new ConsoleLogsViewModel { SelectedResource = _allResource, Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
-        _aiContext = CreateAIContext();
         _logEntryChannelReaderTask = StartLogEntryChannelReaderTask();
 
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(async () =>
@@ -243,7 +240,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 return;
             }
 
-            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_resourceSubscriptionToken);
+            var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_resourceSubscriptionToken);
 
             Logger.LogDebug("Received initial resource snapshot with {ResourceCount} resources.", snapshot.Length);
 
@@ -273,9 +270,34 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 await foreach (var changes in subscription.WithCancellation(_resourceSubscriptionToken).ConfigureAwait(false))
                 {
+                    var selectedResourceName = PageViewModel.SelectedResource?.Id?.InstanceId;
+                    var needsRender = false;
+
                     foreach (var (changeType, resource) in changes)
                     {
+                        // Detect a genuine resource addition before OnResourceChanged inserts it into
+                        // _resourceByName. An Upsert covers both new resources and updates to existing
+                        // ones, so the map lookup distinguishes the two. Match the visibility condition
+                        // used to decide subscription below so a render only happens when the addition
+                        // will actually appear in the resource picker.
+                        var isNewResource = changeType == ResourceViewModelChangeType.Upsert &&
+                            !_resourceByName.ContainsKey(resource.Name) &&
+                            !resource.IsResourceHidden(_showHiddenResources);
+
                         await OnResourceChanged(changeType, resource);
+
+                        // Track whether this batch contains changes that affect the visible page UI
+                        // (selected resource modified, or resources added/removed). Frequent property
+                        // updates on non-selected resources (health checks, state transitions) don't
+                        // require a full page re-render. Avoiding unnecessary re-renders prevents
+                        // FluentTextInput's ImmediateDelay input buffer from being clobbered by stale
+                        // parameter values pushed during the debounce window.
+                        if (changeType == ResourceViewModelChangeType.Delete ||
+                            isNewResource ||
+                            string.Equals(resource.Name, selectedResourceName, StringComparisons.ResourceName))
+                        {
+                            needsRender = true;
+                        }
 
                         // the initial snapshot we obtain is [almost] never correct (it's always empty)
                         // we still want to select the user's initial queried resource on page load,
@@ -285,17 +307,21 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         if (ResourceName is not null && PageViewModel.SelectedResource is null && changeType == ResourceViewModelChangeType.Upsert && string.Equals(ResourceName, resource.Name, StringComparisons.ResourceName))
                         {
                             SetSelectedResourceOption(resource);
+                            needsRender = true;
                         }
                     }
 
-                    await InvokeAsync(() =>
+                    if (needsRender)
                     {
-                        // The selected resource may have changed, so update resource action buttons.
-                        // Update inside in the render's sync context so the buttons don't change while the UI is rendering.
-                        UpdateMenuButtons();
+                        await InvokeAsync(() =>
+                        {
+                            // The selected resource may have changed, so update resource action buttons.
+                            // Update inside the render's sync context so the buttons don't change while the UI is rendering.
+                            UpdateMenuButtons();
 
-                        StateHasChanged();
-                    });
+                            StateHasChanged();
+                        });
+                    }
                 }
             });
         }
@@ -407,7 +433,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
-        _aiContext?.ContextHasChanged();
+
+        var selectedResource = selectedResourceName is not null
+            ? _resourceByName.GetValueOrDefault(selectedResourceName)
+            : null;
 
         // Cancel all existing subscriptions
         await CancelAllSubscriptionsAsync();
@@ -420,6 +449,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
         ResetNoLogsMessage();
 
+        _consoleLogsWereLoaded = !DashboardClient.IsReadOnly || WereConsoleLogsLoaded(isAllSelected, selectedResource);
+
         await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
 
         if (isAllSelected)
@@ -428,11 +459,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _isSubscribedToAll = true;
             await SubscribeToAllResourcesAsync();
         }
-        else if (selectedResourceName is not null && _resourceByName.TryGetValue(selectedResourceName, out var resource))
+        else if (selectedResource is not null)
         {
             // Subscribe to single resource
             _isSubscribedToAll = false;
-            await SubscribeToSingleResourceAsync(resource);
+            await SubscribeToSingleResourceAsync(selectedResource);
         }
         else
         {
@@ -443,7 +474,25 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             StartNoLogsMessageDelay();
         }
+
+        UpdateMenuButtons();
     }
+
+    private bool WereConsoleLogsLoaded(bool isAllSelected, ResourceViewModel? selectedResource)
+    {
+        if (isAllSelected)
+        {
+            return _resourceByName.Values
+                .Where(resource => !resource.IsResourceHidden(_showHiddenResources))
+                .Any(resource => resource.ConsoleLogsLoaded);
+        }
+
+        return selectedResource?.ConsoleLogsLoaded == true;
+    }
+
+    private string GetNoLogsMessage() => _consoleLogsWereLoaded
+        ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoLogsFound)]
+        : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNotCapturedForRun)];
 
     private bool IsAllSelected()
     {
@@ -455,6 +504,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _highlightedCommands.Clear();
         _logsMenuItems.Clear();
         _resourceMenuItems.Clear();
+
+        var selectedResource = GetSelectedResource();
 
         _logsMenuItems.Add(new()
         {
@@ -468,8 +519,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             IsDivider = true
         });
-
-        var selectedResource = GetSelectedResource();
 
         // Only show the "Hide hidden resources" menu item when viewing all resources
         // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
@@ -514,7 +563,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
             Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
         });
-
         if (selectedResource != null)
         {
             if (ViewportInformation.IsDesktop)
@@ -718,35 +766,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         bool showHiddenResources,
         out SelectViewModel<ResourceTypeDetails>? optionToSelect)
     {
-        var builder = ImmutableList.CreateBuilder<SelectViewModel<ResourceTypeDetails>>();
-
-        foreach (var grouping in resourcesByName
-            .Where(r => !r.Value.IsResourceHidden(showHiddenResources))
-            .OrderBy(c => c.Value, ResourceViewModelNameComparer.Instance)
-            .GroupBy(r => r.Value.DisplayName, StringComparers.ResourceName))
-        {
-            string resourceName;
-
-            if (grouping.Count() > 1)
-            {
-                resourceName = grouping.Key;
-
-                builder.Add(new SelectViewModel<ResourceTypeDetails>
-                {
-                    Id = ResourceTypeDetails.CreateResourceGrouping(resourceName, true),
-                    Name = resourceName
-                });
-            }
-            else
-            {
-                resourceName = grouping.First().Value.DisplayName;
-            }
-
-            foreach (var resource in grouping.Select(g => g.Value).OrderBy(r => r, ResourceViewModelNameComparer.Instance))
-            {
-                builder.Add(ToOption(resource, grouping.Count() > 1, resourceName));
-            }
-        }
+        var builder = ResourceSelectHelpers.CreateOptions(resourcesByName, resourceUnknownStateText, showHiddenResources).ToBuilder();
 
         // If there are multiple resources, add "All" option.
         // If there is one resource then it is automatically selected.
@@ -763,35 +783,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         return builder.ToImmutableList();
 
-        SelectViewModel<ResourceTypeDetails> ToOption(ResourceViewModel resource, bool isReplica, string resourceName)
-        {
-            var id = isReplica
-                ? ResourceTypeDetails.CreateReplicaInstance(resource.Name, resourceName)
-                : ResourceTypeDetails.CreateSingleton(resource.Name, resourceName);
-
-            return new SelectViewModel<ResourceTypeDetails>
-            {
-                Id = id,
-                Name = GetDisplayText()
-            };
-
-            string GetDisplayText()
-            {
-                var resourceName = ResourceViewModel.GetResourceName(resource, resourcesByName);
-
-                if (resource.HasNoState())
-                {
-                    return $"{resourceName} ({resourceUnknownStateText})";
-                }
-
-                if (resource.IsRunningState())
-                {
-                    return resourceName;
-                }
-
-                return $"{resourceName} ({resource.State})";
-            }
-        }
     }
 
     private void UpdateResourcesList()
@@ -973,6 +964,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task ClearConsoleLogs(ResourceKey? key)
     {
         var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var resourceNames = key is null
+            ? DataSource.ResourceRepository.GetResources().Select(resource => resource.Name).ToList()
+            : [key.Value.ToString()];
+
+        await DataSource.ResourceRepository.ClearConsoleLogsAsync(resourceNames, now);
+
         var newFilters = key is null
             ? ConsoleLogsFilters.CreateClearAll(now)
             : ConsoleLogsManager.Filters.WithResourceCleared(key.Value.ToString(), now);
@@ -981,6 +978,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // This makes remove behavior persistent which matches removing telemetry.
         await ConsoleLogsManager.UpdateFiltersAsync(newFilters);
     }
+
+    private string? PauseText => PauseManager.ConsoleLogPauseIntervals.LastOrDefault() is { End: null } pause
+        ? string.Format(
+            CultureInfo.CurrentCulture,
+            Loc[nameof(Dashboard.Resources.ConsoleLogs.PauseInProgressText)],
+            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, pause.Start))
+        : null;
 
     private void OnPausedChanged(bool isPaused)
     {
@@ -1024,7 +1028,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     public async ValueTask DisposeAsync()
     {
-        _aiContext?.Dispose();
         ResetNoLogsMessage();
         _showNoLogsMessageCts?.Cancel();
         await TaskHelpers.WaitIgnoreCancelAsync(_showNoLogsMessageDelayTask);
@@ -1037,6 +1040,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await TaskHelpers.WaitIgnoreCancelAsync(_logEntryChannelReaderTask);
 
         await CancelAllSubscriptionsAsync();
+
         TelemetryContext.Dispose();
     }
 
@@ -1092,23 +1096,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         return new ConsoleLogsPageState(selectedResourceName);
     }
 
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(ConsoleLogs), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                if (GetSelectedResource() is { } selectedResource)
-                {
-                    builder.ConsoleLogs(context, selectedResource);
-                }
-                else
-                {
-                    builder.ConsoleLogs(context);
-                }
-            };
-        });
-    }
+    internal IReadOnlyList<MenuButtonItem> LogsMenuItemsForTest => _logsMenuItems;
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);
@@ -1119,4 +1107,5 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             new ComponentTelemetryProperty(TelemetryPropertyKeys.ConsoleLogsShowTimestamp, new AspireTelemetryProperty(_showTimestamp, AspireTelemetryPropertyType.UserSetting))
         ], Logger);
     }
+
 }

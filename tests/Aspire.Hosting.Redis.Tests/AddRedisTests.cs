@@ -7,12 +7,14 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREPERSISTENCE001
 
 namespace Aspire.Hosting.Redis.Tests;
 
@@ -266,6 +268,78 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithRedisCommanderHidesTheCommanderResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddRedis("myredis").WithRedisCommander();
+
+        var commander = Assert.Single(builder.Resources.OfType<RedisCommanderResource>());
+        var hidden = Assert.Single(commander.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public void WithRedisInsightHidesTheInsightResource()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddRedis("myredis").WithRedisInsight();
+
+        var insight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
+        var hidden = Assert.Single(insight.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+    }
+
+    [Fact]
+    public async Task WithRedisInsightAddsManagementLinkToEveryRedisResourceInTheApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis1 = builder.AddRedis("myredis1").WithRedisInsight();
+        var redis2 = builder.AddRedis("myredis2");
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var insight = Assert.Single(model.Resources.OfType<RedisInsightResource>());
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        foreach (var redis in new[] { redis1.Resource, redis2.Resource })
+        {
+            var managementUrl = await GetManagementUrlAsync(redis, "Manage (Insights)");
+            Assert.Equal(insight.Name, managementUrl.Endpoint?.Resource.Name);
+            Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
+            Assert.Equal("/", managementUrl.Url);
+            Assert.Single(insight.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
+        }
+    }
+
+    [Fact]
+    public async Task WithRedisCommanderAddsManagementLinkToEveryRedisResourceInTheApp()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis1 = builder.AddRedis("myredis1").WithRedisCommander();
+        var redis2 = builder.AddRedis("myredis2").WithRedisCommander();
+        // redis3 never calls WithRedisCommander() itself, but Commander manages every Redis resource in the app.
+        var redis3 = builder.AddRedis("myredis3");
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var commander = Assert.Single(model.Resources.OfType<RedisCommanderResource>());
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        foreach (var redis in new[] { redis1.Resource, redis2.Resource, redis3.Resource })
+        {
+            var managementUrl = await GetManagementUrlAsync(redis, "Manage (Commander)");
+            Assert.Equal(commander.Name, managementUrl.Endpoint?.Resource.Name);
+            Assert.Equal("http", managementUrl.Endpoint?.EndpointName);
+            Assert.Equal("/", managementUrl.Url);
+            Assert.Single(commander.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == redis);
+        }
+    }
+
+    [Fact]
     public async Task WithRedisInsightProducesCorrectEnvironmentVariables()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -278,17 +352,17 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         redis1.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
         redis2.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5002);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
         redis3.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5003);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
 
         var redisInsight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
@@ -655,6 +729,57 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.DoesNotContain("--save", args.Substring(saveIndex + 1));
     }
 
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForWellKnownModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Json);
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/rejson.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForModulePath()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule("/opt/redis/custom-module");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /opt/redis/custom-module", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForMultipleModules()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Search)
+            .WithModule("/opt/redis/custom-module.so");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/redisearch.so --loadmodule /opt/redis/custom-module.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleDeduplicatesCommandLineArgsForSameModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Json)
+            .WithModule("/usr/local/lib/redis/modules/rejson.so");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource);
+
+        Assert.Equal(1, args.Count(arg => arg == "--loadmodule"));
+        Assert.Equal(1, args.Count(arg => arg == "/usr/local/lib/redis/modules/rejson.so"));
+    }
+
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)
     {
         var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
@@ -706,7 +831,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
             .WithEndpoint("tcp", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             })
             .WithRedisInsight();
 
@@ -835,6 +960,27 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task RedisWithCertificateUsesTargetPortsForCommandLineArgs()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        using var cert = CreateTestCertificate();
+
+        var redis = builder.AddRedis("myredis", port: 12345)
+            .WithLifetime(ContainerLifetime.Persistent)
+            .WithHttpsCertificate(cert);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource, app.Services).AsTask().WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal("6379", args[args.IndexOf("--tls-port") + 1]);
+        Assert.Equal("6380", args[args.IndexOf("--port") + 1]);
+    }
+
+    [Fact]
     public async Task RedisConnectionStringResolvesWithTlsDynamically()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -896,6 +1042,20 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var connectionStringExpression = redis.Resource.ConnectionStringExpression;
         AssertContainsConditionalReference(connectionStringExpression.ValueExpression);
         Assert.DoesNotContain(",ssl=true", connectionStringExpression.ValueExpression);
+    }
+
+    private static async Task<ResourceUrlAnnotation> GetManagementUrlAsync(IResource resource, string displayText)
+    {
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            resource);
+
+        foreach (var callback in resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>())
+        {
+            await callback.Callback(context);
+        }
+
+        return Assert.Single(context.Urls, url => url.DisplayText == displayText);
     }
 
     private static X509Certificate2 CreateTestCertificate()

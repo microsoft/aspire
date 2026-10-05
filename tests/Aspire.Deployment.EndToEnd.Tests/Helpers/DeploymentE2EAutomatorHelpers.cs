@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -77,6 +76,10 @@ internal static class DeploymentE2EAutomatorHelpers
                     counter,
                     TimeSpan.FromSeconds(120));
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
+                if (strategy.LocalArchiveHiveLabel == "local")
+                {
+                    await auto.ConfigureLocalHiveAsync(counter);
+                }
                 break;
 
             case CliInstallMode.InstallScript:

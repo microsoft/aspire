@@ -12,6 +12,7 @@ namespace Aspire.Dashboard.Utils;
 
 internal static class GlobalizationHelpers
 {
+    private const string DefaultHtmlLanguageName = "en";
     private const int MaxCultureParentDepth = 5;
 
     public static List<CultureInfo> OrderedLocalizedCultures { get; }
@@ -30,6 +31,15 @@ internal static class GlobalizationHelpers
 
         // Order cultures for display in the UI with invariant culture. This prevents the order of languages changing when the culture changes.
         OrderedLocalizedCultures = localizedCultureInfos.OrderBy(c => c.NativeName, StringComparer.InvariantCultureIgnoreCase).ToList();
+    }
+
+    /// <summary>
+    /// Returns the language name used by the dashboard's HTML document.
+    /// </summary>
+    public static string GetHtmlLanguageName(CultureInfo culture)
+    {
+        // Invariant culture uses the English base resources, but its Name is empty.
+        return culture.Name is { Length: > 0 } languageName ? languageName : DefaultHtmlLanguageName;
     }
 
     private static Dictionary<string, List<CultureInfo>> GetExpandedLocalizedCultures(List<CultureInfo> localizedCultures, List<CultureInfo> allCultures)

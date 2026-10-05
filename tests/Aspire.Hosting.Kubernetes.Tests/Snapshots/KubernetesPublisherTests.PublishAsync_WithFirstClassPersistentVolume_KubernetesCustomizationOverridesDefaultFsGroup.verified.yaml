@@ -1,0 +1,40 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "StatefulSet"
+metadata:
+  name: "api-statefulset"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/component: "api"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "{{ .Values.parameters.api.api_image }}"
+          name: "api"
+          envFrom:
+            - configMapRef:
+                name: "api-config"
+          volumeMounts:
+            - name: "data"
+              mountPath: "/srv/data"
+          imagePullPolicy: "IfNotPresent"
+      volumes:
+        - name: "data"
+          persistentVolumeClaim:
+            claimName: "data"
+      securityContext:
+        fsGroup: 3000
+        fsGroupChangePolicy: "OnRootMismatch"
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/component: "api"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1

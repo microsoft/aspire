@@ -29,16 +29,15 @@ public partial class SpanActions : ComponentBase
     [Parameter]
     public required SpanWaterfallViewModel SpanViewModel { get; set; }
 
-    private readonly List<MenuButtonItem> _menuItems = new();
-
-    protected override void OnParametersSet()
+    private IList<MenuButtonItem> GetMenuItems()
     {
-        _menuItems.Clear();
-
+        var menuItems = new List<MenuButtonItem>();
         SpanMenuBuilder.AddMenuItems(
-            _menuItems,
+            menuItems,
             SpanViewModel.Span,
             EventCallback.Factory.Create(this, () => OnViewDetails.InvokeAsync(_menuButton?.MenuButtonId)),
             OnLaunchGenAI);
+
+        return menuItems;
     }
 }

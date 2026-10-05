@@ -31,7 +31,7 @@ internal sealed class RabbitMQEventSourceLogForwarder : IDisposable
     private void LogEvent(EventWrittenEventArgs eventData)
     {
         var level = MapLevel(eventData.Level);
-        var eventId = new EventId(eventData.EventId, eventData.EventName);
+        var eventId = new EventId(eventData.EventId);
 
         // Special case the Error event so the Exception Details are written correctly
         if (eventData.EventId == 3 &&

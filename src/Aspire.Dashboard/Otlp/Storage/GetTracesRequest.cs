@@ -7,16 +7,21 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed class GetTracesRequest
 {
-    public required ResourceKey? ResourceKey { get; init; }
+    public required IReadOnlyList<ResourceKey> ResourceKeys { get; init; }
     public required int StartIndex { get; init; }
     public required int Count { get; init; }
     public required List<TelemetryFilter> Filters { get; init; }
     public string? TraceNameFilterText { get; init; }
     public string[]? TextFragments { get; init; }
 
+    /// <summary>
+    /// Gets the maximum number of the latest matching traces available for paging.
+    /// </summary>
+    internal int? LatestItemCount { get; init; }
+
     public static GetTracesRequest ForResourceKey(ResourceKey resourceKey) => new()
     {
-        ResourceKey = resourceKey,
+        ResourceKeys = [resourceKey],
         StartIndex = 0,
         Count = int.MaxValue,
         Filters = []

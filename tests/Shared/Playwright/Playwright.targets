@@ -22,9 +22,32 @@
     <ItemGroup>
       <_EnvVarsForPlaywrightInstall Include="PLAYWRIGHT_BROWSERS_PATH=$(PlaywrightDependenciesDirectory)" />
       <_EnvVarsForPlaywrightInstall Condition="'$(ContinuousIntegrationBuild)' == 'true'" Include="PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true" />
+      <!-- Increase the download timeout from the default 30s to 120s to avoid transient CI failures -->
+      <_EnvVarsForPlaywrightInstall Condition="'$(ContinuousIntegrationBuild)' == 'true'" Include="PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000" />
     </ItemGroup>
 
-    <Exec Command="dotnet exec --runtimeconfig $(MSBuildThisFileDirectory)Microsoft.Playwright.runtimeconfig.json $(_MicrosoftPlaywrightDllPath) install @(BrowsersForPlaywrightToInstall, ' ')"
-          EnvironmentVariables="@(_EnvVarsForPlaywrightInstall)" />
+    <!-- Build the install command once so the initial attempt and retry cannot drift apart -->
+    <PropertyGroup>
+      <_PlaywrightInstallCommand>dotnet exec --runtimeconfig $(MSBuildThisFileDirectory)Microsoft.Playwright.runtimeconfig.json $(_MicrosoftPlaywrightDllPath) install @(BrowsersForPlaywrightToInstall, ' ')</_PlaywrightInstallCommand>
+    </PropertyGroup>
+
+    <!-- Playwright's install command tries multiple CDN mirrors internally and writes error
+         messages to stderr for mirrors that fail, even when it ultimately succeeds via a
+         fallback mirror. IgnoreStandardErrorWarningFormat prevents MSBuild from promoting
+         those transient error messages into build errors while the exit code still drives
+         overall success/failure. -->
+
+    <!-- First attempt ignores the exit code; if it fails, retry once and fail the build on the second failure -->
+    <Exec Command="$(_PlaywrightInstallCommand)"
+          EnvironmentVariables="@(_EnvVarsForPlaywrightInstall)"
+          IgnoreExitCode="true"
+          IgnoreStandardErrorWarningFormat="true">
+      <Output TaskParameter="ExitCode" PropertyName="_PlaywrightInstallExitCode1" />
+    </Exec>
+
+    <Exec Condition="'$(_PlaywrightInstallExitCode1)' != '0'"
+          Command="$(_PlaywrightInstallCommand)"
+          EnvironmentVariables="@(_EnvVarsForPlaywrightInstall)"
+          IgnoreStandardErrorWarningFormat="true" />
   </Target>
 </Project>

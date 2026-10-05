@@ -1,20 +1,22 @@
-# Aspire.Hosting.Valkey library
+# Valkey hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Valkey cache resource.
+Use this integration to model, configure, and orchestrate a Valkey cache resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Valkey Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Valkey` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Valkey
+```bash
+aspire add Aspire.Hosting.Valkey
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Valkey resource and consume the connection using the following methods:
+In the AppHost, add a Valkey resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var valkey = builder.AddValkey("cache");
@@ -22,6 +24,39 @@ var valkey = builder.AddValkey("cache");
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(valkey);
 ```
+
+**TypeScript**
+
+```typescript
+const valkey = await builder.addValkey("cache");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(valkey);
+```
+
+## REPL
+
+Call `WithRepl()` to opt into a **REPL** command on the Valkey resource in the dashboard:
+
+```csharp
+builder.AddValkey("valkey").WithRepl();
+```
+
+```typescript
+await builder.addValkey("valkey").withRepl();
+```
+
+REPL access is disabled by default and is available only in run mode. Enable it only for trusted dashboard
+users: the shell uses the resource's configured credentials and is not read-only. Sharing the dashboard
+through a tunnel, Codespaces, or VS Code remote development also exposes this capability to users who can
+execute resource commands.
+
+Use `quit` before closing the terminal tab to end the session cleanly. Closing the tab alone can
+leave `valkey-cli` running inside the container. Stopping the container also ends any remaining REPL processes.
+
+When the container is running, this opens an authenticated `valkey-cli` session in the terminal dock.
+Use `quit` to exit. The session runs inside the container using Docker (or the configured Podman runtime);
+no local Valkey client is required. Passwords are passed through environment variables, not command-line arguments.
 
 ## Connection Properties
 
@@ -42,10 +77,11 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/caching/valkey/valkey-host/
 * https://valkey.io
 * https://github.com/valkey-io/valkey/blob/unstable/README.md
-* https://stackexchange.github.io/StackExchange.Redis/Basics
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://valkey.io/docs/
 
 ## Feedback & contributing
 

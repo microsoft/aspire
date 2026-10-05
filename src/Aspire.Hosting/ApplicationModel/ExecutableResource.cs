@@ -27,6 +27,7 @@ public class ExecutableResource : Resource, IResourceWithEnvironment, IResourceW
     /// <param name="workingDirectory">The working directory of the executable. Can be empty.</param>
     public ExecutableResource(string name, string command, string workingDirectory) : base(name)
     {
+        Annotations.Add(new ExecutableLaunchRecipeAnnotation(DirectExecutableLaunchRecipe.Instance));
         Annotations.Add(new ExecutableAnnotation
         {
             Command = ThrowIfNullOrEmpty(command),

@@ -35,7 +35,8 @@ public static class DurableTaskResourceExtensions
 
         scheduler.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
-        return builder.AddResource(scheduler);
+        return builder.AddResource(scheduler)
+            .WithIconName("CalendarClock");
     }
 
     /// <summary>
@@ -149,7 +150,11 @@ public static class DurableTaskResourceExtensions
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
                .WithHttpEndpoint(name: "dashboard", targetPort: 8082)
-               .WithUrlForEndpoint("dashboard", c => c.DisplayText = "Scheduler Dashboard")
+               .WithUrlForEndpoint("dashboard", c =>
+               {
+                   c.DisplayText = "Manage";
+                   c.DisplayOrder = 1;
+               })
                .WithAnnotation(new ContainerImageAnnotation
                {
                    Registry = DurableTaskSchedulerEmulatorContainerImageTags.Registry,
@@ -220,7 +225,8 @@ public static class DurableTaskResourceExtensions
 
         hub.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
-        var hubBuilder = builder.ApplicationBuilder.AddResource(hub);
+        var hubBuilder = builder.ApplicationBuilder.AddResource(hub)
+            .WithIconName("CalendarClock");
 
         hubBuilder.OnResourceReady(
             async (r, e, ct) =>

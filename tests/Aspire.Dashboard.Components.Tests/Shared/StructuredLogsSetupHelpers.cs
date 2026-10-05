@@ -3,7 +3,6 @@
 
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
@@ -16,7 +15,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class StructuredLogsSetupHelpers
 {
-    public static void SetupStructuredLogsDetails(TestContext context)
+    public static void SetupStructuredLogsDetails(BunitContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();

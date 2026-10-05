@@ -8,7 +8,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -40,8 +39,10 @@ internal sealed class PublishCommand : PipelineCommandBase
 
     private readonly IPublishCommandPrompter _prompter;
 
-    public PublishCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, IPublishCommandPrompter prompter, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, AspireSecretsStoreResolver aspireSecretsStoreResolver, ILogger<PublishCommand> logger, IAnsiConsole ansiConsole)
-        : base("publish", PublishCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, aspireSecretsStoreResolver, logger, ansiConsole)
+    public PublishCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IPublishCommandPrompter prompter, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<PublishCommand> logger, IAnsiConsole ansiConsole,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
+        CommonCommandServices services)
+        : base("publish", PublishCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
         _prompter = prompter;
     }
@@ -50,7 +51,7 @@ internal sealed class PublishCommand : PipelineCommandBase
     protected override string OperationFailedPrefix => PublishCommandStrings.OperationFailedPrefix;
     protected override string GetOutputPathDescription() => PublishCommandStrings.OutputPathArgumentDescription;
 
-    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var baseArgs = new List<string> { "--operation", "publish", "--step", "publish" };
 

@@ -171,7 +171,9 @@ internal sealed class AppHostServerClosureManifest
             {
                 Name = Path.GetFileNameWithoutExtension(entry.RelativePath),
                 Culture = TryGetSatelliteCulture(entry),
-                Path = entry.SourcePath
+                Path = entry.SourcePath,
+                PackageId = entry.PackageId,
+                PackageVersion = entry.PackageVersion
             });
         }
 

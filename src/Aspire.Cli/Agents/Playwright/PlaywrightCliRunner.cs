@@ -24,31 +24,20 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
 
         try
         {
-            var startInfo = new ProcessStartInfo(executablePath, "--version")
+            var result = await Process.RunAndCaptureTextAsync(new ProcessStartInfo(executablePath, "--version")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
-            };
+            }, cancellationToken).ConfigureAwait(false);
 
-            using var process = new Process { StartInfo = startInfo };
-            process.Start();
-
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("playwright-cli --version returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
+                logger.LogDebug("playwright-cli --version returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            var output = await outputTask.ConfigureAwait(false);
-            var versionString = output.Trim().Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+            var versionString = result.StandardOutput.Trim().Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
 
             if (string.IsNullOrEmpty(versionString))
             {
@@ -89,35 +78,23 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
 
         try
         {
-            var startInfo = new ProcessStartInfo(executablePath)
+            var startInfo = new ProcessStartInfo(executablePath, ["install", "--skills"])
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = workingDirectory
             };
 
-            startInfo.ArgumentList.Add("install");
-            startInfo.ArgumentList.Add("--skills");
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
 
-            using var process = new Process { StartInfo = startInfo };
-            process.Start();
-
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("playwright-cli install --skills returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
+                logger.LogDebug("playwright-cli install --skills returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return false;
             }
 
-            var output = await outputTask.ConfigureAwait(false);
-            logger.LogDebug("playwright-cli install --skills output: {Output}", output.Trim());
+            logger.LogDebug("playwright-cli install --skills output: {Output}", result.StandardOutput.Trim());
             return true;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)

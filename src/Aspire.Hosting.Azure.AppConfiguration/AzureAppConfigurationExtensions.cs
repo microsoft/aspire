@@ -16,6 +16,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureAppConfigurationExtensions
 {
+    private const string EmulatorEndpointName = "emulator";
+
     /// <summary>
     /// Adds an Azure App Configuration resource to the application model.
     /// </summary>
@@ -82,6 +84,7 @@ public static class AzureAppConfigurationExtensions
 
         var resource = new AzureAppConfigurationResource(name, configureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("Settings")
             .WithDefaultRoleAssignments(AppConfigurationBuiltInRole.GetBuiltInRoleName,
                 AppConfigurationBuiltInRole.AppConfigurationDataOwner);
     }
@@ -105,7 +108,8 @@ public static class AzureAppConfigurationExtensions
             return builder;
         }
 
-        builder.WithHttpEndpoint(name: "emulator", targetPort: 8483)
+        builder.WithHttpEndpoint(name: EmulatorEndpointName, targetPort: 8483)
+            .WithHttpHealthCheck(endpointName: EmulatorEndpointName, path: "/health")
             .WithAnnotation(new ContainerImageAnnotation
             {
                 Registry = AppConfigurationEmulatorContainerImageTags.Registry,
@@ -165,7 +169,7 @@ public static class AzureAppConfigurationExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithEndpoint("emulator", endpoint =>
+        return builder.WithEndpoint(EmulatorEndpointName, endpoint =>
         {
             endpoint.Port = port;
         });

@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "AppHost.java",
+    "language": "java"
+  },
+  "features": {
+    "experimentalPolyglotJava": true
+  },
+  "packages": {
+    "Aspire.Hosting.Java": ""
+  }
+}

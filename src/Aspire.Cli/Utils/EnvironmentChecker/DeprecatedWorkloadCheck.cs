@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.DotNet;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -13,9 +14,18 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// The 'aspire' workload has been deprecated and should be uninstalled.
 /// Users with this workload installed may encounter conflicts or confusion.
 /// </remarks>
-internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger) : IEnvironmentCheck
+internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, IEnvironment environment) : IEnvironmentCheck
 {
+    internal const string CheckName = "aspire-workload";
+
     private static readonly TimeSpan s_processTimeout = TimeSpan.FromSeconds(10);
+    private readonly Func<ProcessStartInfo, CancellationToken, Task<ProcessTextOutput>> _runProcess = Process.RunAndCaptureTextAsync;
+
+    internal DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> logger, IEnvironment environment, Func<ProcessStartInfo, CancellationToken, Task<ProcessTextOutput>> runProcess)
+        : this(logger, environment)
+    {
+        _runProcess = runProcess;
+    }
 
     public int Order => 32; // After SDK check (30), before dev certs (35)
 
@@ -23,43 +33,31 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
     {
         try
         {
-            var processInfo = new ProcessStartInfo
+            var processInfo = new ProcessStartInfo(DotNetSdkInstaller.ResolveDotNetPath(environment), "workload list")
             {
-                FileName = "dotnet",
-                Arguments = "workload list",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                UseShellExecute = false,
                 CreateNoWindow = true
             };
-
-            using var process = Process.Start(processInfo);
-            if (process is null)
-            {
-                logger.LogDebug("Failed to start dotnet workload list process");
-                // Don't fail the check if we can't run the command - the SDK check will catch SDK issues
-                return [];
-            }
 
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(s_processTimeout);
 
-            string output;
+            ProcessTextOutput result;
             try
             {
-                output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-                await process.WaitForExitAsync(timeoutCts.Token);
+                // RunAndCaptureTextAsync kills the process when the timeout fires, so no cleanup is needed here.
+                result = await _runProcess(processInfo, timeoutCts.Token);
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                process.Kill();
                 logger.LogDebug("dotnet workload list timed out");
                 return [];
             }
 
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                logger.LogDebug("dotnet workload list exited with code {ExitCode}", process.ExitCode);
+                logger.LogDebug("dotnet workload list exited with code {ExitCode}", result.ExitStatus.ExitCode);
                 return [];
             }
 
@@ -68,12 +66,12 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             // Installed Workload Id      Manifest Version       Installation Source
             // --------------------------------------------------------------------
             // aspire                     8.0.0/8.0.100          SDK 8.0.100
-            if (IsAspireWorkloadInstalled(output))
+            if (IsAspireWorkloadInstalled(result.StandardOutput))
             {
                 return [new EnvironmentCheckResult
                 {
-                    Category = "sdk",
-                    Name = "aspire-workload",
+                    Category = EnvironmentCheckCategories.Sdk,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "Deprecated 'aspire' workload is installed",
                     Details = "The 'aspire' workload has been deprecated and causes conflicts with modern Aspire projects.",
@@ -114,7 +112,7 @@ internal sealed class DeprecatedWorkloadCheck(ILogger<DeprecatedWorkloadCheck> l
             // Skip header lines, separator lines, and informational lines
             if (trimmedLine.StartsWith("Installed", StringComparison.OrdinalIgnoreCase) ||
                 trimmedLine.StartsWith("Workload version:", StringComparison.OrdinalIgnoreCase) ||
-                trimmedLine.StartsWith("---") ||
+                trimmedLine.StartsWith("---", StringComparison.Ordinal) ||
                 trimmedLine.StartsWith("Use", StringComparison.OrdinalIgnoreCase) ||
                 string.IsNullOrWhiteSpace(trimmedLine))
             {

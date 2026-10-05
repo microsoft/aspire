@@ -60,7 +60,11 @@ internal sealed class AtsMarshaller
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
+        Converters =
+        {
+            new JsonStringEnumConverter(),
+            new TimeSpanMillisecondsJsonConverter()
+        },
         ReferenceHandler = ReferenceHandler.IgnoreCycles,
         TypeInfoResolver = new DefaultJsonTypeInfoResolver()
     };
@@ -157,8 +161,28 @@ internal sealed class AtsMarshaller
             AtsTypeCategory.Array => SerializeArray(value, typeRef.ElementType),
             AtsTypeCategory.List => _handles.Marshal(value, typeRef.TypeId),
             AtsTypeCategory.Dict => _handles.Marshal(value, typeRef.TypeId),
+            AtsTypeCategory.Union => MarshalUnion(value, typeRef),
             _ => throw new InvalidOperationException($"Unknown type category: {typeRef.Category}")
         };
+    }
+
+    private JsonNode? MarshalUnion(object value, AtsTypeRef typeRef)
+    {
+        // Union properties can return either a literal or a handle (for example a Bicep
+        // expression). Marshal the matching declared member so handles retain their type IDs.
+        if (typeRef.UnionTypes is { } members)
+        {
+            foreach (var member in members)
+            {
+                if (member.ClrType?.IsInstanceOfType(value) == true)
+                {
+                    return MarshalToJson(value, member);
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Value of type '{value.GetType()}' does not match any member of union '{typeRef.TypeId}'.");
     }
 
     /// <summary>
@@ -229,6 +253,43 @@ internal sealed class AtsMarshaller
     {
         var json = JsonSerializer.Serialize(value, s_jsonOptions);
         return JsonNode.Parse(json);
+    }
+
+    private sealed class TimeSpanMillisecondsJsonConverter : JsonConverter<TimeSpan>
+    {
+        public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                var milliseconds = reader.GetDouble();
+                if (!double.IsFinite(milliseconds))
+                {
+                    throw new JsonException("TimeSpan milliseconds must be a finite number.");
+                }
+
+                try
+                {
+                    return TimeSpan.FromMilliseconds(milliseconds);
+                }
+                catch (OverflowException ex)
+                {
+                    throw new JsonException("TimeSpan milliseconds are outside the supported range.", ex);
+                }
+            }
+
+            if (reader.TokenType == JsonTokenType.String &&
+                TimeSpan.TryParse(reader.GetString(), System.Globalization.CultureInfo.InvariantCulture, out var value))
+            {
+                return value;
+            }
+
+            throw new JsonException("TimeSpan values must be milliseconds or a standard TimeSpan string.");
+        }
+
+        public override void Write(Utf8JsonWriter writer, TimeSpan value, JsonSerializerOptions options)
+        {
+            writer.WriteNumberValue(value.TotalMilliseconds);
+        }
     }
 
     private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)

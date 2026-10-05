@@ -17,6 +17,8 @@ func main() {
 	helmChartName := builder.AddParameter("helm-chart-name")
 	helmChartVersion := builder.AddParameter("helm-chart-version")
 	helmChartDescription := builder.AddParameter("helm-chart-description")
+	persistentVolumeStorageClass := builder.AddParameter("persistent-volume-storage-class")
+	persistentVolumeCapacity := builder.AddParameter("persistent-volume-capacity")
 
 	kubernetes := builder.AddKubernetesEnvironment("kube")
 	kubernetes.WithHelm(&aspire.WithHelmOptions{
@@ -36,7 +38,7 @@ func main() {
 	kubernetes.WithProperties(func(environment aspire.KubernetesEnvironmentResource) {
 		environment.SetDefaultStorageType("pvc")
 		_, _ = environment.DefaultStorageType()
-		environment.SetDefaultStorageClassName("fast-storage")
+		environment.SetDefaultStorageClassName(aspire.StringPtr("fast-storage"))
 		_, _ = environment.DefaultStorageClassName()
 		environment.SetDefaultStorageSize("5Gi")
 		_, _ = environment.DefaultStorageSize()
@@ -60,6 +62,15 @@ func main() {
 	ingress := kubernetes.AddIngress("public-ingress")
 	ingress.WithHostname("ingress.example.com")
 	ingress.WithTls("ingress-tls")
+
+	persistentVolume := kubernetes.AddPersistentVolume("data")
+	persistentVolume.WithStorageClass("fast-storage")
+	persistentVolume.WithCapacity("5Gi")
+	_, _ = persistentVolume.GetResourceName()
+
+	parameterizedPersistentVolume := kubernetes.AddPersistentVolume("parameterized-data")
+	parameterizedPersistentVolume.WithStorageClassParam(persistentVolumeStorageClass)
+	parameterizedPersistentVolume.WithCapacityParam(persistentVolumeCapacity)
 
 	serviceContainer := builder.AddContainer("kube-service", "redis:alpine")
 	serviceContainer.WithComputeEnvironment(kubernetes)

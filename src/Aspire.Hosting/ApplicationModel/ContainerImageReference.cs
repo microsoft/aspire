@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPROJECTS001
 
 using System.Diagnostics;
 using Aspire.Hosting.Publishing;
@@ -45,7 +46,7 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {
         // Check if this resource is configured to save as an archive instead of pushing to a registry
-        if (context.ExecutionContext?.ServiceProvider is { } serviceProvider)
+        if (context.ExecutionContext?.Services is { } serviceProvider)
         {
             var logger = Resource.GetLogger(serviceProvider);
             var buildOptionsContext = await Resource.ProcessContainerBuildOptionsCallbackAsync(
@@ -59,6 +60,12 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
             {
                 if (!string.IsNullOrEmpty(buildOptionsContext.OutputPath))
                 {
+                    if (Resource.SupportsDotnetProgramPublishing() &&
+                        DotnetProgramPublishing.IsExplicitArchiveOutputPath(buildOptionsContext.OutputPath))
+                    {
+                        return buildOptionsContext.OutputPath;
+                    }
+
                     var imageName = buildOptionsContext.LocalImageName ?? Resource.Name.ToLowerInvariant();
                     var imageTag = buildOptionsContext.LocalImageTag;
                     return ResourceExtensions.GetContainerImageArchivePath(buildOptionsContext.OutputPath, imageName, imageTag);

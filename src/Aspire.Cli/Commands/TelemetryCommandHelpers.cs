@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Net;
-using System.Net.Http.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
@@ -465,6 +464,11 @@ internal static class TelemetryCommandHelpers
         }
     }
 
+    /// <summary>
+    /// Resolves an OTLP resource name from the dashboard telemetry resources API into resource filters used by
+    /// CLI telemetry commands, telemetry export, and telemetry MCP tools. A unique composite name identifies one
+    /// replica, an ambiguous composite name is rejected, and a base resource name resolves all matching replicas.
+    /// </summary>
     public static bool TryResolveResourceNames(
         string? resourceName,
         IList<ResourceInfoJson> resources,
@@ -483,24 +487,12 @@ internal static class TelemetryCommandHelpers
             return false;
         }
 
-        // First, try exact match on display name (full instance name like "catalogservice-abc123")
-        var exactMatch = resources.FirstOrDefault(r =>
-            string.Equals(r.GetCompositeName(), resourceName, StringComparison.OrdinalIgnoreCase));
-        if (exactMatch is not null)
+        var matches = OtlpHelpers.ResolveResourceNameMatches(resourceName, ToOtlpResources(resources));
+        if (matches.Count > 0)
         {
-            resolvedResources = [exactMatch.GetCompositeName()];
-            return true;
-        }
-
-        // Then, try matching by base name to find all replicas
-        var matchingReplicas = resources
-            .Where(r => string.Equals(r.Name, resourceName, StringComparison.OrdinalIgnoreCase))
-            .Select(r => r.GetCompositeName())
-            .ToList();
-
-        if (matchingReplicas.Count > 0)
-        {
-            resolvedResources = matchingReplicas;
+            resolvedResources = matches
+                .Select(r => r.InstanceId is null ? r.ResourceName : $"{r.ResourceName}-{r.InstanceId}")
+                .ToList();
             return true;
         }
 
@@ -608,13 +600,35 @@ internal static class TelemetryCommandHelpers
     /// <summary>
     /// Reads lines from an HTTP streaming response, yielding each complete line as it arrives.
     /// </summary>
+    public static IAsyncEnumerable<string> ReadLinesAsync(this StreamReader reader, CancellationToken cancellationToken)
+    {
+        return reader.ReadLinesAsync(onError: null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads complete lines, stopping if the optional error handler returns true and propagating unhandled errors.
+    /// </summary>
     public static async IAsyncEnumerable<string> ReadLinesAsync(
         this StreamReader reader,
+        Func<Exception, bool>? onError,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (onError is not null)
+            {
+                if (!onError(ex))
+                {
+                    throw;
+                }
+
+                yield break;
+            }
             if (line is null)
             {
                 yield break;
@@ -628,12 +642,46 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
-    /// Converts an array of <see cref="ResourceInfoJson"/> to a list of <see cref="IOtlpResource"/> for use with <see cref="OtlpHelpers.GetResourceName"/>.
+    /// Reads complete lines from an HTTP streaming response and reports expected disconnects.
     /// </summary>
-    public static IReadOnlyList<IOtlpResource> ToOtlpResources(ResourceInfoJson[] resources)
+    public static async IAsyncEnumerable<string> ReadLinesWithDisconnectHandlingAsync(
+        this StreamReader reader,
+        IInteractionService interactionService,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var result = new IOtlpResource[resources.Length];
-        for (var i = 0; i < resources.Length; i++)
+        await foreach (var line in reader.ReadLinesAsync(OnError, cancellationToken).ConfigureAwait(false))
+        {
+            yield return line;
+        }
+
+        bool OnError(Exception ex)
+        {
+            if (ex is IOException ioException &&
+                (ioException is HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded } ||
+                SocketExceptionHelpers.IsConnectionReset(ioException)))
+            {
+                // Dashboard shutdown can truncate a chunked NDJSON response instead of sending its
+                // final chunk. Treat the closed follow stream like a backchannel disconnect, but
+                // keep request failures, invalid telemetry, and other I/O failures as errors.
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    interactionService.DisplayRawText(TelemetryCommandStrings.DashboardConnectionLost, ConsoleOutput.Error);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Converts resource information to a list of <see cref="IOtlpResource"/> values.
+    /// </summary>
+    public static IReadOnlyList<IOtlpResource> ToOtlpResources(IList<ResourceInfoJson> resources)
+    {
+        var result = new IOtlpResource[resources.Count];
+        for (var i = 0; i < resources.Count; i++)
         {
             result[i] = new SimpleOtlpResource(resources[i].Name, resources[i].InstanceId);
         }

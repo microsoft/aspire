@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
@@ -26,10 +27,12 @@ internal interface IAppHostCliBackchannel
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken);
+    Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken);
 }
 
 internal sealed class AppHostCliBackchannel(
     ILogger<AppHostCliBackchannel> logger,
+    IEnvironment environment,
     AspireCliTelemetry telemetry,
     ProfilingTelemetry profilingTelemetry) : IAppHostCliBackchannel
 {
@@ -165,7 +168,7 @@ internal sealed class AppHostCliBackchannel(
 
                 logger.LogDebug("Received {OperationName} async enumerable", operationName);
             }
-            catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
+            catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 logger.LogDebug("Connection lost while getting {OperationName}, waiting for reconnect...", operationName);
                 await WaitForReconnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -215,7 +218,7 @@ internal sealed class AppHostCliBackchannel(
                     }
                     current = enumerator.Current;
                 }
-                catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
+                catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
                 {
                     source.RetryBecauseConnectionLost = true;
 
@@ -233,18 +236,11 @@ internal sealed class AppHostCliBackchannel(
             {
                 await enumerator.DisposeAsync().ConfigureAwait(false);
             }
-            catch (Exception ex) when (IsConnectionLostException(ex))
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 logger.LogDebug("Ignoring connection lost exception during enumerator disposal");
             }
         }
-    }
-
-    private static bool IsConnectionLostException(Exception ex)
-    {
-        return ex is ConnectionLostException
-            || ex is ObjectDisposedException
-            || (ex is OperationCanceledException && ex.InnerException is ConnectionLostException);
     }
 
     private async Task WaitForReconnectionAsync(CancellationToken cancellationToken)
@@ -547,6 +543,45 @@ internal sealed class AppHostCliBackchannel(
             cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Received {StepCount} pipeline steps.", response.Steps.Length);
+
+        return response;
+    }
+
+    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, int interactionId, string inputName, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+
+        logger.LogDebug("Uploading file {FileName} from {FilePath}", fileName, filePath);
+
+        // Enforce the server-side upload limit on the client before reading the file into memory,
+        // preventing unbounded memory allocation for very large files. The server also checks this
+        // limit, so this is a client-side guard to avoid OOM before the rejection arrives.
+        var maxUploadFileSize = long.TryParse(environment.GetEnvironmentVariable(KnownConfigNames.MaxFileUploadSize), out var parsed)
+            ? parsed
+            : FileUploadHelpers.DefaultMaxFileUploadSize;
+        var fileInfo = new FileInfo(filePath);
+        if (fileInfo.Length > maxUploadFileSize)
+        {
+            throw new InvalidOperationException(
+                $"File '{fileName}' ({fileInfo.Length} bytes) exceeds the maximum upload size of {maxUploadFileSize} bytes. " +
+                $"To increase the limit, set the {KnownConfigNames.MaxFileUploadSize} environment variable.");
+        }
+
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        // Known limitation: the entire file is loaded into memory because StreamJsonRpc does not
+        // support streaming byte payloads. The server-side upload limit (default 100 MB) bounds
+        // worst-case memory usage. The Dashboard path uses gRPC streaming and avoids this.
+        var data = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+
+        var response = await rpc.InvokeWithProfilingAsync<UploadFileResponse>(
+            profilingTelemetry,
+            "apphost",
+            "UploadFileAsync",
+            [new UploadFileRequest { Data = data, FileName = fileName, InteractionId = interactionId, InputName = inputName }],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("File uploaded with ID {FileId}", response.FileId);
 
         return response;
     }

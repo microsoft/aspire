@@ -42,7 +42,7 @@ internal sealed class AppHostProjectFactory : IAppHostProjectFactory
     public IAppHostProject? TryGetProject(FileInfo appHostFile)
     {
         _logger.LogDebug("TryGetProject called for file: {AppHostFile}", appHostFile.FullName);
-        
+
         var language = _languageDiscovery.GetLanguageByFile(appHostFile);
         if (language is null)
         {

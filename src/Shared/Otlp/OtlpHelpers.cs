@@ -99,15 +99,17 @@ public static partial class OtlpHelpers
                     var instanceId = resource.InstanceId;
 
                     // Convert long GUID into a shorter, more human friendly format.
+                    // The last characters are used because version 7 GUIDs created close
+                    // in time share the same leading characters, e.g. Guid.CreateVersion7().
                     // Before: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
-                    // After:  aaaaaaaa
+                    // After:  eeeeeeee
                     if (instanceId != null && Guid.TryParse(instanceId, out var guid))
                     {
                         Span<char> chars = stackalloc char[32];
-                        var result = guid.TryFormat(chars, charsWritten: out _, format: "N");
+                        var result = guid.TryFormat(chars, out var charsWritten, format: "N");
                         Debug.Assert(result, "Guid.TryFormat not successful.");
 
-                        instanceId = chars.Slice(0, 8).ToString();
+                        instanceId = chars.Slice(charsWritten - 8, 8).ToString();
                     }
 
                     if (instanceId == null)
@@ -121,5 +123,48 @@ public static partial class OtlpHelpers
         }
 
         return resource.ResourceName;
+    }
+
+    /// <summary>
+    /// Finds a resource by composite name first, then falls back to all resources with the base name.
+    /// Returns no matches when a composite name identifies multiple resources or also matches a resource's
+    /// base name because joining the resource name and instance ID with a dash is not guaranteed to produce
+    /// a unique value.
+    /// </summary>
+    internal static IReadOnlyList<T> ResolveResourceNameMatches<T>(string resourceName, IEnumerable<T> resources)
+        where T : IOtlpResource
+    {
+        var compositeNameMatches = new List<T>();
+        var resourceNameMatches = new List<T>();
+
+        foreach (var resource in resources)
+        {
+            if (resource.InstanceId is { } instanceId && EqualsCompositeName(resource.ResourceName, instanceId, resourceName))
+            {
+                compositeNameMatches.Add(resource);
+            }
+
+            if (string.Equals(resource.ResourceName, resourceName, StringComparisons.ResourceName))
+            {
+                resourceNameMatches.Add(resource);
+            }
+        }
+
+        return compositeNameMatches.Count switch
+        {
+            0 => resourceNameMatches,
+            1 when resourceNameMatches.Count == 0 => compositeNameMatches,
+            _ => []
+        };
+    }
+
+    private static bool EqualsCompositeName(string resourceName, string instanceId, string value)
+    {
+        // Composite names have the format "{resourceName}-{instanceId}". Compare each
+        // segment without allocating the composite string because this runs for every resource.
+        return value.Length == resourceName.Length + instanceId.Length + 1
+            && value.AsSpan(0, resourceName.Length).Equals(resourceName, StringComparisons.ResourceName)
+            && value[resourceName.Length] == '-'
+            && value.AsSpan(resourceName.Length + 1, instanceId.Length).Equals(instanceId, StringComparisons.ResourceName);
     }
 }

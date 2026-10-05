@@ -1,6 +1,6 @@
-# Aspire.Hosting.Azure.Redis library
+# Azure Cache for Redis hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Managed Redis.
+Use this integration to model, configure, and orchestrate Azure Managed Redis in an Aspire solution.
 
 > **Note**: The `AddAzureRedis` method is obsolete. Use `AddAzureManagedRedis` instead, which provisions Azure Managed Redis. Azure Cache for Redis announced its [retirement timeline](https://learn.microsoft.com/azure/azure-cache-for-redis/retirement-faq).
 
@@ -10,29 +10,24 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 - Azure subscription - [create one for free](https://azure.microsoft.com/free/)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the `Aspire.Hosting.Azure.Redis` library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Azure.Redis` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Azure.Redis
+```bash
+aspire add Aspire.Hosting.Azure.Redis
 ```
 
 ## Configure Azure Provisioning for local development
 
-Adding Azure resources to the Aspire application model will automatically enable development-time provisioning
+Adding Azure resources to the AppHost model will automatically enable development-time provisioning
 for Azure resources so that you don't need to configure them manually. Provisioning requires a number of settings
-to be available via .NET configuration. Set these values in user secrets in order to allow resources to be configured
-automatically.
+to be available via AppHost configuration. From your AppHost directory, set these values with `aspire secret set`:
 
-```json
-{
-    "Azure": {
-      "SubscriptionId": "<your subscription id>",
-      "ResourceGroupPrefix": "<prefix for the resource group>",
-      "Location": "<azure location>"
-    }
-}
+```bash
+aspire secret set Azure:SubscriptionId "<your subscription id>"
+aspire secret set Azure:ResourceGroupPrefix "<prefix for the resource group>"
+aspire secret set Azure:Location "<azure location>"
 ```
 
 > NOTE: Developers must have Owner access to the target subscription so that role assignments
@@ -40,7 +35,9 @@ automatically.
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, register an Azure Managed Redis resource using the following methods:
+In the AppHost, register an Azure Managed Redis resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var redis = builder.AddAzureManagedRedis("cache");
@@ -49,11 +46,13 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(redis);
 ```
 
-The `WithReference` method configures a connection in the `MyService` project named `cache`. By default, `AddAzureManagedRedis` configures [Microsoft Entra ID](https://learn.microsoft.com/azure/redis/entra-for-authentication) authentication. This requires changes to applications that need to connect to these resources. In the _Program.cs_ file of `MyService`, the redis connection can be consumed using the client library [Aspire.Microsoft.Azure.StackExchangeRedis](https://www.nuget.org/packages/Aspire.Microsoft.Azure.StackExchangeRedis):
+**TypeScript**
 
-```csharp
-builder.AddRedisClientBuilder("cache")
-       .WithAzureAuthentication();
+```typescript
+const redis = await builder.addAzureManagedRedis("cache");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(redis);
 ```
 
 ## Connection Properties
@@ -73,8 +72,9 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://stackexchange.github.io/StackExchange.Redis/Basics
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/cloud/azure/azure-cache-redis/azure-cache-redis-host/
+* https://learn.microsoft.com/azure/azure-cache-for-redis/cache-overview
 
 ## Feedback & contributing
 

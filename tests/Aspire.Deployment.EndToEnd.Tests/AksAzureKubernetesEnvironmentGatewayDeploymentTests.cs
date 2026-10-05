@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -11,7 +10,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// <summary>
 /// End-to-end test for the <c>AddAzureKubernetesEnvironment</c> + <c>AddLoadBalancer</c> +
 /// <c>AddGateway</c> story. The Aspire deploy pipeline provisions the AKS cluster, ACR, VNet,
-/// the AGC ingress profile (via the Bicep change in this PR), the AGC ALB controller add-on,
+/// the AGC ingress profile, the AGC ALB controller add-on,
 /// the <c>ApplicationLoadBalancer</c> CR, and the Gateway API <c>Gateway</c> + <c>HTTPRoute</c>
 /// resources. The test then waits for the AGC data plane to assign an FQDN to the gateway and
 /// verifies the API service is reachable over plain HTTP via that FQDN.
@@ -114,9 +113,9 @@ public sealed class AksAzureKubernetesEnvironmentGatewayDeploymentTests(ITestOut
 
             var content = File.ReadAllText(appHostFilePath);
 
-            // The AGC ingress profile + ApplicationLoadBalancer + Gateway/HTTPRoute pieces that
-            // this PR adds. Inject before builder.Build().Run();. Use Standard_D2as_v5 to match
-            // the other AKS deployment tests' SKU/region quota story.
+            // Inject the AGC ingress profile + ApplicationLoadBalancer + Gateway/HTTPRoute pieces
+            // before builder.Build().Run();. Use Standard_D2as_v5 to match the other AKS deployment
+            // tests' SKU/region quota story.
             const string buildRunPattern = "builder.Build().Run();";
             const string replacement = """
 // VNet layout chosen to avoid the AKS default service CIDR (10.0.0.0/16):
@@ -133,7 +132,7 @@ var aks = builder.AddAzureKubernetesEnvironment("aks")
 aks.AddNodePool("workload", "Standard_D2as_v5", minCount: 1, maxCount: 3);
 
 // AddLoadBalancer creates the AGC ApplicationLoadBalancer CR, delegates the frontend subnet
-// to Microsoft.ServiceNetworking, and (per this PR) ensures the AGC managed identity gets
+// to Microsoft.ServiceNetworking, and ensures the AGC managed identity gets
 // Network Contributor on the subnet so the controller can program the data plane.
 var publicLb = aks.AddLoadBalancer("public", albSubnet);
 
@@ -185,7 +184,9 @@ builder.Build().Run();
             //   the rest of the AKS deployment tests).
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name so the finally
             //   block can clean it up.
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            // Unset the job-level Azure__Location=westus3 the CI workflow injects: on Linux it coexists
+            // with AZURE__LOCATION (case-sensitive env) and .NET config may bind the inherited westus3 instead.
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && unset Azure__Location && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

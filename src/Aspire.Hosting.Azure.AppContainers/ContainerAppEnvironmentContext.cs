@@ -19,7 +19,7 @@ internal sealed class ContainerAppEnvironmentContext(
 
     public AzureContainerAppEnvironmentResource Environment => environment;
 
-    public IServiceProvider ServiceProvider => serviceProvider;
+    public IServiceProvider Services => serviceProvider;
 
     private readonly Dictionary<IResource, BaseContainerAppContext> _containerApps = new(new ResourceNameComparer());
     private readonly List<(string ResourceName, string[] EndpointNames)> _upgradedEndpoints = [];
@@ -53,10 +53,20 @@ internal sealed class ContainerAppEnvironmentContext(
                 ? $"{x.ResourceName}:{x.EndpointNames[0]}"
                 : $"{x.ResourceName}:{{{string.Join(", ", x.EndpointNames)}}}"));
 
-        Logger.LogInformation(
-            "HTTP endpoints will use HTTPS (port 443) in Azure Container Apps: {Details}. " +
-            "To opt out, use .WithHttpsUpgrade(false) on the container app environment.",
-            details);
+        if (Environment.IsExpress)
+        {
+            Logger.LogInformation(
+                "HTTP endpoints will use HTTPS (port 443) in Azure Container Apps Express: {Details}. " +
+                "Express requires HTTPS ingress.",
+                details);
+        }
+        else
+        {
+            Logger.LogInformation(
+                "HTTP endpoints will use HTTPS (port 443) in Azure Container Apps: {Details}. " +
+                "To opt out, use .WithHttpsUpgrade(false) on the container app environment.",
+                details);
+        }
     }
 
     public BaseContainerAppContext GetContainerAppContext(IResource resource)

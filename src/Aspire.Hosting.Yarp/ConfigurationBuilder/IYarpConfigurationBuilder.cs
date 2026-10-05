@@ -175,7 +175,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="endpoint">The target endpoint for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addCatchAllRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, EndpointReference endpoint)
     {
         return builder.AddRoute(CatchAllPath, endpoint);
@@ -187,7 +187,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="resource">The target resource for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addCatchAllRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, IResourceBuilder<IResourceWithServiceDiscovery> resource)
     {
         return builder.AddRoute(CatchAllPath, resource);
@@ -200,7 +200,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="endpoint">The target endpoint for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, EndpointReference endpoint)
     {
         var cluster = builder.AddCluster(endpoint);
@@ -214,7 +214,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="resource">The target endpoint for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, IResourceBuilder<IResourceWithServiceDiscovery> resource)
     {
         var cluster = builder.AddCluster(resource);
@@ -228,7 +228,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="externalService">The target external service for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addRoute dispatcher.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, string path, IResourceBuilder<ExternalServiceResource> externalService)
     {
         var cluster = builder.AddCluster(externalService);
@@ -257,7 +257,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="externalService">The target external service for this route.</param>
     /// <returns>The created route for further configuration.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the exported addCatchAllRoute dispatcher.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the exported addCatchAllRoute dispatcher.")]
     public static YarpRoute AddRoute(this IYarpConfigurationBuilder builder, IResourceBuilder<ExternalServiceResource> externalService)
     {
         return builder.AddRoute(CatchAllPath, externalService);

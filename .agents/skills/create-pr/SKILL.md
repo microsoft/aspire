@@ -35,10 +35,68 @@ Before starting, verify:
 - **Title**: concise summary of the change.
 - **Labels**: add labels only when they are clearly applicable. Use the `breaking-change` label when the PR breaks public APIs or fundamentally changes the behavior of an existing scenario. Do not use it for every behavior change, additive feature, routine bug fix, or implementation-only change. Examples from existing `breaking-change` issues include API shape/semantics changes, obsoleting a public API, changing endpoint allocation/wait behavior, changing Docker Compose publish behavior, and disabling local auth for Azure resources.
 
-### 3. Build PR body from template
+### 3. Detect non-trivial UI changes
+
+Before building the PR body, check whether the diff includes **non-trivial UI changes** to any of these areas:
+
+- **Dashboard** (`src/Aspire.Dashboard/`): changes to `.razor`, `.razor.cs`, `.css`, `.js`, or UI assets under `src/Aspire.Dashboard/wwwroot/` (e.g., `img/**`, `favicon.ico`) that alter layout, add/remove components, change interactive behavior, or modify visual appearance beyond minor text or spacing tweaks.
+- **CLI** (`src/Aspire.Cli/`): changes to command output formatting, interactive prompts, table/list rendering, spinners, progress indicators, or colored output beyond simple message text changes.
+- **VS Code Extension** (`extension/`): changes to webview panels, tree views, status bar items, quick pick UIs, editor decorations, contributed view configuration (`package.json`), or UI assets (`resources/**`) beyond minor label text changes.
+
+A change is **non-trivial** if it does more than:
+- Fix a typo or update a string literal without altering layout
+- Adjust a single CSS property (e.g., margin, padding) without changing visual structure
+- Change a tooltip or aria-label
+
+If non-trivial UI changes are detected, add a prominent `### Screenshots / Recordings` subsection in the PR body (under `## Description`) with the following content:
+
+```markdown
+### Screenshots / Recordings
+
+> **This PR includes UI changes.** Please add screenshots or screen recordings so reviewers can evaluate the visual changes without running locally.
+>
+> - For before/after comparisons, place them side-by-side or label them clearly.
+> - For interactive changes (animations, transitions, new flows), prefer a short screen recording (GIF or video).
+> - If you cannot capture visuals now, note what scenario to test and mark this section as TODO.
+
+<!-- Add screenshots/recordings here -->
+```
+
+### 4. Upload visual artifacts
+
+For non-trivial UI changes, upload screenshots or recordings as GitHub user attachments. Do not commit them to the source branch unless explicitly requested.
+
+Before uploading, inspect every artifact for secrets, credentials, tokens, customer or confidential data, private URLs, and unintended personal information. Redact or regenerate any artifact that contains sensitive data, and do not upload it until the inspection passes. Treat uploads as permanent public data because this public repository exposes attachments to everyone and the attachment API has no deletion endpoint.
+
+Check attachment support for the command that will write the PR: `gh pr create --help` for a new PR or `gh pr edit --help` for an existing PR. Use `--attach` only when that command advertises it. Prepare local Markdown references for step 5 to insert at the intended location in `pr-body.md`. Use a table for before/after images when appropriate:
+
+```markdown
+| Before | After |
+| --- | --- |
+| ![Before](./before.png) | ![After](./after.png) |
+```
+
+Place an image-style reference to a video on its own line in its own paragraph so GitHub CLI rewrites it to a bare asset URL that renders as a player:
+
+```markdown
+![Screen recording](./demo.mp4)
+```
+
+Prepare one flag per referenced file and append the flags to the final `gh pr create` command in step 6 or `gh pr edit` command in step 7. GitHub CLI rewrites the local references to uploaded URLs; without references, it appends the attachments to the end of the body. For images, text after `#` is the alt text when the body does not already provide it. Videos do not support alt text and must omit the `#` suffix:
+
+```shell
+--attach './before.png#Before' --attach './after.png#After' --attach './demo.mp4'
+```
+
+If the relevant command does not advertise `--attach`, do not upload the artifacts or call GitHub's undocumented attachment endpoint. Tell the user that their installed GitHub CLI version does not support attachment uploads for that command and ask them to upgrade it. Include the detected version from `gh --version` and link to the official upgrade instructions at https://github.com/cli/cli#installation.
+
+After the upgrade, run `gh --version` and check the relevant command help again. Retry the upload only when `--attach` is advertised. If the user does not upgrade, continue without uploading and retain the TODO in the Screenshots / Recordings section so the missing visual evidence is explicit.
+
+### 5. Build PR body from template
 
 - Read `.github/pull_request_template.md`.
 - Use the template structure as the PR body.
+- If step 4 prepared visual artifacts and `gh --attach` is available, replace the `<!-- Add screenshots/recordings here -->` placeholder with the prepared local Markdown references before running the create or edit command. Do not leave the placeholder in the final body after a successful upload.
 - Fill known details in `## Description` with reviewer- and user-facing context:
   - Lead with **why** the change matters: the user problem, scenario, or workflow it improves.
   - Summarize the user-visible behavior before implementation details: what users can now do, see, configure, or call.
@@ -134,7 +192,7 @@ Before starting, verify:
 - Keep `Fixes # (issue)` unless a concrete issue number is provided.
 - Write the body to a temporary file named `pr-body.md` in the repo root.
 
-### 4. Create the PR
+### 6. Create the PR
 
 Set `GH_PAGER` to `cat` to prevent interactive paging, then create the PR. The syntax differs by shell:
 
@@ -146,7 +204,9 @@ GH_PAGER=cat gh pr create \
   --base <base-branch> \
   --head <head-branch> \
   --title "<pr-title>" \
-  --body-file pr-body.md
+  --body-file pr-body.md \
+  --attach './before.png#Before' \
+  --attach './after.png#After'
 ```
 
 **PowerShell/Windows:**
@@ -156,30 +216,36 @@ gh pr create `
   --base <base-branch> `
   --head <head-branch> `
   --title "<pr-title>" `
-  --body-file pr-body.md
+  --body-file pr-body.md `
+  --attach './before.png#Before' `
+  --attach './after.png#After'
 ```
+
+Omit the `--attach` lines when step 4 did not prepare visual artifacts. Attach videos without a `#` suffix.
 
 > **Why `GH_PAGER=cat`?** The `gh` CLI pipes long output through a pager (like `less`) by default, which blocks in non-interactive terminals. Setting it to `cat` disables paging so output prints directly.
 
 > **Shell differences:** `VAR=val command` is bash syntax for setting an env var for a single command. PowerShell requires a separate `$env:VAR = "val"` statement (persists for the session, which is harmless here).
 
-### 5. Handle existing PRs
+### 7. Handle existing PRs
 
 If a PR already exists for the branch:
 - Do not create another.
 - If requested (or if the body is still mostly unfilled template text), update it:
 
-  **bash:** `GH_PAGER=cat gh pr edit <pr-number-or-url> --body-file pr-body.md`
+  **bash:** `GH_PAGER=cat gh pr edit <pr-number-or-url> --body-file pr-body.md --attach './before.png#Before' --attach './demo.mp4'`
 
-  **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md`
+  **PowerShell:** `$env:GH_PAGER = "cat"; gh pr edit <pr-number-or-url> --body-file pr-body.md --attach './before.png#Before' --attach './demo.mp4'`
+
+- Omit the `--attach` flags when step 4 did not prepare visual artifacts. Attach videos without a `#` suffix.
 
 - If a label needs to be applied to an existing PR, use `gh pr edit <pr-number-or-url> --add-label <label-name>`.
 
 - Return the existing PR URL.
 
-### 6. Clean up
+### 8. Clean up
 
-After you are completely finished creating or updating the PR (after step 4 and, if needed, step 5), delete the temporary body file:
+After you are completely finished creating or updating the PR (after step 6 and, if needed, step 7), delete the temporary body file:
 - **bash:** `rm pr-body.md`
 - **PowerShell:** `Remove-Item pr-body.md`
 
@@ -190,7 +256,7 @@ After you are completely finished creating or updating the PR (after step 4 and,
 | `gh: command not found` | Tell the user to install `gh` from https://cli.github.com/ |
 | `gh auth` not logged in | Tell the user to run `gh auth login` |
 | `git push` rejected | Inform the user; do not force-push without explicit permission |
-| PR already exists | Follow step 6 above |
+| PR already exists | Follow step 7 (Handle existing PRs) above |
 
 ## Notes
 
@@ -198,3 +264,4 @@ After you are completely finished creating or updating the PR (after step 4 and,
 - Keep the body aligned with `.github/pull_request_template.md`.
 - If the user asks to preview before creating, show the prepared PR body first, then create after confirmation.
 - For checklist sections with Yes/No alternatives, prefer selecting exactly one option per question when information is known.
+- **After creating the PR**, if non-trivial UI changes were detected in step 3, verify that the screenshots or recordings from step 4 are present and rendered in the PR description. If capture or upload was not possible, alert the user with a message like: "This PR includes non-trivial UI changes to [Dashboard/CLI/Extension], but screenshots or recordings could not be added. Please add them so reviewers can evaluate the visual changes without running locally." Include the PR URL so the user can edit it directly.

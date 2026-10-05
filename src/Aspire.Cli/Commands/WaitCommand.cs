@@ -4,12 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -18,9 +13,9 @@ internal sealed class WaitCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ResourceManagement;
 
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<WaitCommand> _logger;
+    private readonly ResourceWaitService _resourceWaitService;
     private readonly TimeProvider _timeProvider;
 
     private static readonly Argument<string> s_resourceArgument = new("resource")
@@ -45,21 +40,17 @@ internal sealed class WaitCommand : BaseCommand
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
     public WaitCommand(
-        IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<WaitCommand> logger,
-        AspireCliTelemetry telemetry,
-        TimeProvider? timeProvider = null)
-        : base("wait", WaitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ResourceWaitService resourceWaitService,
+        CommonCommandServices services,
+        TimeProvider timeProvider)
+        : base("wait", WaitCommandStrings.Description, services)
     {
-        _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = connectionResolver;
         _logger = logger;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _resourceWaitService = resourceWaitService;
+        _timeProvider = timeProvider;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_statusOption);
@@ -98,7 +89,7 @@ internal sealed class WaitCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToFindProject));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, InteractionService, CliExitCodes.FailedToFindProject));
         }
 
         var connection = result.Connection!;
@@ -119,41 +110,46 @@ internal sealed class WaitCommand : BaseCommand
 
         var startTimestamp = _timeProvider.GetTimestamp();
 
-        var exitCode = await _interactionService.ShowStatusAsync(
+        var exitCode = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForResource, resourceName, statusLabel),
             (Func<Task<int>>)(async () =>
             {
-                var response = await connection.WaitForResourceAsync(resourceName, status, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+                var response = await _resourceWaitService.WaitAsync(
+                    connection,
+                    resourceName,
+                    GetWaitTarget(status),
+                    timeoutSeconds,
+                    cancellationToken).ConfigureAwait(false);
 
-                if (response.Success)
+                if (response.Outcome == ResourceWaitOutcome.Success)
                 {
                     return CliExitCodes.Success;
                 }
 
                 if (response.ResourceNotFound)
                 {
-                    _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceNotFound, resourceName));
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceNotFound, resourceName));
                     return CliExitCodes.WaitResourceFailed;
                 }
 
-                if (response.TimedOut)
+                if (response.Outcome == ResourceWaitOutcome.Timeout)
                 {
-                    _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitTimedOut, resourceName, statusLabel, timeoutSeconds));
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitTimedOut, resourceName, statusLabel, timeoutSeconds));
                     return CliExitCodes.WaitTimeout;
                 }
 
                 // Resource entered a failed state
-                _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceEnteredFailedState, resourceName, response.State ?? response.ErrorMessage));
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceEnteredFailedState, resourceName, response.State ?? response.ErrorMessage));
                 return CliExitCodes.WaitResourceFailed;
             }));
 
         // Reset cursor position after spinner
-        _interactionService.DisplayPlainText("");
+        InteractionService.DisplayPlainText("");
 
         if (exitCode == CliExitCodes.Success)
         {
             var elapsed = _timeProvider.GetElapsedTime(startTimestamp);
-            _interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceReachedTargetStatus, resourceName, statusLabel, elapsed.TotalSeconds));
+            InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceReachedTargetStatus, resourceName, statusLabel, elapsed.TotalSeconds));
         }
 
         return exitCode;
@@ -172,6 +168,17 @@ internal sealed class WaitCommand : BaseCommand
             "healthy" => "healthy",
             "down" => "down",
             _ => status
+        };
+    }
+
+    private static ResourceWaitTarget GetWaitTarget(string status)
+    {
+        return status switch
+        {
+            "healthy" => ResourceWaitTarget.Healthy,
+            "up" => ResourceWaitTarget.Up,
+            "down" => ResourceWaitTarget.Down,
+            _ => throw new ArgumentOutOfRangeException(nameof(status))
         };
     }
 }

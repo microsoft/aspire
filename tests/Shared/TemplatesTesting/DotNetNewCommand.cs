@@ -26,5 +26,7 @@ public class DotNetNewCommand : DotNetCommand
     }
 
     protected override string GetFullArgs(params string[] args)
-        => $"new {base.GetFullArgs(args)} --debug:custom-hive \"{_customHive}\"";
+        // DefaultBuildArgs contains MSBuild properties for build, test, and run commands.
+        // `dotnet new` treats those arguments as template options, so do not append them here.
+        => $"new {string.Join(" ", args)} --debug:custom-hive \"{_customHive}\"";
 }

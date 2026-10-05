@@ -10,11 +10,17 @@ namespace Aspire.Dashboard.Components;
 
 public partial class ChartFilters
 {
-    [Parameter, EditorRequired]
-    public required OtlpInstrumentData Instrument { get; set; }
+    private readonly Guid _idSuffix = Guid.NewGuid();
+    private readonly HashSet<string> _openFilterNames = [];
 
     [Parameter, EditorRequired]
-    public required InstrumentViewModel InstrumentViewModel { get; set; }
+    public required OtlpInstrumentType InstrumentType { get; set; }
+
+    [Parameter, EditorRequired]
+    public required bool ShowCount { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> ShowCountChanged { get; set; }
 
     [Parameter, EditorRequired]
     public required ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; }
@@ -22,31 +28,27 @@ public partial class ChartFilters
     [Parameter]
     public EventCallback<DimensionFilterViewModel> OnDimensionValuesChanged { get; set; }
 
-    public bool ShowCounts { get; set; }
+    private string GetFilterButtonId(DimensionFilterViewModel filter) => $"typeFilterButton-{filter.SanitizedHtmlId}-{filter.NameHash}-{_idSuffix}";
 
-    protected override void OnInitialized()
+    private bool IsPopupOpen(DimensionFilterViewModel filter) => _openFilterNames.Contains(filter.Name);
+
+    private void TogglePopup(DimensionFilterViewModel filter) => SetPopupOpen(filter, !IsPopupOpen(filter));
+
+    private void ShowPopup(DimensionFilterViewModel filter) => SetPopupOpen(filter, opened: true);
+
+    private void SetPopupOpen(DimensionFilterViewModel filter, bool opened)
     {
-        InstrumentViewModel.DataUpdateSubscriptions.Add(() =>
+        if (opened)
         {
-            ShowCounts = InstrumentViewModel.ShowCount;
-            return Task.CompletedTask;
-        });
+            _openFilterNames.Add(filter.Name);
+        }
+        else
+        {
+            _openFilterNames.Remove(filter.Name);
+        }
     }
 
-    private void ShowCountChanged()
-    {
-        InstrumentViewModel.ShowCount = ShowCounts;
-    }
+    private Task OnFilterSelectionChangedAsync(DimensionFilterViewModel filter) => OnDimensionValuesChanged.InvokeAsync(filter);
 
-    private async Task OnTagSelectionChangedAsync(DimensionFilterViewModel context, DimensionValueViewModel tag, bool isChecked)
-    {
-        context.OnTagSelectionChanged(tag, isChecked);
-        await OnDimensionValuesChanged.InvokeAsync(context);
-    }
-
-    private async Task OnAllValuesSelectionChangedAsync(DimensionFilterViewModel context, bool? isChecked)
-    {
-        context.AreAllValuesSelected = isChecked;
-        await OnDimensionValuesChanged.InvokeAsync(context);
-    }
+    private Task OnShowCountChangedAsync(bool value) => ShowCountChanged.InvokeAsync(value);
 }

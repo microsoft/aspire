@@ -1,0 +1,55 @@
+parameters:
+  # Prefix prepended to step displayNames (e.g. the 🟣 emoji used by the
+  # internal-1ES jobs in azure-pipelines.yml / azure-pipelines-unofficial.yml).
+  # Public/CodeQL pipelines omit it. Kept as a parameter so the displayName
+  # convention of each calling pipeline is preserved.
+  - name: displayPrefix
+    type: string
+    default: ''
+
+steps:
+  - task: PowerShell@2
+    displayName: ${{ parameters.displayPrefix }}Install Corepack
+    inputs:
+      targetType: 'inline'
+      script: |
+        # Pinned Corepack shim version, sourced from
+        # extension/scripts/corepack-version.txt so this script,
+        # extension/build.sh, extension/build.ps1, the GitHub Actions
+        # workflow, and every AzDO pipeline that references this template
+        # stay in sync. The Yarn release itself is pinned in
+        # extension/package.json via the `packageManager` field.
+        $CorepackVersion = (Get-Content -Raw -Path '$(Build.SourcesDirectory)/extension/scripts/corepack-version.txt').Trim()
+        $corepackHome = Join-Path '$(Agent.TempDirectory)' 'corepack'
+        $env:COREPACK_HOME = $corepackHome
+        Write-Host "##vso[task.setvariable variable=COREPACK_HOME]$corepackHome"
+
+        # Hosted Windows images can already have yarn in npm's global prefix.
+        # The npm Corepack package owns that shim too, so force only in CI
+        # where the tool install is job-scoped.
+        npm install -g --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        $npmGlobalBin = (npm prefix --global).Trim()
+        $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
+        Write-Host "##vso[task.prependpath]$npmGlobalBin"
+
+        # Verify the version actually on PATH matches our pin. On Windows the
+        # Node.js installer registers a `corepack.cmd` under
+        # %ProgramFiles%\nodejs which may shadow the npm-global shim under
+        # %APPDATA%\npm, so a successful `npm install -g corepack@<version>`
+        # does NOT guarantee that subsequent `corepack` calls resolve to it.
+        $installed = (corepack --version).Trim()
+        if ($installed -ne $CorepackVersion) {
+          Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
+          exit 1
+        }
+
+        corepack enable
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        node ./scripts/prepareCorepackYarn.mjs
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        corepack yarn --version
+      workingDirectory: '$(Build.SourcesDirectory)\extension'

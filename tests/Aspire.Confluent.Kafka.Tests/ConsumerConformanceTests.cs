@@ -15,9 +15,7 @@ public class ConsumerConformanceTests : ConformanceTests<IConsumer<string, strin
 
     protected override string ActivitySourceName => throw new NotImplementedException();
 
-    protected override string[] RequiredLogCategories => [
-        "Aspire.Confluent.Kafka"
-        ];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Aspire.Confluent.Kafka")];
 
     protected override string? ConfigurationSectionName => "Aspire:Confluent:Kafka:Consumer";
 

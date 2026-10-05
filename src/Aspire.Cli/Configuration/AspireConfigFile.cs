@@ -31,6 +31,8 @@ namespace Aspire.Cli.Configuration;
 ///     "llmsTxtUrl": "https://aspire.dev/llms-full.txt",
 ///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-0.xml" }
 ///   },
+///   "certificates": { "nssDbPaths": "firefox=/path/to/profile" },
+///   "containerTunnel": { "baseImage": "example.com/aspire-tunnel:latest" },
 ///   "features": { "polyglotSupportEnabled": true },
 ///   "profiles": {
 ///     "default": {
@@ -107,6 +109,20 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("docs")]
     [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
     public AspireConfigDocs? Docs { get; set; }
+
+    /// <summary>
+    /// Developer certificate configuration.
+    /// </summary>
+    [JsonPropertyName("certificates")]
+    [Description("Developer certificate configuration.")]
+    public AspireConfigCertificates? Certificates { get; set; }
+
+    /// <summary>
+    /// Container network tunnel configuration.
+    /// </summary>
+    [JsonPropertyName(AspireConfigContainerTunnel.SectionName)]
+    [Description("Container network tunnel configuration.")]
+    public AspireConfigContainerTunnel? ContainerTunnel { get; set; }
 
     /// <summary>
     /// Launch profiles (ports, env vars). Replaces apphost.run.json.
@@ -475,6 +491,37 @@ internal sealed class AspireConfigDocs
     [JsonPropertyName("api")]
     [Description("Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.")]
     public AspireConfigApiDocs? Api { get; set; }
+}
+
+/// <summary>
+/// Developer certificate configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigCertificates
+{
+    /// <summary>
+    /// Optional NSS database path overrides used for browser certificate trust on Linux.
+    /// </summary>
+    [JsonPropertyName("nssDbPaths")]
+    [Description("NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator. Prefix a path with \"firefox=\" or \"chromium=\" to apply the trust settings expected by that browser family.")]
+    public string? NssDbPaths { get; set; }
+}
+
+/// <summary>
+/// Container network tunnel configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigContainerTunnel
+{
+    public const string SectionName = "containerTunnel";
+    public const string BaseImagePropertyName = "baseImage";
+    public const string BaseImageConfigPath = SectionName + ":" + BaseImagePropertyName;
+    public const string BaseImageConfigKey = SectionName + "." + BaseImagePropertyName;
+
+    /// <summary>
+    /// Optional base image override for the container network tunnel.
+    /// </summary>
+    [JsonPropertyName(BaseImagePropertyName)]
+    [Description("Base image used by the container network tunnel that routes traffic to host services.")]
+    public string? BaseImage { get; set; }
 }
 
 /// <summary>

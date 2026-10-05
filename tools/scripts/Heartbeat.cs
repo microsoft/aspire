@@ -170,7 +170,7 @@ string GetCpuUsage(ref long prevIdle, ref long prevTotal)
     {
         // Parse /proc/stat for system-wide CPU usage
         var statLines = File.ReadAllLines("/proc/stat");
-        var cpuLine = statLines.FirstOrDefault(l => l.StartsWith("cpu "));
+        var cpuLine = statLines.FirstOrDefault(l => l.StartsWith("cpu ", StringComparison.Ordinal));
         if (cpuLine != null)
         {
             var values = cpuLine.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).Select(s => long.Parse(s, CultureInfo.InvariantCulture)).ToArray();
@@ -290,7 +290,7 @@ string GetMemoryUsage()
             }
 
             long GetPages(string key) =>
-                lines.Where(l => l.StartsWith(key))
+                lines.Where(l => l.StartsWith(key, StringComparison.Ordinal))
                     .Select(l => long.TryParse(System.Text.RegularExpressions.Regex.Match(l, @"\d+").Value, out var v) ? v : 0)
                     .FirstOrDefault();
 
@@ -658,9 +658,9 @@ string GetDiskUsage()
 
                     // Only report key mount points
                     if (mountPoint is "/" or "/home" or "/tmp" ||
-                        mountPoint.StartsWith("/home/") ||
-                        mountPoint.StartsWith("/mnt/") ||
-                        mountPoint.StartsWith("/Volumes/"))
+                        mountPoint.StartsWith("/home/", StringComparison.Ordinal) ||
+                        mountPoint.StartsWith("/mnt/", StringComparison.Ordinal) ||
+                        mountPoint.StartsWith("/Volumes/", StringComparison.Ordinal))
                     {
                         diskInfo.Add($"{mountPoint}:{used}/{size}({usePercent})");
                     }

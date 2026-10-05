@@ -4,6 +4,13 @@ const builder = await createBuilder();
 
 await builder.addAzureProvisioning();
 
+const frontDoor = await builder.addAzureFrontDoor("frontdoor");
+await frontDoor.configureInfrastructure(async infrastructure => {
+    const profile = await infrastructure.getCdnProfile();
+    await profile.originResponseTimeoutSeconds.set(60);
+    const _originTimeout = await profile.originResponseTimeoutSeconds.get();
+});
+
 const location = await builder.addParameter("location");
 const resourceGroup = await builder.addParameter("resource-group");
 const existingName = await builder.addParameter("existing-name");
@@ -65,9 +72,22 @@ await infrastructure.publishAsExisting(existingName, { resourceGroup: existingRe
 await infrastructure.asExisting(existingName, { resourceGroup: existingResourceGroup });
 
 const identity = await builder.addAzureUserAssignedIdentity("identity");
+const identityBicepIdentifier = await identity.getBicepIdentifier();
 await identity.configureInfrastructure(async infrastructureContext => {
     await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
+    const provisionedIdentity = await infrastructureContext.getSqlUserAssignedIdentityByIdentifier(identityBicepIdentifier);
+    const bicep = infrastructureContext.bicep();
+    const resourceGroup = await bicep.resourceGroup();
+    const resourceGroupId = await bicep.member(resourceGroup, "id");
+    const uniqueName = await bicep.uniqueString([resourceGroupId]);
+    const identityName = bicep.createStringBuilder()
+        .appendLiteral("mi-")
+        .appendValue(uniqueName)
+        .build();
+    const deploymentLocation = bicep.location("westus2");
+    await provisionedIdentity.name.set(identityName);
+    await provisionedIdentity.location.set(deploymentLocation);
 });
 await identity.withParameter("identityEmpty");
 await identity.withParameter("identityPlain", { value: "value" });
@@ -79,7 +99,6 @@ await identity.withParameter("identityFromExpression", { value: refExpr`${locati
 await identity.withParameter("identityFromEndpoint", { value: endpoint });
 await identity.publishAsConnectionString();
 await identity.clearDefaultRoleAssignments();
-await identity.getBicepIdentifier();
 await identity.isExisting();
 await identity.runAsExisting("identity-existing", { resourceGroup: "rg-identity" });
 await identity.runAsExisting(existingName, { resourceGroup: existingResourceGroup });

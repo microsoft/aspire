@@ -11,10 +11,12 @@ using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Resources;
-using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 using static Azure.Provisioning.Expressions.BicepFunction;
 
 namespace Aspire.Hosting;
@@ -26,6 +28,7 @@ public static class FoundryExtensions
 {
     private const string DefaultCapabilityHostName = "foundry-caphost";
     internal const string LocalProjectsNotSupportedMessage = "Microsoft Foundry projects are not supported when the parent Foundry resource is configured with RunAsFoundryLocal().";
+    private static readonly TimeSpan s_healthCheckTimeout = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Adds a Microsoft Foundry resource to the application model.
@@ -55,7 +58,7 @@ public static class FoundryExtensions
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <param name="format">The format of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, string modelName, string modelVersion, string format)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -124,7 +127,7 @@ public static class FoundryExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, FoundryModel model)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -156,27 +159,78 @@ public static class FoundryExtensions
     }
 
     /// <summary>
-    /// Adds a Foundry Local resource to the distributed application builder.
+    /// Configures a Microsoft Foundry resource to use an Aspire-managed Foundry Local service.
     /// </summary>
-    /// <param name="builder">The distributed application builder.</param>
-    /// <returns>A resource builder for the Foundry Local resource.</returns>
-    [AspireExport]
+    /// <param name="builder">The Microsoft Foundry resource builder.</param>
+    /// <returns>The configured Microsoft Foundry resource builder.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    [AspireExportIgnore(Reason = "Binary compatibility overload. Polyglot app hosts use the overload with the optional endpoint.")]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(this IResourceBuilder<FoundryResource> builder)
+        => builder.RunAsFoundryLocal(endpoint: null);
+
+    /// <summary>
+    /// Configures a Microsoft Foundry resource to use an Aspire-managed or existing Foundry Local service.
+    /// </summary>
+    /// <param name="builder">The Microsoft Foundry resource builder.</param>
+    /// <param name="endpoint">The endpoint of an existing Foundry Local service, or <see langword="null"/> for an Aspire-managed service.</param>
+    /// <returns>The configured Microsoft Foundry resource builder.</returns>
+    /// <remarks>
+    /// When <paramref name="endpoint"/> is provided, Aspire connects to that existing
+    /// Foundry Local service without starting, stopping, downloading, or loading anything on its host.
+    /// Models configured on the resource must already be loaded by the existing service.
+    /// </remarks>
+    /// <example>
+    /// Connect to an existing Foundry Local service and identify the model that is already loaded:
+    /// <code lang="csharp">
+    /// var foundry = builder.AddFoundry("foundry")
+    ///     .RunAsFoundryLocal("http://windows-host:5273");
+    ///
+    /// var chat = foundry.AddDeployment("chat", FoundryModel.Local.Phi4Mini)
+    ///     .WithProperties(deployment =>
+    ///     {
+    ///         deployment.LocalModelId = "Phi-4-mini-instruct-generic-gpu:5";
+    ///     });
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="endpoint"/> is not an absolute HTTP or HTTPS URL.</exception>
+    [AspireExport]
+    public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(
+        this IResourceBuilder<FoundryResource> builder,
+        string? endpoint = null)
     {
-        ArgumentNullException.ThrowIfNull(builder, nameof(builder));
+        ArgumentNullException.ThrowIfNull(builder);
 
         if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
             return builder;
         }
 
+        Uri? existingEndpoint = null;
+        if (endpoint is not null)
+        {
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out existingEndpoint) ||
+                existingEndpoint.Scheme is not ("http" or "https"))
+            {
+                throw new ArgumentException("The Foundry Local endpoint must be an absolute HTTP or HTTPS URL.", nameof(endpoint));
+            }
+
+            existingEndpoint = EnsureTrailingSlash(existingEndpoint);
+        }
+
         var resource = builder.Resource;
         ThrowIfProjectsConfiguredForLocal(builder, resource);
         resource.Annotations.Add(new EmulatorResourceAnnotation());
-
-        builder.ApplicationBuilder.Services.AddSingleton<FoundryLocalManager>();
+        resource.ApiKey = FoundryLocalService.ApiKey;
+        resource.EmulatorServiceUri = existingEndpoint;
+        resource.ManageLocalService = existingEndpoint is null;
 
         builder.WithInitializer();
+        if (resource.ManageLocalService)
+        {
+            builder.OnResourceStopped(static (_, _, ct) => FoundryLocalService.StopAsync(ct));
+            builder.ApplicationBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, FoundryLocalLifecycleService>());
+        }
 
         foreach (var deployment in resource.Deployments)
         {
@@ -190,11 +244,15 @@ public static class FoundryExtensions
         builder.ApplicationBuilder.Services.AddHealthChecks()
                 .Add(new HealthCheckRegistration(
                     healthCheckKey,
-                    sp => new FoundryLocalHealthCheck(sp.GetRequiredService<FoundryLocalManager>()),
+                    sp => new FoundryLocalHealthCheck(resource, sp.GetRequiredService<IHttpClientFactory>()),
                     failureStatus: default,
                     tags: default,
                     timeout: default
                     ));
+        builder.ApplicationBuilder.Services.AddHttpClient(nameof(FoundryLocalHealthCheck), client =>
+            client.Timeout = s_healthCheckTimeout);
+        builder.ApplicationBuilder.Services.AddHttpClient(nameof(LocalModelHealthCheck), client =>
+            client.Timeout = s_healthCheckTimeout);
 
         builder.WithHealthCheck(healthCheckKey);
 
@@ -286,10 +344,7 @@ public static class FoundryExtensions
             => Task.Run(async () =>
             {
                 var rns = @event.Services.GetRequiredService<ResourceNotificationService>();
-                var manager = @event.Services.GetRequiredService<FoundryLocalManager>();
                 var logger = @event.Services.GetRequiredService<ResourceLoggerService>().GetLogger(resource);
-
-                resource.ApiKey = manager.ApiKey;
 
                 await rns.PublishUpdateAsync(resource, state => state with
                 {
@@ -298,17 +353,19 @@ public static class FoundryExtensions
 
                 try
                 {
-                    await manager.StartServiceAsync(ct).ConfigureAwait(false);
+                    if (resource.ManageLocalService)
+                    {
+                        await FoundryLocalService.StartAsync(logger, ct).ConfigureAwait(false);
+                        resource.EmulatorServiceUri = FoundryLocalService.Endpoint;
+                    }
                 }
                 catch (Exception e)
                 {
                     logger.LogInformation("Foundry Local could not be started. Ensure it's installed correctly: https://learn.microsoft.com/azure/ai-foundry/foundry-local/get-started (Error: {Error}).", e.Message);
                 }
 
-                if (manager.IsServiceRunning)
+                if (resource.EmulatorServiceUri is not null)
                 {
-                    resource.EmulatorServiceUri = manager.Endpoint;
-
                     await rns.PublishUpdateAsync(resource, state => state with
                     {
                         State = KnownResourceStates.Running,
@@ -340,80 +397,103 @@ public static class FoundryExtensions
             var rns = @event.Services.GetRequiredService<ResourceNotificationService>();
             var loggerService = @event.Services.GetRequiredService<ResourceLoggerService>();
             var logger = loggerService.GetLogger(deployment);
-            var manager = @event.Services.GetRequiredService<FoundryLocalManager>();
             var eventing = @event.Services.GetRequiredService<IDistributedApplicationEventing>();
 
             var model = deployment.ModelName;
+            var manageModel = foundryResource.ManageLocalService;
 
             _ = Task.Run(async () =>
             {
-                await rns.PublishUpdateAsync(deployment, state => state with
+                try
                 {
-                    State = new ResourceStateSnapshot($"Downloading model {model}", KnownResourceStateStyles.Info),
-                    Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, model)]
-                }).ConfigureAwait(false);
-
-                var result = manager.DownloadModelWithProgressAsync(model, ct: ct);
-
-                await foreach (var progress in result.ConfigureAwait(false))
-                {
-                    if (progress.IsCompleted && progress.ModelInfo is not null)
+                    await rns.PublishUpdateAsync(deployment, state => state with
                     {
-                        // Set the model id that was actually downloaded. This is the value that is used in the
-                        // connection string
+                        State = new ResourceStateSnapshot(manageModel ? $"Preparing model {model}" : $"Using existing model {model}", KnownResourceStateStyles.Info),
+                        Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, model)]
+                    }).ConfigureAwait(false);
 
-                        deployment.ModelId = progress.ModelInfo.ModelId;
-                        logger.LogInformation("Model {Model} downloaded successfully ({ModelId}).", model, deployment.ModelId);
+                    if (manageModel)
+                    {
+                        var requestedModel = deployment.LocalModelId ?? model;
+                        var cachedModelId = await FoundryLocalService.TryLoadCachedModelAsync(requestedModel, ct).ConfigureAwait(false);
 
-                        // Re-publish the connection string since the model id is now known
-                        var connectionStringAvailableEvent = new ConnectionStringAvailableEvent(deployment, @event.Services);
-                        await eventing.PublishAsync(connectionStringAvailableEvent, ct).ConfigureAwait(false);
-
-                        await rns.PublishUpdateAsync(deployment, state => state with
+                        if (cachedModelId is not null)
                         {
-                            Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, $"{model} ({deployment.ModelId})")]
-                        }).ConfigureAwait(false);
-
-                        await rns.PublishUpdateAsync(deployment, state => state with
+                            deployment.LocalModelId = cachedModelId;
+                        }
+                        else
                         {
-                            State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
-                        }).ConfigureAwait(false);
-
-                        try
-                        {
-                            _ = await manager.LoadModelAsync(deployment.ModelId, ct: ct).ConfigureAwait(false);
+                            deployment.LocalModelId = await DownloadModelAsync(requestedModel).ConfigureAwait(false);
 
                             await rns.PublishUpdateAsync(deployment, state => state with
                             {
-                                State = KnownResourceStates.Running
+                                State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
                             }).ConfigureAwait(false);
-                        }
-                        catch (Exception e)
-                        {
-                            // LoadModelAsync throws IOE when the model is invalid.
-                            logger.LogInformation("Failed to start {Model}. Error: {Error}", model, e.Message);
 
-                            await rns.PublishUpdateAsync(deployment, state => state with
-                            {
-                                State = KnownResourceStates.FailedToStart
-                            }).ConfigureAwait(false);
+                            await FoundryLocalService.LoadModelAsync(deployment.LocalModelId, ct).ConfigureAwait(false);
                         }
-                    }
-                    else if (progress.IsCompleted && !string.IsNullOrEmpty(progress.ErrorMessage))
-                    {
-                        logger.LogInformation("Failed to start {Model}. Error: {Error}", model, progress.ErrorMessage);
-                        await rns.PublishUpdateAsync(deployment, state => state with
-                        {
-                            State = KnownResourceStates.FailedToStart
-                        }).ConfigureAwait(false);
+
+                        logger.LogInformation("Model {Model} is loaded ({ModelId}).", model, deployment.LocalModelId);
                     }
                     else
                     {
-                        logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress.Percentage);
+                        deployment.LocalModelId ??= model;
+                    }
+
+                    // Re-publish the connection string since the model id is now known.
+                    var connectionStringAvailableEvent = new ConnectionStringAvailableEvent(deployment, @event.Services);
+                    await eventing.PublishAsync(connectionStringAvailableEvent, ct).ConfigureAwait(false);
+
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        State = KnownResourceStates.Running,
+                        Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, $"{model} ({deployment.LocalModelId})")]
+                    }).ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    logger.LogInformation("Failed to start {Model}. Error: {Error}", model, e.Message);
+
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        State = KnownResourceStates.FailedToStart
+                    }).ConfigureAwait(false);
+                }
+
+                async Task<string> DownloadModelAsync(string requestedModel)
+                {
+                    await rns.PublishUpdateAsync(deployment, state => state with
+                    {
+                        State = new ResourceStateSnapshot($"Downloading model {model}", KnownResourceStateStyles.Info)
+                    }).ConfigureAwait(false);
+
+                    var progressChannel = Channel.CreateUnbounded<float>();
+                    var downloadTask = DownloadWithProgressAsync();
+
+                    await foreach (var progress in progressChannel.Reader.ReadAllAsync(ct).ConfigureAwait(false))
+                    {
+                        logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress);
                         await rns.PublishUpdateAsync(deployment, state => state with
                         {
-                            State = new ResourceStateSnapshot($"Downloading model {model}: {progress.Percentage:F2}%", KnownResourceStateStyles.Info)
+                            State = new ResourceStateSnapshot($"Downloading model {model}: {progress:F2}%", KnownResourceStateStyles.Info)
                         }).ConfigureAwait(false);
+                    }
+
+                    return await downloadTask.ConfigureAwait(false);
+
+                    async Task<string> DownloadWithProgressAsync()
+                    {
+                        try
+                        {
+                            return await FoundryLocalService.DownloadModelAsync(
+                                requestedModel,
+                                progress => progressChannel.Writer.TryWrite(progress),
+                                ct).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            progressChannel.Writer.TryComplete();
+                        }
                     }
                 }
             }, ct);
@@ -426,7 +506,7 @@ public static class FoundryExtensions
         builder.ApplicationBuilder.Services.AddHealthChecks()
                 .Add(new HealthCheckRegistration(
                     healthCheckKey,
-                    sp => new LocalModelHealthCheck(modelId: deployment.ModelId, sp.GetRequiredService<FoundryLocalManager>()),
+                    sp => new LocalModelHealthCheck(deployment, sp.GetRequiredService<IHttpClientFactory>()),
                     failureStatus: default,
                     tags: default,
                     timeout: default
@@ -435,6 +515,21 @@ public static class FoundryExtensions
         builder.WithHealthCheck(healthCheckKey);
 
         return builder;
+    }
+
+    private static Uri EnsureTrailingSlash(Uri endpoint)
+    {
+        if (endpoint.AbsolutePath.EndsWith('/'))
+        {
+            return endpoint;
+        }
+
+        var builder = new UriBuilder(endpoint)
+        {
+            Path = endpoint.AbsolutePath + "/"
+        };
+
+        return builder.Uri;
     }
 
     private static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)

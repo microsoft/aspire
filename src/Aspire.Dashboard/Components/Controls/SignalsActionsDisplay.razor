@@ -3,7 +3,7 @@
 
 @if (ViewportInformation.IsDesktop)
 {
-    <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged"/>
+    <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged" Disabled="@TelemetryRepository.IsReadOnly"/>
     <ClearSignalsButton SelectedResource="@SelectedResource"
                         HandleClearSignal="@HandleClearSignal"/>
 }
@@ -12,7 +12,7 @@ else
     <FluentLabel>@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]</FluentLabel>
 
     <FluentStack Orientation="Orientation.Horizontal">
-        <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged" />
+        <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged" Disabled="@TelemetryRepository.IsReadOnly" />
         <ClearSignalsButton SelectedResource="@SelectedResource"
                             HandleClearSignal="@HandleClearSignal"/>
     </FluentStack>

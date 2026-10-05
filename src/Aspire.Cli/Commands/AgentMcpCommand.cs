@@ -5,14 +5,11 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared.Mcp;
@@ -53,10 +50,6 @@ internal sealed class AgentMcpCommand : BaseCommand
     internal IReadOnlyDictionary<string, CliMcpTool> KnownTools => _knownTools;
 
     public AgentMcpCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor,
         IMcpTransportFactory transportFactory,
         ILoggerFactory loggerFactory,
@@ -66,8 +59,8 @@ internal sealed class AgentMcpCommand : BaseCommand
         IDocsSearchService docsSearchService,
         IDocsIndexService docsIndexService,
         IHttpClientFactory httpClientFactory,
-        AspireCliTelemetry telemetry)
-        : base("mcp", AgentCommandStrings.McpCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("mcp", AgentCommandStrings.McpCommand_Description, services)
     {
         _auxiliaryBackchannelMonitor = auxiliaryBackchannelMonitor;
         _transportFactory = transportFactory;
@@ -78,7 +71,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         _environmentChecker = environmentChecker;
         _docsSearchService = docsSearchService;
         _docsIndexService = docsIndexService;
-        _executionContext = executionContext;
+        _executionContext = services.ExecutionContext;
         _resourceToolRefreshService = new McpResourceToolRefreshService(auxiliaryBackchannelMonitor, loggerFactory.CreateLogger<McpResourceToolRefreshService>());
 
         Options.Add(s_dashboardUrlOption);
@@ -110,9 +103,9 @@ internal sealed class AgentMcpCommand : BaseCommand
             _dashboardOnlyMode = true;
             var staticProvider = new StaticDashboardInfoProvider(dashboardUrl, apiKey);
 
-            _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(staticProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
-            _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(staticProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
-            _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(staticProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
+            _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
+            _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
+            _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(staticProvider, null, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
         }
         else
         {
@@ -121,9 +114,9 @@ internal sealed class AgentMcpCommand : BaseCommand
             _knownTools[KnownMcpTools.ListResources] = new ListResourcesTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListResourcesTool>());
             _knownTools[KnownMcpTools.ListConsoleLogs] = new ListConsoleLogsTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ListConsoleLogsTool>());
             _knownTools[KnownMcpTools.ExecuteResourceCommand] = new ExecuteResourceCommandTool(_auxiliaryBackchannelMonitor, _loggerFactory.CreateLogger<ExecuteResourceCommandTool>());
-            _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(dashboardInfoProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
-            _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(dashboardInfoProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
-            _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(dashboardInfoProvider, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
+            _knownTools[KnownMcpTools.ListStructuredLogs] = new ListStructuredLogsTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListStructuredLogsTool>());
+            _knownTools[KnownMcpTools.ListTraces] = new ListTracesTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListTracesTool>());
+            _knownTools[KnownMcpTools.ListTraceStructuredLogs] = new ListTraceStructuredLogsTool(dashboardInfoProvider, _auxiliaryBackchannelMonitor, _httpClientFactory, _loggerFactory.CreateLogger<ListTraceStructuredLogsTool>());
             _knownTools[KnownMcpTools.SelectAppHost] = new SelectAppHostTool(_auxiliaryBackchannelMonitor, _executionContext);
             _knownTools[KnownMcpTools.ListAppHosts] = new ListAppHostsTool(_auxiliaryBackchannelMonitor, _executionContext);
             _knownTools[KnownMcpTools.ListIntegrations] = new ListIntegrationsTool(_packagingService, _executionContext, _auxiliaryBackchannelMonitor);
@@ -141,7 +134,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             ServerInfo = new Implementation
             {
                 Name = "aspire-mcp-server",
-                Version = VersionHelper.GetDefaultTemplateVersion(),
+                Version = _executionContext.IdentityVersion,
                 Icons = icons
             },
             Handlers = new McpServerHandlers()

@@ -34,6 +34,32 @@ void main() throws Exception {
         // Test 10: Add multiple databases to same server
         mongoChained.addDatabase("app-db");
         mongoChained.addDatabase("analytics-db", "analytics");
+        // Test 11: Test withBindIpAll
+        builder.addMongoDB("mongo-bind-all")
+            .withBindIpAll();
+        // Test 12: Initialize a single-member replica set with the resource name and a generated keyfile.
+        builder.addMongoDB("mongo-single")
+            .withReplicaSet()
+            .addDatabase("single-db");
+        // Test 13: Initialize a single-member replica set with an explicit set name.
+        builder.addMongoDB("mongo-single-named")
+            .withReplicaSet("app-rs")
+            .addDatabase("single-named-db");
+        // Test 14: Supply a keyfile before initialization; TLS options are separate export coverage, not prerequisites.
+        var keyFileParam = builder.addParameter("rs-keyfile", new AddParameterOptions().secret(true).value("bW9uZ29kYmtleWZpbGUxMjM0"));
+        builder.addMongoDB("mongo-rs-configured")
+            .withKeyFile(keyFileParam, "/etc/rs.key")
+            .withReplicaSet("configured-rs")
+            .withTlsMode()
+            .withTlsAllowInvalidCertificates();
+        // Test 15: Advanced local multi-member experiments use plain servers, not withReplicaSet single-member sets.
+        // NOTE: The members are not given a key file of their own here. withMember gives them the replica set's shared one,
+        // and a member carrying a different key file is rejected.
+        var mongo1 = builder.addMongoDB("mongo-rs-1");
+        var mongo2 = builder.addMongoDB("mongo-rs-2");
+        var replicaSet = builder.addMongoDBReplicaSet("rs0")
+            .withMember(mongo1)
+            .withMember(mongo2);
         // ---- Property access on MongoDBServerResource ----
         var _endpoint = mongo.primaryEndpoint();
         var _host = mongo.host();

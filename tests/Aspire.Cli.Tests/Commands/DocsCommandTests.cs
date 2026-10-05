@@ -13,7 +13,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsCommand_WithNoSubcommand_ShowsHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -31,7 +31,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsListCommand_ReturnsDocuments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -48,7 +48,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsListCommand_WithJsonFormat_ReturnsJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -65,7 +65,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsSearchCommand_WithQuery_ReturnsResults()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -83,7 +83,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsSearchCommand_WithLimit_RespectsLimit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -101,7 +101,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsSearchCommand_WithJsonFormat_ReturnsJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -119,7 +119,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsGetCommand_WithValidSlug_ReturnsContent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -136,7 +136,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsGetCommand_WithSection_ReturnsSection()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
@@ -153,7 +153,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsGetCommand_WithRichMarkdown_PreservesReadableBlockOrder()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var document = new DocsContent
         {
@@ -235,7 +235,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DocsGetCommand_WithInvalidSlug_ReturnsError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
