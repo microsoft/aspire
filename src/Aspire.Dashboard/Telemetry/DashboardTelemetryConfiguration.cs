@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Configuration;
+using Aspire.Hosting;
 
 namespace Aspire.Dashboard.Telemetry;
 
@@ -19,16 +19,16 @@ public sealed record DashboardTelemetryConfiguration
     /// Resolves direct and AppHost-forwarded telemetry opt-out settings.
     /// </summary>
     /// <param name="configuration">The dashboard configuration.</param>
-    /// <param name="options">The dashboard options containing the forwarded opt-out.</param>
     /// <returns>The resolved product telemetry settings.</returns>
-    public static DashboardTelemetryConfiguration Create(IConfiguration configuration, DashboardOptions options)
+    public static DashboardTelemetryConfiguration Create(IConfiguration configuration)
     {
-        // The AppHost still forwards consent under DebugSession, while standalone and
-        // deployed dashboards can use the product environment variable directly.
+        // Retain the AppHost's legacy opt-out key without keeping the obsolete IDE transport options.
+        var forwardedOptOut = configuration.GetValue<bool?>(DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.ConfigKey);
+
         return new()
         {
             ReportedTelemetryEnabled = !configuration.GetBool(DashboardTelemetryService.TelemetryOptOutConfigKey, defaultValue: false) &&
-                options.DebugSession.TelemetryOptOut is not true
+                forwardedOptOut is not true
         };
     }
 }

@@ -343,7 +343,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
-            services.GetRequiredService<IConfiguration>(), services.GetRequiredService<IOptions<DashboardOptions>>().Value));
+            services.GetRequiredService<IConfiguration>()));
         builder.Services.AddSingleton<DashboardTelemetryManager>();
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
         builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();

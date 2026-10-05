@@ -45,17 +45,17 @@ internal static class DashboardConfigNames
     public static readonly ConfigName ResourceServiceClientCertificateFilePathName = new("Dashboard:ResourceServiceClient:ClientCertificate:FilePath", "DASHBOARD__RESOURCESERVICECLIENT__CLIENTCERTIFICATE__FILEPATH");
     public static readonly ConfigName ResourceServiceClientCertificateSubjectName = new("Dashboard:ResourceServiceClient:ClientCertificate:Subject", "DASHBOARD__RESOURCESERVICECLIENT__CLIENTCERTIFICATE__SUBJECT");
     public static readonly ConfigName ResourceServiceClientApiKeyName = new("Dashboard:ResourceServiceClient:ApiKey", "DASHBOARD__RESOURCESERVICECLIENT__APIKEY");
-    public static readonly ConfigName DebugSessionPortName = new("Dashboard:DebugSession:Port", "DASHBOARD__DEBUGSESSION__PORT");
-    public static readonly ConfigName DebugSessionServerCertificateName = new("Dashboard:DebugSession:ServerCertificate", "DASHBOARD__DEBUGSESSION__SERVERCERTIFICATE");
-    public static readonly ConfigName DebugSessionTokenName = new("Dashboard:DebugSession:Token", "DASHBOARD__DEBUGSESSION__TOKEN");
-    public static readonly ConfigName DebugSessionDcpInstanceIdName = new("Dashboard:DebugSession:DcpInstanceId", "DASHBOARD__DEBUGSESSION__DCPINSTANCEID");
-    public static readonly ConfigName DebugSessionTelemetryOptOutName = new("Dashboard:DebugSession:TelemetryOptOut", "DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT");
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
     public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");
     public static readonly ConfigName UIDisableAgentHelpName = new("Dashboard:UI:DisableAgentHelp", "DASHBOARD__UI__DISABLEAGENTHELP");
 
     public static class Legacy
     {
+        public static readonly ConfigName DebugSessionPortName = new("Dashboard:DebugSession:Port", "DASHBOARD__DEBUGSESSION__PORT");
+        public static readonly ConfigName DebugSessionServerCertificateName = new("Dashboard:DebugSession:ServerCertificate", "DASHBOARD__DEBUGSESSION__SERVERCERTIFICATE");
+        public static readonly ConfigName DebugSessionTokenName = new("Dashboard:DebugSession:Token", "DASHBOARD__DEBUGSESSION__TOKEN");
+        public static readonly ConfigName DebugSessionDcpInstanceIdName = new("Dashboard:DebugSession:DcpInstanceId", "DASHBOARD__DEBUGSESSION__DCPINSTANCEID");
+        public static readonly ConfigName DebugSessionTelemetryOptOutName = new("Dashboard:DebugSession:TelemetryOptOut", "DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT");
         public static readonly ConfigName DashboardOtlpGrpcUrlName = new(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
         public static readonly ConfigName DashboardOtlpHttpUrlName = new(KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
         public static readonly ConfigName DashboardUnsecuredAllowAnonymousName = new(KnownConfigNames.Legacy.DashboardUnsecuredAllowAnonymous);

@@ -288,11 +288,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var environmentVariables = dashboardEnvironment.EnvironmentVariables.ToDictionary();
 
         // Assert
-        Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionPortName.EnvVarName));
-        Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTokenName.EnvVarName));
-        Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName));
-        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName));
-        Assert.Equal(telemetryEnabled, bool.TryParse(environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName), out var b) ? b : null);
+        Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName));
+        Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName));
+        Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName));
+        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName));
+        Assert.Equal(telemetryEnabled, bool.TryParse(environmentVariables.GetValueOrDefault(DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.EnvVarName), out var b) ? b : null);
     }
 
     [Fact]

@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Xunit;
 
@@ -27,29 +27,40 @@ public class DashboardTelemetryConfigurationTests
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [DashboardTelemetryService.TelemetryOptOutConfigKey] = directOptOut
+            [DashboardTelemetryService.TelemetryOptOutConfigKey] = directOptOut,
+            [DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.ConfigKey] = forwardedOptOut?.ToString()
         }).Build();
-        var options = new DashboardOptions
-        {
-            DebugSession = new DebugSessionOptions { TelemetryOptOut = forwardedOptOut }
-        };
 
-        var settings = DashboardTelemetryConfiguration.Create(configuration, options);
+        var settings = DashboardTelemetryConfiguration.Create(configuration);
 
         Assert.Equal(enabled, settings.ReportedTelemetryEnabled);
     }
 
-    [Fact]
-    public void Create_ResolvesSettingsOnce()
+    [Theory]
+    [InlineData(DashboardTelemetryService.TelemetryOptOutConfigKey)]
+    [InlineData("Dashboard:DebugSession:TelemetryOptOut")]
+    public void Create_ResolvesSettingsOnce(string optOutKey)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection().Build();
-        var options = new DashboardOptions();
-        var settings = DashboardTelemetryConfiguration.Create(configuration, options);
+        var settings = DashboardTelemetryConfiguration.Create(configuration);
 
-        configuration[DashboardTelemetryService.TelemetryOptOutConfigKey] = "true";
-        options.DebugSession.TelemetryOptOut = true;
+        configuration[optOutKey] = "true";
 
         Assert.True(settings.ReportedTelemetryEnabled);
-        Assert.False(DashboardTelemetryConfiguration.Create(configuration, options).ReportedTelemetryEnabled);
+        Assert.False(DashboardTelemetryConfiguration.Create(configuration).ReportedTelemetryEnabled);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("true")]
+    public void Create_InvalidLegacyOptOut_Throws(string? directOptOut)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DashboardTelemetryService.TelemetryOptOutConfigKey] = directOptOut,
+            [DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.ConfigKey] = "invalid"
+        }).Build();
+
+        Assert.Throws<InvalidOperationException>(() => DashboardTelemetryConfiguration.Create(configuration));
     }
 }
