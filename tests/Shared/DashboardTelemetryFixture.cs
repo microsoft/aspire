@@ -59,10 +59,7 @@ public sealed class DashboardTelemetryFixture : IDisposable
     {
         public override void OnEnd(LogRecord data)
         {
-            // LogRecord instances are pooled, so copy their data before returning to the SDK.
-            writer.TryWrite(new TestDashboardTelemetryLog(
-                data.FormattedMessage, data.LogLevel, data.EventId, data.CategoryName,
-                data.TraceId, data.SpanId, data.Attributes?.ToArray() ?? []));
+            writer.TryWrite(TestDashboardTelemetryLog.Create(data));
         }
     }
 }
@@ -74,4 +71,34 @@ public sealed record TestDashboardTelemetryLog(
     string? CategoryName,
     ActivityTraceId TraceId,
     ActivitySpanId SpanId,
-    IReadOnlyList<KeyValuePair<string, object?>> Attributes);
+    IReadOnlyList<KeyValuePair<string, object?>> Attributes)
+{
+    internal static TestDashboardTelemetryLog Create(LogRecord data)
+    {
+        // LogRecord instances are pooled, so copy their data before returning to the SDK.
+        return new(data.FormattedMessage, data.LogLevel, data.EventId, data.CategoryName,
+            data.TraceId, data.SpanId, data.Attributes?.ToArray() ?? []);
+    }
+}
+
+internal sealed class TestDashboardTelemetryLogExporter : BaseExporter<LogRecord>
+{
+    public Channel<TestDashboardTelemetryLog> LogChannel { get; } = Channel.CreateUnbounded<TestDashboardTelemetryLog>();
+    public bool IsDisposed { get; private set; }
+
+    public override ExportResult Export(in Batch<LogRecord> batch)
+    {
+        foreach (var record in batch)
+        {
+            LogChannel.Writer.TryWrite(TestDashboardTelemetryLog.Create(record));
+        }
+
+        return ExportResult.Success;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        IsDisposed = true;
+        base.Dispose(disposing);
+    }
+}

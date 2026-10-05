@@ -267,18 +267,29 @@ public class DashboardTelemetryServiceTests
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
 
-    [Fact]
-    public void RecordEvent_BoundsStringsAndArrays()
+    [Theory]
+    [InlineData("Array")]
+    [InlineData("List")]
+    [InlineData("Enumerable")]
+    public void RecordEvent_BoundsStringsAndCollections(string collectionType)
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
         using var activity = service.StartReportedActivity("dashboard-operation");
         Assert.NotNull(activity);
+        var resourceTypes = Enumerable.Repeat(new string('y', 300), 105);
+        IEnumerable<string> valuesToRecord = collectionType switch
+        {
+            "Array" => resourceTypes.ToArray(),
+            "List" => resourceTypes.ToList(),
+            "Enumerable" => resourceTypes,
+            _ => throw new ArgumentOutOfRangeException(nameof(collectionType))
+        };
 
         service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success, new()
         {
             [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100)),
-            [TelemetryPropertyKeys.ResourceTypes] = new(Enumerable.Repeat(new string('y', 300), 105).ToArray())
+            [TelemetryPropertyKeys.ResourceTypes] = new(valuesToRecord)
         });
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));

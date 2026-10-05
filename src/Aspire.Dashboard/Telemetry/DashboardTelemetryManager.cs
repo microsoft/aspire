@@ -72,7 +72,8 @@ internal sealed class DashboardTelemetryManager(
 
             try
             {
-                _logProvider = logProvider.AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, Path.Combine(storageDirectory, "logs"));
+                _logProvider = logProvider.AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, Path.Combine(storageDirectory, "logs"),
+                    record => IsEventLog(record.CategoryName, record.LogLevel));
             }
             catch
             {
@@ -147,8 +148,7 @@ internal sealed class DashboardTelemetryManager(
     {
         // Preserve the old telemetry-only behavior without adding usage noise to local logs.
         builder.AddFilter(DashboardTelemetryService.EventLogCategoryName, LogLevel.None);
-        builder.AddFilter<OpenTelemetryLoggerProvider>((category, level) =>
-            category == DashboardTelemetryService.EventLogCategoryName && level is >= LogLevel.Information and < LogLevel.None);
+        builder.AddFilter<OpenTelemetryLoggerProvider>(IsEventLog);
         builder.AddOpenTelemetry(logging =>
         {
             logging.IncludeFormattedMessage = true;
@@ -157,6 +157,9 @@ internal sealed class DashboardTelemetryManager(
             logging.SetResourceBuilder(CreateResourceBuilder());
         });
     }
+
+    internal static bool IsEventLog(string? category, LogLevel level) =>
+        category == DashboardTelemetryService.EventLogCategoryName && level is >= LogLevel.Information and < LogLevel.None;
 
     private static ResourceBuilder CreateResourceBuilder() => ResourceBuilder.CreateEmpty().AddService(
         serviceName: "aspire-dashboard",

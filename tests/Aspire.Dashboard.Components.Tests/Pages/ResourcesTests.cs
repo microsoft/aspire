@@ -17,6 +17,8 @@ using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Serialization;
+using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
@@ -39,6 +41,37 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
+    [Fact]
+    public async Task Resources_TelemetryRecordsResourceTypeList()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources:
+        [
+            CreateResource("private-resource-a", "private-type-a", "Running", null),
+            CreateResource("private-resource-b", "private-type-b", "Running", null)
+        ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        using var fixture = new DashboardTelemetryFixture();
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => cut.Instance.TelemetryContext.Initialize(fixture.Telemetry, browserUserAgent: null));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var initializeLog));
+        Assert.Equal(TelemetryEventKeys.ComponentInitialize, initializeLog.Message);
+
+        using var activity = fixture.Telemetry.StartReportedActivity("resources");
+        Assert.NotNull(activity);
+        await cut.InvokeAsync(cut.Instance.UpdateTelemetryProperties);
+
+        Assert.IsType<List<string>>(cut.Instance.TelemetryContext.Properties[TelemetryPropertyKeys.ResourceTypes].Value);
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
+        Assert.Equal(new[] { "custom-resource-type", "custom-resource-type" },
+            Assert.IsType<string[]>(log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value));
+        Assert.Equal(new[] { "custom-resource-type", "custom-resource-type" },
+            Assert.IsType<string[]>(Assert.Single(activity.Events).Tags.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value));
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
+        cut.Dispose();
+    }
+
     [Fact]
     public void ResourceOptions_SelectionChanges_UpdateAllCheckboxState()
     {

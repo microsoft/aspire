@@ -164,7 +164,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
             {
                 attributes.Add(new(key, text.Length <= 1024 ? text : text[..1024]));
             }
-            else if (property.Value is string[] values)
+            else if (property.Value is IEnumerable<string> values)
             {
                 attributes.Add(new(key, values.Take(100).Select(value => value.Length <= 256 ? value : value[..256]).ToArray()));
             }

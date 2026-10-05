@@ -24,14 +24,14 @@ internal static class AspireTelemetryExporter
         });
     }
 
-    public static LoggerProvider AddAspireAzureMonitorExporter(this LoggerProvider provider, string connectionString, string storageDirectory)
+    public static LoggerProvider AddAspireAzureMonitorExporter(this LoggerProvider provider, string connectionString, string storageDirectory, Func<LogRecord, bool> filter)
     {
         var options = new AzureMonitorExporterOptions();
         ConfigureExporter(options, connectionString, storageDirectory);
 
         // Attach after hosted-service startup checks consent, rather than constructing
         // an exporter while the application's logger factory is being initialized.
-        return provider.AddProcessor(new BatchLogRecordExportProcessor(new AzureMonitorLogExporter(options)));
+        return provider.AddProcessor(new FilteredBatchLogRecordExportProcessor(new AzureMonitorLogExporter(options), filter));
     }
 
     private static void ConfigureExporter(AzureMonitorExporterOptions options, string connectionString, string storageDirectory)
