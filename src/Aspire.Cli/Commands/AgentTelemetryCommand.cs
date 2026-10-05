@@ -189,13 +189,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         // attached; in that case this is a no-op, which is the desired behavior.
         using (var activity = Telemetry.StartReportedActivity(TelemetryConstants.Activities.AgentTelemetry))
         {
-            if (activity is not null)
-            {
-                foreach (var (name, value) in tags)
-                {
-                    activity.SetTag(name, value);
-                }
-            }
+            Telemetry.SetActivityProperties(activity, tags.Select(static tag => new KeyValuePair<string, object?>(tag.Name, tag.Value)));
         }
 
         await Telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);

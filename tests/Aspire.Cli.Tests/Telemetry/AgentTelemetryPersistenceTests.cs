@@ -11,7 +11,6 @@ using Azure.Core.Pipeline;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
-using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
 using OpenTelemetry.Trace;
 
@@ -22,7 +21,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryManager_RequiresInitializationBeforeUse()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
 
         Assert.False(manager.IsInitialized);
         Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
@@ -44,7 +44,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryManager_ConcurrentInitializationAndRepeatedShutdownAreIdempotent()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
         await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(manager.Initialize)));
 
         Assert.True(manager.IsInitialized);
@@ -59,7 +60,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryManager_ConcurrentInitializeAndTryShutdownLeaveConsistentState()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var initialization = Task.Run(async () =>
         {
@@ -86,7 +88,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryManager_DisposeBeforeInitializationPreventsInitialization()
     {
-        var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        var manager = CreateDisabledManager(fixture);
         manager.Dispose();
 
         Assert.Throws<InvalidOperationException>(manager.Initialize);
@@ -96,16 +99,18 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ForceFlushReportedAsync_WithoutProviderSucceeds()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
 
         manager.Initialize();
         Assert.True(await manager.ForceFlushReportedAsync().DefaultTimeout());
     }
 
-    private static TelemetryManager CreateDisabledManager()
+    private static TelemetryManager CreateDisabledManager(TelemetryFixture fixture)
         => new(
             new TelemetryConfiguration { ReportedTelemetryEnabled = false },
-            new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
+            fixture.TagsSource,
+            fixture.Telemetry);
 
     [Fact]
     [OuterloopTest("Exercises the exporter's real three-minute lease expiry across processes.")]

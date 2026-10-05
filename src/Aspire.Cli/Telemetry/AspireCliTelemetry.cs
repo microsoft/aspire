@@ -135,6 +135,15 @@ internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
 
     protected override bool IsReportedTelemetryEnabled => _telemetryConfiguration.ReportedTelemetryEnabled;
 
+    /// <inheritdoc />
+    protected override bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue)
+    {
+        // CLI properties are supplied by internal instrumentation, which retains its existing
+        // tag set and exception details rather than adopting the dashboard's privacy policy.
+        sanitizedValue = value;
+        return true;
+    }
+
     /// <summary>
     /// Records a CLI product event immediately and on the nearest active reported activity, if present.
     /// </summary>
@@ -368,16 +377,18 @@ internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
             return;
         }
 
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome);
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus);
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds);
+        SetActivityProperties(activity,
+        [
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias)),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain))
+        ]);
         if (!string.IsNullOrEmpty(result.Source))
         {
-            activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
+            SetActivityProperty(activity, TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
         }
-
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias));
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain));
 
         foreach (var probe in result.ProbeDiagnostics)
         {

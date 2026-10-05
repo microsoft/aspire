@@ -62,6 +62,56 @@ public class DashboardTelemetryServiceTests
         Assert.Equal("resource-stop", activity.GetTagItem(TelemetryPropertyKeys.CommandName));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SetActivityProperties_PreservesClassificationAndBounds(bool batch)
+    {
+        using var fixture = new DashboardTelemetryFixture();
+        using var activity = fixture.Telemetry.StartReportedActivity("dashboard-operation");
+        Assert.NotNull(activity);
+        Dictionary<string, AspireTelemetryProperty> properties = new()
+        {
+            [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100)),
+            [TelemetryPropertyKeys.MetricsInstrumentsCount] = new("12", AspireTelemetryPropertyType.Metric),
+            [TelemetryPropertyKeys.StructuredLogsFilterCount] = new("NaN", AspireTelemetryPropertyType.Metric),
+            [TelemetryPropertyKeys.ResourceType] = new("secret", AspireTelemetryPropertyType.Pii),
+            ["Unknown"] = new("secret")
+        };
+
+        if (batch)
+        {
+            fixture.Telemetry.SetActivityProperties(activity, properties);
+        }
+        else
+        {
+            foreach (var (key, value) in properties)
+            {
+                fixture.Telemetry.SetActivityProperty(activity, key, value);
+            }
+        }
+
+        Assert.Collection(activity.TagObjects.OrderBy(t => t.Key, StringComparer.Ordinal),
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 1024)), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.MetricsInstrumentsCount, 12d), tag));
+        Assert.Empty(activity.Events);
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
+    }
+
+    [Fact]
+    public void SetActivityProperty_DisallowedValue_PreservesExistingTag()
+    {
+        using var fixture = new DashboardTelemetryFixture();
+        using var activity = fixture.Telemetry.StartReportedActivity("dashboard-operation");
+        Assert.NotNull(activity);
+        fixture.Telemetry.SetActivityProperty(activity, TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty("resource-stop"));
+
+        fixture.Telemetry.SetActivityProperty(activity, TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty("secret", AspireTelemetryPropertyType.Pii));
+
+        Assert.Collection(activity.TagObjects,
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, "resource-stop"), tag));
+    }
+
     [Fact]
     public void RecordEvent_UsesAmbientCorrelationWithoutCreatingActivities()
     {
@@ -458,14 +508,11 @@ public class DashboardTelemetryServiceTests
     }
 
     [Fact]
-    public void RecordEvent_ReportsOnlyAllowedPropertiesAndNumericMetrics()
+    public void Recording_ReportsOnlyAllowedPropertiesAndNumericMetrics()
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
-        using var activity = service.StartReportedActivity("dashboard-operation");
-        Assert.NotNull(activity);
-
-        service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success, properties: new()
+        Dictionary<string, AspireTelemetryProperty> properties = new()
         {
             [TelemetryPropertyKeys.DashboardComponentId] = new("Metrics"),
             [TelemetryPropertyKeys.MetricsInstrumentsCount] = new("12", AspireTelemetryPropertyType.Metric),
@@ -475,14 +522,30 @@ public class DashboardTelemetryServiceTests
             [TelemetryPropertyKeys.ExceptionStackTrace] = new("secret"),
             [TelemetryPropertyKeys.ConsoleLogsResourceName] = new("secret"),
             [TelemetryPropertyKeys.UserAgent] = new("secret"),
+            [TelemetryPropertyKeys.DashboardVersion] = new("secret"),
+            [TelemetryPropertyKeys.DashboardBuildId] = new("secret"),
+            [TelemetryPropertyKeys.ExceptionType] = new("secret"),
+            [TelemetryPropertyKeys.ExceptionRuntimeVersion] = new("secret"),
+            ["aspire.dashboard.result"] = new("secret"),
             ["Unknown"] = new("secret")
-        });
+        };
+        using var activity = service.StartOperation(TelemetryEventKeys.ExecuteCommand, properties);
+        Assert.NotNull(activity);
+        var defaultVersion = activity.GetTagItem(TelemetryPropertyKeys.DashboardVersion);
+        var defaultBuildId = activity.GetTagItem(TelemetryPropertyKeys.DashboardBuildId);
+        Assert.Equal(Aspire.Shared.AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly), defaultVersion);
+        Assert.Equal(Aspire.Shared.AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly), defaultBuildId);
+        service.SetOperationResult(activity, TelemetryResult.Success);
+
+        service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success, properties);
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(activity.TagObjects.OrderBy(t => t.Key),
+            log.Attributes.Where(t => t.Key != "{OriginalFormat}").OrderBy(t => t.Key));
         Assert.Equal(Assert.Single(activity.Events).Tags.OrderBy(t => t.Key),
             log.Attributes.Where(t => t.Key != "{OriginalFormat}").OrderBy(t => t.Key));
         Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardBuildId, defaultBuildId), tag),
             tag =>
             {
                 Assert.Equal(TelemetryPropertyKeys.DashboardComponentId, tag.Key);
@@ -493,7 +556,7 @@ public class DashboardTelemetryServiceTests
                 Assert.Equal(TelemetryPropertyKeys.MetricsInstrumentsCount, tag.Key);
                 Assert.Equal(12d, tag.Value);
             },
-            tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardVersion, defaultVersion), tag),
             tag =>
             {
                 Assert.Equal("aspire.dashboard.result", tag.Key);

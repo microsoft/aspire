@@ -103,7 +103,7 @@ public abstract class AspireTelemetryBase : IDisposable
     /// Records a structured event immediately and adds it to the nearest active reported activity, if present.
     /// </summary>
     /// <remarks>
-    /// Product-specific recording APIs must apply their privacy policy before calling this method.
+    /// Applies the product's property privacy policy to both the log and activity event, including default metadata.
     /// </remarks>
     /// <param name="eventName">The event name.</param>
     /// <param name="properties">The product-specific event properties.</param>
@@ -115,15 +115,7 @@ public abstract class AspireTelemetryBase : IDisposable
             return;
         }
 
-        var tags = new ActivityTagsCollection(GetDefaultTags());
-        if (properties is not null)
-        {
-            foreach (var (key, value) in properties)
-            {
-                tags[key] = value;
-            }
-        }
-
+        var tags = CreateProperties(properties);
         var activity = FindReportedActivity(Activity.Current);
         List<KeyValuePair<string, object?>> attributes = [.. tags, new("{OriginalFormat}", eventName)];
         _eventLogger.Log(LogLevel.Information, new EventId(0, eventName), attributes,
@@ -132,6 +124,60 @@ public abstract class AspireTelemetryBase : IDisposable
         // Keep custom events in Application Insights' traces table rather than using
         // Activity.AddException, which would route errors to the exceptions table.
         activity?.AddEvent(new ActivityEvent(eventName, tags: tags));
+    }
+
+    /// <summary>
+    /// Adds default metadata and properties to a reported activity after applying the product's privacy policy.
+    /// </summary>
+    /// <param name="activity">The reported activity.</param>
+    /// <param name="properties">The product-specific activity properties.</param>
+    protected void AddReportedActivityProperties(Activity activity, IEnumerable<KeyValuePair<string, object?>>? properties)
+    {
+        SetActivityProperties(activity, GetDefaultTags().Concat(properties ?? []));
+    }
+
+    /// <summary>
+    /// Sets an activity property after applying the product's privacy policy.
+    /// </summary>
+    /// <remarks>
+    /// Does not add default metadata. A disallowed property leaves any existing tag unchanged.
+    /// </remarks>
+    /// <param name="activity">The activity, or <see langword="null"/> when not recorded.</param>
+    /// <param name="key">The property name.</param>
+    /// <param name="value">The value, including any product-specific privacy classification.</param>
+    /// <exception cref="ArgumentException">The property name is null, empty, or whitespace.</exception>
+    public void SetActivityProperty(Activity? activity, string key, object? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        if (activity is not null && TrySanitizeProperty(key, value, out var sanitizedValue))
+        {
+            activity.SetTag(key, sanitizedValue);
+        }
+    }
+
+    /// <summary>
+    /// Sets activity properties after applying the product's privacy policy.
+    /// </summary>
+    /// <remarks>
+    /// Does not add default metadata or enumerate properties when the activity is <see langword="null"/>.
+    /// Disallowed properties leave existing tags unchanged.
+    /// </remarks>
+    /// <param name="activity">The activity, or <see langword="null"/> when not recorded.</param>
+    /// <param name="properties">The properties, including any product-specific privacy classifications.</param>
+    /// <exception cref="ArgumentNullException">The properties collection is null.</exception>
+    /// <exception cref="ArgumentException">A property name is null, empty, or whitespace.</exception>
+    public void SetActivityProperties(Activity? activity, IEnumerable<KeyValuePair<string, object?>> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        if (activity is null)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in properties)
+        {
+            SetActivityProperty(activity, key, value);
+        }
     }
 
     /// <summary>
@@ -166,10 +212,7 @@ public abstract class AspireTelemetryBase : IDisposable
         using var errorActivity = createActivity && FindReportedActivity(Activity.Current) is null ? StartReportedActivity(_errorEventName) : null;
         if (errorActivity is not null)
         {
-            foreach (var tag in GetDefaultTags())
-            {
-                errorActivity.SetTag(tag.Key, tag.Value);
-            }
+            AddReportedActivityProperties(errorActivity, properties: null);
             errorActivity.SetStatus(ActivityStatusCode.Error);
         }
 
@@ -177,7 +220,7 @@ public abstract class AspireTelemetryBase : IDisposable
     }
 
     /// <summary>
-    /// Creates product-specific exception fields, including any required privacy filtering.
+    /// Creates product-specific exception fields that will be filtered by the product's privacy policy.
     /// </summary>
     /// <param name="exception">The exception to describe.</param>
     /// <returns>The error event tags.</returns>
@@ -195,9 +238,32 @@ public abstract class AspireTelemetryBase : IDisposable
     protected abstract IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags();
 
     /// <summary>
+    /// Determines whether a property may be reported and sanitizes its value.
+    /// </summary>
+    /// <param name="key">The property name.</param>
+    /// <param name="value">The property value, including any product-specific privacy classification.</param>
+    /// <param name="sanitizedValue">The value to report when the property is allowed.</param>
+    /// <returns><see langword="true"/> when the property may be reported; otherwise, <see langword="false"/>.</returns>
+    protected abstract bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue);
+
+    /// <summary>
     /// Gets whether structured events and errors may be recorded.
     /// </summary>
     protected virtual bool IsReportedTelemetryEnabled => true;
+
+    private ActivityTagsCollection CreateProperties(IEnumerable<KeyValuePair<string, object?>>? properties)
+    {
+        var tags = new ActivityTagsCollection();
+        foreach (var (key, value) in GetDefaultTags().Concat(properties ?? []))
+        {
+            if (TrySanitizeProperty(key, value, out var sanitizedValue))
+            {
+                tags[key] = sanitizedValue;
+            }
+        }
+
+        return tags;
+    }
 
     private Activity? FindReportedActivity(Activity? activity)
     {

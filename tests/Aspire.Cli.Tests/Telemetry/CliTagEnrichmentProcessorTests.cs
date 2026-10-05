@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
@@ -15,7 +14,7 @@ public class CliTagEnrichmentProcessorTests
     {
         using var fixture = new TelemetryFixture();
 
-        var processor = new CliTagEnrichmentProcessor(fixture.TagsSource);
+        var processor = new CliTagEnrichmentProcessor(fixture.TagsSource, fixture.Telemetry);
 
         using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
         using var listener = new ActivityListener
@@ -43,7 +42,8 @@ public class CliTagEnrichmentProcessorTests
     {
         // Verifies the processor handles the synchronous wait path when tags
         // haven't completed yet (the GetResolvedTags blocking path).
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        using var fixture = new TelemetryFixture(initialize: false);
+        var tagsSource = fixture.TagsSource;
 
         // Gate the tag calculation behind a TaskCompletionSource so it hasn't completed
         // when OnEnd is called — this forces the blocking wait path in GetResolvedTags.
@@ -60,7 +60,7 @@ public class CliTagEnrichmentProcessorTests
             return expectedTags;
         });
 
-        var processor = new CliTagEnrichmentProcessor(tagsSource);
+        var processor = new CliTagEnrichmentProcessor(tagsSource, fixture.Telemetry);
 
         using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
         using var listener = new ActivityListener
@@ -92,7 +92,8 @@ public class CliTagEnrichmentProcessorTests
     [Fact]
     public async Task OnEnd_DetectorActivitySuppressesRawInternalIdentityTags()
     {
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        using var fixture = new TelemetryFixture(initialize: false);
+        var tagsSource = fixture.TagsSource;
         tagsSource.StartCalculation(() => Task.FromResult<IReadOnlyList<KeyValuePair<string, object?>>>(
         [
             new(TelemetryConstants.Tags.CliVersion, "1.0.0-test"),
@@ -100,7 +101,7 @@ public class CliTagEnrichmentProcessorTests
             new(TelemetryConstants.Tags.InternalMicrosoftDomain, "REDMOND")
         ]));
         await tagsSource.TagsTask;
-        var processor = new CliTagEnrichmentProcessor(tagsSource);
+        var processor = new CliTagEnrichmentProcessor(tagsSource, fixture.Telemetry);
 
         using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
         using var listener = new ActivityListener

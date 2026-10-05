@@ -64,10 +64,24 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         var activity = StartReportedActivity(eventName);
         if (activity is not null)
         {
-            AddProperties(activity, startEventProperties);
+            AddReportedActivityProperties(activity, properties: null);
+            SetActivityProperties(activity, startEventProperties);
         }
 
         return activity;
+    }
+
+    /// <summary>
+    /// Sets classified dashboard activity properties using the shared privacy policy.
+    /// </summary>
+    /// <param name="activity">The activity, or <see langword="null"/> when not recorded.</param>
+    /// <param name="properties">The classified dashboard properties.</param>
+    /// <exception cref="ArgumentNullException">The properties collection is null.</exception>
+    /// <exception cref="ArgumentException">A property name is empty or whitespace.</exception>
+    public void SetActivityProperties(Activity? activity, IReadOnlyDictionary<string, AspireTelemetryProperty> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        base.SetActivityProperties(activity, GetProperties(properties));
     }
 
     /// <summary>
@@ -79,7 +93,9 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     {
         if (activity is not null)
         {
-            SetResult(activity, result);
+            var status = GetResultStatus(result);
+            SetActivityProperty(activity, "aspire.dashboard.result", result.ToString());
+            activity.SetStatus(status);
         }
     }
 
@@ -97,9 +113,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         }
 
         _ = GetResultStatus(result);
-        var attributes = CreateProperties(properties);
-        attributes.Add(new("aspire.dashboard.result", result.ToString()));
-        RecordEventCore(eventName, attributes);
+        RecordEventCore(eventName, GetProperties(properties).Append(new("aspire.dashboard.result", result.ToString())));
     }
 
     /// <summary>
@@ -128,53 +142,58 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         [TelemetryPropertyKeys.ExceptionRuntimeVersion] = VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty
     };
 
-    private void AddProperties(Activity activity, Dictionary<string, AspireTelemetryProperty>? properties)
+    /// <inheritdoc />
+    protected override bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue)
     {
-        foreach (var (key, value) in CreateProperties(properties))
-        {
-            activity.SetTag(key, value);
-        }
-    }
-
-    private List<KeyValuePair<string, object?>> CreateProperties(Dictionary<string, AspireTelemetryProperty>? properties)
-    {
-        List<KeyValuePair<string, object?>> attributes = [.. _defaultTags];
-        if (properties is null)
-        {
-            return attributes;
-        }
-
-        foreach (var (key, property) in properties)
+        sanitizedValue = null;
+        if (value is AspireTelemetryProperty property)
         {
             // Product telemetry must not export arbitrary application data. The old IDE
             // bridge enforced a key allowlist and excluded free-form diagnostic fields.
             if (property.PropertyType == AspireTelemetryPropertyType.Pii || !IsAllowedProperty(key))
             {
-                continue;
+                return false;
             }
 
             if (property.PropertyType == AspireTelemetryPropertyType.Metric)
             {
-                if (double.TryParse(Convert.ToString(property.Value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value))
+                if (double.TryParse(Convert.ToString(property.Value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number))
                 {
-                    attributes.Add(new(key, value));
+                    sanitizedValue = number;
+                    return true;
                 }
+
+                return false;
             }
-            else if (property.Value is string text)
-            {
-                attributes.Add(new(key, text.Length <= 1024 ? text : text[..1024]));
-            }
-            else if (property.Value is IEnumerable<string> values)
-            {
-                attributes.Add(new(key, values.Take(100).Select(value => value.Length <= 256 ? value : value[..256]).ToArray()));
-            }
-            else if (property.Value is bool or int or double)
-            {
-                attributes.Add(new(key, property.Value));
-            }
+
+            value = property.Value;
+        }
+        else if (key is not (TelemetryPropertyKeys.DashboardVersion or TelemetryPropertyKeys.DashboardBuildId or
+            TelemetryPropertyKeys.ExceptionType or TelemetryPropertyKeys.ExceptionRuntimeVersion or "aspire.dashboard.result"))
+        {
+            return false;
         }
 
-        return attributes;
+        sanitizedValue = value switch
+        {
+            string text => text.Length <= 1024 ? text : text[..1024],
+            IEnumerable<string> values => values.Take(100).Select(text => text.Length <= 256 ? text : text[..256]).ToArray(),
+            bool or int or double => value,
+            _ => null
+        };
+
+        return sanitizedValue is not null;
+    }
+
+    private static IEnumerable<KeyValuePair<string, object?>> GetProperties(IReadOnlyDictionary<string, AspireTelemetryProperty>? properties)
+    {
+        if (properties is not null)
+        {
+            foreach (var (key, property) in properties)
+            {
+                yield return new(key, property);
+            }
+        }
     }
 
     private static bool IsAllowedProperty(string key) => key is
@@ -186,12 +205,6 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         TelemetryPropertyKeys.ErrorRequestId or TelemetryPropertyKeys.StructuredLogsSelectedLogLevel or
         TelemetryPropertyKeys.StructuredLogsFilterCount or TelemetryPropertyKeys.CommandName or
         TelemetryPropertyKeys.TerminalDockTrigger;
-
-    private static void SetResult(Activity activity, TelemetryResult result)
-    {
-        activity.SetTag("aspire.dashboard.result", result.ToString());
-        activity.SetStatus(GetResultStatus(result));
-    }
 
     private static ActivityStatusCode GetResultStatus(TelemetryResult result) => result switch
     {

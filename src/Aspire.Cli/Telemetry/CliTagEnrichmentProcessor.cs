@@ -16,10 +16,12 @@ namespace Aspire.Cli.Telemetry;
 internal sealed class CliTagEnrichmentProcessor : BaseProcessor<Activity>
 {
     private readonly TelemetryTagsSource _tagsSource;
+    private readonly AspireCliTelemetry _telemetry;
 
-    public CliTagEnrichmentProcessor(TelemetryTagsSource tagsSource)
+    public CliTagEnrichmentProcessor(TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry)
     {
         _tagsSource = tagsSource;
+        _telemetry = telemetry;
     }
 
     public override void OnEnd(Activity activity)
@@ -39,7 +41,7 @@ internal sealed class CliTagEnrichmentProcessor : BaseProcessor<Activity>
                 continue;
             }
 
-            activity.SetTag(tag.Key, tag.Value);
+            _telemetry.SetActivityProperty(activity, tag.Key, tag.Value);
         }
     }
 }

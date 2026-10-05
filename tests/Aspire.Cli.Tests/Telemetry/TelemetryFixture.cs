@@ -49,6 +49,9 @@ internal sealed class TelemetryFixture : IDisposable
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
         executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
         TagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        Telemetry = telemetryConfiguration is null
+            ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
+            : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
 
         // Simulate CliTagEnrichmentProcessor behavior: in production, tags are added
         // in OnEnd before export. Tests assert on live activities before they
@@ -69,7 +72,7 @@ internal sealed class TelemetryFixture : IDisposable
                             continue;
                         }
 
-                        activity.SetTag(tag.Key, tag.Value);
+                        Telemetry.SetActivityProperty(activity, tag.Key, tag.Value);
                     }
                 }
             },
@@ -77,9 +80,6 @@ internal sealed class TelemetryFixture : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
 
-        Telemetry = telemetryConfiguration is null
-            ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
-            : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
         if (initialize)
         {
             Telemetry.Initialize();

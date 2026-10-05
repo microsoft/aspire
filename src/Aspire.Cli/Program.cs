@@ -1227,7 +1227,7 @@ public class Program
                 var commandName = GetCommandName(parseResult);
                 logger.LogDebug("Executing command: {CommandName}", commandName);
 
-                mainActivity?.SetTag(TelemetryConstants.Tags.CommandName, commandName);
+                telemetry.SetActivityProperty(mainActivity, TelemetryConstants.Tags.CommandName, commandName);
 
                 ProfilingTelemetry.ActivityScope profileCommandActivity = default;
                 try
@@ -1274,7 +1274,7 @@ public class Program
             }
             finally
             {
-                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                telemetry.SetActivityProperty(mainActivity, TelemetryConstants.Tags.ProcessExitCode, exitCode);
                 mainActivity?.Stop();
             }
 
@@ -1332,9 +1332,12 @@ public class Program
         {
             using var currentProcess = Process.GetCurrentProcess();
             activity.SetStartTime(currentProcess.StartTime);
-            activity.AddTag(TelemetryConstants.Tags.ProcessPid, currentProcess.Id);
-            activity.AddTag(TelemetryConstants.Tags.ProcessExecutableName, "aspire");
-            activity.SetTag(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect());
+            telemetry.SetActivityProperties(activity,
+            [
+                new(TelemetryConstants.Tags.ProcessPid, currentProcess.Id),
+                new(TelemetryConstants.Tags.ProcessExecutableName, "aspire"),
+                new(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect())
+            ]);
         }
 
         return activity;

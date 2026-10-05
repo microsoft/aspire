@@ -15,6 +15,43 @@ namespace Aspire.Cli.Tests.Telemetry;
 
 public class AspireCliTelemetryTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SetActivityProperties_PreservesCliValuesAndSupportsRemovingTags(bool batch)
+    {
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var activity = fixture.Telemetry.StartReportedActivity("test-activity");
+        Assert.NotNull(activity);
+        fixture.Telemetry.SetActivityProperty(activity, "test.removed", "original");
+        string[] values = ["one", "two"];
+        KeyValuePair<string, object?>[] properties =
+        [
+            new("test.string", "value"),
+            new("test.number", 42L),
+            new("test.array", values),
+            new("test.removed", null)
+        ];
+
+        if (batch)
+        {
+            fixture.Telemetry.SetActivityProperties(activity, properties);
+        }
+        else
+        {
+            foreach (var (key, value) in properties)
+            {
+                fixture.Telemetry.SetActivityProperty(activity, key, value);
+            }
+        }
+
+        Assert.Collection(activity.TagObjects.OrderBy(t => t.Key, StringComparer.Ordinal),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("test.array", values), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("test.number", 42L), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("test.string", "value"), tag));
+        Assert.Empty(activity.Events);
+    }
+
     [Fact]
     public void StartReportedActivity_CreatesActivityWithCorrectName()
     {
