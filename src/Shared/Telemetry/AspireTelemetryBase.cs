@@ -102,9 +102,12 @@ public abstract class AspireTelemetryBase : IDisposable
     /// <summary>
     /// Records a structured event immediately and adds it to the nearest active reported activity, if present.
     /// </summary>
+    /// <remarks>
+    /// Product-specific recording APIs must apply their privacy policy before calling this method.
+    /// </remarks>
     /// <param name="eventName">The event name.</param>
     /// <param name="properties">The product-specific event properties.</param>
-    public void RecordEvent(string eventName, IEnumerable<KeyValuePair<string, object?>>? properties = null)
+    protected void RecordEventCore(string eventName, IEnumerable<KeyValuePair<string, object?>>? properties)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(eventName);
         if (!IsReportedTelemetryEnabled)
@@ -170,7 +173,7 @@ public abstract class AspireTelemetryBase : IDisposable
             errorActivity.SetStatus(ActivityStatusCode.Error);
         }
 
-        RecordEvent(_errorEventName, CreateErrorTags(exception));
+        RecordEventCore(_errorEventName, CreateErrorTags(exception));
     }
 
     /// <summary>

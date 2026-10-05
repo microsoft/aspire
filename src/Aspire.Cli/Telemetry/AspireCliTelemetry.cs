@@ -135,6 +135,14 @@ internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
 
     protected override bool IsReportedTelemetryEnabled => _telemetryConfiguration.ReportedTelemetryEnabled;
 
+    /// <summary>
+    /// Records a CLI product event immediately and on the nearest active reported activity, if present.
+    /// </summary>
+    /// <param name="eventName">The event name.</param>
+    /// <param name="properties">The CLI-specific event properties.</param>
+    public void RecordEvent(string eventName, IEnumerable<KeyValuePair<string, object?>>? properties = null) =>
+        RecordEventCore(eventName, properties);
+
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
     {

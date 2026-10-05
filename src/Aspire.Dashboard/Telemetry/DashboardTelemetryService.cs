@@ -99,7 +99,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         _ = GetResultStatus(result);
         var attributes = CreateProperties(properties);
         attributes.Add(new("aspire.dashboard.result", result.ToString()));
-        base.RecordEvent(eventName, attributes);
+        RecordEventCore(eventName, attributes);
     }
 
     /// <summary>
