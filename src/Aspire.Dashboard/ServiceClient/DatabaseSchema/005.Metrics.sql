@@ -2,6 +2,17 @@
 -- The .NET Foundation licenses this file to you under the MIT license.
 -- IMPORTANT: Increment DashboardSqliteDatabase.SchemaVersion when changing the database schema.
 
+CREATE TABLE IF NOT EXISTS telemetry_metric_aggregation_temporalities (
+    aggregation_temporality INTEGER PRIMARY KEY,
+    aggregation_temporality_name TEXT NOT NULL UNIQUE
+) STRICT;
+
+INSERT OR IGNORE INTO telemetry_metric_aggregation_temporalities (aggregation_temporality, aggregation_temporality_name)
+VALUES
+    (0, 'Unspecified'),
+    (1, 'Delta'),
+    (2, 'Cumulative');
+
 CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     instrument_id INTEGER PRIMARY KEY AUTOINCREMENT,
     resource_id INTEGER NOT NULL REFERENCES telemetry_resources(resource_id) ON DELETE CASCADE,
@@ -11,7 +22,7 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     description TEXT NOT NULL,
     unit TEXT NOT NULL,
     instrument_type INTEGER NOT NULL,
-    aggregation_temporality INTEGER NOT NULL,
+    aggregation_temporality INTEGER NOT NULL REFERENCES telemetry_metric_aggregation_temporalities(aggregation_temporality),
     is_monotonic INTEGER NOT NULL,
     UNIQUE (resource_id, scope_id, instrument_name)
 ) STRICT;

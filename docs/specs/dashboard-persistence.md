@@ -227,6 +227,8 @@ Summary tables and indexes let trace list queries avoid reconstructing every tra
 
 `telemetry_metric_instruments` identifies instruments by resource, scope, and name and stores type, temporality, monotonicity, unit, and description.
 
+`telemetry_metric_aggregation_temporalities` maps aggregation temporality values to names: `0` is `Unspecified`, `1` is `Delta`, and `2` is `Cumulative`. Instruments reference this lookup table through the `aggregation_temporality` foreign key.
+
 Metric dimensions are normalized into an attribute set and stable non-cryptographic hash. Points store timestamps, point type, repeated-value count, integer or floating-point values, and histogram data. Histogram bucket counts and explicit bounds are compact binary values rather than JSON. Exemplars and their filtered attributes are separate rows correlated to trace and span IDs.
 
 Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
