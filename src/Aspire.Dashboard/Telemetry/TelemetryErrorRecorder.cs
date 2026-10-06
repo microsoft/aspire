@@ -10,6 +10,9 @@ namespace Aspire.Dashboard.Telemetry;
 /// </summary>
 public interface ITelemetryErrorRecorder
 {
+    /// <summary>
+    /// Records an error, reporting distinct leaf exceptions for aggregates by type, message, and stack trace.
+    /// </summary>
     void RecordError(string message, Exception exception, bool writeToLogging = false);
 }
 
@@ -31,6 +34,28 @@ public sealed class TelemetryErrorRecorder : ITelemetryErrorRecorder
             _logger.LogError(exception, message);
         }
 
+        // Blazor passes newly created disposal aggregates to its error handler without throwing them,
+        // so only the child exceptions have the original stacks.
+        // https://github.com/dotnet/aspnetcore/blob/v10.0.0/src/Components/Components/src/RenderTree/Renderer.cs#L1312
+        if (exception is AggregateException aggregateException)
+        {
+            var innerExceptions = aggregateException.Flatten().InnerExceptions;
+            if (innerExceptions.Count > 0)
+            {
+                foreach (var innerException in innerExceptions.DistinctBy(e => (e.GetType(), e.Message, e.StackTrace)))
+                {
+                    RecordException(innerException);
+                }
+
+                return;
+            }
+        }
+
+        RecordException(exception);
+    }
+
+    private void RecordException(Exception exception)
+    {
         _telemetryService.PostFault(
             TelemetryEventKeys.Error,
             $"{exception.GetType().FullName}: {exception.Message}",

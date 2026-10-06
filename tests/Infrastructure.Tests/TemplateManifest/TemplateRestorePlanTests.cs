@@ -134,6 +134,46 @@ public sealed class TemplateRestorePlanTests(ITestOutputHelper output)
         Assert.Equal("'$(Mode)' == 'first'", normalized.Elements("PropertyGroup").Last().Attribute("Condition")!.Value);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [RequiresTools(["pwsh"])]
+    public async Task PreservesItemDeclarationOrderDuringRestore(bool separateGroups)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var environment = new TemplateManifestTestEnvironment(workspace, output);
+        TemplateManifestTestEnvironment.CreatePackage(environment.ExternalFeed, "External.ItemOrderFixture", "1.0.0");
+        var source = XElement.Parse($"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup>
+              <ItemGroup>
+                <TemplatePackage Include="External.ItemOrderFixture" Version="1.0.0" />
+                {(separateGroups ? "</ItemGroup><ItemGroup>" : "")}
+                <PackageReference Include="@(TemplatePackage)" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        foreach (var normalize in new[] { false, true })
+        {
+            var directory = workspace.CreateDirectory(normalize ? "normalized" : "original").FullName;
+            var path = Path.Combine(directory, "App.csproj");
+            new XDocument(normalize ? TemplateRestorePlan.Normalize(source) : source).Save(path);
+            using var command = environment.CreateRestoreCommand(path);
+
+            var result = await command.ExecuteAsync();
+            result.EnsureSuccessful();
+
+            using var assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(directory, "obj", "project.assets.json")));
+            Assert.Equal(["External.ItemOrderFixture/1.0.0"],
+                assets.RootElement.GetProperty("libraries").EnumerateObject().Select(p => p.Name));
+            using var evaluation = JsonDocument.Parse(result.Output);
+            var package = Assert.Single(evaluation.RootElement.GetProperty("Items").GetProperty("PackageReference").EnumerateArray());
+            Assert.Equal("External.ItemOrderFixture", package.GetProperty("Identity").GetString());
+            Assert.Equal("1.0.0", package.GetProperty("Version").GetString());
+        }
+    }
+
     [Fact]
     [RequiresTools(["pwsh"])]
     public async Task DoesNotMovePropertiesPastAChooseThatSelectsDependencies()

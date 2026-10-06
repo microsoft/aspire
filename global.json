@@ -13,23 +13,15 @@
     "dotnet": "11.0.100-rc.1.26425.128",
     "runtimes": {
       "dotnet/x64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "dotnet/arm64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "aspnetcore/x64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "aspnetcore/arm64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ]
     }

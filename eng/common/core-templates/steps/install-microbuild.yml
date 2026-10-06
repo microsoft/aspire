@@ -21,10 +21,10 @@ steps:
     - ${{ if eq(parameters.enableMicrobuildForMacAndLinux, 'true') }}:
       # Needed to download the MicroBuild plugin nupkgs on Mac and Linux when nuget.exe is unavailable
       - task: UseDotNet@2
-        displayName: Install .NET 8.0 SDK for MicroBuild Plugin
+        displayName: Install .NET 10.0 SDK for MicroBuild Plugin
         inputs:
           packageType: sdk
-          version: 8.0.x
+          version: 10.0.x
           installationPath: ${{ parameters.microBuildOutputFolder }}/.dotnet-microbuild
         condition: and(succeeded(), ne(variables['Agent.Os'], 'Windows_NT'))
 

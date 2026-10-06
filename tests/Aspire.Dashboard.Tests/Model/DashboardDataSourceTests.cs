@@ -1486,6 +1486,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(selectedClient.IsEnabled);
         Assert.True(selectedClient.WhenConnected.IsCompletedSuccessfully);
+        Assert.True(selectedClient.WhenResourcesReady.IsCompletedSuccessfully);
         Assert.Equal(DashboardConnectionState.Connected, selectedClient.ConnectionState);
         Assert.Equal(0, connectionStateChangedCount);
         await selectedClient.ReconnectAsync();

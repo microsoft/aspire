@@ -237,6 +237,28 @@ jobs:
                 $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
 
+          # Publish native tray payloads before signing and never republish afterward.
+          - ${{ if in(parameters.agentOs, 'macos', 'windows') }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/Bundle.proj
+                /t:_PublishNativeTray
+                /p:Configuration=$(_BuildConfig)
+                /p:TargetRid=${{ targetRid }}
+                ${{ parameters.extraBuildArgs }}
+                /bl:$(Build.Arcade.LogsPath)PublishTray.binlog
+              displayName: 🟣Prepare native tray app
+            - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+              - script: >-
+                  $(Build.SourcesDirectory)/$(dotnetScript)
+                  msbuild
+                  $(Build.SourcesDirectory)/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj
+                  /t:PrepareTraySigning
+                  /p:Configuration=$(_BuildConfig)
+                  /p:RuntimeIdentifier=${{ targetRid }}
+                displayName: 🟣Prepare tray app signing input
+
           # ESRP treats the Dashboard executable path as a discovery pattern and otherwise
           # finds the adjacent .dSYM DWARF binary with the same name. Dashboard packages do
           # not ship symbols, so remove the bundle before any signing pass evaluates inputs.
@@ -254,9 +276,33 @@ jobs:
                 ${{ parameters.extraBuildArgs }}
                 -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj"
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              displayName: 🟣Sign managed executables
+              # eng/Signing.props includes the Windows tray publish output.
+              displayName: 🟣Sign bundle components
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/pipelines/SignTray.proj
+                -restore
+                /t:SignTray
+                /p:Configuration=$(_BuildConfig)
+                /p:RuntimeIdentifier=${{ targetRid }}
+                /p:SignType=real
+                /bl:$(Build.Arcade.LogsPath)SignTray.binlog
+              displayName: 🟣Sign and notarize whole tray app
+              env:
+                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/src/Aspire.Tray/Mac/Aspire.Tray.Mac.csproj
+                /t:RestoreSignedTray
+                /p:Configuration=$(_BuildConfig)
+                /p:RuntimeIdentifier=${{ targetRid }}
+              displayName: 🟣Restore and verify signed tray app
 
           # On macOS/Linux, restore the execute bit after Arcade signing.
           # MicroBuild rewrites the binary file during signing, which resets permissions
@@ -331,6 +377,9 @@ jobs:
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
+              /p:SkipTrayBuild=true
+              /p:RequireWindowsTraySignature=${{ parameters.codeSign }}
+              /p:RequireMacTraySignature=${{ parameters.codeSign }}
               /p:ContinuousIntegrationBuild=true
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout

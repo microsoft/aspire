@@ -23,6 +23,9 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required bool IsNavMenuOpen { get; set; }
 
+    [Parameter]
+    public bool HasResourceTerminals { get; set; }
+
     [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }
 
@@ -49,9 +52,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -155,10 +155,11 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
                 ActiveIcon: DesktopNavMenu.ConsoleLogsIcon(active: true),
                 LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.ConsoleLogsUrl())
             );
+
         }
 
         yield return new MobileNavMenuEntry(
-            StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)],
+            Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)],
             () => NavigateToAsync(DashboardUrls.StructuredLogsUrl()),
             DesktopNavMenu.StructuredLogsIcon(),
             ActiveIcon: DesktopNavMenu.StructuredLogsIcon(active: true),
@@ -180,6 +181,17 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
             ActiveIcon: DesktopNavMenu.MetricsIcon(active: true),
             LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.MetricsUrl())
         );
+
+        if (DashboardClient.IsEnabled && HasResourceTerminals)
+        {
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.NavMenuTerminalsTab)],
+                () => NavigateToAsync(DashboardUrls.TerminalsUrl()),
+                DesktopNavMenu.TerminalsIcon(),
+                ActiveIcon: DesktopNavMenu.TerminalsIcon(active: true),
+                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TerminalsUrl())
+            );
+        }
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)],

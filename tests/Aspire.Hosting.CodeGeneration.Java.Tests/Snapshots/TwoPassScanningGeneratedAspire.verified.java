@@ -22653,6 +22653,7 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     private String url;
     private String displayText;
     private EndpointReference endpoint;
+    private Number displayOrder;
     private UrlDisplayLocation displayLocation;
 
     public String getUrl() { return url; }
@@ -22661,6 +22662,8 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     public void setDisplayText(String value) { this.displayText = value; }
     public EndpointReference getEndpoint() { return endpoint; }
     public void setEndpoint(EndpointReference value) { this.endpoint = value; }
+    public Number getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Number value) { this.displayOrder = value; }
     public UrlDisplayLocation getDisplayLocation() { return displayLocation; }
     public void setDisplayLocation(UrlDisplayLocation value) { this.displayLocation = value; }
 
@@ -22673,6 +22676,8 @@ public class ResourceUrlAnnotation implements JsonSerializable {
         value.setDisplayText(displayTextValue == null ? null : (String) displayTextValue);
         var endpointValue = map.get("Endpoint");
         value.setEndpoint((EndpointReference) endpointValue);
+        var displayOrderValue = map.get("DisplayOrder");
+        value.setDisplayOrder(displayOrderValue == null ? null : ((Number) displayOrderValue).doubleValue());
         var displayLocationValue = map.get("DisplayLocation");
         value.setDisplayLocation(UrlDisplayLocation.fromValue((String) displayLocationValue));
         return value;
@@ -22683,6 +22688,7 @@ public class ResourceUrlAnnotation implements JsonSerializable {
         map.put("Url", AspireClient.serializeValue(url));
         map.put("DisplayText", AspireClient.serializeValue(displayText));
         map.put("Endpoint", AspireClient.serializeValue(endpoint));
+        map.put("DisplayOrder", AspireClient.serializeValue(displayOrder));
         map.put("DisplayLocation", AspireClient.serializeValue(displayLocation));
         return map;
     }

@@ -73,15 +73,17 @@ every push (`if: always()`) and the script opens or closes based on the aggregat
 CI result the workflow passes in env:
 
 - `CI_RED` = `contains(needs.*.result, 'failure')` — file/update the issue.
-- `CI_GREEN` = `prepare_for_ci`, `tests`, and `stabilization_check` all `success`
+- `CI_GREEN` = `prepare_for_ci` and `tests` both `success`
   — close the issue.
 
 These are derived from explicit `needs.*.result` checks rather than
-`failure()`/`success()` because `tests`/`stabilization_check` are **skipped** on
+`failure()`/`success()` because `tests` is **skipped** on
 the no-relevant-changes path (`skip_workflow`). A skipped run is neither red nor
 green, so the script leaves any open issue untouched — requiring all-`success` for
 `CI_GREEN` avoids closing a still-red issue on a docs-only push, and the failure
-check avoids filing on a skip.
+check avoids filing on a skip. Stabilization runs only on PRs when the
+`STABILIZATION_ENABLED` output in `ci.yml` is `true`; it is intentionally skipped
+on pushes and does not contribute to the push-only tracker's green result.
 
 ## Logic and tests
 

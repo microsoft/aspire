@@ -63,6 +63,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string MermaidFollowNotSupported {
+            get {
+                return ResourceManager.GetString("MermaidFollowNotSupported", resourceCulture);
+            }
+        }
+
         public static string NoAppHostFound {
             get {
                 return ResourceManager.GetString("NoAppHostFound", resourceCulture);

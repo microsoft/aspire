@@ -21,6 +21,17 @@ export function getResourceStateDescription(state: string): string {
     return state === ResourceState.ValueMissing ? parameterValueMissing : state;
 }
 
+export function getResourceSource(resource: ResourceJson): string | undefined {
+    const candidates = [
+        resource.source,
+        resource.properties?.['container.image'],
+        resource.properties?.['executable.path'],
+        resource.properties?.['project.path'],
+    ];
+
+    return candidates.find(candidate => typeof candidate === 'string' && candidate.trim().length > 0) ?? undefined;
+}
+
 export function getParameterValueDescription(resource: ResourceJson): string | undefined {
     if (resource.resourceType !== ResourceType.Parameter || resource.state === ResourceState.ValueMissing) {
         return undefined;

@@ -15,6 +15,23 @@ namespace Aspire.Cli.Resources {
     [System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class PsCommandStrings {
+        public static string SnapshotRequiresFollowJson {
+            get {
+                return ResourceManager.GetString("SnapshotRequiresFollowJson", resourceCulture);
+            }
+        }
+
+        public static string OutputOptionDescription {
+            get {
+                return ResourceManager.GetString("OutputOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string InvalidOutputMode {
+            get {
+                return ResourceManager.GetString("InvalidOutputMode", resourceCulture);
+            }
+        }
 
         private static System.Resources.ResourceManager resourceMan;
 

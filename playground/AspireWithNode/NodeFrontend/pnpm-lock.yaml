@@ -10,7 +10,7 @@ overrides:
   '@opentelemetry/core': 2.8.0
   '@opentelemetry/propagator-jaeger': 2.9.0
   esbuild: 0.28.1
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.12
   body-parser: 2.3.0
 
 importers:
@@ -21,8 +21,8 @@ importers:
         specifier: ^4.12.1
         version: 4.12.1
       '@grpc/grpc-js':
-        specifier: ^1.14.4
-        version: 1.14.4
+        specifier: ^1.14.5
+        version: 1.14.5
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -95,8 +95,8 @@ packages:
   '@godaddy/terminus@4.12.1':
     resolution: {integrity: sha512-Tm+wVu1/V37uZXcT7xOhzdpFoovQReErff8x3y82k6YyWa1gzxWBjTyrx4G2enjEqoXPnUUmJ3MOmwH+TiP6Sw==}
 
-  '@grpc/grpc-js@1.14.4':
-    resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
+  '@grpc/grpc-js@1.14.5':
+    resolution: {integrity: sha512-7VZM+SVdEcUUqSQeNI3zM8Qs/BhQKZndPo2h5VkYkAM8Iz0wJIa8mKV5ekQGqG8UUsnkQ0NMxIxwkIHYvj0qOw==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/@grpc/grpc-js/-/grpc-js-1.14.5.tgz}
     engines: {node: '>=12.10.0'}
 
   '@grpc/proto-loader@0.8.1':
@@ -688,8 +688,8 @@ packages:
     resolution: {integrity: sha512-2cGmJupaNgg+QUwVLAucDuWuoMZ6EX9iHDRswZ5lsNYEmwPaRknMPCLZz07yTzVq/83p4o/wzbDZbBrTvGGTIw==}
     engines: {node: '>=18'}
 
-  brace-expansion@5.0.8:
-    resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/brace-expansion/-/brace-expansion-5.0.12.tgz}
     engines: {node: 20 || >=22}
 
   braces@3.0.3:
@@ -1331,7 +1331,7 @@ snapshots:
     dependencies:
       stoppable: 1.1.0
 
-  '@grpc/grpc-js@1.14.4':
+  '@grpc/grpc-js@1.14.5':
     dependencies:
       '@grpc/proto-loader': 0.8.1
       '@js-sdsl/ordered-map': 4.4.2
@@ -1423,7 +1423,7 @@ snapshots:
 
   '@opentelemetry/exporter-logs-otlp-grpc@0.218.0(@opentelemetry/api@1.9.1)':
     dependencies:
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.5
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 2.8.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/otlp-exporter-base': 0.218.0(@opentelemetry/api@1.9.1)
@@ -1453,7 +1453,7 @@ snapshots:
 
   '@opentelemetry/exporter-metrics-otlp-grpc@0.218.0(@opentelemetry/api@1.9.1)':
     dependencies:
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.5
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 2.8.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/exporter-metrics-otlp-http': 0.218.0(@opentelemetry/api@1.9.1)
@@ -1492,7 +1492,7 @@ snapshots:
 
   '@opentelemetry/exporter-trace-otlp-grpc@0.218.0(@opentelemetry/api@1.9.1)':
     dependencies:
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.5
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 2.8.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/otlp-exporter-base': 0.218.0(@opentelemetry/api@1.9.1)
@@ -1886,7 +1886,7 @@ snapshots:
 
   '@opentelemetry/otlp-grpc-exporter-base@0.218.0(@opentelemetry/api@1.9.1)':
     dependencies:
-      '@grpc/grpc-js': 1.14.4
+      '@grpc/grpc-js': 1.14.5
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/core': 2.8.0(@opentelemetry/api@1.9.1)
       '@opentelemetry/otlp-exporter-base': 0.218.0(@opentelemetry/api@1.9.1)
@@ -2137,7 +2137,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@5.0.8:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -2463,7 +2463,7 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.8
+      brace-expansion: 5.0.12
 
   module-details-from-path@1.0.4: {}
 

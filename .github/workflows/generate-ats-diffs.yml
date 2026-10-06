@@ -37,6 +37,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ matrix.target_branch }}
+          persist-credentials: false
 
       - name: Restore
         run: ./restore.sh
@@ -142,6 +143,12 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the generated-diff branch; pull-requests creates or updates
+          # the generated-diff pull request and applies its labels.
+          permission-contents: write
+          permission-pull-requests: write
+          # Release-branch history can differ from main in workflow files.
+          permission-workflows: ${{ startsWith(matrix.target_branch, 'release/') && 'write' || '' }}
 
       - name: Create or update pull request
         uses: ./.github/actions/create-pull-request

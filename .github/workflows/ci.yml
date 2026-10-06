@@ -28,6 +28,9 @@ jobs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
       EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
+      # Re-enable once the .NET 11 dependencies are GA. Export the switch so Final
+      # Results can distinguish intentionally disabled PRs from unexpected skips.
+      STABILIZATION_ENABLED: 'false'
 
     steps:
       - name: Checkout code
@@ -90,7 +93,7 @@ jobs:
   # PR CI runs unstable (DotNetFinalVersionKind=prerelease above) so that dogfood artifacts
   # have unique versions and dynamic Helix versions line up cleanly. To compensate for the
   # fact that we never normally exercise the "everything is stable" build shape on PRs, this
-  # job runs a parallel build with StabilizePackageVersion=true that:
+  # job, when enabled, runs a parallel build with StabilizePackageVersion=true that:
   #
   #   1. Packs all shipping packages, which catches NU5104 (stable package depending on a
   #      preview package whose csproj sets SuppressFinalPackageVersion=true). This is the
@@ -102,31 +105,19 @@ jobs:
   #      exercises the user-visible CLI flow against the locally-built stable feed,
   #      which is the scenario that has historically broken on stabilization branches.
   #
-  # The job is gated to PRs only. Push CI (including push to release branches with
+  # The job is gated to enabled PRs only. Push CI (including push to release branches with
   # StabilizePackageVersion=true) doesn't need this check because that *is* the stabilized
   # build shape already.
   stabilization_check:
     name: Stabilization Check
     runs-on: 8-core-ubuntu-latest
     needs: [prepare_for_ci]
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && github.event_name == 'pull_request' && needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' }}
     steps:
-      # The actual stabilization work only makes sense for pull_request events. On push
-      # (including push to release branches with StabilizePackageVersion=true) the build is
-      # already running in the shape this job is meant to validate, so there's nothing to
-      # add. We still let the job *run* on push so the GitHub Actions result is 'success'
-      # rather than 'skipped' — otherwise the `results:` job's `contains(needs.*.result,
-      # 'skipped')` check would fail every push to main / release/**.
-      - name: Skip on push events
-        if: ${{ github.event_name != 'pull_request' }}
-        run: echo "Stabilization Check only runs on pull_request events. Skipping (job remains success)."
-
       - name: Checkout code
-        if: ${{ github.event_name == 'pull_request' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build + pack with StabilizePackageVersion=true
-        if: ${{ github.event_name == 'pull_request' }}
         # SkipNativeBuild=true keeps this job fast (~5min): pack-time NU5104 detection
         # doesn't need NativeAOT CLI binaries, and the moderate smoke below invokes the
         # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`.
@@ -139,7 +130,6 @@ jobs:
             -p:InstallBrowsersForPlaywright=false
 
       - name: Run version-sensitive Aspire.Cli.Tests classes under stabilization
-        if: ${{ github.event_name == 'pull_request' }}
         # Classes that touch IsPrerelease / channel detection / template version pinning /
         # update-notification logic. These are the code paths most likely to behave
         # differently when the CLI's own assembly version label is stable.
@@ -171,12 +161,11 @@ jobs:
             --filter-not-trait "outerloop=true"
 
       - name: aspire init + restore smoke against stable local feed
-        if: ${{ github.event_name == 'pull_request' }}
         run: ./eng/scripts/stabilization-smoke-init-restore.sh
 
       # Always upload logs, even if the build fails, to enable debugging
       - name: Upload logs
-        if: ${{ always() && github.event_name == 'pull_request' }}
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: stabilization_check_logs
@@ -199,7 +188,9 @@ jobs:
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
                needs.tests.result != 'success' ||
-               needs.stabilization_check.result != 'success') }}
+               (needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' &&
+                github.event_name == 'pull_request' &&
+                needs.stabilization_check.result != 'success')) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1
@@ -212,11 +203,12 @@ jobs:
   # checks and are owned by the author.
   #
   # CI_RED / CI_GREEN are derived from explicit needs.*.result checks rather than
-  # failure()/success() because tests/stabilization_check are *skipped* on the
+  # failure()/success() because tests are *skipped* on the
   # no-relevant-changes path (skip_workflow): a skipped run is neither red nor green,
-  # so the script leaves any open issue untouched (no CI signal). Requiring all
-  # three to have *succeeded* for CI_GREEN means a docs-only push never closes a
-  # still-red issue without actually re-running CI.
+  # so the script leaves any open issue untouched (no CI signal). Requiring both
+  # prepare_for_ci and tests to have *succeeded* for CI_GREEN means a docs-only push
+  # never closes a still-red issue without actually re-running CI. Stabilization is
+  # PR-only and cannot contribute a success result to this push-only tracker.
   ci_failure_tracker:
     name: Track CI Failure
     needs: [prepare_for_ci, tests, stabilization_check]
@@ -237,8 +229,7 @@ jobs:
           CI_RED: ${{ contains(needs.*.result, 'failure') }}
           CI_GREEN: >-
             ${{ needs.prepare_for_ci.result == 'success' &&
-                needs.tests.result == 'success' &&
-                needs.stabilization_check.result == 'success' }}
+                needs.tests.result == 'success' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

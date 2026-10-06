@@ -465,6 +465,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Export as Mermaid.
+        /// </summary>
+        public static string ResourcesGraphExportMermaidButton {
+            get {
+                return ResourceManager.GetString("ResourcesGraphExportMermaidButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Reset.
         /// </summary>
         public static string ResourcesGraphResetButton {

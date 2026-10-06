@@ -17,6 +17,8 @@
 	<properties>
 		<java.version>21</java.version>
 		<opentelemetry-javaagent.version>2.24.0</opentelemetry-javaagent.version>
+		<!-- Keep Jackson modules aligned with the fixes for CVE-2026-91776 and CVE-2026-91777. -->
+		<jackson-bom.version>2.21.7</jackson-bom.version>
 		<!--
 			Boot's managed Tomcat predates the security fixes in 10.1.60, including the
 			CVE-2026-41293 fix regression. Keep all embedded modules aligned until Boot catches up.

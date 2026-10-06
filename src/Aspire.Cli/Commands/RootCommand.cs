@@ -172,6 +172,7 @@ internal sealed class RootCommand : BaseRootCommand
         TelemetryCommand telemetryCommand,
         ExportCommand exportCommand,
         DashboardCommand dashboardCommand,
+        TrayCommand trayCommand,
         DocsCommand docsCommand,
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
@@ -246,6 +247,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
         Subcommands.Add(dashboardCommand);
+        Subcommands.Add(trayCommand);
         Subcommands.Add(secretCommand);
 
 #if DEBUG

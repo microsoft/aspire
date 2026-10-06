@@ -257,7 +257,7 @@ internal sealed class TemplateRestorePlan
                 group.Remove();
             }
         }
-        // Re-group unconditional properties/items so cosmetic ordering and group boundaries don't
+        // Re-group unconditional properties/items so property ordering and group boundaries don't
         // defeat deduplication. Conditional groups remain intact for MSBuild to evaluate.
         foreach (var groupName in new[] { "PropertyGroup", "ItemGroup" })
         {
@@ -269,7 +269,13 @@ internal sealed class TemplateRestorePlan
             {
                 continue;
             }
-            var elements = groups.SelectMany(g => g.Elements()).OrderBy(e => e.ToString(SaveOptions.DisableFormatting), StringComparer.Ordinal).ToArray();
+            var elements = groups.SelectMany(g => g.Elements()).ToArray();
+            if (groupName == "PropertyGroup")
+            {
+                elements = elements.OrderBy(e => e.ToString(SaveOptions.DisableFormatting), StringComparer.Ordinal).ToArray();
+            }
+            // Items are evaluated in declaration order, including across groups. For example,
+            // <PackageReference Include="@(TemplatePackage)" /> must stay after its TemplatePackage items.
             groups.Remove();
             if (elements.Length > 0)
             {

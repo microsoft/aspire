@@ -21,6 +21,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
+    private bool _hasResourceTerminals;
     // Fluent v5 has no API to notify the provider after mutating an existing toast's options. This value is
     // rendered as an additional provider attribute so changing it forces FluentToastProvider to read them again.
     private int _toastProviderUpdateVersion;
@@ -291,6 +292,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
 
         _isSwitchingRuns = true;
+        _hasResourceTerminals = false;
         await InvokeAsync(StateHasChanged);
 
         try

@@ -234,7 +234,10 @@ internal static class ResourceSnapshotMapper
         return string.Equals(visibility, KnownCommandVisibility.Default, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsCommandVisibleToApi(string? visibility)
+    /// <summary>
+    /// Returns whether the command is available to API consumers.
+    /// </summary>
+    internal static bool IsCommandVisibleToApi(string? visibility)
     {
         return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
     }
@@ -245,7 +248,10 @@ internal static class ResourceSnapshotMapper
             || (includeDisabledCommands && visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.UI, StringComparison.OrdinalIgnoreCase)) is true);
     }
 
-    private static bool IsCommandVisibleToConsumer(string state, bool includeDisabledCommands)
+    /// <summary>
+    /// Returns whether the command state can be exposed to the consumer.
+    /// </summary>
+    internal static bool IsCommandVisibleToConsumer(string state, bool includeDisabledCommands)
     {
         return string.Equals(state, KnownCommandState.Enabled, StringComparison.OrdinalIgnoreCase)
             || (includeDisabledCommands && string.Equals(state, KnownCommandState.Disabled, StringComparison.OrdinalIgnoreCase));
@@ -276,7 +282,10 @@ internal static class ResourceSnapshotMapper
         return string.Equals(input.InputType, nameof(InputType.SecretText), StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ResourceCommandArgumentDynamicLoadingJson? MapDynamicLoading(ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading)
+    /// <summary>
+    /// Projects dynamic loading dependencies without including argument values.
+    /// </summary>
+    internal static ResourceCommandArgumentDynamicLoadingJson? MapDynamicLoading(ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading)
     {
         return dynamicLoading is null
             ? null

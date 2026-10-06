@@ -3,10 +3,10 @@
 @if (UnreadCount > 0)
 {
     <FluentCounterBadge Count="@UnreadCount"
-                        OverflowCount="9"
+                        OverflowCount="@OverflowCount"
                         Color="BadgeColor.Brand"
                         Appearance="BadgeAppearance.Filled"
-                        Class="notification-counter-badge"
+                        Class="@(UnreadCount > OverflowCount ? "notification-counter-badge notification-counter-badge-overflow" : "notification-counter-badge")"
                         Style="border: 0;">
         <AnchorContent>
             <FluentButton Class="header-button"

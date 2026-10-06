@@ -1,12 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Cli.Agents.Hooks;
-using Aspire.Cli.Bundles;
-using Aspire.Cli.Layout;
-using Aspire.Cli.Processes;
 using Aspire.Shared;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Cli.Telemetry;
 
@@ -23,7 +20,7 @@ internal static class AgentTelemetryUploader
     internal static bool HasPendingTelemetry(string storagePath)
         => Directory.Exists(storagePath) && Directory.EnumerateFiles(storagePath, "*", SearchOption.AllDirectories).Any();
 
-    internal static async Task EnsureRunningAsync(IServiceProvider services)
+    internal static void EnsureRunning()
     {
         if (!HasPendingTelemetry(TelemetryManager.GetTelemetryStoragePath()))
         {
@@ -40,16 +37,22 @@ internal static class AgentTelemetryUploader
         }
 
         var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.DrainOptionName);
-        var startInfo = new IsolatedProcessStartInfo
+        var startInfo = new ProcessStartInfo(command, args)
         {
-            FileName = command,
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            Detached = true,
-            IsolateConsole = false
         };
-        foreach (var arg in args)
+
+        if (OperatingSystem.IsWindows())
         {
-            startInfo.ArgumentList.Add(arg);
+            // Share the hook's console instead of StartDetached (DETACHED_PROCESS), matching the
+            // other detached CLI children. Inherit no handles so the hook host (which may be
+            // waiting for its pipes to close) is not held open by the drainer.
+            startInfo.InheritedHandles = [];
+        }
+        else
+        {
+            // setsid() so the drainer outlives the hook's session and terminal.
+            startInfo.StartDetached = true;
         }
 
         // A drainer must neither attach to an IDE session nor export profiling data.
@@ -59,28 +62,9 @@ internal static class AgentTelemetryUploader
             startInfo.Environment.Remove(key);
         }
 
-        // Windows launches the self-contained CLI without needing any bundle component. Unix uses
-        // the existing DCP detach helper; retain its layout while handing the lease to the child.
-        using var dcp = OperatingSystem.IsWindows() ? null : await DcpExecutableResolver.TryGetDcpExecutableAsync(
-            services.GetRequiredService<ILayoutDiscovery>(), services.GetRequiredService<IBundleService>(),
-            services.GetRequiredService<CliExecutionContext>(), UploaderName, CancellationToken.None).ConfigureAwait(false);
-        if (!OperatingSystem.IsWindows())
-        {
-            startInfo.DetachedUnixLauncherPath = dcp?.ExecutablePath
-                ?? throw new InvalidOperationException("Could not resolve DCP for the telemetry uploader.");
-        }
-        if (dcp?.LayoutLease is { } layoutLease)
-        {
-            var childEnvironment = new Dictionary<string, string>();
-            layoutLease.AddEnvironment(childEnvironment);
-            foreach (var (key, value) in childEnvironment)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
-
-        // IsolatedProcess disposal releases launch handles, not the independent process.
-        await using var process = await IsolatedProcess.StartAsync(startInfo, CancellationToken.None).ConfigureAwait(false);
+        // StartAndForget connects stdio to the null device and releases the process handle, so the
+        // drainer is fully independent of this short-lived hook invocation.
+        Process.StartAndForget(startInfo);
     }
 
     internal static async Task DrainAsync(string storagePath, string lockPath, CancellationToken cancellationToken)

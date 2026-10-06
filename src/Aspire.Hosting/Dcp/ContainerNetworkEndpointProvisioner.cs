@@ -416,6 +416,7 @@ internal sealed partial class ContainerNetworkEndpointProvisioner : IDisposable
         tunnelProxy.Spec.ContainerNetworkName = KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value;
         tunnelProxy.Spec.Aliases = [await GetContainerHostNameAsync(cancellationToken).ConfigureAwait(false)];
         tunnelProxy.Spec.Tunnels = tunnels;
+        tunnelProxy.Spec.BaseImage = _options.Value.ContainerTunnelBaseImage;
         var tunnelAppResource = new AppResource<ContainerNetworkTunnelProxy>(tunnelProxy);
         _appResources.Add(tunnelAppResource);
 

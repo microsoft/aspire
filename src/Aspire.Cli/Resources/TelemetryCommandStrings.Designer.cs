@@ -294,6 +294,15 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to The connection to the dashboard was lost..
+        /// </summary>
+        internal static string DashboardConnectionLost {
+            get {
+                return ResourceManager.GetString("DashboardConnectionLost", resourceCulture);
+            }
+        }
+
         internal static string DashboardConnectionFailed {
             get {
                 return ResourceManager.GetString("DashboardConnectionFailed", resourceCulture);
@@ -315,6 +324,18 @@ namespace Aspire.Cli.Resources {
         internal static string DashboardUrlInvalidHint {
             get {
                 return ResourceManager.GetString("DashboardUrlInvalidHint", resourceCulture);
+            }
+        }
+
+        internal static string InvalidDashboardUrlDisplayValue {
+            get {
+                return ResourceManager.GetString("InvalidDashboardUrlDisplayValue", resourceCulture);
+            }
+        }
+
+        internal static string ConfiguredDashboardDisplayValue {
+            get {
+                return ResourceManager.GetString("ConfiguredDashboardDisplayValue", resourceCulture);
             }
         }
 

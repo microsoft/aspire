@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- net11.0 (not DefaultTargetFramework=net8.0): references tools/SelectTests, which runs on
+    <!-- net11.0 (not DefaultTargetFramework=net10.0): references tools/SelectTests, which runs on
          the repo SDK's runtime and loads its Microsoft.Build ProjectGraph at runtime. -->
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -43,6 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
+    <Compile Include="$(TestsSharedDir)WindowsTrayTestPayload.cs" Link="shared/WindowsTrayTestPayload.cs" />
     <!-- Resolves pwsh from PATH for the workflow step tests, which replace PATH with a stub directory. -->
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="shared/PathLookupHelper.cs" />
   </ItemGroup>

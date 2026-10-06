@@ -21,7 +21,7 @@
     "language": "C#",
     "type": "solution",
     "editorTreatAs": "solution",
-    "aspire-!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!-tfms": "net8.0;net9.0;net10.0;net11.0"
+    "aspire-!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!-tfms": "net10.0;net11.0"
   },
   "precedence": "9000",
   "identity": "Aspire.Empty.CSharp.!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",
@@ -55,14 +55,6 @@
       "datatype": "choice",
       "choices": [
         {
-          "choice": "net8.0",
-          "description": "Target net8.0"
-        },
-        {
-          "choice": "net9.0",
-          "description": "Target net9.0"
-        },
-        {
           "choice": "net10.0",
           "description": "Target net10.0"
         },
@@ -71,7 +63,7 @@
           "description": "Target net11.0"
         }
       ],
-      "replaces": "net8.0",
+      "replaces": "net10.0",
       "defaultValue": "net10.0"
     },
     "AspireVersion": {

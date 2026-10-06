@@ -953,7 +953,7 @@ internal sealed class RunCommand : BaseCommand
             var failureMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
 
-            if (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            if (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 // The backchannel connection itself died, so the AppHost is dying too. Wait for it
                 // to exit so we can surface its real exit code/captured output rather than a
@@ -1325,7 +1325,7 @@ internal sealed class RunCommand : BaseCommand
                     }
                 }
             }
-            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 // The AppHost process exited and the backchannel connection was lost. This is
                 // expected during orderly shutdown, but buffered records still need to be flushed.
@@ -1345,7 +1345,7 @@ internal sealed class RunCommand : BaseCommand
             // Swallow the exception if the operation was cancelled.
             return;
         }
-        catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+        catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
         {
             // The AppHost process exited and the backchannel connection was lost. This is
             // expected during orderly shutdown — the connection drops before the cancellation

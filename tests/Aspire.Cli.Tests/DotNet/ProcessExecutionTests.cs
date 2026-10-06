@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
@@ -266,6 +267,162 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
     }
 
+    [Fact]
+    public async Task WaitForExitAsync_CallbackThrows_StillDeliversRemainingOutputAndExitCode()
+    {
+        // The callback throws on the FIRST line; every later line must still be delivered so a
+        // faulting consumer cannot leave the child blocked on a full pipe.
+        var seenLines = new List<string>();
+        var (fileName, arguments) = OperatingSystem.IsWindows()
+            ? ("cmd.exe", new[] { "/d", "/c", "echo line-one&echo line-two" })
+            : ("/bin/sh", new[] { "-c", "echo line-one; echo line-two" });
+
+        await using var execution = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance).CreateExecution(
+            fileName,
+            arguments,
+            env: null,
+            new DirectoryInfo(Environment.CurrentDirectory),
+            new ProcessInvocationOptions
+            {
+                StandardOutputCallback = line =>
+                {
+                    seenLines.Add(line.Trim());
+                    if (line.Contains("line-one"))
+                    {
+                        throw new InvalidOperationException("intentional callback failure");
+                    }
+                }
+            });
+
+        Assert.True(await execution.StartAsync(CancellationToken.None));
+
+        Assert.Equal(0, await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout());
+        Assert.Equal(["line-one", "line-two"], seenLines);
+    }
+
+    [Theory]
+    [InlineData(false, false, false, true, false)]
+    [InlineData(true, false, false, true, true)]
+    [InlineData(false, true, false, false, true)]
+    [InlineData(false, false, true, false, true)]
+    [InlineData(true, true, false, true, true)]
+    [InlineData(true, false, true, true, true)]
+    [SupportedOSPlatform("windows")]
+    public void CreateProcessStartInfo_OnWindows_MapsLaunchOptions(
+        bool isolateConsole,
+        bool killOnParentExit,
+        bool detached,
+        bool expectedCreateNoWindow,
+        bool expectedOnlyStandardHandlesInherited)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
+
+        var startInfo = ProcessExecutionFactory.CreateProcessStartInfo(
+            "child.exe",
+            ["arg"],
+            Environment.CurrentDirectory,
+            new ProcessInvocationOptions
+            {
+                IsolateConsole = isolateConsole,
+                KillOnParentExit = killOnParentExit,
+                Detached = detached,
+            });
+
+        Assert.Equal("child.exe", startInfo.FileName);
+        Assert.Equal(["arg"], startInfo.ArgumentList);
+        Assert.Equal(expectedCreateNoWindow, startInfo.CreateNoWindow);
+        Assert.Equal(killOnParentExit, startInfo.KillOnParentExit);
+        // DETACHED_PROCESS would leave the child without a console to receive CTRL+C.
+        Assert.False(startInfo.StartDetached);
+        if (expectedOnlyStandardHandlesInherited)
+        {
+            Assert.NotNull(startInfo.InheritedHandles);
+            Assert.Empty(startInfo.InheritedHandles);
+        }
+        else
+        {
+            Assert.Null(startInfo.InheritedHandles);
+        }
+
+        Assert.False(startInfo.RedirectStandardInput);
+        Assert.Equal(!detached, startInfo.RedirectStandardOutput);
+        Assert.Equal(!detached, startInfo.RedirectStandardError);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [SupportedOSPlatform("windows")]
+    public async Task StartAsync_OnWindows_IsolateConsole_ChildReceivesCtrlCThroughItsOwnConsole(bool killOnParentExit)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
+
+        // Mirror Program.Main: clear any inherited "ignore CTRL+C" attribute so the child, which
+        // inherits it across CreateProcess, can observe CTRL_C_EVENT regardless of how the test host
+        // was launched.
+        WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, add: false);
+
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var execution = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance).CreateExecution(
+            "ping.exe",
+            ["-n", "120", "127.0.0.1"],
+            env: null,
+            new DirectoryInfo(Environment.CurrentDirectory),
+            new ProcessInvocationOptions
+            {
+                IsolateConsole = true,
+                KillOnParentExit = killOnParentExit,
+                StandardOutputCallback = _ => started.TrySetResult()
+            });
+
+        Assert.True(await execution.StartAsync(CancellationToken.None));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        var signal = await SendCtrlCThroughAttachedConsoleAsync(execution.ProcessId);
+        Assert.True(signal.ExitStatus.ExitCode == 0, $"Signaler exited with {signal.ExitStatus.ExitCode}: {signal.StandardError}");
+
+        // STATUS_CONTROL_C_EXIT: ping handled CTRL+C and exited, rather than being killed.
+        Assert.Equal(unchecked((int)0xC000013A), await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30)));
+    }
+
+    /// <summary>
+    /// Performs the same console-signal sequence as DCP's <c>stop-process-tree</c> on Windows,
+    /// from a separate process so the test host's console attachment is never changed:
+    /// attach to the target's console, ignore CTRL+C in the signaler, and send CTRL_C_EVENT to
+    /// every process attached to that console. AttachConsole fails if the target has no console.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static async Task<ProcessTextOutput> SendCtrlCThroughAttachedConsoleAsync(int processId)
+    {
+        var script = $$"""
+            $ErrorActionPreference = 'Stop'
+            Add-Type -Namespace AspireTests -Name ConsoleSignal -MemberDefinition @'
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool FreeConsole();
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool AttachConsole(uint processId);
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool SetConsoleCtrlHandler(IntPtr handler, bool add);
+            [DllImport("kernel32.dll", SetLastError = true)] public static extern bool GenerateConsoleCtrlEvent(uint ctrlEvent, uint processGroupId);
+            '@
+            [void][AspireTests.ConsoleSignal]::FreeConsole()
+            if (-not [AspireTests.ConsoleSignal]::AttachConsole({{processId}})) { [Console]::Error.WriteLine("AttachConsole failed: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()); exit 2 }
+            if (-not [AspireTests.ConsoleSignal]::SetConsoleCtrlHandler([IntPtr]::Zero, $true)) { [Console]::Error.WriteLine("SetConsoleCtrlHandler failed: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()); exit 3 }
+            if (-not [AspireTests.ConsoleSignal]::GenerateConsoleCtrlEvent(0, 0)) { [Console]::Error.WriteLine("GenerateConsoleCtrlEvent failed: " + [Runtime.InteropServices.Marshal]::GetLastWin32Error()); exit 4 }
+            exit 0
+            """;
+
+        // -EncodedCommand avoids Windows PowerShell's command-line quote handling for the script.
+        var startInfo = new ProcessStartInfo("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))])
+        {
+            // DCP is launched the same way: its own hidden console, so it can FreeConsole/AttachConsole
+            // without touching the console the test host is attached to.
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        return await Process.RunAndCaptureTextAsync(startInfo, timeout.Token);
+    }
+
     private static string CreateJsonPayload(int lineCount)
     {
         var builder = new StringBuilder();
@@ -425,8 +582,6 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         IProcessTreeGracefulShutdownSignaler signaler,
         IGracefulShutdownWindow shutdownService)
     {
-        // The Windows kill-on-close job is now resolved on-demand inside the factory via
-        // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
         return CreateExecution(
             scriptFile,
             new ProcessInvocationOptions

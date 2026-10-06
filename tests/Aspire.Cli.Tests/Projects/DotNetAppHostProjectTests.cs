@@ -1002,6 +1002,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [Fact]
     public async Task RunAsync_ProjectAppHostUsesDirectCommandLaunchAndAppliesLaunchSettings()
     {
+        const string configuredImage = "example.com/aspire-tunnel:configured";
+        const string launchProfileImage = "example.com/aspire-tunnel:launch-profile";
+
         var appHostFile = CreateProjectAppHost();
         var targetPath = CreateBuiltAppHostAssembly("AppHost.dll");
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
@@ -1009,6 +1012,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var appHostCommandJson = JsonSerializer.Serialize(appHostCommand.FullName);
         var targetPathJson = JsonSerializer.Serialize(targetPath.FullName);
         var runWorkingDirectoryJson = JsonSerializer.Serialize(runWorkingDirectory.FullName);
+        WriteAspireConfigJson(appHostFile.DirectoryName!, $$"""
+            {
+              "containerTunnel": {
+                "baseImage": "{{configuredImage}}"
+              }
+            }
+            """);
         Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
         File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
             {
@@ -1023,7 +1033,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                   "commandLineArgs": "--from-profile \"profile value\"",
                   "environmentVariables": {
                     "DOTNET_ENVIRONMENT": "Development",
-                    "CUSTOM_ENV": "custom-value"
+                    "CUSTOM_ENV": "custom-value",
+                    "ASPIRE_CONTAINER_TUNNEL_BASE_IMAGE": "example.com/aspire-tunnel:launch-profile"
                   }
                 },
                 "https": {
@@ -1082,6 +1093,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal("http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.Equal("context-value", env["CUSTOM_ENV"]);
+            Assert.Equal(launchProfileImage, env[KnownConfigNames.ContainerTunnelBaseImage]);
             return Task.FromResult(123);
         };
 

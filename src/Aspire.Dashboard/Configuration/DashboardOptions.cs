@@ -250,6 +250,14 @@ public sealed class FrontendOptions
     public string? PublicUrl { get; set; }
 
     /// <summary>
+    /// Gets or sets whether WebSocket compression is disabled for the Blazor connection.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to false. Disable compression for reverse proxies that don't support compressed WebSocket messages.
+    /// </remarks>
+    public bool DisableWebSocketCompression { get; set; }
+
+    /// <summary>
     /// Gets and sets the limit on the number of console log messages retained in the viewer and database.
     /// </summary>
     /// <remarks>

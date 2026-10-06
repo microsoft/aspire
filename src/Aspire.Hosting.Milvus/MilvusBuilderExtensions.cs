@@ -158,13 +158,11 @@ public static class MilvusBuilderExtensions
                                                         .ExcludeFromManifest();
 
         resourceBuilder.WithHidden();
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
         builder.WithUrlForEndpoint(attuContainer.PrimaryEndpoint, url =>
         {
             url.DisplayText = "Manage";
             url.DisplayOrder = 1;
         });
-#pragma warning restore CS0618
 
         configureContainer?.Invoke(resourceBuilder);
 

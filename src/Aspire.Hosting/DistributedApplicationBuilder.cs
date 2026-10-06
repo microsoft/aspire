@@ -226,6 +226,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
+        // Suppress routine HttpClientFactory Debug cleanup in every sink while retaining Information and higher diagnostics.
+        _innerBuilder.Logging.AddFilter("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogLevel.Information);
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
@@ -842,6 +844,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP Publisher options, we should only process these in run mode
             { "--dcp-cli-path", "DcpPublisher:CliPath" },
             { "--dcp-container-runtime", "DcpPublisher:ContainerRuntime" },
+            { "--dcp-container-tunnel-base-image", "DcpPublisher:ContainerTunnelBaseImage" },
             { "--dcp-dependency-check-timeout", "DcpPublisher:DependencyCheckTimeout" },
             { "--dcp-dashboard-path", "DcpPublisher:DashboardPath" }
         };

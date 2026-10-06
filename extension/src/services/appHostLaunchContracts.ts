@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireOperationKind } from '../dcp/types';
-import { appHostLifecycleBusy } from '../loc/strings';
+import { appHostLaunchTargetChanged, appHostLifecycleBusy } from '../loc/strings';
+import { type OpaqueAppHostIdentity } from '../utils/appHostIdentity';
 
 export interface AppHostLaunchRequestedEvent {
     appHostPath: string;
@@ -37,6 +38,7 @@ export interface AppHostOperationState {
 
 export interface AppHostLaunchSession {
     readonly appHostPath: string | undefined;
+    readonly appHostIdentity?: OpaqueAppHostIdentity;
     /**
      * The concrete AppHost the extension resolved for this session, when the session's
      * own `program` is a workspace folder rather than a file.
@@ -55,8 +57,69 @@ export interface AppHostLaunchSession {
     stopDebugging(): Promise<void>;
 }
 
+/**
+ * Safe session details the editor-assistance surfaces are allowed to inspect.
+ *
+ * The snapshot deliberately excludes VS Code debug session ids, process ids, and the
+ * full debug configuration. Consumers only need enough state to summarize the AppHost
+ * the editor is already managing.
+ */
+export interface AppHostEditorSessionSnapshot {
+    readonly appHostPath: string | undefined;
+    readonly resolvedAppHostPath: string | undefined;
+    readonly appHostIdentity?: OpaqueAppHostIdentity;
+    readonly operationKind: AspireOperationKind;
+    readonly startupCompleted: boolean;
+    readonly noDebug: boolean | undefined;
+    readonly isStopping: boolean;
+}
+
+export type EditorResourceSessionState = 'starting' | 'running' | 'stopping';
+export type EditorResourceSessionMode = 'run' | 'debug' | 'other';
+
+/**
+ * Safe child-session details exposed to editor-assistance services.
+ *
+ * AppHost, source-target, and resource-executable paths are used only for exact
+ * internal correlation. The snapshot deliberately omits the VS Code session id,
+ * process id, full debug configuration, and resource metadata so callers cannot
+ * turn it into an ambient debug-session handle.
+ */
+export interface EditorResourceSessionSnapshot {
+    readonly appHostPath: string;
+    readonly appHostIdentity?: OpaqueAppHostIdentity;
+    readonly targetPath: string;
+    readonly resourceExecutablePaths?: readonly string[];
+    readonly state: EditorResourceSessionState;
+    readonly mode: EditorResourceSessionMode;
+}
+
 export interface RunningAppHost {
     readonly appHostPath: string;
+}
+
+/**
+ * One lifecycle operation's AppHost, resolved once into the name the caller chose and the
+ * physical AppHost that name selected.
+ *
+ * The two are kept apart on purpose. `selectorPath` is provenance: it is what the caller chose,
+ * what a workspace-relative display renders, which workspace folder's CLI and settings apply,
+ * and what is checked again before the operation commits. `canonicalPath` is what the operation
+ * is actually performed against - reservations, CLI probes, and the debug configuration - because
+ * a name can be repointed while any of those steps is in flight, and an operation that followed
+ * the name would then act on an AppHost the caller never selected while `identity` still
+ * attributes it to the one they did.
+ *
+ * Callers resolve this once, before taking the lifecycle lock, and carry the whole value through.
+ * Passing only the canonical path forward loses the selector, which silently turns the freshness
+ * check into a comparison of the physical path against itself - a check that can no longer fail.
+ */
+export interface AppHostLaunchTarget {
+    readonly selectorPath: string;
+    readonly canonicalPath: string;
+    readonly identity: OpaqueAppHostIdentity;
+    /** Stable workspace-relative identity used for user-facing launch presentation. */
+    readonly displayPath: string;
 }
 
 export type AppHostStopResult =
@@ -106,6 +169,16 @@ export class AppHostLifecycleLockTimeoutError extends Error {
         // localized, unlike the tool path where the timeout only maps to a `busy` outcome.
         super(appHostLifecycleBusy);
         this.name = 'AppHostLifecycleLockTimeoutError';
+    }
+}
+
+export class AppHostLaunchTargetChangedError extends Error {
+    constructor() {
+        // `AppHostLaunchService.launch` is the editor's own run/debug path, so this message can
+        // reach a notification via showErrorMessage and has to be localized. The tool path maps
+        // it to a generic failure outcome, which keeps the AppHost identity out of tool output.
+        super(appHostLaunchTargetChanged);
+        this.name = 'AppHostLaunchTargetChangedError';
     }
 }
 

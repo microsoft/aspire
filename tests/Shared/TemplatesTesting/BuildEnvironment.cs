@@ -37,12 +37,6 @@ public class BuildEnvironment
     public static bool IsRunningOnCI => IsRunningOnHelix || IsRunningOnCIBuildMachine || IsRunningOnGithubActions;
     public static bool ShouldRunPlaywrightTests => PlaywrightProvider.HasPlaywrightSupport && !EnvironmentVariables.RunOnlyBasicBuildTemplatesTests;
 
-    private static readonly Lazy<BuildEnvironment> s_net8Sdk = new(() =>
-        new BuildEnvironment(sdkDirName: "dotnet-8"));
-
-    private static readonly Lazy<BuildEnvironment> s_net9Sdk = new(() =>
-        new BuildEnvironment(sdkDirName: "dotnet-9"));
-
     private static readonly Lazy<BuildEnvironment> s_net10Sdk = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-10"));
 
@@ -52,8 +46,6 @@ public class BuildEnvironment
     private static readonly Lazy<BuildEnvironment> s_net11SdkWithAllSupportedRuntimes = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-tests"));
 
-    public static BuildEnvironment ForNet8SdkOnly => s_net8Sdk.Value;
-    public static BuildEnvironment ForNet9SdkOnly => s_net9Sdk.Value;
     public static BuildEnvironment ForNet10SdkOnly => s_net10Sdk.Value;
     public static BuildEnvironment ForNet11SdkOnly => s_net11Sdk.Value;
     public static BuildEnvironment ForNet11SdkWithAllSupportedRuntimes => s_net11SdkWithAllSupportedRuntimes.Value;
@@ -61,8 +53,7 @@ public class BuildEnvironment
     public static BuildEnvironment ForDefaultFramework =>
         DefaultTargetFramework switch
         {
-            TestTargetFramework.Net8 => ForNet8SdkOnly,
-            TestTargetFramework.Net9 or TestTargetFramework.Net10 => ForNet11SdkWithAllSupportedRuntimes,
+            TestTargetFramework.Net10 => ForNet11SdkWithAllSupportedRuntimes,
             TestTargetFramework.Net11 => ForNet11SdkOnly,
 
             _ => throw new ArgumentOutOfRangeException(nameof(DefaultTargetFramework))
@@ -297,9 +288,7 @@ public class BuildEnvironment
     private static TestTargetFramework ComputeDefaultTargetFramework()
         => EnvironmentVariables.DefaultTFMForTesting?.ToLowerInvariant() switch
         {
-            null or "" or "net9.0" => TestTargetFramework.Net9,
-            "net8.0" => TestTargetFramework.Net8,
-            "net10.0" => TestTargetFramework.Net10,
+            null or "" or "net10.0" => TestTargetFramework.Net10,
             "net11.0" => TestTargetFramework.Net11,
             _ => throw new ArgumentOutOfRangeException(nameof(EnvironmentVariables.DefaultTFMForTesting), EnvironmentVariables.DefaultTFMForTesting, "Invalid value")
         };
@@ -308,8 +297,6 @@ public class BuildEnvironment
 
 public enum TestTargetFramework
 {
-    Net8,
-    Net9,
     Net10,
     Net11,
     None
@@ -319,8 +306,6 @@ public static class TestTargetFrameworkExtensions
 {
     public static string ToTFMString(this TestTargetFramework tfm) => tfm switch
     {
-        TestTargetFramework.Net8 => "net8.0",
-        TestTargetFramework.Net9 => "net9.0",
         TestTargetFramework.Net10 => "net10.0",
         TestTargetFramework.Net11 => "net11.0",
         _ => throw new ArgumentOutOfRangeException(nameof(tfm))

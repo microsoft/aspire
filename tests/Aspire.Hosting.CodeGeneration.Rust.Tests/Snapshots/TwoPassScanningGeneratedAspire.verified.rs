@@ -1830,6 +1830,8 @@ pub struct ResourceUrlAnnotation {
     pub display_text: Option<String>,
     #[serde(rename = "Endpoint", skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<Handle>,
+    #[serde(rename = "DisplayOrder", skip_serializing_if = "Option::is_none")]
+    pub display_order: Option<f64>,
     #[serde(rename = "DisplayLocation")]
     pub display_location: UrlDisplayLocation,
 }
@@ -1841,6 +1843,9 @@ impl ResourceUrlAnnotation {
         map.insert("DisplayText".to_string(), serde_json::to_value(&self.display_text).unwrap_or(Value::Null));
         if let Some(ref v) = self.endpoint {
             map.insert("Endpoint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.display_order {
+            map.insert("DisplayOrder".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("DisplayLocation".to_string(), serde_json::to_value(&self.display_location).unwrap_or(Value::Null));
         map

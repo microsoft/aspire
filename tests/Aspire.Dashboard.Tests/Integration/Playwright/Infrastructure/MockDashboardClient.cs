@@ -42,6 +42,7 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
 
     public bool IsEnabled => true;
     public Task WhenConnected => Task.CompletedTask;
+    public Task WhenResourcesReady => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
     public string? MinRequiredVersion => null;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
@@ -53,7 +54,11 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
     public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, int interactionId, string inputName, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
+    public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
     public Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -94,7 +99,8 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
         throw new NotImplementedException();
     }
 
-    public ResourceViewModel? GetResource(string resourceName) => null;
+    public ResourceViewModel? GetResource(string resourceName) =>
+        GetResources().FirstOrDefault(resource => string.Equals(resource.Name, resourceName, StringComparison.Ordinal));
 
     public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [];
 

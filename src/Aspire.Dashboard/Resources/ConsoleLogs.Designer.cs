@@ -195,16 +195,5 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        public static string ConsoleLogsViewConsoleOption {
-            get {
-                return ResourceManager.GetString("ConsoleLogsViewConsoleOption", resourceCulture);
-            }
-        }
-        
-        public static string ConsoleLogsViewTerminalOption {
-            get {
-                return ResourceManager.GetString("ConsoleLogsViewTerminalOption", resourceCulture);
-            }
-        }
     }
 }

@@ -111,12 +111,13 @@ public class TerminalWebSocketProxyEndpointTests
         }
 
         Assert.True(resolver.ResolveCalled, "Same-origin requests must proceed past the Origin gate to resource resolution.");
+        Assert.Equal(useGrpc ? "test" : "myapp-abc123", resolver.ResourceName);
     }
 
     [Theory]
-    [InlineData("/api/terminal?replica=0")]
-    [InlineData("/api/terminal?resource=test&replica=-1")]
-    [InlineData("/api/terminal?resource=test&replica=invalid")]
+    [InlineData("/api/terminal")]
+    [InlineData("/api/terminal?resource=")]
+    [InlineData("/api/terminal?resource=%20")]
     [InlineData("/api/apphost-terminal?resource=test")]
     public async Task TerminalEndpoint_InvalidIdentity_Returns400BeforeConnecting(string path)
     {
@@ -158,7 +159,7 @@ public class TerminalWebSocketProxyEndpointTests
     private static Uri BuildTerminalUri(bool useGrpc)
     {
         // TestHost rewrites Scheme/Host on dispatch; only the path+query matter.
-        var path = useGrpc ? "/api/apphost-terminal?terminalId=test" : "/api/terminal?resource=myapp&replica=0";
+        var path = useGrpc ? "/api/apphost-terminal?terminalId=test" : "/api/terminal?resource=myapp-abc123";
         return new Uri($"{DashboardScheme}://{DashboardHost}{path}");
     }
 
@@ -176,7 +177,7 @@ public class TerminalWebSocketProxyEndpointTests
                         services.AddSingleton<TerminalViewSessionRegistry>();
                         services.AddSingleton<IDashboardClient>(new TestDashboardClient(attachTerminal: async (terminalId, cancellationToken) =>
                         {
-                            await resolver.ConnectAsync(terminalId, 0, cancellationToken);
+                            await resolver.ConnectAsync(terminalId, cancellationToken);
                             throw new RpcException(new Status(StatusCode.NotFound, "Terminal was not found."));
                         }));
 
@@ -242,10 +243,12 @@ public class TerminalWebSocketProxyEndpointTests
     private sealed class TrackingTerminalConnectionResolver : ITerminalConnectionResolver
     {
         public bool ResolveCalled { get; private set; }
+        public string? ResourceName { get; private set; }
 
-        public Task<Stream?> ConnectAsync(string resourceName, int replicaIndex, CancellationToken cancellationToken)
+        public Task<Stream?> ConnectAsync(string resourceName, CancellationToken cancellationToken)
         {
             ResolveCalled = true;
+            ResourceName = resourceName;
             return Task.FromResult<Stream?>(null);
         }
     }

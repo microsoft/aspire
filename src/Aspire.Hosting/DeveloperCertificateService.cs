@@ -153,9 +153,8 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
     /// <summary>
     /// Returns the certificate PEM format key and/or PFX bytes for the specified certificate.
     /// On macOS, both outputs are cached as separate files to avoid triggering repeated
-    /// keychain prompts. The cache is read without loading any PFX into an X509Certificate2,
-    /// because EphemeralKeySet is not supported on macOS with net8.0 and loading without it
-    /// imports the private key into the keychain.
+    /// keychain prompts. Reading the cached bytes without loading a PFX into an X509Certificate2
+    /// avoids importing its private key into the keychain.
     /// </summary>
     /// <param name="certificate">The certificate to export key material from.</param>
     /// <param name="password">The password for the private key, or <c>null</c> for unencrypted export.</param>

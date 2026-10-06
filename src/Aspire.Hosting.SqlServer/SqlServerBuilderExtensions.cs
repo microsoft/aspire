@@ -126,18 +126,58 @@ public static partial class SqlServerBuilderExtensions
     /// builder.AddSqlServer("sqlserver").WithRepl();
     /// </code>
     /// </example>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the WithRepl overload with an optional configuration callback.")]
     public static IResourceBuilder<SqlServerServerResource> WithRepl(this IResourceBuilder<SqlServerServerResource> builder)
+        => builder.WithRepl(configure: null);
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated SQL Server shell with the configured client tools.
+    /// </summary>
+    /// <param name="builder">The SQL Server resource builder.</param>
+    /// <param name="configure">An optional callback to configure the SQL Server REPL.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> or the configured command is null.</exception>
+    /// <exception cref="ArgumentException">The configured command is empty or whitespace.</exception>
+    /// <remarks>
+    /// <para>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands as <c>sa</c>, including server-side operating system commands when enabled.
+    /// Enable it only for trusted dashboard users.
+    /// </para>
+    /// <para>
+    /// The default sqlcmd executable path matches the integration's default container image.
+    /// When using an older or custom image, select the executable path installed in that image.
+    /// The callback runs once during configuration in run mode, and the selected client is captured.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddSqlServer("sqlserver")
+    ///     .WithRepl(options => options.Command = SqlServerReplCommand.Version17);
+    /// </code>
+    /// </example>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<SqlServerServerResource> WithRepl(this IResourceBuilder<SqlServerServerResource> builder, Action<SqlServerReplOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+        if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder;
+        }
+
+        var options = new SqlServerReplOptions();
+        configure?.Invoke(options);
+        ArgumentException.ThrowIfNullOrWhiteSpace(options.Command, nameof(options.Command));
+        var executablePath = options.Command;
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, executablePath, ct));
     }
 
     /// <summary>
     /// Creates authenticated sqlcmd launch options for the running container.
     /// </summary>
-    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(SqlServerServerResource resource, CancellationToken cancellationToken)
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(SqlServerServerResource resource, string executablePath, CancellationToken cancellationToken)
     {
         var password = await resource.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(password))
@@ -147,28 +187,15 @@ public static partial class SqlServerBuilderExtensions
 
         var port = resource.PrimaryEndpoint.TargetPort ?? throw new DistributedApplicationException("The SQL Server REPL port is not available.");
 
-        // SQL Server 2022 CU14 / 2019 CU28 moved sqlcmd to mssql-tools18. Inspect the
-        // installed binary rather than guessing from tags, which may be overridden or pinned.
-        // https://learn.microsoft.com/sql/linux/quickstart-install-connect-docker
-        // Only the fixed script is interpreted by the shell; "$@" preserves argument boundaries.
-        const string selectSqlCmd = """
-            if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then
-                exec /opt/mssql-tools18/bin/sqlcmd "$@"
-            elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then
-                exec /opt/mssql-tools/bin/sqlcmd "$@"
-            else
-                echo 'The SQL Server REPL requires sqlcmd in /opt/mssql-tools18/bin or /opt/mssql-tools/bin.' >&2
-                exit 127
-            fi
-            """;
-
         return new TerminalLaunchOptions
         {
             Title = $"sqlcmd ({resource.Name})",
-            Executable = "/bin/sh",
+            // Invoke sqlcmd directly, avoiding shell parsing and checkout-dependent script line endings.
+            // https://github.com/microsoft/aspire/issues/20645
+            Executable = executablePath,
             // The client connects over container loopback and trusts the local server's
             // self-signed certificate, matching the integration's connection string.
-            Arguments = ["-c", selectSqlCmd, "sqlcmd", "-S", $"127.0.0.1,{port.ToString(CultureInfo.InvariantCulture)}", "-U", "sa", "-d", "master", "-C"],
+            Arguments = ["-S", $"127.0.0.1,{port.ToString(CultureInfo.InvariantCulture)}", "-U", "sa", "-d", "master", "-C"],
             EnvironmentVariables = { ["SQLCMDPASSWORD"] = password }
         };
     }

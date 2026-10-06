@@ -327,6 +327,34 @@ suite('E2E launch profile', () => {
         }
     });
 
+    test('rejects a brace spec when one of its alternatives is missing', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const testArtifactsRoot = path.join(extensionRoot, '.test-artifacts', 'unit');
+        fs.mkdirSync(testArtifactsRoot, { recursive: true });
+        const fixtureRoot = createE2eSpecFixtures(extensionRoot, ['cliPathRejectionNotification.e2e.test.js']);
+        const tempRoot = fs.mkdtempSync(path.join(testArtifactsRoot, 'aev-missing-spec-'));
+        try {
+            const result = runE2eRunnerAsPlatform(extensionRoot, 'linux', {
+                ...process.env,
+                ASPIRE_EXTENSION_E2E_CLI_PATH: path.join(tempRoot, 'missing-aspire'),
+                ASPIRE_EXTENSION_E2E_SPEC: path.join(fixtureRoot, '{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js'),
+                ASPIRE_EXTENSION_E2E_TEMP_ROOT: tempRoot,
+                ASPIRE_EXTENSION_E2E_VSCODE_VERSION: '1.130.0',
+            });
+
+            const missingSpec = path.join(fixtureRoot, 'usefulnessSurvey.e2e.test.js');
+            assert.notStrictEqual(result.status, 0);
+            assert.ok(result.stderr.includes(`did not match compiled test files for: ${missingSpec}`), result.stderr);
+            assert.deepStrictEqual(fs.readdirSync(tempRoot), []);
+            assert.ok(fs.existsSync(path.join(fixtureRoot, 'cliPathRejectionNotification.e2e.test.js')));
+            assert.ok(!fs.existsSync(missingSpec));
+        }
+        finally {
+            removeDirectorySafely(tempRoot);
+            removeDirectorySafely(fixtureRoot);
+        }
+    });
+
     test('removes the per-run root when the environment is rejected before any download', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const tempRoot = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'aev-guard-'));
@@ -796,12 +824,12 @@ suite('E2E launch profile', () => {
         test(`dismisses a launch error dialog with text in its ${dialogText.message ? 'heading' : 'details'}`, async () => {
             const helpers = fs.readFileSync(path.resolve(__dirname, '..', '..', 'src', 'test-e2e', 'helpers', 'vscode.ts'), 'utf8');
             const source = ts.createSourceFile('vscode.ts', helpers, ts.ScriptTarget.Latest, true);
-            const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'acceptModalDialog');
+            const declaration = source.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text === 'interactWithModalDialog');
             assert.ok(declaration);
             const compiled = ts.transpileModule(declaration.getText(source), {
                 compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
             }).outputText;
-            const exported: { acceptModalDialog?: (buttonTitle: string) => Promise<{ message: string; details: string }> } = {};
+            const exported: { interactWithModalDialog?: (buttonTitle: string) => Promise<{ message: string; details: string }> } = {};
             const pressed: string[] = [];
             vm.runInNewContext(compiled, {
                 exports: exported,
@@ -816,8 +844,8 @@ suite('E2E launch profile', () => {
                     return result;
                 } } } },
             });
-            assert.ok(exported.acceptModalDialog);
-            const accepted = await exported.acceptModalDialog('Cancel');
+            assert.ok(exported.interactWithModalDialog);
+            const accepted = await exported.interactWithModalDialog('Cancel');
             assert.strictEqual(accepted.message, dialogText.message);
             assert.strictEqual(accepted.details, dialogText.details);
             assert.deepStrictEqual(pressed, ['Cancel']);

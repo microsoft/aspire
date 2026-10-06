@@ -259,7 +259,16 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Console.
+        ///   Looks up a localized string similar to Terminals.
+        /// </summary>
+        public static string NavMenuTerminalsTab {
+            get {
+                return ResourceManager.GetString("NavMenuTerminalsTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Console logs.
         /// </summary>
         public static string NavMenuConsoleLogsTab {
             get {
@@ -304,7 +313,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Structured.
+        ///   Looks up a localized string similar to Structured logs.
         /// </summary>
         public static string NavMenuStructuredLogsTab {
             get {

@@ -24,6 +24,7 @@ internal static class KnownConfigNames
     public const string ResourceServiceEndpointUrl = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
+    public const string ContainerTunnelBaseImage = "ASPIRE_CONTAINER_TUNNEL_BASE_IMAGE";
     public const string DependencyCheckTimeout = "ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
     public const string ProxylessEndpointPortRange = "ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE";
     public const string ServiceStartupWatchTimeout = "ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";

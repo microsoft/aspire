@@ -37,6 +37,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ matrix.target_branch }}
+          persist-credentials: false
+
+      - name: Read target branch framework
+        run: |
+          # Release branches retain their own framework baseline.
+          framework=$(python3 -c "import xml.etree.ElementTree as ET; print(ET.parse('eng/Versions.props').find('.//DefaultTargetFramework').text)")
+          echo "API_TARGET_FRAMEWORK=$framework" >> "$GITHUB_ENV"
 
       - name: Restore and build (main)
         if: ${{ matrix.target_branch == 'main' }}
@@ -45,7 +52,7 @@ jobs:
 
           # Keep main's best-effort API review behavior; release baselines must be complete.
           find src -name '*.csproj' | grep -Ev 'Aspire.ProjectTemplates|Aspire.Cli' | while IFS= read -r proj; do
-            ./dotnet.sh build "$proj" -f net8.0 --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
+            ./dotnet.sh build "$proj" -f "$API_TARGET_FRAMEWORK" --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
           done
         continue-on-error: true
 
@@ -54,9 +61,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Exclude projects that do not generate a net8.0 release API baseline.
+          # Exclude projects that do not generate a release API baseline.
           find src -name '*.csproj' | grep -Ev '/(Aspire.ProjectTemplates|Aspire.Cli|Aspire.Dashboard|Aspire.Hosting.Analyzers|Aspire.Hosting.Azure.Provisioning.Generators|Aspire.Hosting.Integration.Analyzers|Aspire.Hosting.RemoteHost|Aspire.Managed|Aspire.AppHost.Sdk|Aspire.TerminalHost|Tools)/' | while IFS= read -r proj; do
-            ./dotnet.sh build "$proj" -f net8.0 --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
+            ./dotnet.sh build "$proj" -f "$API_TARGET_FRAMEWORK" --configuration Release --no-incremental /t:"Build;GenAPIGenerateReferenceAssemblySource"
           done
 
       - name: Generate GitHub App Token
@@ -65,6 +72,12 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the generated-diff branch; pull-requests creates or updates
+          # the generated-diff pull request and applies its labels.
+          permission-contents: write
+          permission-pull-requests: write
+          # Release-branch history can differ from main in workflow files.
+          permission-workflows: ${{ startsWith(matrix.target_branch, 'release/') && 'write' || '' }}
 
       - name: Create or update pull request
         uses: ./.github/actions/create-pull-request

@@ -231,44 +231,39 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = executablePath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        startInfo.ArgumentList.Add("--version");
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(s_versionCheckTimeout);
 
-        var result = await ProcessCaptureRunner.RunAsync(
-            startInfo,
-            s_versionCheckTimeout,
-            static async (process, captureToken) =>
+        try
+        {
+            var result = await Process.RunAndCaptureTextAsync(
+                new ProcessStartInfo(executablePath, ["--version"])
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                },
+                timeoutCts.Token).ConfigureAwait(false);
+
+            if (result.ExitStatus.ExitCode == 0)
             {
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(captureToken);
-                var stderrTask = process.StandardError.ReadToEndAsync(captureToken);
-                await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-                return (Stdout: await stdoutTask.ConfigureAwait(false), Stderr: await stderrTask.ConfigureAwait(false));
-            },
-            static () => (Stdout: string.Empty, Stderr: string.Empty),
-            logger,
-            cancellationToken);
+                return result.StandardOutput;
+            }
 
-        if (result.Cancelled)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-        }
-
-        if (result.ExitCode != 0 || result.FailureKind is not null)
-        {
             logger.LogDebug(
                 "Deno version check failed with exit code {ExitCode}: {Error}",
-                result.ExitCode,
-                result.Capture.Stderr.Trim());
-            return null;
+                result.ExitStatus.ExitCode,
+                result.StandardError.Trim());
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug("Deno version check timed out after {Timeout}s.", s_versionCheckTimeout.TotalSeconds);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            logger.LogDebug(ex, "Could not start Deno version check using '{DenoPath}'.", executablePath);
         }
 
-        return result.Capture.Stdout;
+        return null;
     }
 }

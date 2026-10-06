@@ -60,28 +60,45 @@ internal sealed class TemplateManifestTestEnvironment
 
     internal PowerShellCommand CreateCommand()
     {
+        return CreateDotnetCommand("generate.ps1", """
+            & $env:TEST_DOTNET $env:TEST_GENERATOR $env:TEST_SOURCE $env:TEST_SOURCE `
+                $env:TEST_MANIFEST $env:TEST_CONFIG $env:TEST_FEED $env:TEST_RESTORE
+            exit $LASTEXITCODE
+            """)
+            .WithEnvironmentVariable("TEST_GENERATOR", typeof(TemplateRestorePlan).Assembly.Location)
+            .WithEnvironmentVariable("TEST_SOURCE", SourceDirectory)
+            .WithEnvironmentVariable("TEST_MANIFEST", ManifestPath)
+            .WithEnvironmentVariable("TEST_FEED", BuiltFeed)
+            .WithEnvironmentVariable("TEST_RESTORE", RestoreDirectory);
+    }
+
+    internal PowerShellCommand CreateRestoreCommand(string projectPath)
+    {
+        return CreateDotnetCommand("restore.ps1", """
+            & $env:TEST_DOTNET restore $env:TEST_PROJECT --configfile $env:TEST_CONFIG `
+                --disable-build-servers --verbosity quiet -p:NuGetAudit=false
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & $env:TEST_DOTNET msbuild $env:TEST_PROJECT -nologo -getItem:PackageReference
+            exit $LASTEXITCODE
+            """)
+            .WithEnvironmentVariable("TEST_PROJECT", projectPath);
+    }
+
+    private PowerShellCommand CreateDotnetCommand(string scriptName, string scriptContent)
+    {
         // Use the installed repository SDK and isolate all feeds, HTTP caches and extracted
         // packages. The generated projects target net11.0 so no targeting-pack download is needed.
         var dotnet = Path.Combine(RepoRoot.Path, ".dotnet", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
         Assert.True(File.Exists(dotnet), "The repository SDK must be initialized before running infrastructure tests.");
-        var script = Path.Combine(_workspace.Path, "generate.ps1");
-        File.WriteAllText(script, """
-            & $env:TEST_DOTNET $env:TEST_GENERATOR $env:TEST_SOURCE $env:TEST_SOURCE `
-                $env:TEST_MANIFEST $env:TEST_CONFIG $env:TEST_FEED $env:TEST_RESTORE
-            exit $LASTEXITCODE
-            """);
+        var script = Path.Combine(_workspace.Path, scriptName);
+        File.WriteAllText(script, scriptContent);
 
         return new PowerShellCommand(script, _output)
             .WithWorkingDirectory(_workspace.Path)
             .WithTimeout(TimeSpan.FromMinutes(2))
             .WithEnvironmentVariable("TEST_DOTNET", dotnet)
             .WithEnvironmentVariable("PATH", Path.GetDirectoryName(dotnet) + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"))
-            .WithEnvironmentVariable("TEST_GENERATOR", typeof(TemplateRestorePlan).Assembly.Location)
-            .WithEnvironmentVariable("TEST_SOURCE", SourceDirectory)
-            .WithEnvironmentVariable("TEST_MANIFEST", ManifestPath)
             .WithEnvironmentVariable("TEST_CONFIG", ConfigPath)
-            .WithEnvironmentVariable("TEST_FEED", BuiltFeed)
-            .WithEnvironmentVariable("TEST_RESTORE", RestoreDirectory)
             .WithEnvironmentVariable("NUGET_PACKAGES", SharedCache)
             .WithEnvironmentVariable("NUGET_HTTP_CACHE_PATH", Path.Combine(_workspace.Path, "http-cache"))
             .WithEnvironmentVariable("DOTNET_CLI_HOME", _workspace.Path)

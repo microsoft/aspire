@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -45,6 +45,7 @@
     <Compile Include="..\Shared\ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />
     <Compile Include="..\Shared\ParentProcessWatchdog.cs" Link="Shared\ParentProcessWatchdog.cs" />
     <Compile Include="..\Shared\ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
+    <Compile Include="..\Shared\RequestIdTypeInfoResolver.cs" Link="Shared\RequestIdTypeInfoResolver.cs" />
     <Compile Include="..\Shared\SocketPermissionHelper.cs" Link="Shared\SocketPermissionHelper.cs" />
     <Compile Include="..\Shared\SocketDirectoryNames.cs" Link="Shared\SocketDirectoryNames.cs" />
     <Compile Include="..\Shared\TerminalHost\*.cs" Link="Shared\%(Filename)%(Extension)" />

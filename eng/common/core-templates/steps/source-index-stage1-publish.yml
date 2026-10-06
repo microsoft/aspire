@@ -5,11 +5,12 @@ parameters:
   binlogPath: artifacts/log/Debug/Build.binlog
 
 steps:
+# Both source-index tools declare rollForward=Major, so they run on the .NET 10 SDK runtime.
 - task: UseDotNet@2
-  displayName: "Source Index: Use .NET 9 SDK"
+  displayName: "Source Index: Use .NET 10 SDK"
   inputs:
     packageType: sdk
-    version: 9.0.x
+    version: 10.0.x
     installationPath: $(Agent.TempDirectory)/dotnet
     workingDirectory: $(Agent.TempDirectory)
 

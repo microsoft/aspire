@@ -48,7 +48,8 @@ internal static class ResourceSetupHelpers
         ViewportInformation viewport,
         IDashboardClient? dashboardClient = null,
         ILocalStorage? localStorage = null,
-        ISessionStorage? sessionStorage = null)
+        ISessionStorage? sessionStorage = null,
+        IDialogService? dialogService = null)
     {
         FluentUISetupHelpers.SetupFluentDivider(context);
         FluentUISetupHelpers.SetupFluentInputLabel(context);
@@ -71,6 +72,11 @@ internal static class ResourceSetupHelpers
         context.Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
 
         FluentUISetupHelpers.SetupFluentUIComponents(context);
+
+        if (dialogService is not null)
+        {
+            context.Services.AddSingleton(dialogService);
+        }
 
         var dimensionManager = context.Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);

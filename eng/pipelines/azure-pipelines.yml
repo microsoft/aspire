@@ -228,43 +228,6 @@ extends:
           packageVSCodeExtensionAsPreRelease: ${{ parameters.packageVSCodeExtensionAsPreRelease }}
 
     # ----------------------------------------------------------------
-    # Source indexing for https://source.dot.net. This is self-contained:
-    # the SourceIndexStage1 job runs its OWN full repo build to produce a
-    # binlog and then uploads the resulting index. It consumes nothing from
-    # the other stages and nothing depends on it (dependsOn: []), so it runs
-    # fully in parallel and never gates the publish path — previously it was
-    # an extra job inside the `build` stage, which put its redundant rebuild
-    # on the critical path to `assemble`/publish.
-    # main-only: the whole stage compiles out on PR/non-main builds, matching
-    # the prior `enableSourceIndex` gating. The Azure upload step is already
-    # guarded to internal, non-PR builds inside source-index-stage1-publish.yml.
-    # ----------------------------------------------------------------
-    - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
-      - stage: source_index
-        displayName: Source Index
-        dependsOn: []
-        # Re-enable when publishing access is restored: https://github.com/microsoft/aspire/issues/20621
-        condition: 'false'
-        jobs:
-        - template: /eng/common/templates-official/jobs/jobs.yml@self
-          parameters:
-            enableMicrobuild: false
-            enablePublishUsingPipelines: false
-            enablePublishBuildAssets: false
-            publishAssetsImmediately: false
-            enableTelemetry: true
-            enablePublishBuildArtifacts: false
-            enablePublishTestResults: false
-            enableSourceIndex: true
-            sourceIndexParams:
-              # Use the repository wrapper so standalone restore receives its NuGet
-              # audit warning policy; Arcade's default command bypasses that wrapper.
-              sourceIndexBuildCommand: .\build.cmd -restore -build -binarylog -ci
-            workspace:
-              clean: all
-            jobs: []
-
-    # ----------------------------------------------------------------
     # This stage performs the managed build, sign, pack, and template
     # component manifest generation. It runs IN PARALLEL with build_sign_native and
     # build_extension — the managed compile/sign/pack does not consume
@@ -286,9 +249,7 @@ extends:
           enablePublishBuildAssets: false
           publishAssetsImmediately: false
           enableTelemetry: true
-          # Source indexing is intentionally NOT enabled here. It runs in its own
-          # `source_index` stage (dependsOn: []) so its full repo rebuild stays off
-          # the critical path and never gates the downstream publish.
+          # Source indexing runs in a separate daily pipeline.
           enableSourceIndex: false
           # Publish build logs
           enablePublishBuildArtifacts: true

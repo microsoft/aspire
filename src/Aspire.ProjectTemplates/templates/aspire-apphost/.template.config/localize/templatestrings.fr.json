@@ -3,8 +3,6 @@
   "name": "AppHost Aspire",
   "description": "Modèle de projet pour la création d’un projet AppHost Aspire (orchestrateur).",
   "symbols/Framework/description": "Framework cible du projet.",
-  "symbols/Framework/choices/net8.0/description": "Cible net8.0",
-  "symbols/Framework/choices/net9.0/description": "Cible net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
   "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "Numéro de port à utiliser pour le point de terminaison HTTP dans launchSettings.json du projet AppHost.",

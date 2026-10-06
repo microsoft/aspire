@@ -33,6 +33,12 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ConfigInfo_AdvertisesAgentMcp()
+    {
+        Assert.Contains(KnownCapabilities.AgentMcp, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
     public void ConfigInfo_AdvertisesLaunchProfiles()
     {
         Assert.Contains(KnownCapabilities.LaunchProfile, KnownCapabilities.GetAdvertisedCapabilities());
@@ -203,6 +209,46 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("string", nssDbPaths.Type);
         Assert.Contains("NSS database paths", nssDbPaths.Description);
+    }
+
+    [Fact]
+    public async Task ContainerTunnelBaseImage_CanBeConfiguredViaAspireConfig()
+    {
+        const string image = "example.com/aspire-tunnel:configured";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{}");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {AspireConfigContainerTunnel.BaseImageConfigKey} {image}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(configPath))?.AsObject();
+        Assert.NotNull(settings);
+        Assert.Equal(image, settings["containerTunnel"]?["baseImage"]?.ToString());
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var configuration = reloadedProvider.GetRequiredService<IConfiguration>();
+
+        Assert.Equal(image, configuration[AspireConfigContainerTunnel.BaseImageConfigPath]);
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesContainerTunnelBaseImage()
+    {
+        var schema = Aspire.Cli.Commands.SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        var containerTunnel = Assert.Single(schema.Properties, property => property.Name == AspireConfigContainerTunnel.SectionName);
+        var baseImage = Assert.Single(containerTunnel.SubProperties!, property => property.Name == AspireConfigContainerTunnel.BaseImagePropertyName);
+
+        Assert.Equal("string", baseImage.Type);
+        Assert.Contains("Base image", baseImage.Description);
     }
 
     [Fact]

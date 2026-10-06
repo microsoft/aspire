@@ -927,6 +927,159 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(jsonLines, l => l.Contains("aspire-dashboard"));
     }
 
+    [Theory]
+    [InlineData("resources --format mermaid", false)]
+    [InlineData("describe --format=Mermaid", false)]
+    [InlineData("resources --format MERMAID --include-hidden", true)]
+    public async Task DescribeCommand_MermaidFormat_ExportsTopology(string args, bool includeHidden)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running",
+                Relationships =
+                [
+                    new() { ResourceName = "API", Type = "Reference" },
+                    new() { ResourceName = "api", Type = "WaitFor" },
+                    new() { ResourceName = "frontend", Type = "Reference" },
+                    new() { ResourceName = "Frontend", Type = "Reference" },
+                    new() { ResourceName = "FRONTEND", Type = "WaitFor" },
+                    new() { ResourceName = "cache", Type = "Reference" },
+                    new() { ResourceName = "connection", Type = "Reference" },
+                    new() { ResourceName = "missing", Type = "Reference" }
+                ]
+            },
+            new ResourceSnapshot { Name = "api-2", DisplayName = "api", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "api-1", DisplayName = "api", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running", IsHidden = true },
+            new ResourceSnapshot { Name = "connection", DisplayName = "connection", ResourceType = "Parameter", State = "Running" }
+        ], disableAnsi: true, errorTextWriter: errorWriter);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(args);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd")
+            .UseParameters(args.StartsWith("resources", StringComparison.Ordinal) ? "resources" : "describe", includeHidden);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_EscapesLabels()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "end", DisplayName = "api\" # & <b> \\ `\nnext", ResourceType = "Project", State = "Running",
+                EnvironmentVariables = [new() { Name = "SECRET", Value = "do-not-export", IsFromSpec = true }],
+                Urls = [new() { Name = "http", Url = "http://private.example.test", IsInternal = false }]
+            }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd");
+    }
+
+    [Theory]
+    [InlineData("api-1")]
+    [InlineData("API-2")]
+    public async Task DescribeCommand_MermaidFormat_PreservesSelectedReplicaNames(string resource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot
+            {
+                Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running",
+                Relationships = [new() { ResourceName = "api", Type = "Reference" }]
+            },
+            new ResourceSnapshot { Name = "api-2", DisplayName = "api", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "api-1", DisplayName = "api", ResourceType = "Project", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse($"resources {resource} --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd").UseParameters(resource);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("cache")]
+    public async Task DescribeCommand_MermaidFormat_FiltersResources(string resource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Hidden" },
+            new ResourceSnapshot { Name = "connection", DisplayName = "connection", ResourceType = "Parameter", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse($"resources {resource} --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "mmd").UseParameters(resource.Length == 0 ? "empty" : resource);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_RejectsFollow()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [], disableAnsi: true, errorTextWriter: errorWriter);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources --format mermaid --follow").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+        Assert.Contains(DescribeCommandStrings.MermaidFollowNotSupported, errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_MissingResourceKeepsStandardOutputEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "cache", DisplayName = "cache", ResourceType = "Container", State = "Running" }
+        ], disableAnsi: true, errorTextWriter: errorWriter);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources missing --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+        Assert.Contains("Resource 'missing' not found.", errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_MermaidFormat_NoAppHostKeepsStandardOutputEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.ErrorTextWriter = errorWriter;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("resources --format mermaid").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+        Assert.NotEmpty(errorWriter.ToString());
+    }
+
     private ServiceProvider CreateDescribeTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,

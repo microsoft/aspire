@@ -317,13 +317,11 @@ public static class MySqlBuilderExtensions
             foreach (var mySqlResource in @event.Model.Resources.OfType<MySqlServerResource>())
             {
                 phpMyAdminContainerBuilder.WithRelationship(mySqlResource, KnownRelationshipTypes.Manages);
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 builder.ApplicationBuilder.CreateResourceBuilder(mySqlResource).WithUrlForEndpoint(phpMyAdminContainer.PrimaryEndpoint, url =>
                 {
                     url.DisplayText = "Manage";
                     url.DisplayOrder = 1;
                 });
-#pragma warning restore CS0618
             }
 
             return Task.CompletedTask;
