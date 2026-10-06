@@ -1,15 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Text;
 using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
-using Aspire.Tests;
-using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Metrics.V1;
