@@ -60,7 +60,15 @@ internal static class TextVisualizerFormatHelpers
 
     public static string? GetDatabaseSystem(KeyValuePair<string, string>[] attributes)
     {
-        return attributes.GetValue("db.system.name") ?? attributes.GetValue("db.system");
+        if (attributes.GetValue("db.system.name") is { Length: > 0 } databaseSystem)
+        {
+            return databaseSystem;
+        }
+
+        // Empty metadata is absent so it doesn't mask a legacy value or inherited span metadata.
+        return attributes.GetValue("db.system") is { Length: > 0 } legacyDatabaseSystem
+            ? legacyDatabaseSystem
+            : null;
     }
 
     public static string? GetLogMessageFormat(string source)

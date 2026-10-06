@@ -30,4 +30,22 @@ public class OtlpSpanAttributeItemTests
 
         Assert.Null(items.Single(i => i.Name == "db.statement").TextVisualizerFormat);
     }
+
+    [Theory]
+    [InlineData("", "postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("", "redis", null)]
+    [InlineData("postgresql", "redis", DashboardUIHelpers.SqlFormat)]
+    [InlineData("redis", "postgresql", null)]
+    public void CreateItems_EmptyCurrentDatabaseSystem_UsesLegacyOrInheritedMetadata(string legacySystem, string inheritedSystem, string? expectedFormat)
+    {
+        var items = OtlpSpanAttributeItem.CreateItems(
+        [
+            KeyValuePair.Create("db.query.text", "SELECT 1"),
+            KeyValuePair.Create("db.system.name", ""),
+            KeyValuePair.Create("db.system", legacySystem)
+        ],
+        [KeyValuePair.Create("db.system.name", inheritedSystem)]);
+
+        Assert.Equal(expectedFormat, items.Single(i => i.Name == "db.query.text").TextVisualizerFormat);
+    }
 }

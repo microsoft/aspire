@@ -10,6 +10,22 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class TextVisualizerFormatHelpersTests
 {
     [Theory]
+    [InlineData("", "", null)]
+    [InlineData("", "postgresql", "postgresql")]
+    [InlineData("", "redis", "redis")]
+    [InlineData("postgresql", "", "postgresql")]
+    [InlineData("postgresql", "redis", "postgresql")]
+    [InlineData("redis", "postgresql", "redis")]
+    public void GetDatabaseSystem_UsesFirstNonEmptyConvention(string currentSystem, string legacySystem, string? expectedSystem)
+    {
+        Assert.Equal(expectedSystem, TextVisualizerFormatHelpers.GetDatabaseSystem(
+        [
+            KeyValuePair.Create("db.system.name", currentSystem),
+            KeyValuePair.Create("db.system", legacySystem)
+        ]));
+    }
+
+    [Theory]
     [InlineData("Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat)]
     [InlineData("Microsoft.EntityFrameworkCore.Database.Command.Custom", DashboardUIHelpers.SqlFormat)]
     [InlineData("Microsoft.EntityFrameworkCore", null)]
@@ -103,6 +119,8 @@ public sealed class TextVisualizerFormatHelpersTests
     [Theory]
     [InlineData("postgresql", "redis", DashboardUIHelpers.SqlFormat)]
     [InlineData("redis", "postgresql", null)]
+    [InlineData("", "postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("", "redis", null)]
     public void GetLogFormat_BothDatabaseSystems_PrefersCurrentConvention(string currentSystem, string legacySystem, string? expectedFormat)
     {
         Assert.Equal(expectedFormat, TextVisualizerFormatHelpers.GetLogFormat("db.query.text", "MyApp.Database",
@@ -193,6 +211,19 @@ public sealed class TextVisualizerFormatHelpersTests
         [
             KeyValuePair.Create("db.system", "mssql"),
             KeyValuePair.Create("db.system.name", "redis")
+        ]));
+    }
+
+    [Theory]
+    [InlineData("postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("redis", null)]
+    [InlineData("custom", null)]
+    public void GetFormat_EmptyCurrentDatabaseSystem_RespectsLegacyConvention(string legacySystem, string? expectedFormat)
+    {
+        Assert.Equal(expectedFormat, TextVisualizerFormatHelpers.GetFormat("db.query.text",
+        [
+            KeyValuePair.Create("db.system.name", ""),
+            KeyValuePair.Create("db.system", legacySystem)
         ]));
     }
 }
