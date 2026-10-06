@@ -183,10 +183,11 @@ internal sealed class ChartDataCalculator
                         continue;
                     }
 
-                    if (metricStart <= end)
+                    if (metricStart < end)
                     {
                         // Cumulative counts can decrease after a reset. Use the latest matching
-                        // snapshot, not the maximum count from before the reset.
+                        // snapshot, not the maximum count from before the reset. An interval
+                        // starting at the window end belongs to the following window.
                         dimensionValue = histogram.Count;
                         hasValue = true;
                         break;

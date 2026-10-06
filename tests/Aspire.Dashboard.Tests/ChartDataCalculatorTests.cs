@@ -716,6 +716,52 @@ public class ChartDataCalculatorTests
         Assert.Equal(10, count);
     }
 
+    [Theory]
+    [InlineData(-1, 1d)]
+    [InlineData(0, 100d)]
+    [InlineData(1, 100d)]
+    public void TryCalculatePoint_CumulativeResetBoundary_SelectsCorrectSnapshot(int boundaryOffsetTicks, double expectedCount)
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        var boundary = time.AddSeconds(1).AddTicks(boundaryOffsetTicks);
+        var context = CreateContext();
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, boundary, [100, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(boundary, time.AddSeconds(2), [1, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
+        Assert.Equal(expectedCount, count);
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime.AddSeconds(1), s_startTime.AddSeconds(2), out count));
+        Assert.Equal(1, count);
+        Assert.False(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime.AddSeconds(-1), s_startTime, out count));
+        Assert.Equal(0, count);
+    }
+
+    [Theory]
+    [InlineData(false, 200d)]
+    [InlineData(true, 1d)]
+    public void CalculateChartValues_CumulativeBoundary_DoesNotSelectFollowingInterval(bool reset, double nextCount)
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        var context = CreateContext();
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [100, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(reset ? time.AddSeconds(1) : time,
+            time.AddSeconds(2), reset ? [1, 0] : [200, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        var calculator = new ChartDataCalculator(pointCount: 1, duration: TimeSpan.FromSeconds(1));
+
+        var data = calculator.CalculateChartValues([dimension], s_startTime.AddSeconds(1), ToLocal, "Count");
+
+        var trace = Assert.Single(data.Traces);
+        Assert.Equal([null, 100d, nextCount], trace.Values);
+        Assert.Equal(trace.Values, trace.DiffValues);
+        Assert.Equal([s_startTime, s_startTime.AddSeconds(1), s_startTime.AddSeconds(2)], data.XValues);
+    }
+
     [Fact]
     public void CalculateChartValues_ToLocalApplied()
     {

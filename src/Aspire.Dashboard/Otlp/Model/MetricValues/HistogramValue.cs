@@ -101,7 +101,9 @@ public class HistogramValue : MetricValueBase
             }
 
             start = reset && aggregationStart > previous.End ? aggregationStart : previous.End;
-            aggregationId = reset ? end.Ticks : previous.AggregationId;
+            // Resets can share an end tick or even an exact timestamp. Advance past the persisted
+            // epoch identity so those resets remain distinct, including after database reopening.
+            aggregationId = reset ? Math.Max(end.Ticks, checked(previous.AggregationId + 1)) : previous.AggregationId;
         }
 
         var bounds = previous is not null && sameBounds ? previous.ExplicitBounds : point.ExplicitBounds.ToArray();

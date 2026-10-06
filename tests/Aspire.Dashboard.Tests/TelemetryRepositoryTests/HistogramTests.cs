@@ -427,6 +427,37 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cumulative_ResetAtCountWindowEnd_SelectsPrecedingAggregation(bool rollup)
+    {
+        using var context = await CreateRepositoryAsync();
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext,
+            [CreateMetrics(AggregationTemporality.Cumulative,
+                CreatePoint(s_start, s_start.AddSeconds(1), [100, 0], [100]),
+                CreatePoint(s_start.AddSeconds(1), s_start.AddSeconds(2), [1, 0], [100]))]);
+        Assert.Equal(2, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+        var instrument = await context.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "test-meter",
+            InstrumentName = "histogram",
+            StartTime = s_start,
+            EndTime = s_start.AddSeconds(2),
+            DataPointInterval = rollup ? TimeSpan.FromSeconds(1) : null
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        Assert.Equal(2, Assert.Single(instrument.Dimensions).Values.Count);
+
+        Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+        Assert.Equal(100, count);
+        Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start.AddSeconds(1), s_start.AddSeconds(2), out count));
+        Assert.Equal(1, count);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -475,6 +506,104 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
         var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
         Assert.Equal(2, values.Length);
         Assert.NotEqual(values[0].AggregationId, values[1].AggregationId);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Cumulative_SubTickReset_PreservesAggregationsAfterReopening(bool rollup, bool sameStartTick)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, "dashboard.db");
+        var timestamp = DateTimeToUnixNanoseconds(s_start);
+        var first = CreatePoint(s_start, s_start.AddMilliseconds(500), [1, 0, 0], [10, 100]);
+        first.StartTimeUnixNano = timestamp + (sameStartTick ? 500_000_000ul : 0ul);
+        first.TimeUnixNano = timestamp + 500_000_010;
+        first.Sum = 5;
+        var reset = CreatePoint(s_start, s_start.AddMilliseconds(500), [0, 1, 0], [10, 100]);
+        reset.StartTimeUnixNano = timestamp + 500_000_020;
+        reset.TimeUnixNano = timestamp + 500_000_080;
+        reset.Sum = 20;
+        long firstId;
+        using (var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            var addContext = new AddContext();
+            await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, first)]);
+            Assert.Equal(1, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            var instrument = await GetInstrumentAsync(context.Repository, rollup: false);
+            firstId = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(instrument.Dimensions).Values)).AggregationId;
+        }
+
+        long resetId;
+        using (var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            var addContext = new AddContext();
+            await reopened.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, reset)]);
+            Assert.Equal(1, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            var instrument = await GetInstrumentAsync(reopened.Repository, rollup);
+            var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+            Assert.Collection(values,
+                value =>
+                {
+                    Assert.Equal(firstId, value.AggregationId);
+                    Assert.Equal([1ul, 0ul, 0ul], value.Values);
+                },
+                value =>
+                {
+                    Assert.NotEqual(firstId, value.AggregationId);
+                    Assert.Equal([0ul, 1ul, 0ul], value.Values);
+                });
+            resetId = values[1].AggregationId;
+            AssertPercentiles(instrument, [10, 100, 100]);
+        }
+
+        using (var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            var continued = reset.Clone();
+            continued.TimeUnixNano = timestamp + 500_000_090;
+            continued.BucketCounts[1] = 2;
+            continued.Count = 2;
+            continued.Sum = 40;
+            var addContext = new AddContext();
+            await reopened.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, continued)]);
+            Assert.Equal(1, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+        }
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, readOnly: true);
+        var finalInstrument = await GetInstrumentAsync(readOnly.Repository, rollup);
+        var finalValues = Assert.Single(finalInstrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        Assert.Equal([1ul, 2ul], finalValues.Select(value => value.Count));
+        Assert.Equal(firstId, finalValues[0].AggregationId);
+        Assert.All(finalValues.Skip(1), value => Assert.Equal(resetId, value.AggregationId));
+        AssertPercentiles(finalInstrument, [100, 100, 100]);
+    }
+
+    [Theory]
+    [InlineData(0ul)]
+    [InlineData(70ul)]
+    public void Cumulative_ResetsWithEqualOrSubTickEnds_HaveDistinctIdentities(ulong endOffset)
+    {
+        var first = CreatePoint(s_start, s_start.AddMilliseconds(500), [1, 0], [100]);
+        first.TimeUnixNano += 10;
+        first.Sum = 50;
+        var reset = first.Clone();
+        reset.TimeUnixNano += endOffset;
+        reset.BucketCounts[0] = 0;
+        reset.BucketCounts[1] = 1;
+        reset.Sum = 200;
+        var nextReset = first.Clone();
+        nextReset.TimeUnixNano = reset.TimeUnixNano;
+
+        var firstValue = HistogramValue.Create(first, OtlpAggregationTemporality.Cumulative, previous: null);
+        var resetValue = HistogramValue.Create(reset, OtlpAggregationTemporality.Cumulative, firstValue);
+        var nextResetValue = HistogramValue.Create(nextReset, OtlpAggregationTemporality.Cumulative, resetValue);
+
+        Assert.Equal(3, new[] { firstValue.AggregationId, resetValue.AggregationId, nextResetValue.AggregationId }.Distinct().Count());
     }
 
     [Fact]

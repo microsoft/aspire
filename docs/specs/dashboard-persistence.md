@@ -231,13 +231,15 @@ Summary tables and indexes let trace list queries avoid reconstructing every tra
 
 Metric dimensions are normalized into an attribute set and stable non-cryptographic hash. Points store timestamps, point type, repeated-value count, integer or floating-point values, and histogram data. Histogram bucket counts and explicit bounds are compact binary values rather than JSON. Exemplars and their filtered attributes are separate rows correlated to trace and span IDs.
 
-Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
+Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative reset identities increase within each dimension, even when reset end timestamps share a 100-nanosecond tick or are identical. Identity generation continues from the latest persisted snapshot after database reopening. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
 
 Delta interval identities preserve the original nanosecond end timestamp, so distinct intervals are not collapsed by the chart timestamps' 100-nanosecond resolution. JSON export uses this stored timestamp so export and reimport also preserve distinct intervals; aggregation start timestamps remain limited to 100-nanosecond resolution. Exact duplicate deliveries retain the same identity across requests and database reopening, including rolled-up reads. Schema version 21 replaces the earlier tick-based identity encoding; incompatible databases follow the standard persistence-mode behavior described above.
 
 Delta histogram points with an omitted start timestamp use their end timestamp for chart placement, including after persistence and rollup. The original zero aggregation start timestamp is preserved for export.
 
 Cumulative points ending before their dimension's latest accepted snapshot are rejected individually before reset detection or snapshot extension. This prevents reordered delivery from creating false resets or moving interval timestamps backwards. Reordered delta intervals remain accepted.
+
+Cumulative count charts select the latest overlapping snapshot whose chart interval starts before the window end. An interval starting exactly at the window end belongs to the following window, so a reset does not lower the preceding window's count.
 
 Unchanged cumulative snapshots are extended in place before copying bucket arrays. Bucket counts are packed directly into database blobs without an intermediate signed array. Chart calculations subtract cumulative buckets while accumulating them, rather than allocating a temporary distribution for each contribution.
 
