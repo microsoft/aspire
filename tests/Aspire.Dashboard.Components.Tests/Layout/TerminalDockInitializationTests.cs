@@ -25,6 +25,12 @@ public partial class TerminalDockTests
         var processed = Channel.CreateUnbounded<WatchTerminalsUpdate>();
         var client = new TestDashboardClient(
             isEnabled: true,
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>(),
+            initialResources:
+            [
+                TerminalSetupHelpers.CreateTerminalResource("first-resource"),
+                TerminalSetupHelpers.CreateTerminalResource("second-resource")
+            ],
             terminalChannelProvider: () => updates)
         {
             OnTerminalUpdateProcessed = update => processed.Writer.TryWrite(update)
@@ -64,19 +70,21 @@ public partial class TerminalDockTests
         cut.WaitForAssertion(() =>
         {
             Assert.Single(cut.FindAll(".terminal-dock.visible"));
-            Assert.Equal(["Renamed", "second"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
+            Assert.Equal(["Renamed", "second", "first-resource", "second-resource"], cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim()));
             Assert.Equal(2, cut.FindComponents<TerminalView>().Count);
         });
 
         await updates.Writer.WriteAsync(TerminalSetupHelpers.Snapshot());
         await processed.Reader.ReadAsync().AsTask().DefaultTimeout();
-        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-panel")));
-        Assert.Equal(0, client.ResourceSubscriptionCount);
+        cut.WaitForAssertion(() => Assert.Equal(["first-resource", "second-resource"],
+            cut.FindAll("[role=tab]").Select(tab => tab.TextContent.Trim())));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Equal(1, client.ResourceSubscriptionCount);
 
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         await cut.InvokeAsync(cut.Instance.ToggleAsync);
         Assert.Equal(1, client.TerminalSubscriptionCount);
-        Assert.Equal(0, client.ResourceSubscriptionCount);
+        Assert.Equal(1, client.ResourceSubscriptionCount);
         await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask()).DefaultTimeout();
         Assert.Equal(0, client.ActiveTerminalSubscriptionCount);
     }

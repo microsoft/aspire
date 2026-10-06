@@ -290,4 +290,7 @@
   <data name="TerminalWindowEnded" xml:space="preserve">
     <value>This terminal has ended.</value>
   </data>
+  <data name="TerminalDockShowTerminal" xml:space="preserve">
+    <value>Show terminal</value>
+  </data>
 </root>

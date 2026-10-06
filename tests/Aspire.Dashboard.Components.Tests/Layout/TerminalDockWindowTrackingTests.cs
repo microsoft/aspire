@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -19,6 +20,93 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 
 public partial class TerminalDockTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("/aspire/nested")]
+    public async Task ResourceWindow_DetachReturnAndRemovalNeverCloseTheResource(string pathBase)
+    {
+        var resources = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var resource = TerminalSetupHelpers.CreateTerminalResource("shell: #1/?%+", 2, 3);
+        var client = new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: () => resources);
+        Services.AddSingleton<NavigationManager>(new TestNavigationManager($"https://dashboard.example{pathBase}/"));
+        TerminalSetupHelpers.SetupTerminalComponents(this, client, pathBase);
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-show-terminal")));
+        var key = "resource:shell: #1/?%+";
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        await cut.Find(".terminal-dock-show-terminal").ClickAsync(new());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        var original = cut.FindComponent<TerminalView>().Instance;
+        var button = cut.FindComponent<TerminalWindowButton>().Instance;
+        Assert.Equal(key, button.TerminalKey);
+        Assert.Equal("terminal-window/resource/shell%3A%20%231%2F%3F%25%2B", button.Url);
+        Assert.False(button.Disabled);
+
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync(key, "blocked"));
+        Assert.Same(original, cut.FindComponent<TerminalView>().Instance);
+        Assert.Single(cut.FindAll(".terminal-dock-popup-blocked"));
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync(key, "opened"));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        Assert.Equal(key, cut.Find("[data-terminal-window-focus-key]").GetAttribute("data-terminal-window-focus-key"));
+        await cut.FindAll(".terminal-dock-detached-actions .aspire-button")[1].ClickAsync(new());
+        cut.WaitForAssertion(() =>
+        {
+            var view = cut.FindComponent<TerminalView>().Instance;
+            Assert.Equal("shell: #1/?%+", view.ResourceName);
+            Assert.True(view.AutoFit);
+        });
+
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync(key, "opened"));
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowClosedAsync(key));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync(key, "opened"));
+        await resources.Writer.WriteAsync([new(ResourceViewModelChangeType.Delete, resource)]);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll("[role=tab]"));
+            Assert.Empty(cut.FindComponents<TerminalView>());
+        });
+        await cut.InvokeAsync(() => Assert.Equal(2, JSInterop.Invocations.Count(i => i.Identifier == "closeTerminalWindow")));
+        Assert.Empty(client.ClosedTerminals);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResourceWindow_AdoptionAndTrackingFailureWaitForExplicitReturn(bool trackingFailure)
+    {
+        var client = new TestDashboardClient(isEnabled: true,
+            initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell")],
+            resourceChannelProvider: () => Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>());
+        TerminalSetupHelpers.SetupTerminalComponents(this, client);
+        var module = TerminalSetupHelpers.SetupTerminalWindows(this);
+        var adoption = module.SetupVoid("adoptTerminalWindows", _ => true);
+        var toasts = Render<FluentToastProvider>();
+        var cut = Render<TerminalDock>();
+        await cut.InvokeAsync(cut.Instance.ToggleAsync);
+        cut.WaitForAssertion(() => Assert.Single(adoption.Invocations));
+        var launcher = TerminalSetupHelpers.GetWindowLauncher(this, cut);
+        var key = "resource:shell";
+        if (trackingFailure)
+        {
+            adoption.SetException(new JSException("Storage denied"));
+            toasts.WaitForAssertion(() => Assert.Single(toasts.FindComponents<FluentToast>()));
+        }
+        else
+        {
+            await cut.InvokeAsync(() => launcher.OnTerminalWindowOpenedAsync(key, "recovering"));
+            adoption.SetVoidResult();
+        }
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".terminal-dock-detached-actions")));
+        Assert.Empty(cut.FindComponents<TerminalView>());
+        await cut.FindAll(".terminal-dock-detached-actions .aspire-button")[1].ClickAsync(new());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<TerminalView>()));
+        Assert.Empty(client.ClosedTerminals);
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]

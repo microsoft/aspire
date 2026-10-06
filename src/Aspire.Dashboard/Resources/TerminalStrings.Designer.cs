@@ -374,6 +374,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Show terminal.
+        /// </summary>
+        public static string TerminalDockShowTerminal {
+            get {
+                return ResourceManager.GetString("TerminalDockShowTerminal", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Scroll terminal tabs left.
         /// </summary>
         public static string TerminalDockScrollLeft {

@@ -350,6 +350,11 @@ function newId() {
 }
 
 function terminalPath(baseUri, key) {
+    // Resource keys carry the exact resource instance (e.g. "resource:repl-abc123").
+    // Escape the entire instance as one route segment; AppHost IDs are GUIDs.
+    if (key.startsWith('resource:')) {
+        return new URL(`terminal-window/resource/${encodeURIComponent(key.slice('resource:'.length))}`, baseUri).pathname;
+    }
     return new URL(`terminal-window/apphost/${encodeURIComponent(key)}`, baseUri).pathname;
 }
 

@@ -693,6 +693,53 @@ describe("cross-document terminal tracking", async () => {
         assert.equal(recovered.module.isTerminalWindowOpen("terminal"), false);
     });
 
+    for (const name of ["shell", "shell: #1/?%+"]) {
+        test(`resource dock windows recover and revoke the exact instance: ${name}`, async () => {
+            const browser = createBrowser();
+            const key = `resource:${name}`;
+            const baseUri = "https://localhost/dashboard/";
+            const url = `${baseUri}terminal-window/resource/${encodeURIComponent(name)}?fontSize=19`;
+            const main = await loadDocument(browser.createWindow(baseUri));
+            const launcher = main.register(key, baseUri);
+            launcher.button.setAttribute("data-terminal-window-url", url);
+            await main.module.adoptTerminalWindows(launcher.id, [key]);
+            launcher.button.click();
+            const popup = await loadDocument(main.window.openCalls[0].popup);
+            assert.equal(popup.registerPopup(key, baseUri), true);
+            await flushNotifications();
+            assert.deepEqual(main.notifications.map(call => call.slice(1)), [[key, "opened"], [key, "adopted"]]);
+
+            const recovered = await loadDocument(main.window);
+            const nextLauncher = recovered.register(key, baseUri);
+            await recovered.module.adoptTerminalWindows(nextLauncher.id, [key]);
+            await flushNotifications();
+            assert.equal(main.window.openCalls.length, 1);
+            assert.ok(recovered.notifications.some(call => call[1] === key && call[2] === "adopted"));
+            assert.equal(recovered.module.focusTerminalWindow(key), true);
+            assert.equal(popup.window.focusCalls, 1);
+            recovered.module.closeTerminalWindow(key);
+            await flushNotifications();
+            assert.equal(popup.window.closed, true);
+            const reloaded = await loadDocument(popup.window);
+            assert.equal(reloaded.registerPopup(key, baseUri), false);
+        });
+    }
+
+    test("a coordinated resource key rejects a different instance route", async () => {
+        const browser = createBrowser();
+        const main = await loadDocument(browser.createWindow());
+        const key = "resource:shell-2";
+        const launcher = main.register(key);
+        launcher.button.setAttribute("data-terminal-window-url",
+            "https://localhost/dashboard/terminal-window/resource/shell-1?fontSize=19");
+        await main.module.adoptTerminalWindows(launcher.id, [key]);
+        mock.method(console, "error", () => {});
+        launcher.button.click();
+        await flushNotifications();
+        assert.equal(main.window.openCalls.length, 0);
+        assert.deepEqual(main.notifications, [["OnTerminalWindowOpenedAsync", key, "failed"]]);
+    });
+
     test("a suspended or closed-before-recovery popup keeps a conservative placeholder until explicit return", async () => {
         for (const closed of [false, true]) {
             const browser = createBrowser();

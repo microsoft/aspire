@@ -21,6 +21,27 @@ exposes the same session as `aspire terminal agent --replica 0`.
 All terminal APIs share the experimental diagnostic `ASPIRETERMINAL001`,
 including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
 
+## Resource terminals in the dashboard dock
+
+Opening the terminal dock lists visible resources with terminal support alongside
+AppHost-owned terminals, with a separate tab for each replica. Resource discovery
+does not open the dock or connect a terminal viewer. Select a resource tab and
+choose **Show terminal** to attach its terminal inside the dock.
+
+Resource tabs remain available while the resource advertises terminal support.
+They have no close button: the dock does not own or stop resource processes.
+Once shown, a viewer stays mounted across tab switches and dock collapse.
+Only the visible, active pane fits the terminal to its available space.
+
+Shown resource terminals can be popped out into a separate window. The dock
+replaces its viewer with **Focus window** and **Return to panel** controls.
+Returning or closing the window restores the dock viewer; reloading the dashboard
+recovers detached windows before mounting viewers that could compete for sizing
+control. Removing a resource releases its dock viewer and coordinated window,
+without stopping the resource process.
+
+Resource terminals remain accessible on their resource pages and through the CLI.
+
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use
@@ -423,7 +444,12 @@ Console logs always displays the standard log stream, including pre-PTY hosting
 messages and post-PTY exit output. Its options menu no longer switches views.
 Navigating away from Terminals disposes the inline consumer, not the producer;
 returning attaches a new viewer and synchronizes producer-backed history.
-The AppHost terminal dock and interaction terminals remain separate surfaces.
+The terminal dock and interaction terminals remain separate surfaces. The dock
+also lists terminal-enabled resource instances after its first opening, with
+**Show terminal** connecting each resource viewer only on request. These tabs
+use exact resource instance names for their window keys and WebSocket endpoints;
+they do not require replica index metadata. Resource tabs cannot be closed and
+can be reordered alongside AppHost tabs without losing their viewer or selection.
 
 The resource terminal offers an icon-only **Open in new window** button
 at the right of its title bar, not in the page's Options menu or Console view.
@@ -434,7 +460,7 @@ The browser opens or focuses the named window before notifying Blazor, so a
 pending server response cannot delay popup creation. Browser popup policy can
 still block the launch, in which case the dashboard shows feedback.
 
-Resource terminals keep their inline viewer while the extra window is open.
+Resource terminals on the Terminals page keep their inline viewer while the extra window is open.
 Dock terminals show a detached placeholder until the window closes or the user
 chooses **Return to dock**. Disposing the opener leaves independent windows and
 their AppHost-owned producers running.

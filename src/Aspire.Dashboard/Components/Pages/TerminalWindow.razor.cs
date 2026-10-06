@@ -42,6 +42,8 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     private string? _windowRegistrationId;
     private bool _windowReady = true;
     private bool _windowTrackingFailed;
+    private string? _windowKey;
+    private bool _targetResolved;
 
     /// <summary>
     /// Gets or sets the id of an AppHost-owned dock terminal to attach to.
@@ -89,6 +91,7 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
     {
         var terminalId = TerminalId is { Length: > 0 } ? TerminalId : null;
         var resourceName = terminalId is null && ResourceName is { Length: > 0 } ? ResourceName : null;
+        _windowKey = terminalId ?? (resourceName is not null ? $"resource:{resourceName}" : null);
         var cancellationToken = _cts.Token;
         // Don't mount a resource viewer until its exact instance has been resolved.
         _windowReady = resourceName is null && (terminalId is null || (WindowOwner is null && WindowGeneration is null));
@@ -130,7 +133,8 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
             _ended = true;
             Logger.LogWarning("Could not resolve terminal resource {ResourceName}.", resourceName);
         }
-        _windowReady = terminalId is null || (WindowOwner is null && WindowGeneration is null);
+        _targetResolved = true;
+        _windowReady = WindowOwner is null && WindowGeneration is null;
         if (terminalId is null)
         {
             return;
@@ -152,9 +156,10 @@ public sealed partial class TerminalWindow : ComponentBase, IAsyncDisposable
         {
             await StopWindowTrackingAsync(release: true);
         }
-        else if (!_windowReady && !_windowTrackingFailed && _windowRegistrationTask is null && TerminalId is { } terminalId)
+        else if (_targetResolved && !_windowReady && !_windowTrackingFailed && _windowRegistrationTask is null && _windowKey is { } key)
         {
-            _windowRegistrationTask = RegisterWindowAsync(terminalId);
+            // Registration can grant permission to mount, so wait for resource resolution first.
+            _windowRegistrationTask = RegisterWindowAsync(key);
             await _windowRegistrationTask;
         }
     }

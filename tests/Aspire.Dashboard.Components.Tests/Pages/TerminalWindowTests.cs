@@ -366,19 +366,33 @@ public class TerminalWindowTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task CoordinatedWindow_ChecksGenerationBeforeMountingAndDoesNotRevokeOnDisposal(bool stillDetached)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task CoordinatedWindow_ChecksGenerationBeforeMountingAndDoesNotRevokeOnDisposal(bool stillDetached, bool resourceWindow)
     {
-        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient());
+        TerminalSetupHelpers.SetupTerminalComponents(this, new TestDashboardClient(
+            isEnabled: true, initialResources: [TerminalSetupHelpers.CreateTerminalResource("terminal")]));
         var module = TerminalSetupHelpers.SetupTerminalWindows(this);
         var registration = module.Setup<bool>("registerDetachedTerminalWindow", _ => true);
         Services.GetRequiredService<NavigationManager>().NavigateTo(
-            "terminal-window/apphost/terminal?fontSize=23&windowOwner=owner&windowGeneration=generation");
-        var cut = Render<TerminalWindow>(builder => builder.Add(p => p.TerminalId, "terminal"));
+            $"terminal-window/{(resourceWindow ? "resource" : "apphost")}/terminal?fontSize=23&windowOwner=owner&windowGeneration=generation");
+        var cut = Render<TerminalWindow>(builder =>
+        {
+            if (resourceWindow)
+            {
+                builder.Add(p => p.ResourceName, "terminal");
+            }
+            else
+            {
+                builder.Add(p => p.TerminalId, "terminal");
+            }
+        });
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Equal([], JSInterop.Invocations.Where(i => i.Identifier == "initTerminal"));
         Assert.Single(registration.Invocations);
+        Assert.Equal(resourceWindow ? "resource:terminal" : "terminal", Assert.Single(registration.Invocations).Arguments[1]);
 
         registration.SetResult(stillDetached);
         cut.WaitForAssertion(() =>

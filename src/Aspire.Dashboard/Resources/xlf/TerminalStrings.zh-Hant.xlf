@@ -122,6 +122,11 @@
         <target state="new">Scroll terminal tabs right</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDockShowTerminal">
+        <source>Show terminal</source>
+        <target state="new">Show terminal</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalDockTabs">
         <source>Terminals</source>
         <target state="new">Terminals</target>
