@@ -185,7 +185,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(rawText, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.SqlFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]
@@ -382,6 +382,93 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.Equal(mermaid, downloadedText);
     }
 
+    [Theory]
+    [InlineData(null, DashboardUIHelpers.PlaintextFormat)]
+    [InlineData(DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    public async Task Render_TextVisualizerDialog_SqlOption_CanSelectAndPreservesSelectionAsync(string? fallbackFormat, string expectedFormat)
+    {
+        const string query = "SELECT * FROM Products WHERE Id = @id";
+        var getCut = SetUpDialog(out var dialogService);
+        var content = new TextVisualizerDialogViewModel(query, "commandText", false, FallbackFormat: fallbackFormat);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, new DialogParameters());
+        var cut = getCut();
+        var dialog = cut.FindComponent<TextVisualizerDialog>();
+        var select = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
+
+        Assert.Equal(expectedFormat, dialog.Instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(query, dialog.Instance.TextVisualizerViewModel.FormattedText);
+        var options = select.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
+        var sqlOption = options.Single(o => o.Id == DashboardUIHelpers.SqlFormat);
+        var markdownOption = options.Single(o => o.Id == DashboardUIHelpers.MarkdownFormat);
+        Assert.Equal("SQL", sqlOption.Name);
+        Assert.False(select.Instance.OptionDisabled!(sqlOption));
+        Assert.False(select.Instance.OptionDisabled!(markdownOption));
+
+        await select.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(sqlOption));
+        dialog.Render(parameters => parameters.Add(p => p.Content, content));
+
+        Assert.Equal(DashboardUIHelpers.SqlFormat, dialog.Instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(DashboardUIHelpers.SqlFormat, select.Instance.Value?.Id);
+        Assert.Equal(query, dialog.Instance.TextVisualizerViewModel.FormattedText);
+
+        var plaintextOption = options.Single(o => o.Id == DashboardUIHelpers.PlaintextFormat);
+        await select.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(plaintextOption));
+        Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.Instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(query, dialog.Instance.TextVisualizerViewModel.FormattedText);
+    }
+
+    [Theory]
+    [InlineData("""{"query":"SELECT 1"}""", DashboardUIHelpers.JsonFormat)]
+    [InlineData("<query>SELECT 1</query>", DashboardUIHelpers.XmlFormat)]
+    public async Task Render_TextVisualizerDialog_SqlFallback_JsonAndXmlDisableSqlAndMarkdownAsync(string text, string expectedFormat)
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = dialogService,
+            Value = text,
+            ValueDescription = "commandText",
+            FallbackFormat = DashboardUIHelpers.SqlFormat
+        });
+        var cut = getCut();
+        var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
+        var select = cut.FindComponent<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>();
+        var options = select.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
+
+        Assert.Equal(expectedFormat, dialog.TextVisualizerViewModel.FormatKind);
+        Assert.True(select.Instance.OptionDisabled!(options.Single(o => o.Id == DashboardUIHelpers.SqlFormat)));
+        Assert.True(select.Instance.OptionDisabled!(options.Single(o => o.Id == DashboardUIHelpers.MarkdownFormat)));
+    }
+
+    [Fact]
+    public async Task Render_GridValue_SqlHint_ReachesVisualizerAsync()
+    {
+        var getCut = SetUpDialog(out var dialogService);
+
+        var gridValue = Render<GridValue>(parameters => parameters
+            .Add(p => p.Value, "SELECT 1")
+            .Add(p => p.ValueDescription, "commandText")
+            .Add(p => p.TextVisualizerFallbackFormat, DashboardUIHelpers.SqlFormat));
+        await gridValue.FindComponent<FluentButton>().InvokeAsync(() => gridValue.FindComponent<FluentButton>().Instance.OnClick.InvokeAsync());
+
+        Assert.Equal(DashboardUIHelpers.SqlFormat, getCut().FindComponent<TextVisualizerDialog>().Instance.TextVisualizerViewModel.FormatKind);
+    }
+
+    [Fact]
+    public void Render_TextVisualizer_Sql_EmitsHighlightLanguageAndEncodedContent()
+    {
+        SetUpDialog(out _);
+        var cut = Render<TextVisualizer>(parameters => parameters
+            .Add(p => p.ViewModel, new TextVisualizerViewModel("SELECT '<script>'", indentText: true, fallbackFormat: DashboardUIHelpers.SqlFormat))
+            .Add(p => p.Virtualize, false));
+
+        var line = Assert.Single(cut.FindAll(".highlight-line.language-sql"));
+        Assert.Equal("sql", line.GetAttribute("data-language"));
+        Assert.Equal("SELECT '<script>'", line.GetAttribute("data-content"));
+        Assert.Equal("SELECT '<script>'", line.TextContent.Trim());
+        Assert.Empty(line.QuerySelectorAll("script"));
+    }
+
     private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this, themeManager: themeManager, localStorage: localStorage);
@@ -411,10 +498,12 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Services.RemoveAll<IDialogService>();
         Services.AddSingleton<IDialogService>(testDialogService);
 
-        dialogService = new DashboardDialogService(
+        Services.RemoveAll<DashboardDialogService>();
+        Services.AddSingleton<DashboardDialogService>(services => new DashboardDialogService(
             testDialogService,
             new TestStringLocalizer<Aspire.Dashboard.Resources.Dialogs>(),
-            Services.GetRequiredService<DimensionManager>());
+            services.GetRequiredService<DimensionManager>()));
+        dialogService = Services.GetRequiredService<DashboardDialogService>();
         return () => cut ?? throw new InvalidOperationException("The dialog was not rendered.");
     }
 }

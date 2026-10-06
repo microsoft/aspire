@@ -15,6 +15,11 @@ public sealed class OpenTextVisualizerDialogOptions
     public string? DownloadFileName { get; init; }
 
     /// <summary>
+    /// The initial format to use when the content is not JSON or XML. Users can still change the format.
+    /// </summary>
+    public string? FallbackFormat { get; init; }
+
+    /// <summary>
     /// If set, the dialog will use this format and hide the format dropdown.
     /// </summary>
     public string? FixedFormat { get; init; }

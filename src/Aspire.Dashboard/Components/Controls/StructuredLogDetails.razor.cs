@@ -74,7 +74,13 @@ public partial class StructuredLogDetails : IDisposable
             // Move some attributes to separate lists, e.g. exception attributes to their own list.
             // Remaining attributes are displayed along side the message.
             var attributes = _viewModel.LogEntry.Attributes
-                .Select(a => new TelemetryPropertyViewModel { Name = a.Key, Key = $"unknown-{a.Key}", Value = a.Value })
+                .Select(a => new TelemetryPropertyViewModel
+                {
+                    Name = a.Key,
+                    Key = $"unknown-{a.Key}",
+                    Value = a.Value,
+                    TextVisualizerFallbackFormat = SqlHelpers.GetFormat(a.Key, _viewModel.LogEntry.Attributes)
+                })
                 .ToList();
 
             _contextAttributes =

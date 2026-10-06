@@ -55,6 +55,12 @@ public partial class GridValue
     public string? ValueToVisualize { get; set; }
 
     /// <summary>
+    /// The initial visualizer format to use when the content is not JSON or XML.
+    /// </summary>
+    [Parameter]
+    public string? TextVisualizerFallbackFormat { get; set; }
+
+    /// <summary>
     /// Determines whether or not masking support is enabled for this value
     /// </summary>
     [Parameter]
@@ -162,7 +168,8 @@ public partial class GridValue
             DialogService = DialogService,
             ValueDescription = ValueDescription,
             Value = ValueToVisualize ?? Value ?? string.Empty,
-            ContainsSecret = IsMasked || ContainsSecret
+            ContainsSecret = IsMasked || ContainsSecret,
+            FallbackFormat = TextVisualizerFallbackFormat
         });
     }
 

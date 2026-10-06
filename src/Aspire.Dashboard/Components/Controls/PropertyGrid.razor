@@ -33,9 +33,9 @@
                        IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
                        TextVisualizerTitle="@context.Name"
                        ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
+                       TextVisualizerFallbackFormat="@context.TextVisualizerFallbackFormat"
                        ComponentMetadata="@GetComponentMetadata(context)"/>
             @ExtraValueContent(context)
         </AspireTemplateColumn>
     </FluentDataGrid>
 </div>
-

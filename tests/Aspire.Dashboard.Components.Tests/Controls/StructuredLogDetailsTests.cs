@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
@@ -18,6 +19,40 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 [UseCulture("en-US")]
 public class StructuredLogDetailsTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("commandText", "mssql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.query.text", "postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.statement", "sqlite", DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.query.text", "redis", null)]
+    public void Render_QueryField_SetsVisualizerFormatOnlyOnValue(string name, string system, string? expectedFormat)
+    {
+        StructuredLogsSetupHelpers.SetupStructuredLogsDetails(this);
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
+        var model = new StructureLogsDetailsViewModel
+        {
+            LogEntry = TelemetryTestHelpers.CreateOtlpLogEntry(
+                record: TelemetryTestHelpers.CreateLogRecord(message: "Executed DbCommand\nSELECT 1", attributes:
+                [
+                    KeyValuePair.Create(name, "SELECT 1"),
+                    KeyValuePair.Create("db.system.name", system)
+                ]),
+                resourceView: resource.GetView([]),
+                scope: TelemetryTestHelpers.CreateOtlpScope(context),
+                context: context)
+        };
+
+        var cut = Render<StructuredLogDetails>(parameters => parameters.Add(p => p.ViewModel, model));
+
+        Assert.Equal(expectedFormat, cut.Instance.FilteredItems.Single(p => p.Name == name).TextVisualizerFallbackFormat);
+        Assert.Null(cut.Instance.FilteredItems.Single(p => p.Name == "Message").TextVisualizerFallbackFormat);
+        var values = cut.FindComponents<GridValue>();
+        var queryValue = Assert.Single(values, v => v.Instance.ValueDescription == name);
+        Assert.Equal(expectedFormat, queryValue.Instance.TextVisualizerFallbackFormat);
+        var queryName = Assert.Single(values, v => v.Instance.Value == name);
+        Assert.Null(queryName.Instance.TextVisualizerFallbackFormat);
+    }
+
     [Fact]
     public void Render_ManyDuplicateAttributes_NoDuplicateKeys()
     {
