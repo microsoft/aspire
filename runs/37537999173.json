@@ -1,0 +1,98 @@
+{
+  "run_id": 37537999173,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37537999173",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-06T23:04:24Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20614,
+    "title": "Raise Aspire's minimum supported .NET version to .NET 10",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-dotnet-10-baseline",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20614",
+    "merged_at": "2026-10-06T22:02:25Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "f733f6f57fa539dd6c31a6313376d723ecc492a9",
+    "failed_sha": "f40c75f6e2e0daf107c3b3a4899c04b465f937a7",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f2528c5248e8b3fa0d1ec6675cb00bb7a4222f9f",
+        "message": "Add Aspire editor assistance language model tools (#19414) ## What changed Adds **six new editor-assistance language-model tools** and hardens the existing `aspire_apphost_start` and `aspire_apphost_stop` tools, which already landed in microsoft/aspire#19134. Eight tools are covered here; only six are introduced by this PR. Enable the Aspire tools in Copilot Chat's tool picker in a trusted workspace. Replace `apphost.cs` with an exact discovered AppHost path. Multi-root workspaces require the fo",
+        "html_url": "https://github.com/microsoft/aspire/commit/f2528c5248e8b3fa0d1ec6675cb00bb7a4222f9f",
+        "pull_request": {
+          "number": 19414,
+          "title": "Add Aspire editor assistance language model tools",
+          "url": "https://github.com/microsoft/aspire/pull/19414",
+          "merged_at": "2026-10-06T16:10:41Z"
+        }
+      },
+      {
+        "sha": "f40c75f6e2e0daf107c3b3a4899c04b465f937a7",
+        "message": "Raise Aspire's minimum supported .NET version to .NET 10 (#20614) ## Description Raise the supported .NET baseline on `main` for the next major Aspire release. Shipping libraries and C# templates no longer need to support .NET 8 or .NET 9, and repository builds/tests should not require those SDKs or runtimes. - Set `DefaultTargetFramework` to `net10.0` and `AllTargetFrameworks` to `net10.0;net11.0`, with framework-aligned 10.x/11.x dependencies. Keep the CLI on its existing `net11.0` target. - R",
+        "html_url": "https://github.com/microsoft/aspire/commit/f40c75f6e2e0daf107c3b3a4899c04b465f937a7",
+        "pull_request": {
+          "number": 20614,
+          "title": "Raise Aspire's minimum supported .NET version to .NET 10",
+          "url": "https://github.com/microsoft/aspire/pull/20614",
+          "merged_at": "2026-10-06T22:02:25Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 112524631439,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37537999173/job/112524631439",
+      "classification": "flaky-test",
+      "reason": "Run tests step failed with 3 test failures (6839 passed) matching two known recurring flaky-test patterns: TrayWatchStream stalled-reconciliation race and NuGetPackagePrefetcher shutdown timeout; no build/compile errors occurred.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(removeFirst: True, brokenPipe: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   7",
+      "stack_trace": "at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 925\n   at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 940\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause aspire-cli-tests-backchannel-traywatchstream-stalled-flaky (2 prior occurrences); a race condition in reconciliation counting unrelated to the triggering .NET 10 baseline PR."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(removeFirst: False, brokenPipe: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   7",
+      "stack_trace": "at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 925\n   at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 940\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same race-condition assertion as the removeFirst:True variant of the known flaky TrayWatchStream test, just a different parameterization; not caused by the triggering PR."
+    },
+    {
+      "name": "Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:175 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 180\n   at Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:line 175\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause cli-nuget-prefetcher-shutdown-timeout (5 prior occurrences across multiple runs/OSes); a timing-sensitive shutdown cancellation test unrelated to the triggering PR."
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-backchannel-traywatchstream-stalled-flaky",
+    "aspire-cli-tests-backchannel-traywatchstream-stalled-flaky-removefirst-false",
+    "cli-nuget-prefetcher-shutdown-timeout"
+  ]
+}

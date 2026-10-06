@@ -1,0 +1,16 @@
+{
+  "id": "aspire-cli-tests-backchannel-traywatchstream-stalled-flaky-removefirst-false",
+  "type": "flaky-test",
+  "title": "Flaky: TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit (removeFirst: False) asserts wrong reconciliation count",
+  "test_name": "Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(removeFirst: False, brokenPipe: False)",
+  "error_pattern": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   7\n   at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in TrayWatchStreamTests.cs:line 925",
+  "occurrences": [
+    {
+      "run_id": 37537999173,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37537999173",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-06T23:04:24Z"
+    }
+  ]
+}
