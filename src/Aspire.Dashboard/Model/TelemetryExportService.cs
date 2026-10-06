@@ -575,7 +575,10 @@ public sealed class TelemetryExportService
                 {
                     Attributes = ConvertAttributes(dimension.Attributes),
                     StartTimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(histogramValue.AggregationStart),
-                    TimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.End),
+                    // Delta identities retain the original nanosecond end; DateTime would collapse sub-tick intervals.
+                    TimeUnixNano = histogramValue.AggregationTemporality == OtlpAggregationTemporality.Delta
+                        ? unchecked((ulong)histogramValue.AggregationId)
+                        : OtlpHelpers.DateTimeToUnixNanoseconds(histogramValue.End),
                     Count = histogramValue.Count,
                     Sum = histogramValue.Sum,
                     BucketCounts = histogramValue.Values,

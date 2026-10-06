@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Dashboard.Components.Controls.Chart;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Otlp.Model.Serialization;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Otlp.Serialization;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.HistogramTestHelpers;
@@ -286,6 +289,65 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Delta_ExportImport_SubTickTimestamps_PreservesIntervals(bool rollup, bool omitStart)
+    {
+        using var source = await CreateRepositoryAsync();
+        var timestamp = DateTimeToUnixNanoseconds(s_start);
+        var first = CreatePoint(s_start, s_start.AddTicks(2), [100, 0, 0], [10, 100]);
+        first.StartTimeUnixNano = omitStart ? 0 : timestamp + 100;
+        first.TimeUnixNano = timestamp + 140;
+        first.Sum = 500;
+        var second = CreatePoint(s_start, s_start.AddTicks(2), [0, 100, 0], [10, 100]);
+        second.StartTimeUnixNano = omitStart ? 0 : first.TimeUnixNano;
+        second.TimeUnixNano = timestamp + 180;
+        second.Sum = 5000;
+        var addContext = new AddContext();
+        await source.Repository.AsWriter().AddMetricsAsync(addContext,
+            [CreateMetrics(AggregationTemporality.Delta, first, second)]);
+        Assert.Equal(2, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        var instrument = await GetInstrumentAsync(source.Repository, rollup);
+        var exported = TelemetryExportService.ConvertMetricsToOtlpJson([instrument]);
+        var json = JsonSerializer.Serialize(exported, OtlpJsonSerializerContext.DefaultContext.OtlpTelemetryDataJson);
+        var deserialized = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.DefaultContext.OtlpTelemetryDataJson);
+        Assert.NotNull(deserialized);
+        var request = OtlpJsonToProtobufConverter.ToProtobuf(new OtlpExportMetricsServiceRequestJson
+        {
+            ResourceMetrics = deserialized.ResourceMetrics
+        });
+
+        using var destination = await CreateRepositoryAsync();
+        var importContext = new AddContext();
+        await destination.Repository.AsWriter().AddMetricsAsync(importContext, request.ResourceMetrics);
+        Assert.Equal(2, importContext.SuccessCount);
+        Assert.Equal(0, importContext.FailureCount);
+
+        var imported = await GetInstrumentAsync(destination.Repository, rollup);
+        var values = Assert.Single(imported.Dimensions).Values.Cast<HistogramValue>().OrderBy(value => value.AggregationId).ToArray();
+        Assert.Collection(values,
+            value =>
+            {
+                Assert.Equal(unchecked((long)first.TimeUnixNano), value.AggregationId);
+                Assert.Equal([100ul, 0ul, 0ul], value.Values);
+                Assert.Equal(100ul, value.Count);
+            },
+            value =>
+            {
+                Assert.Equal(unchecked((long)second.TimeUnixNano), value.AggregationId);
+                Assert.Equal([0ul, 100ul, 0ul], value.Values);
+                Assert.Equal(100ul, value.Count);
+            });
+        AssertPercentiles(imported, [10, 100, 100]);
+        Assert.True(ChartDataCalculator.TryCalculatePoint(imported.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+        Assert.Equal(200, count);
+    }
+
+    [Theory]
     [InlineData((ulong)long.MaxValue, long.MaxValue)]
     [InlineData((ulong)long.MaxValue + 1, long.MinValue)]
     [InlineData(ulong.MaxValue, -1L)]
@@ -557,8 +619,16 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
         Assert.NotNull(histogram);
         Assert.Equal((int)AggregationTemporality.Cumulative, histogram.AggregationTemporality);
         Assert.Collection(histogram.DataPoints!,
-            point => Assert.Equal(DateTimeToUnixNanoseconds(s_start), point.StartTimeUnixNano),
-            point => Assert.Equal(DateTimeToUnixNanoseconds(s_start), point.StartTimeUnixNano));
+            point =>
+            {
+                Assert.Equal(DateTimeToUnixNanoseconds(s_start), point.StartTimeUnixNano);
+                Assert.Equal(DateTimeToUnixNanoseconds(s_start.AddMilliseconds(100)), point.TimeUnixNano);
+            },
+            point =>
+            {
+                Assert.Equal(DateTimeToUnixNanoseconds(s_start), point.StartTimeUnixNano);
+                Assert.Equal(DateTimeToUnixNanoseconds(s_start.AddMilliseconds(200)), point.TimeUnixNano);
+            });
     }
 
     private static async Task<OtlpInstrumentData> GetInstrumentAsync(ITelemetryRepository repository, bool rollup)
