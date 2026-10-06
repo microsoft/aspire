@@ -7,7 +7,15 @@ namespace Aspire.Tray;
 /// Immutable menu commands retain exact process identities across discovery updates.
 /// </summary>
 internal sealed record LinuxTrayMenuItem(string Label, LinuxTrayAction Action = LinuxTrayAction.None,
-    AppHostMenuItem? Host = null, bool Enabled = true, IReadOnlyList<LinuxTrayMenuItem>? Children = null);
+    AppHostMenuItem? Host = null, bool Enabled = true, IReadOnlyList<LinuxTrayMenuItem>? Children = null)
+{
+    internal LinuxTrayIcon Icon { get; init; }
+}
+
+internal enum LinuxTrayIcon
+{
+    None, Healthy, Warning, Unhealthy, Unknown, Stopped, Documentation, Settings
+}
 
 internal enum LinuxTrayAction
 {
@@ -34,8 +42,8 @@ internal static class LinuxTrayMenu
         recent.Add(new("Clear recently opened...", LinuxTrayAction.ClearRecent, Enabled: state.CanClearRecent));
         items.Add(new("Recently opened", Children: recent));
         items.Add(new("", LinuxTrayAction.Separator));
-        items.Add(new("Documentation", LinuxTrayAction.Documentation));
-        items.Add(new("Settings...", LinuxTrayAction.Settings));
+        items.Add(new("Documentation", LinuxTrayAction.Documentation) { Icon = LinuxTrayIcon.Documentation });
+        items.Add(new("Settings...", LinuxTrayAction.Settings) { Icon = LinuxTrayIcon.Settings });
         items.Add(new("", LinuxTrayAction.Separator));
         items.Add(new("Quit Aspire", LinuxTrayAction.Quit));
         return items;
@@ -68,7 +76,23 @@ internal static class LinuxTrayMenu
             // to screen readers and preserves it on hosts that omit menu artwork.
             var status = state.Discovery != DiscoveryState.Live ? "Discovery unavailable"
                 : Status(host);
-            return new($"{AppHostPresentation.GetCompactMenuLabel(host)} - {status}", Host: host, Children: actions);
+            return new($"{AppHostPresentation.GetCompactMenuLabel(host)} - {status}", Host: host, Children: actions)
+            {
+                Icon = host switch
+                {
+                    { IsStarting: true } or { IsStopping: true } => LinuxTrayIcon.Warning,
+                    _ when state.Discovery != DiscoveryState.Live => LinuxTrayIcon.Warning,
+                    { Error: not null } => LinuxTrayIcon.Unhealthy,
+                    { IsRunning: false } => LinuxTrayIcon.Stopped,
+                    _ => host.Health switch
+                    {
+                        AppHostHealth.Healthy => LinuxTrayIcon.Healthy,
+                        AppHostHealth.Warning => LinuxTrayIcon.Warning,
+                        AppHostHealth.Unhealthy => LinuxTrayIcon.Unhealthy,
+                        _ => LinuxTrayIcon.Unknown
+                    }
+                }
+            };
         }
     }
 

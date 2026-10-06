@@ -37,6 +37,9 @@ public class LinuxTrayTests
             LinuxTrayAction.Folder, LinuxTrayAction.CopyPath, LinuxTrayAction.Code], actions.Select(item => item.Action));
         Assert.All(actions, action => Assert.Equal(id, action.Host!.Id));
         Assert.Equal("Stop AppHost...", actions[1].Label);
+        Assert.Equal(LinuxTrayIcon.Healthy, row.Icon);
+        Assert.Equal(LinuxTrayIcon.Documentation, menu.Single(item => item.Action == LinuxTrayAction.Documentation).Icon);
+        Assert.Equal(LinuxTrayIcon.Settings, menu.Single(item => item.Action == LinuxTrayAction.Settings).Icon);
     }
 
     [Theory]
@@ -50,6 +53,7 @@ public class LinuxTrayTests
             "Example", "PID 1", "Example", true, true, false, null) { Health = Enum.Parse<AppHostHealth>(health) };
         var menu = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), true, false);
         Assert.Equal($"Example - {expected}", menu[0].Label);
+        Assert.Equal(Enum.Parse<LinuxTrayIcon>(health), menu[0].Icon);
     }
 
     [Fact]
@@ -65,11 +69,29 @@ public class LinuxTrayTests
         Assert.Equal(LinuxTrayAction.None, row.Action);
         Assert.Equal(LinuxTrayAction.Start, row.Children![0].Action);
         Assert.True(row.Children[0].Enabled);
+        Assert.Equal(LinuxTrayIcon.Stopped, row.Icon);
         Assert.Equal("Unpin AppHost", row.Children[1].Label);
         var disconnected = state with { Discovery = DiscoveryState.Disconnected, AppHosts = [host with { CanStart = false }] };
         row = LinuxTrayMenu.Build(disconnected, true, false)[0];
         Assert.Equal("Example - Discovery unavailable", row.Label);
         Assert.False(row.Children![0].Enabled);
+        Assert.Equal(LinuxTrayIcon.Warning, row.Icon);
+    }
+
+    [Theory]
+    [InlineData(true, false, null, "Warning")]
+    [InlineData(false, true, null, "Warning")]
+    [InlineData(false, false, "Stop failed", "Unhealthy")]
+    public void PendingActionsAndErrorsOverrideHealthyIcons(bool starting, bool stopping, string? error, string expected)
+    {
+        var host = new AppHostMenuItem(new(Path.GetFullPath("apphost.cs"), 1, 2),
+            "Example", "PID 1", "Example", true, true, stopping, error)
+        {
+            Health = AppHostHealth.Healthy, IsStarting = starting
+        };
+        var row = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), true, false)
+            .Single(item => item.Host == host);
+        Assert.Equal(Enum.Parse<LinuxTrayIcon>(expected), row.Icon);
     }
 
     [Fact]

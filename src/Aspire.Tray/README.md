@@ -96,12 +96,17 @@ and Ubuntu provide `libayatana-appindicator3-1`; Fedora provides
 copies. The tray never installs packages or changes desktop/bar configuration.
 X11 and Wayland are handled by GTK; Linux musl and headless sessions are not supported.
 
-Menus expose health as text (including unknown, waiting/degraded, and unhealthy),
+Menus expose health as colored dots (a gray square for stopped projects) and text
+(including unknown, waiting/degraded, and unhealthy). Documentation and Settings
+use desktop theme icons. Icons are exported through D-Bus menus, while text
+remains available on panel hosts that omit menu artwork. Menus include
 dashboard launch, confirmed exact-instance stop, explicit start for offline
 projects, pinning, recent history, folder and clipboard actions, and VS Code when
 `code` is on PATH. Opening a submenu never starts a project. The dashboard opens
 in the default browser, not inside the popup. GTK confirmations default to Cancel.
 Settings include stop confirmation, version information, and opt-in login startup.
+Some GNOME AppIndicator extension versions omit icons on submenu headers, so
+AppHost health remains text-only there even though the icon is exported.
 Unlike the macOS/Windows frontends, this initial Linux frontend has no custom
 connection-badge artwork, Settings keyboard shortcut, or additional editor discovery.
 

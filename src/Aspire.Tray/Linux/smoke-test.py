@@ -165,6 +165,10 @@ def run(publish):
             assert "SYNTHETIC-SECRET" not in str(layout()), "Dashboard credentials leaked into menu"
             host_row = find("Example - Healthy")
             assert host_row[1]["children-display"] == "submenu"
+            healthy_icon = host_row[1]["icon-data"]
+            assert bytes(healthy_icon[:8]) == b"\x89PNG\r\n\x1a\n", "Health icon was not exported as PNG"
+            assert find("Documentation")[1]["icon-name"] == "help-browser"
+            assert find("Settings...")[1]["icon-name"] == "preferences-system"
             assert find("Open dashboard")[1].get("enabled", True)
             assert find("Stop AppHost...")[1].get("enabled", True)
             click(find("Pin AppHost"))
@@ -172,6 +176,7 @@ def run(publish):
             message["appHosts"][0]["health"] = "unhealthy"
             write_snapshot(json.dumps(message))
             wait(lambda: find("Example - Unhealthy") is not None, "Health update missing")
+            assert find("Example - Unhealthy")[1]["icon-data"] != healthy_icon, "Health icon did not update"
             message["appHosts"] = []
             write_snapshot(json.dumps(message))
             wait(lambda: find("Start AppHost") is not None, "Offline pinned host missing")

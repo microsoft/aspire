@@ -176,7 +176,22 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         foreach (var item in items)
         {
             var widget = item.Action == LinuxTrayAction.Separator ? Gtk.gtk_separator_menu_item_new()
-                : Gtk.gtk_menu_item_new_with_label(item.Label);
+                : item.Icon == LinuxTrayIcon.None ? Gtk.gtk_menu_item_new_with_label(item.Label)
+                : Gtk.gtk_image_menu_item_new_with_label(item.Label);
+            if (item.Icon != LinuxTrayIcon.None)
+            {
+                // libdbusmenu's GTK parser recognizes GtkImageMenuItem, not an arbitrary
+                // image/label box. Keep using this GTK 3 widget for icon-name/icon-data export.
+                // https://git.launchpad.net/libdbusmenu/tree/libdbusmenu-gtk/parser.c
+                var image = item.Icon switch
+                {
+                    LinuxTrayIcon.Documentation => Gtk.gtk_image_new_from_icon_name("help-browser", 1),
+                    LinuxTrayIcon.Settings => Gtk.gtk_image_new_from_icon_name("preferences-system", 1),
+                    _ => CreateHealthImage(item.Icon)
+                };
+                Gtk.gtk_image_menu_item_set_image(widget, image);
+                Gtk.gtk_image_menu_item_set_always_show_image(widget, 1);
+            }
             Gtk.gtk_widget_set_sensitive(widget, item.Enabled ? 1 : 0);
             Gtk.gtk_menu_shell_append(menu, widget);
             if (item.Children is not null)
@@ -190,6 +205,63 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
             }
         }
         return menu;
+    }
+
+    private static nint CreateHealthImage(LinuxTrayIcon icon)
+    {
+        // Cairo is already a GTK dependency. Export a small antialiased PNG through
+        // GdkPixbuf so health colors do not depend on the panel's installed icon theme.
+        const int size = 16;
+        var surface = Gtk.cairo_image_surface_create(0, size, size); // CAIRO_FORMAT_ARGB32
+        var context = Gtk.cairo_create(surface);
+        try
+        {
+            var color = icon switch
+            {
+                LinuxTrayIcon.Healthy => 0x269653,
+                LinuxTrayIcon.Warning => 0xE58A00,
+                LinuxTrayIcon.Unhealthy => 0xD63E42,
+                _ => 0x929292
+            };
+            Draw(size * 0.3, 0x606060);
+            Draw(size * 0.3 - 1, color);
+            if (Gtk.cairo_surface_status(surface) != 0 || Gtk.cairo_status(context) != 0)
+            {
+                throw new InvalidOperationException("Could not render the AppHost health icon.");
+            }
+            var pixels = Gtk.gdk_pixbuf_get_from_surface(surface, 0, 0, size, size);
+            if (pixels == 0)
+            {
+                throw new InvalidOperationException("Could not create the AppHost health image.");
+            }
+            try
+            {
+                return Gtk.gtk_image_new_from_pixbuf(pixels);
+            }
+            finally
+            {
+                Gtk.g_object_unref(pixels);
+            }
+        }
+        finally
+        {
+            Gtk.cairo_destroy(context);
+            Gtk.cairo_surface_destroy(surface);
+        }
+
+        void Draw(double radius, int color)
+        {
+            Gtk.cairo_set_source_rgb(context, ((color >> 16) & 255) / 255d, ((color >> 8) & 255) / 255d, (color & 255) / 255d);
+            if (icon == LinuxTrayIcon.Stopped)
+            {
+                Gtk.cairo_rectangle(context, size / 2d - radius, size / 2d - radius, radius * 2, radius * 2);
+            }
+            else
+            {
+                Gtk.cairo_arc(context, size / 2d, size / 2d, radius, 0, Math.Tau);
+            }
+            Gtk.cairo_fill(context);
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
