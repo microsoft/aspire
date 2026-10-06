@@ -351,50 +351,111 @@ public sealed partial class SqliteTelemetryRepository
             connection.Execute(sql.ToString(), parameters, transaction);
         }
 
-        var pointIds = SqliteBatchInsert.BatchInsertRows(
-            connection,
-            transaction,
-            pointBatch.Inserts,
-            MaxMetricPointBatchSize,
-            "telemetry_metric_points",
-            [
-                "dimension_id", "point_type", "start_time_ticks", "end_time_ticks", "repeat_count",
-                "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags",
-                "histogram_aggregation_start_ticks", "histogram_aggregation_id"
-            ],
-            "point_id",
-            static (point, parameters) =>
-            {
-                parameters[0].Value = point.Dimension.DimensionId;
-                parameters[1].Value = point.PointType;
-                parameters[2].Value = point.StartTimeTicks;
-                parameters[3].Value = point.EndTimeTicks;
-                parameters[4].Value = point.RepeatCount;
-                parameters[5].Value = point.IntegerValue ?? (object)DBNull.Value;
-                parameters[6].Value = point.DoubleValue ?? (object)DBNull.Value;
-                parameters[7].Value = point.HistogramSum ?? (object)DBNull.Value;
-                parameters[8].Value = point.HistogramCount ?? (object)DBNull.Value;
-                parameters[9].Value = point.Histogram is not null ? PackUInt64Values(point.Histogram.Values) : DBNull.Value;
-                parameters[10].Value = point.Histogram is not null ? PackDoubleValues(point.Histogram.ExplicitBounds) : DBNull.Value;
-                parameters[11].Value = point.Flags;
-                parameters[12].Value = point.Histogram?.AggregationStart.Ticks ?? (object)DBNull.Value;
-                parameters[13].Value = point.Histogram?.AggregationId ?? (object)DBNull.Value;
-            });
-        for (var i = 0; i < pointBatch.Inserts.Count; i++)
+        string[] columns =
+        [
+            "dimension_id", "point_type", "start_time_ticks", "end_time_ticks", "repeat_count",
+            "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags",
+            "histogram_aggregation_start_ticks", "histogram_aggregation_id"
+        ];
+        BindRowParameters<PendingMetricPoint> bindParameters = static (point, parameters) =>
         {
-            pointBatch.Inserts[i].PointId = pointIds[i];
+            parameters[0].Value = point.Dimension.DimensionId;
+            parameters[1].Value = point.PointType;
+            parameters[2].Value = point.StartTimeTicks;
+            parameters[3].Value = point.EndTimeTicks;
+            parameters[4].Value = point.RepeatCount;
+            parameters[5].Value = point.IntegerValue ?? (object)DBNull.Value;
+            parameters[6].Value = point.DoubleValue ?? (object)DBNull.Value;
+            parameters[7].Value = point.HistogramSum ?? (object)DBNull.Value;
+            parameters[8].Value = point.HistogramCount ?? (object)DBNull.Value;
+            parameters[9].Value = point.Histogram is not null ? PackUInt64Values(point.Histogram.Values) : DBNull.Value;
+            parameters[10].Value = point.Histogram is not null ? PackDoubleValues(point.Histogram.ExplicitBounds) : DBNull.Value;
+            parameters[11].Value = point.Flags;
+            parameters[12].Value = point.Histogram?.AggregationStart.Ticks ?? (object)DBNull.Value;
+            parameters[13].Value = point.Histogram?.AggregationId ?? (object)DBNull.Value;
+        };
+
+        List<long> numberPointIds;
+        Dictionary<MetricPointKey, long>? histogramPointIds = null;
+        var previousMaxPointId = 0L;
+        if (pointBatch.Inserts.Exists(static point => point.Histogram is not null))
+        {
+            // AUTOINCREMENT assigns every new row an ID above the existing maximum. UPSERT
+            // preserves old IDs, so count each newly allocated ID once, including repeated inputs.
+            previousMaxPointId = connection.QuerySingle<long>("SELECT COALESCE(MAX(point_id), 0) FROM telemetry_metric_points;", transaction: transaction);
+            numberPointIds = [];
+            var histogramIds = new Dictionary<MetricPointKey, long>();
+            var returnedCount = 0;
+            SqliteBatchInsert.BatchInsertRows(
+                pointBatch.Inserts, MaxMetricPointBatchSize, columns.Length,
+                rowCount => SqliteBatchInsert.CreateBatchInsertCommand(
+                    connection, transaction, rowCount, "telemetry_metric_points", columns,
+                    returningColumnName: "point_id, dimension_id, start_time_ticks, histogram_aggregation_id, point_type",
+                    onConflictClause: $"""
+                        ON CONFLICT(dimension_id, start_time_ticks, histogram_aggregation_id) WHERE point_type = {HistogramPointType}
+                        DO UPDATE SET
+                            end_time_ticks = excluded.end_time_ticks,
+                            histogram_sum = excluded.histogram_sum,
+                            histogram_count = excluded.histogram_count,
+                            bucket_counts = excluded.bucket_counts,
+                            explicit_bounds = excluded.explicit_bounds,
+                            flags = excluded.flags,
+                            histogram_aggregation_start_ticks = excluded.histogram_aggregation_start_ticks
+                        """),
+                bindParameters,
+                command =>
+                {
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read())
+                    {
+                        var pointId = reader.GetInt64(0);
+                        var pointType = reader.GetInt32(4);
+                        if (pointType == HistogramPointType)
+                        {
+                            var key = new MetricPointKey(reader.GetInt64(1), pointType, reader.GetInt64(2), reader.GetInt64(3));
+                            histogramIds[key] = pointId;
+                        }
+                        else
+                        {
+                            numberPointIds.Add(pointId);
+                        }
+                        returnedCount++;
+                    }
+                });
+            if (returnedCount != pointBatch.Inserts.Count)
+            {
+                throw new InvalidOperationException($"The metric batch returned {returnedCount} rows; expected {pointBatch.Inserts.Count}.");
+            }
+            // Only numeric IDs are all newly generated and can be sorted into input order.
+            // Histogram retries return old IDs and must be correlated by their logical key.
+            numberPointIds.Sort();
+            histogramPointIds = histogramIds;
+        }
+        else
+        {
+            numberPointIds = SqliteBatchInsert.BatchInsertRows(
+                connection, transaction, pointBatch.Inserts, MaxMetricPointBatchSize,
+                "telemetry_metric_points", columns, "point_id", bindParameters);
         }
 
+        var numberIndex = 0;
         foreach (var point in pointBatch.Inserts)
         {
+            point.PointId = histogramPointIds is not null && point.Histogram is { } histogram
+                ? histogramPointIds[new MetricPointKey(point.Dimension.DimensionId, point.PointType, point.StartTimeTicks, histogram.AggregationId)]
+                : numberPointIds[numberIndex++];
             QueueMetricExemplars(pointBatch, point.PointId, point.Exemplars);
         }
         InsertMetricExemplars(connection, transaction, pointBatch.Exemplars);
 
+        var insertedIds = histogramPointIds is not null ? new HashSet<long>() : null;
         foreach (var point in pointBatch.Inserts)
         {
             point.Context.SuccessCount += point.SourcePointCount;
-            point.Dimension.PointCount++;
+            if (insertedIds is null || (point.PointId > previousMaxPointId && insertedIds.Add(point.PointId)))
+            {
+                point.Dimension.PointCount++;
+            }
 
             if (ReferenceEquals(point.Dimension.PendingPoint, point))
             {

@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Dashboard.Components.Controls.Chart;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
@@ -10,6 +11,7 @@ using Aspire.Dashboard.Otlp.Model.Serialization;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Otlp.Serialization;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.HistogramTestHelpers;
@@ -204,6 +206,297 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
             Assert.Collection(histogram.DataPoints!,
                 point => Assert.Equal(DateTimeToUnixNanoseconds(s_start.AddMilliseconds(100)), point.TimeUnixNano),
                 point => Assert.Equal(DateTimeToUnixNanoseconds(s_start.AddMilliseconds(200)), point.TimeUnixNano));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Cumulative_SubTickUpdates_ReplaceSnapshotWithoutConsumingRetention(bool sameRequest)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(maxMetricsCount: 3);
+        HistogramDataPoint[] points =
+        [
+            CreatePoint(s_start, s_start.AddMilliseconds(100), [10, 0], [10]),
+            CreatePoint(s_start, s_start.AddMilliseconds(200), [20, 0], [10]),
+            CreatePoint(s_start, s_start.AddMilliseconds(200), [30, 0], [10]),
+            CreatePoint(s_start, s_start.AddMilliseconds(200), [40, 0], [10]),
+            CreatePoint(s_start, s_start.AddMilliseconds(300), [50, 0], [10])
+        ];
+        points[2].TimeUnixNano += 10;
+        points[3].TimeUnixNano += 20;
+        for (var index = 0; index < points.Length; index++)
+        {
+            points[index].Exemplars.Add(CreateExemplar(s_start.AddMilliseconds(50), index + 1));
+        }
+
+        var addContext = new AddContext();
+        if (sameRequest)
+        {
+            await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, points)]);
+        }
+        else
+        {
+            foreach (var point in points)
+            {
+                await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Cumulative, point)]);
+            }
+        }
+        Assert.Equal(5, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        var histogram = await GetInstrumentAsync(context.Repository, rollup: false);
+        Assert.Collection(Assert.Single(histogram.Dimensions).Values,
+            value => Assert.Equal(10UL, Assert.IsType<HistogramValue>(value).Count),
+            value => Assert.Equal(20UL, Assert.IsType<HistogramValue>(value).Count),
+            value =>
+            {
+                var snapshot = Assert.IsType<HistogramValue>(value);
+                Assert.Equal(50UL, snapshot.Count);
+                Assert.Equal([3d, 4d, 5d], snapshot.Exemplars.Select(exemplar => exemplar.Value));
+            });
+        using var connection = context.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_metric_points;";
+        Assert.Equal(3L, command.ExecuteScalar());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HistogramUpsert_MixedOldAndNewIds_CorrelatesPointsAndPreservesRetention(bool rollup)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(maxMetricsCount: 3);
+        var points = Enumerable.Range(0, 4).Select(index =>
+        {
+            var point = CreatePoint(s_start.AddMilliseconds(index * 100), s_start.AddMilliseconds((index + 1) * 100),
+                [100, 0], [10]);
+            point.Sum = 500;
+            point.Exemplars.Add(CreateExemplar(s_start.AddMilliseconds(index * 100 + 50), index + 1));
+            return point;
+        }).ToArray();
+        var addContext = new AddContext();
+        await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, points[..3])]);
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        var metrics = CreateMetrics(AggregationTemporality.Delta, points[3], points[0]);
+        metrics.ScopeMetrics[0].Metrics.Add(new Metric
+        {
+            Name = "gauge",
+            Gauge = new Gauge
+            {
+                DataPoints =
+                {
+                    new NumberDataPoint
+                    {
+                        StartTimeUnixNano = DateTimeToUnixNanoseconds(s_start),
+                        TimeUnixNano = DateTimeToUnixNanoseconds(s_start.AddMilliseconds(500)),
+                        AsInt = 42
+                    },
+                    new NumberDataPoint
+                    {
+                        StartTimeUnixNano = DateTimeToUnixNanoseconds(s_start),
+                        TimeUnixNano = DateTimeToUnixNanoseconds(s_start.AddMilliseconds(600)),
+                        AsInt = 84
+                    }
+                }
+            }
+        });
+        await context.Repository.AddMetricsAsync(addContext, [metrics]);
+        Assert.Equal(7, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        var histogram = await GetInstrumentAsync(context.Repository, rollup);
+        var values = Assert.Single(histogram.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        Assert.Equal(points.Skip(1).Select(point => unchecked((long)point.TimeUnixNano)), values.Select(value => value.AggregationId));
+        Assert.Equal([2d, 3d, 4d], values.Select(value => Assert.Single(value.Exemplars).Value));
+        Assert.True(ChartDataCalculator.TryCalculatePoint(histogram.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+        Assert.Equal(300, count);
+
+        var gauge = await context.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "test-meter",
+            InstrumentName = "gauge",
+            StartTime = s_start,
+            EndTime = s_start.AddSeconds(1)
+        }, CancellationToken.None);
+        Assert.NotNull(gauge);
+        Assert.Collection(Assert.Single(gauge.Dimensions).Values,
+            value => Assert.Equal(42, Assert.IsType<MetricValue<long>>(value).Value),
+            value => Assert.Equal(84, Assert.IsType<MetricValue<long>>(value).Value));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Delta_RepeatedInterval_ReplacesPayloadAndPreservesExemplars(bool rollup, bool sameRequest)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(maxMetricsCount: 1);
+        var first = CreatePoint(s_start, s_start.AddMilliseconds(100), [10, 0, 0], [10, 100]);
+        first.Sum = 50;
+        first.Exemplars.Add(CreateExemplar(s_start.AddMilliseconds(50), 5, [KeyValuePair.Create("delivery", "first")]));
+        var updated = CreatePoint(s_start, s_start.AddMilliseconds(100), [0, 20, 0], [20, 200]);
+        updated.Sum = 1000;
+        updated.Exemplars.Add(CreateExemplar(s_start.AddMilliseconds(75), 50, [KeyValuePair.Create("delivery", "retry")]));
+        var addContext = new AddContext();
+        if (sameRequest)
+        {
+            await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, first, updated, updated)]);
+        }
+        else
+        {
+            await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, first)]);
+            await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, updated)]);
+            await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, updated)]);
+        }
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        var instrument = await GetInstrumentAsync(context.Repository, rollup);
+        var value = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal(unchecked((long)first.TimeUnixNano), value.AggregationId);
+        Assert.Equal(20ul, value.Count);
+        Assert.Equal(1000, value.Sum);
+        Assert.Equal([0ul, 20ul, 0ul], value.Values);
+        Assert.Equal([20d, 200d], value.ExplicitBounds);
+        Assert.Collection(value.Exemplars,
+            exemplar =>
+            {
+                Assert.Equal(5, exemplar.Value);
+                Assert.Equal(KeyValuePair.Create("delivery", "first"), Assert.Single(exemplar.Attributes));
+            },
+            exemplar =>
+            {
+                Assert.Equal(50, exemplar.Value);
+                Assert.Equal(KeyValuePair.Create("delivery", "retry"), Assert.Single(exemplar.Attributes));
+            });
+        AssertPercentiles(instrument, [200, 200, 200]);
+
+        using var connection = context.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_metric_points;";
+        Assert.Equal(1L, Assert.IsType<long>(command.ExecuteScalar()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Delta_RetryAcrossBatchBoundariesAfterReopening_PreservesRetention(bool rollup)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, "dashboard.db");
+        var options = Options.Create(new DashboardOptions { TelemetryLimits = new TelemetryLimitOptions { MaxMetricsCount = 120 } });
+        var points = Enumerable.Range(0, 120).Select(index =>
+        {
+            var point = CreatePoint(s_start.AddMilliseconds(index), s_start.AddMilliseconds(index + 1), [100, 0], [10]);
+            point.Sum = 500;
+            return point;
+        }).ToArray();
+        using (var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, dashboardOptions: options))
+        {
+            var addContext = new AddContext();
+            await context.Repository.AddMetricsAsync(addContext,
+                [CreateMetrics(AggregationTemporality.Delta, [.. points, .. points.Reverse(), points[0]])]);
+            Assert.Equal(241, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+        }
+
+        using var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, dashboardOptions: options);
+        var retryContext = new AddContext();
+        await reopened.Repository.AddMetricsAsync(retryContext,
+            [CreateMetrics(AggregationTemporality.Delta, [.. points.Reverse(), points[0]])]);
+        Assert.Equal(121, retryContext.SuccessCount);
+        Assert.Equal(0, retryContext.FailureCount);
+        var instrument = await GetInstrumentAsync(reopened.Repository, rollup);
+        var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        Assert.Equal(points.Select(point => unchecked((long)point.TimeUnixNano)), values.Select(value => value.AggregationId));
+        Assert.All(values, value => Assert.Equal([100ul, 0ul], value.Values));
+        Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+        Assert.Equal(12000, count);
+
+        using var connection = reopened.Database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_metric_points;";
+        Assert.Equal(120L, Assert.IsType<long>(command.ExecuteScalar()));
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task Delta_RetriesAtRetentionLimit_PreserveDistinctIntervals(bool rollup, bool sameRequest, bool retryOldest)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, "dashboard.db");
+        var options = Options.Create(new DashboardOptions { TelemetryLimits = new TelemetryLimitOptions { MaxMetricsCount = 3 } });
+        var points = new[]
+        {
+            CreatePoint(s_start, s_start.AddMilliseconds(100), [100, 0, 0], [10, 100]),
+            CreatePoint(s_start.AddMilliseconds(100), s_start.AddMilliseconds(200), [0, 100, 0], [10, 100]),
+            CreatePoint(s_start.AddMilliseconds(200), s_start.AddMilliseconds(300), [0, 0, 100], [10, 100])
+        };
+        points[0].Sum = 500;
+        points[1].Sum = 5000;
+        points[2].Sum = 20000;
+        var retry = points[retryOldest ? 0 : 2];
+        var next = CreatePoint(s_start.AddMilliseconds(300), s_start.AddMilliseconds(400), [100, 0, 0], [10, 100]);
+        next.Sum = 500;
+        using (var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, dashboardOptions: options))
+        {
+            var addContext = new AddContext();
+            await context.Repository.AddMetricsAsync(addContext,
+                [CreateMetrics(AggregationTemporality.Delta, sameRequest ? [.. points, retry, retry] : points)]);
+            Assert.Equal(sameRequest ? 5 : 3, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            if (!sameRequest)
+            {
+                await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, retry)]);
+                await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, retry)]);
+                Assert.Equal(5, addContext.SuccessCount);
+                Assert.Equal(0, addContext.FailureCount);
+            }
+            await AssertIntervalsAsync(context.Repository, points);
+        }
+
+        using (var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, dashboardOptions: options))
+        {
+            var addContext = new AddContext();
+            await reopened.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, retry, retry)]);
+            Assert.Equal(2, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            await AssertIntervalsAsync(reopened.Repository, points);
+
+            await reopened.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, next)]);
+            Assert.Equal(3, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            await AssertIntervalsAsync(reopened.Repository, [points[1], points[2], next]);
+        }
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, readOnly: true);
+        await AssertIntervalsAsync(readOnly.Repository, [points[1], points[2], next]);
+
+        async Task AssertIntervalsAsync(ITelemetryRepository repository, HistogramDataPoint[] expected)
+        {
+            var instrument = await GetInstrumentAsync(repository, rollup);
+            var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+            Assert.Equal(expected.Select(point => unchecked((long)point.TimeUnixNano)), values.Select(value => value.AggregationId));
+            Assert.Equal(expected.Select(point => point.Count), values.Select(value => value.Count));
+            for (var i = 0; i < expected.Length; i++)
+            {
+                Assert.Equal(expected[i].BucketCounts, values[i].Values);
+            }
+            AssertPercentiles(instrument, [100, 100, 100]);
+            Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+            Assert.Equal(300, count);
         }
     }
 
