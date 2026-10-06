@@ -233,6 +233,8 @@ Metric dimensions are normalized into an attribute set and stable non-cryptograp
 
 Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
 
+Delta histogram points with an omitted start timestamp use their end timestamp for chart placement, including after persistence and rollup. The original zero aggregation start timestamp is preserved for export.
+
 Cumulative points ending before their dimension's latest accepted snapshot are rejected individually before reset detection or snapshot extension. This prevents reordered delivery from creating false resets or moving interval timestamps backwards. Reordered delta intervals remain accepted.
 
 Unchanged cumulative snapshots are extended in place before copying bucket arrays. Bucket counts are packed directly into database blobs without an intermediate signed array. Chart calculations subtract cumulative buckets while accumulating them, rather than allocating a temporary distribution for each contribution.
@@ -248,6 +250,15 @@ To exercise this warning, run the [Stress playground](../../playground/Stress/St
 To see how an unavailable interval looks alongside available percentiles, execute **Generate unavailable histogram percentiles** on `stress-apiservice`. Select `unavailable-histogram-percentiles` / `histogram.unavailable.percentiles` in the Metrics graph, set a five-minute duration, and leave **Show count** off. The command sends 600 delta points across two dimensions. Both use `[10, 50, 100]` except during the middle 80 seconds, when one uses `[20, 60, 200]`. That interval has observations but unavailable percentiles and appears as a gap between the valid percentile bands. Count mode still shows observations throughout the gap.
 
 To exercise exemplars during an unavailable interval, execute **Generate unavailable histogram exemplars** on `stress-apiservice`. Select `unavailable-histogram-exemplars` / `histogram.unavailable.exemplars`, both `stress.layout` dimensions, a five-minute duration, and **Show count** off. This scenario adds four exemplars with matching traces: one before the gap, two in the unavailable interval, and one after it. The graph retains their markers; the table retains the unavailable row with no-data dashes in the percentile cells and a button for its two exemplars. Open that button and use **View** to navigate to a sample's trace. Run the command again to refresh the live five-minute window.
+
+The following `stress-apiservice` commands exercise the other histogram semantics. Select a five-minute duration and toggle **Show count** to compare observations with percentiles. Run each command again to refresh its data.
+
+| Command | Resource / instrument | Expected behavior |
+| --- | --- | --- |
+| **Generate delta histogram intervals** | `delta-histogram-intervals` / `histogram.delta.intervals` | Three changing distributions, each with 100 observations per second. Equal-count intervals remain independent and count windows sum all observations. |
+| **Generate cumulative histogram resets** | `cumulative-histogram-resets` / `histogram.cumulative.resets` | Two resets change aggregation start timestamps and bucket layouts. Counts form three rising ramps, and percentile calculations do not subtract across resets. |
+| **Generate delta histograms without start timestamps** | `delta-histogram-without-start` / `histogram.delta.without.start` | Omitted start timestamps do not hide current data in either chart mode; exported starts remain zero. |
+| **Generate shared histogram bounds** | `shared-histogram-bounds` / `histogram.shared.bounds` | Select both `stress.layout` dimensions. Different layouts merge at shared boundaries of 50 and 100 ms without a percentile warning. |
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 

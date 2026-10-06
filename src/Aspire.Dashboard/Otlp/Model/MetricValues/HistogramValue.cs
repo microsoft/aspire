@@ -60,7 +60,10 @@ public class HistogramValue : MetricValueBase
         }
 
         var sameBounds = previous is not null && HasSameBounds(previous.ExplicitBounds, point);
-        var start = aggregationStart;
+        // StartTimeUnixNano is optional. With StartTimeUnixNano = 0, use the end timestamp
+        // for delta chart placement, but retain the original aggregation start for export.
+        // See https://opentelemetry.io/docs/specs/otel/metrics/data-model/#timestamps.
+        var start = temporality == OtlpAggregationTemporality.Delta && point.StartTimeUnixNano == 0 ? end : aggregationStart;
         var aggregationId = end.Ticks;
 
         if (temporality != OtlpAggregationTemporality.Delta && previous is not null)

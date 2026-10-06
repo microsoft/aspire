@@ -77,9 +77,41 @@ app.MapPost("/unavailable-histogram-exemplars", async (LargeTelemetryGenerator g
 {
     await generator.ExportUnavailableHistogramExemplarsAsync(cancellationToken);
 
-    return TypedResults.Text("Generated histogram.unavailable.exemplars on unavailable-histogram-exemplars. Select both stress.layout dimensions, a five-minute duration, and Show count off. The graph has exemplar markers before, during, and after the gap; the table's blank-percentile row has two exemplars linked to traces.");
+    return TypedResults.Text("Generated histogram.unavailable.exemplars on unavailable-histogram-exemplars. Select both stress.layout dimensions, a five-minute duration, and Show count off. The graph has exemplar markers before, during, and after the gap; the table's unavailable-percentile row shows no-data dashes and two exemplars linked to traces.");
 })
     .WithSummary("Generate unavailable histogram percentiles with exemplars and matching traces.");
+
+app.MapPost("/delta-histogram-intervals", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportDeltaHistogramIntervalsAsync(cancellationToken);
+
+    return TypedResults.Text("Generated histogram.delta.intervals on delta-histogram-intervals. Select a five-minute duration on the Metrics page. Percentiles change across three distributions; Show count sums all 100 observations per second instead of merging equal-count intervals.");
+})
+    .WithSummary("Generate equal-count delta histogram intervals with changing distributions.");
+
+app.MapPost("/cumulative-histogram-resets", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportCumulativeHistogramResetsAsync(cancellationToken);
+
+    return TypedResults.Text("Generated histogram.cumulative.resets on cumulative-histogram-resets. Select a five-minute duration on the Metrics page. Show count displays three rising ramps separated by resets; percentile mode follows the changing bucket layouts without subtracting across aggregations.");
+})
+    .WithSummary("Generate cumulative histogram resets with changed start timestamps and bucket layouts.");
+
+app.MapPost("/delta-histogram-without-start", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportDeltaHistogramWithoutStartAsync(cancellationToken);
+
+    return TypedResults.Text("Generated histogram.delta.without.start on delta-histogram-without-start. Select a five-minute duration on the Metrics page. Both percentile and count modes show current observations despite every point omitting StartTimeUnixNano.");
+})
+    .WithSummary("Generate delta histograms with omitted optional start timestamps.");
+
+app.MapPost("/shared-histogram-bounds", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportSharedHistogramBoundsAsync(cancellationToken);
+
+    return TypedResults.Text("Generated histogram.shared.bounds on shared-histogram-bounds. Select both stress.layout dimensions and a five-minute duration on the Metrics page. Their different layouts merge at shared boundaries of 50 and 100 ms, keeping percentiles available without a warning.");
+})
+    .WithSummary("Generate histogram dimensions with different layouts and shared bucket bounds.");
 
 app.MapGet("/write-console", () =>
 {

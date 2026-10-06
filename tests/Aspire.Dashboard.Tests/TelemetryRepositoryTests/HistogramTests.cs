@@ -146,6 +146,65 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Delta_OmittedStartTimestamp_PreservesChartPlacementAndExport(bool rollup)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, "dashboard.db");
+        using (var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            var addContext = new AddContext();
+            await context.Repository.AddMetricsAsync(addContext,
+                [CreateMetrics(AggregationTemporality.Delta,
+                    CreatePoint(DateTime.UnixEpoch, s_start.AddMilliseconds(100), [100, 0, 0], [10, 100]),
+                    CreatePoint(DateTime.UnixEpoch, s_start.AddMilliseconds(200), [0, 100, 0], [10, 100]))]);
+
+            Assert.Equal(2, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            await AssertInstrumentAsync(context.Repository);
+        }
+
+        using var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, readOnly: true);
+        await AssertInstrumentAsync(reopened.Repository);
+
+        async Task AssertInstrumentAsync(ITelemetryRepository repository)
+        {
+            var instrument = await GetInstrumentAsync(repository, rollup);
+            var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+            Assert.Equal(
+                [(s_start.AddMilliseconds(100), s_start.AddMilliseconds(100), 100ul),
+                 (s_start.AddMilliseconds(200), s_start.AddMilliseconds(200), 100ul)],
+                values.Select(value => (value.Start, value.End, value.Count)));
+            Assert.All(values, value => Assert.Equal(DateTime.UnixEpoch, value.AggregationStart));
+
+            var calculator = new ChartDataCalculator(pointCount: 1, duration: TimeSpan.FromSeconds(1));
+            var chartTime = new DateTimeOffset(s_start.AddSeconds(1));
+            var countData = calculator.CalculateChartValues(instrument.Dimensions, chartTime, value => value, "Count");
+            Assert.Equal([null, 200, null], Assert.Single(countData.Traces).Values);
+
+            var percentileData = calculator.CalculateHistogramValues(instrument.Dimensions, chartTime, value => value, "ms");
+            Assert.False(percentileData.HasIncompatibleHistogramBounds);
+            Assert.Equal([50, 90, 99], percentileData.Traces.Select(trace => trace.Percentile));
+            Assert.Collection(percentileData.Traces,
+                trace => Assert.Equal([null, 10, null], trace.Values),
+                trace => Assert.Equal([null, 100, null], trace.Values),
+                trace => Assert.Equal([null, 100, null], trace.Values));
+
+            var exported = TelemetryExportService.ConvertMetricsToOtlpJson([instrument]);
+            var resource = Assert.Single(exported.ResourceMetrics!);
+            var scope = Assert.Single(resource.ScopeMetrics!);
+            var histogram = Assert.Single(scope.Metrics!).Histogram;
+            Assert.NotNull(histogram);
+            Assert.Equal((int)AggregationTemporality.Delta, histogram.AggregationTemporality);
+            Assert.All(histogram.DataPoints!, point => Assert.Equal(0ul, point.StartTimeUnixNano));
+            Assert.Collection(histogram.DataPoints!,
+                point => Assert.Equal(DateTimeToUnixNanoseconds(s_start.AddMilliseconds(100)), point.TimeUnixNano),
+                point => Assert.Equal(DateTimeToUnixNanoseconds(s_start.AddMilliseconds(200)), point.TimeUnixNano));
+        }
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]
