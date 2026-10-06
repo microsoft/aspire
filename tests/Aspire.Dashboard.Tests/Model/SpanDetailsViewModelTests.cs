@@ -32,7 +32,7 @@ public sealed class SpanDetailsViewModelTests
 
         var vm = SpanDetailsViewModel.Create(span, repositoryContext.Repository, [resource]);
 
-        Assert.Equal(expectedFormat, vm.Properties.Single(p => p.Name == name).TextVisualizerFallbackFormat);
-        Assert.All(vm.Properties.Where(p => p.Name != name), p => Assert.Null(p.TextVisualizerFallbackFormat));
+        Assert.Equal(expectedFormat, vm.Properties.Single(p => p.Name == name).TextVisualizerFormat);
+        Assert.All(vm.Properties.Where(p => p.Name != name), p => Assert.Null(p.TextVisualizerFormat));
     }
 }

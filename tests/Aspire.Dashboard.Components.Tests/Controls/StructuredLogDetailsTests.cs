@@ -20,11 +20,16 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class StructuredLogDetailsTests : DashboardTestContext
 {
     [Theory]
-    [InlineData("commandText", "mssql", DashboardUIHelpers.SqlFormat)]
-    [InlineData("db.query.text", "postgresql", DashboardUIHelpers.SqlFormat)]
-    [InlineData("db.statement", "sqlite", DashboardUIHelpers.SqlFormat)]
-    [InlineData("db.query.text", "redis", null)]
-    public void Render_QueryField_SetsVisualizerFormatOnlyOnValue(string name, string system, string? expectedFormat)
+    [InlineData("commandText", "mssql", "Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.query.text", "postgresql", "Npgsql.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.statement", "mysql", "MySqlConnector.MySqlCommand", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    [InlineData("commandText", "mssql", "NHibernate.SQL", null, DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.statement", "sqlite", "Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.query.text", "redis", "Microsoft.EntityFrameworkCore.Database.Command", null, DashboardUIHelpers.SqlFormat)]
+    [InlineData("commandText", "mssql", "MyApp.Controllers.CommandsController", null, null)]
+    [InlineData("sql", "postgresql", "MyApp.Services.QueryService", null, null)]
+    [InlineData("commandText", "mssql", "Microsoft.EntityFrameworkCore.Query", DashboardUIHelpers.SqlFormat, null)]
+    public void Render_QueryField_SetsVisualizerFormatOnlyOnValue(string name, string system, string source, string? expectedFormat, string? expectedMessageFormat)
     {
         StructuredLogsSetupHelpers.SetupStructuredLogsDetails(this);
         var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
@@ -38,19 +43,24 @@ public class StructuredLogDetailsTests : DashboardTestContext
                     KeyValuePair.Create("db.system.name", system)
                 ]),
                 resourceView: resource.GetView([]),
-                scope: TelemetryTestHelpers.CreateOtlpScope(context),
+                scope: TelemetryTestHelpers.CreateOtlpScope(context, name: source),
                 context: context)
         };
 
         var cut = Render<StructuredLogDetails>(parameters => parameters.Add(p => p.ViewModel, model));
 
-        Assert.Equal(expectedFormat, cut.Instance.FilteredItems.Single(p => p.Name == name).TextVisualizerFallbackFormat);
-        Assert.Null(cut.Instance.FilteredItems.Single(p => p.Name == "Message").TextVisualizerFallbackFormat);
+        Assert.Equal(expectedFormat, cut.Instance.FilteredItems.Single(p => p.Name == name).TextVisualizerFormat);
+        Assert.Equal(expectedMessageFormat, cut.Instance.FilteredItems.Single(p => p.Name == "Message").TextVisualizerFormat);
         var values = cut.FindComponents<GridValue>();
         var queryValue = Assert.Single(values, v => v.Instance.ValueDescription == name);
-        Assert.Equal(expectedFormat, queryValue.Instance.TextVisualizerFallbackFormat);
+        Assert.Equal(expectedFormat, queryValue.Instance.TextVisualizerFormat);
         var queryName = Assert.Single(values, v => v.Instance.Value == name);
-        Assert.Null(queryName.Instance.TextVisualizerFallbackFormat);
+        Assert.Null(queryName.Instance.TextVisualizerFormat);
+        var messageValue = Assert.Single(values, v => v.Instance.ValueDescription == "Message");
+        Assert.Equal(expectedMessageFormat, messageValue.Instance.TextVisualizerFormat);
+        Assert.Equal("Executed DbCommand\nSELECT 1", messageValue.Instance.Value);
+        var messageName = Assert.Single(values, v => v.Instance.Value == "Message");
+        Assert.Null(messageName.Instance.TextVisualizerFormat);
     }
 
     [Fact]

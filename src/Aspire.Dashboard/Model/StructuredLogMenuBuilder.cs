@@ -55,7 +55,7 @@ public sealed class StructuredLogMenuBuilder
         EventCallback onViewDetails,
         bool showViewDetails = true)
     {
-        AddMenuItems(menuItems, logEntry.Message, () => logEntry, onViewDetails, showViewDetails);
+        AddMenuItems(menuItems, logEntry.Message, logEntry.Scope.Name, () => logEntry, onViewDetails, showViewDetails);
     }
 
     /// <summary>
@@ -71,12 +71,13 @@ public sealed class StructuredLogMenuBuilder
         EventCallback onViewDetails,
         bool showViewDetails = true)
     {
-        AddMenuItems(menuItems, summary.Message, () => _dataSource.TelemetryRepository.GetLog(summary.InternalId), onViewDetails, showViewDetails);
+        AddMenuItems(menuItems, summary.Message, summary.ScopeName, () => _dataSource.TelemetryRepository.GetLog(summary.InternalId), onViewDetails, showViewDetails);
     }
 
     private void AddMenuItems(
         List<MenuButtonItem> menuItems,
         string message,
+        string source,
         Func<OtlpLogEntry?> getLogEntry,
         EventCallback onViewDetails,
         bool showViewDetails)
@@ -102,7 +103,8 @@ public sealed class StructuredLogMenuBuilder
                 {
                     DialogService = _dialogService,
                     ValueDescription = header,
-                    Value = message
+                    Value = message,
+                    InitialFormat = SqlHelpers.GetLogMessageFormat(source)
                 }).ConfigureAwait(false);
             }
         });

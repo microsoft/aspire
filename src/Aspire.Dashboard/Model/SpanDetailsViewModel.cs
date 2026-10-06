@@ -40,7 +40,7 @@ public sealed class SpanDetailsViewModel
             Name = f.DisplayName,
             Key = f.Key,
             Value = f.Value,
-            TextVisualizerFallbackFormat = SqlHelpers.GetFormat(f.DisplayName, span.Attributes)
+            TextVisualizerFormat = SqlHelpers.GetFormat(f.DisplayName, span.Attributes)
         }));
 
         var traceCache = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);

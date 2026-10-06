@@ -19,7 +19,7 @@ public class SpanDetailsTests : DashboardTestContext
             [KeyValuePair.Create("db.query.text", "SELECT 1")],
             [KeyValuePair.Create("db.system.name", system)]);
 
-        Assert.Equal(expectedFormat, Assert.Single(items).TextVisualizerFallbackFormat);
+        Assert.Equal(expectedFormat, Assert.Single(items).TextVisualizerFormat);
     }
 
     [Fact]
@@ -29,6 +29,6 @@ public class SpanDetailsTests : DashboardTestContext
             [KeyValuePair.Create("db.statement", "SELECT 1"), KeyValuePair.Create("db.system", "redis")],
             [KeyValuePair.Create("db.system.name", "postgresql")]);
 
-        Assert.Null(items.Single(i => i.Name == "db.statement").TextVisualizerFallbackFormat);
+        Assert.Null(items.Single(i => i.Name == "db.statement").TextVisualizerFormat);
     }
 }

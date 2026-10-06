@@ -10,6 +10,79 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class SqlHelpersTests
 {
     [Theory]
+    [InlineData("Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat)]
+    [InlineData("Microsoft.EntityFrameworkCore.Database.Command.Custom", DashboardUIHelpers.SqlFormat)]
+    [InlineData("Microsoft.EntityFrameworkCore", null)]
+    [InlineData("Microsoft.EntityFrameworkCore.Query", null)]
+    [InlineData("Microsoft.EntityFrameworkCore.Database.Transaction", null)]
+    [InlineData("Npgsql.Command", DashboardUIHelpers.SqlFormat)]
+    [InlineData("Npgsql.Command.Custom", DashboardUIHelpers.SqlFormat)]
+    [InlineData("MySqlConnector.MySqlCommand", DashboardUIHelpers.SqlFormat)]
+    [InlineData("MySqlConnector.MySqlCommand.Custom", DashboardUIHelpers.SqlFormat)]
+    [InlineData("NHibernate.SQL", DashboardUIHelpers.SqlFormat)]
+    [InlineData("NHibernate.SQL.Custom", DashboardUIHelpers.SqlFormat)]
+    [InlineData("Npgsql", null)]
+    [InlineData("Npgsql.Connection", null)]
+    [InlineData("Npgsql.Transaction", null)]
+    [InlineData("MySqlConnector", null)]
+    [InlineData("MySqlConnector.MySqlConnection", null)]
+    [InlineData("MySqlConnector.ConnectionPool", null)]
+    [InlineData("NHibernate", null)]
+    [InlineData("NHibernate.Transaction", null)]
+    [InlineData("MyApp.Microsoft.EntityFrameworkCore.Database.Command", null)]
+    [InlineData("MyApp.Npgsql.Command", null)]
+    [InlineData("MyApp.MySqlConnector.MySqlCommand", null)]
+    [InlineData("MyApp.NHibernate.SQL", null)]
+    [InlineData("nhibernate.sql", null)]
+    [InlineData("", null)]
+    public void GetLogMessageFormat_OnlyKnownCommandSources_ReturnsSql(string source, string? expectedFormat)
+    {
+        Assert.Equal(expectedFormat, SqlHelpers.GetLogMessageFormat(source));
+    }
+
+    [Theory]
+    [InlineData("Microsoft.EntityFrameworkCore")]
+    [InlineData("Microsoft.EntityFrameworkCore.Database.Command")]
+    [InlineData("Microsoft.EntityFrameworkCore.Query")]
+    [InlineData("Npgsql")]
+    [InlineData("Npgsql.Command")]
+    [InlineData("MySqlConnector")]
+    [InlineData("MySqlConnector.MySqlCommand")]
+    public void GetLogFormat_KnownDatabaseSource_ReturnsSql(string source)
+    {
+        Assert.Equal(DashboardUIHelpers.SqlFormat, SqlHelpers.GetLogFormat("commandText", source, []));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("MyApp.Controllers.DatabaseController")]
+    [InlineData("MyApp.Microsoft.EntityFrameworkCore")]
+    [InlineData("MyApp.Npgsql.Command")]
+    [InlineData("MyApp.MySqlConnector")]
+    [InlineData("Microsoft.EntityFramework")]
+    [InlineData("microsoft.entityframeworkcore.Database.Command")]
+    [InlineData("MongoDB.Command")]
+    public void GetLogFormat_OtherSource_ReturnsNull(string source)
+    {
+        Assert.Null(SqlHelpers.GetLogFormat("commandText", source, []));
+        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", source, [KeyValuePair.Create("db.system.name", "postgresql")]));
+        Assert.Null(SqlHelpers.GetLogFormat("sql", source, []));
+    }
+
+    [Theory]
+    [InlineData("commandText", "mssql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.statement", "mysql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.query.text", "postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("db.query.text", "redis", null)]
+    [InlineData("db.statement", "mongodb", null)]
+    [InlineData("Message", "postgresql", null)]
+    public void GetLogFormat_KnownSource_RespectsFieldAndDatabaseSystem(string name, string system, string? expectedFormat)
+    {
+        Assert.Equal(expectedFormat, SqlHelpers.GetLogFormat(name, "Microsoft.EntityFrameworkCore.Database.Command",
+            [KeyValuePair.Create("db.system.name", system)]));
+    }
+
+    [Theory]
     [InlineData("db.query.text")]
     [InlineData("db.statement")]
     [InlineData("commandText")]

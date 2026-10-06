@@ -7,14 +7,18 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
+using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
@@ -326,7 +330,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         const string rawText = """{"key": "value"}""";
 
         var getCut = SetUpDialog(out var dialogService);
-        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat), new DialogParameters());
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, ContainsSecret: false, FixedFormat: DashboardUIHelpers.JsonFormat, InitialFormat: DashboardUIHelpers.SqlFormat), new DialogParameters());
         var cut = getCut();
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
@@ -385,11 +389,11 @@ public class TextVisualizerDialogTests : DashboardTestContext
     [Theory]
     [InlineData(null, DashboardUIHelpers.PlaintextFormat)]
     [InlineData(DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
-    public async Task Render_TextVisualizerDialog_SqlOption_CanSelectAndPreservesSelectionAsync(string? fallbackFormat, string expectedFormat)
+    public async Task Render_TextVisualizerDialog_SqlOption_CanSelectAndPreservesSelectionAsync(string? initialFormat, string expectedFormat)
     {
         const string query = "SELECT * FROM Products WHERE Id = @id";
         var getCut = SetUpDialog(out var dialogService);
-        var content = new TextVisualizerDialogViewModel(query, "commandText", false, FallbackFormat: fallbackFormat);
+        var content = new TextVisualizerDialogViewModel(query, "commandText", false, InitialFormat: initialFormat);
         await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, new DialogParameters());
         var cut = getCut();
         var dialog = cut.FindComponent<TextVisualizerDialog>();
@@ -418,9 +422,11 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData("""{"query":"SELECT 1"}""", DashboardUIHelpers.JsonFormat)]
-    [InlineData("<query>SELECT 1</query>", DashboardUIHelpers.XmlFormat)]
-    public async Task Render_TextVisualizerDialog_SqlFallback_JsonAndXmlDisableSqlAndMarkdownAsync(string text, string expectedFormat)
+    [InlineData("""{"query":"SELECT 1"}""", null, DashboardUIHelpers.JsonFormat)]
+    [InlineData("<query>SELECT 1</query>", null, DashboardUIHelpers.XmlFormat)]
+    [InlineData("""{"query":"SELECT 1"}""", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    [InlineData("<query>SELECT 1</query>", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    public async Task Render_TextVisualizerDialog_InitialSqlFormat_TakesPriorityOverDetectionAsync(string text, string? initialFormat, string expectedFormat)
     {
         var getCut = SetUpDialog(out var dialogService);
         await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
@@ -428,7 +434,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             DialogService = dialogService,
             Value = text,
             ValueDescription = "commandText",
-            FallbackFormat = DashboardUIHelpers.SqlFormat
+            InitialFormat = initialFormat
         });
         var cut = getCut();
         var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
@@ -436,19 +442,27 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var options = select.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
 
         Assert.Equal(expectedFormat, dialog.TextVisualizerViewModel.FormatKind);
-        Assert.True(select.Instance.OptionDisabled!(options.Single(o => o.Id == DashboardUIHelpers.SqlFormat)));
-        Assert.True(select.Instance.OptionDisabled!(options.Single(o => o.Id == DashboardUIHelpers.MarkdownFormat)));
+        Assert.False(dialog.HasFixedFormat);
+        Assert.Equal(initialFormat is null, select.Instance.OptionDisabled!(options.Single(o => o.Id == DashboardUIHelpers.SqlFormat)));
+        Assert.Equal(initialFormat is null, select.Instance.OptionDisabled!(options.Single(o => o.Id == DashboardUIHelpers.MarkdownFormat)));
+        if (initialFormat is not null)
+        {
+            Assert.Equal(text, dialog.TextVisualizerViewModel.FormattedText);
+        }
     }
 
-    [Fact]
-    public async Task Render_GridValue_SqlHint_ReachesVisualizerAsync()
+    [Theory]
+    [InlineData("SELECT 1")]
+    [InlineData("""{"query":"SELECT 1"}""")]
+    [InlineData("<query>SELECT 1</query>")]
+    public async Task Render_GridValue_SqlFormat_ReachesVisualizerAsync(string text)
     {
         var getCut = SetUpDialog(out var dialogService);
 
         var gridValue = Render<GridValue>(parameters => parameters
-            .Add(p => p.Value, "SELECT 1")
+            .Add(p => p.Value, text)
             .Add(p => p.ValueDescription, "commandText")
-            .Add(p => p.TextVisualizerFallbackFormat, DashboardUIHelpers.SqlFormat));
+            .Add(p => p.TextVisualizerFormat, DashboardUIHelpers.SqlFormat));
         await gridValue.FindComponent<FluentButton>().InvokeAsync(() => gridValue.FindComponent<FluentButton>().Instance.OnClick.InvokeAsync());
 
         Assert.Equal(DashboardUIHelpers.SqlFormat, getCut().FindComponent<TextVisualizerDialog>().Instance.TextVisualizerViewModel.FormatKind);
@@ -459,7 +473,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
     {
         SetUpDialog(out _);
         var cut = Render<TextVisualizer>(parameters => parameters
-            .Add(p => p.ViewModel, new TextVisualizerViewModel("SELECT '<script>'", indentText: true, fallbackFormat: DashboardUIHelpers.SqlFormat))
+            .Add(p => p.ViewModel, new TextVisualizerViewModel("SELECT '<script>'", indentText: true, knownFormat: DashboardUIHelpers.SqlFormat))
             .Add(p => p.Virtualize, false));
 
         var line = Assert.Single(cut.FindAll(".highlight-line.language-sql"));
@@ -467,6 +481,62 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.Equal("SELECT '<script>'", line.GetAttribute("data-content"));
         Assert.Equal("SELECT '<script>'", line.TextContent.Trim());
         Assert.Empty(line.QuerySelectorAll("script"));
+    }
+
+    [Theory]
+    [InlineData("Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat, false)]
+    [InlineData("Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat, true)]
+    [InlineData("Npgsql.Command", DashboardUIHelpers.SqlFormat, false)]
+    [InlineData("Npgsql.Command", DashboardUIHelpers.SqlFormat, true)]
+    [InlineData("MySqlConnector.MySqlCommand", DashboardUIHelpers.SqlFormat, false)]
+    [InlineData("MySqlConnector.MySqlCommand", DashboardUIHelpers.SqlFormat, true)]
+    [InlineData("NHibernate.SQL", DashboardUIHelpers.SqlFormat, false)]
+    [InlineData("NHibernate.SQL", DashboardUIHelpers.SqlFormat, true)]
+    [InlineData("Microsoft.EntityFrameworkCore.Query", DashboardUIHelpers.PlaintextFormat, false)]
+    [InlineData("Microsoft.EntityFrameworkCore.Query", DashboardUIHelpers.PlaintextFormat, true)]
+    public async Task Render_StructuredLogMessage_CommandSource_UsesSqlFormatAsync(string source, string expectedFormat, bool useSummary)
+    {
+        const string message = "Executed DbCommand (5ms) [Parameters=[], CommandType='Text', CommandTimeout='30']\nSELECT 1";
+        var getCut = SetUpDialog(out _);
+        var menuBuilder = Services.GetRequiredService<StructuredLogMenuBuilder>();
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
+        var logEntry = TelemetryTestHelpers.CreateOtlpLogEntry(
+            record: TelemetryTestHelpers.CreateLogRecord(message: message),
+            resourceView: resource.GetView([]),
+            scope: TelemetryTestHelpers.CreateOtlpScope(context, name: source),
+            context: context);
+        var menuItems = new List<MenuButtonItem>();
+        if (useSummary)
+        {
+            var summary = new LogSummary
+            {
+                InternalId = logEntry.InternalId,
+                TimeStamp = logEntry.TimeStamp,
+                Severity = logEntry.Severity,
+                Message = logEntry.Message,
+                SpanId = logEntry.SpanId,
+                TraceId = logEntry.TraceId,
+                ScopeName = logEntry.Scope.Name,
+                Resource = resource,
+                ExceptionText = null,
+                HasGenAI = false
+            };
+            menuBuilder.AddMenuItems(menuItems, summary, EventCallback.Empty, showViewDetails: false);
+        }
+        else
+        {
+            menuBuilder.AddMenuItems(menuItems, logEntry, EventCallback.Empty, showViewDetails: false);
+        }
+
+        var messageItem = Assert.Single(menuItems, item => item.Text == Aspire.Dashboard.Resources.StructuredLogs.ActionLogMessageText);
+        Assert.NotNull(messageItem.OnClick);
+        await Renderer.Dispatcher.InvokeAsync(messageItem.OnClick);
+
+        var dialog = getCut().FindComponent<TextVisualizerDialog>();
+        Assert.Equal(expectedFormat, dialog.Instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(message, dialog.Instance.TextVisualizerViewModel.FormattedText);
+        Assert.False(dialog.Instance.HasFixedFormat);
     }
 
     private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)

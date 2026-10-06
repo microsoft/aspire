@@ -81,7 +81,7 @@ public partial class TextVisualizerDialog : ComponentBase
         }
         else
         {
-            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true, fallbackFormat: Content.FallbackFormat);
+            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true, knownFormat: Content.InitialFormat);
 
             if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
             {
@@ -142,7 +142,7 @@ public partial class TextVisualizerDialog : ComponentBase
         };
 
         return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
-            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.FallbackFormat), parameters);
+            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.InitialFormat), parameters);
     }
 
     private async Task DownloadAsync()

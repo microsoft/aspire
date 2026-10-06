@@ -33,7 +33,7 @@
                        IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
                        TextVisualizerTitle="@context.Name"
                        ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
-                       TextVisualizerFallbackFormat="@context.TextVisualizerFallbackFormat"
+                       TextVisualizerFormat="@context.TextVisualizerFormat"
                        ComponentMetadata="@GetComponentMetadata(context)"/>
             @ExtraValueContent(context)
         </AspireTemplateColumn>

@@ -11,7 +11,7 @@ public class OtlpSpanAttributeItem(string name, string value) : IPropertyGridIte
 {
     public string Name { get; } = name;
     public string Value { get; } = value;
-    public string? TextVisualizerFallbackFormat { get; init; }
+    public string? TextVisualizerFormat { get; init; }
 }
 
 public class OtlpSpanEvent(OtlpSpan span) : IPropertyGridItem

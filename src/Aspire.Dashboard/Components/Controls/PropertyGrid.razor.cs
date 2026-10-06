@@ -46,9 +46,9 @@ public interface IPropertyGridItem
     public string? ValueToVisualize => null;
 
     /// <summary>
-    /// Gets the initial visualizer format to use when the value is not JSON or XML.
+    /// Gets the initial visualizer format, overriding automatic format detection. Users can still change the format.
     /// </summary>
-    public string? TextVisualizerFallbackFormat => null;
+    public string? TextVisualizerFormat => null;
 
     /// <summary>
     /// Gets whether this item's value is sensitive and should be masked.

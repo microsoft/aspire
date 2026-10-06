@@ -55,10 +55,10 @@ public partial class GridValue
     public string? ValueToVisualize { get; set; }
 
     /// <summary>
-    /// The initial visualizer format to use when the content is not JSON or XML.
+    /// The initial visualizer format, overriding automatic format detection. Users can still change the format.
     /// </summary>
     [Parameter]
-    public string? TextVisualizerFallbackFormat { get; set; }
+    public string? TextVisualizerFormat { get; set; }
 
     /// <summary>
     /// Determines whether or not masking support is enabled for this value
@@ -169,7 +169,7 @@ public partial class GridValue
             ValueDescription = ValueDescription,
             Value = ValueToVisualize ?? Value ?? string.Empty,
             ContainsSecret = IsMasked || ContainsSecret,
-            FallbackFormat = TextVisualizerFallbackFormat
+            InitialFormat = TextVisualizerFormat
         });
     }
 

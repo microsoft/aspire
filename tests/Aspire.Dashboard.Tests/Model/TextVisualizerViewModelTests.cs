@@ -10,10 +10,10 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class TextVisualizerViewModelTests
 {
     [Fact]
-    public void Create_SqlFallback_PreservesQueryAndCanChangeFormat()
+    public void Create_KnownSqlFormat_PreservesQueryAndCanChangeFormat()
     {
         const string query = "SELECT '<value>', @id;\r\n-- comment\r\nSELECT 2;";
-        var vm = new TextVisualizerViewModel(query, indentText: true, fallbackFormat: DashboardUIHelpers.SqlFormat);
+        var vm = new TextVisualizerViewModel(query, indentText: true, knownFormat: DashboardUIHelpers.SqlFormat);
 
         Assert.Equal(DashboardUIHelpers.SqlFormat, vm.FormatKind);
         Assert.Equal(query, vm.FormattedText);
@@ -29,13 +29,15 @@ public sealed class TextVisualizerViewModelTests
     }
 
     [Theory]
-    [InlineData("""{"query":"SELECT 1"}""", DashboardUIHelpers.JsonFormat)]
-    [InlineData("<query>SELECT 1</query>", DashboardUIHelpers.XmlFormat)]
-    public void Create_SqlFallback_StructuredFormatsTakePriority(string text, string expectedFormat)
+    [InlineData("""{"query":"SELECT 1"}""")]
+    [InlineData("<query>SELECT 1</query>")]
+    public void Create_KnownSqlFormat_TakesPriorityOverStructuredFormats(string text)
     {
-        var vm = new TextVisualizerViewModel(text, indentText: true, fallbackFormat: DashboardUIHelpers.SqlFormat);
+        var vm = new TextVisualizerViewModel(text, indentText: true, knownFormat: DashboardUIHelpers.SqlFormat);
 
-        Assert.Equal(expectedFormat, vm.FormatKind);
+        Assert.Equal(DashboardUIHelpers.SqlFormat, vm.FormatKind);
+        Assert.Equal(text, vm.FormattedText);
+        Assert.All(vm.FormattedLines, line => Assert.Equal(DashboardUIHelpers.SqlFormat, line.FormatKind));
     }
 
     [Fact]

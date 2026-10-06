@@ -10,5 +10,5 @@ public sealed class TelemetryPropertyViewModel : IPropertyGridItem
     public required string Name { get; init; }
     public required string Value { get; init; }
     public required object Key { get; init; }
-    public string? TextVisualizerFallbackFormat { get; init; }
+    public string? TextVisualizerFormat { get; init; }
 }

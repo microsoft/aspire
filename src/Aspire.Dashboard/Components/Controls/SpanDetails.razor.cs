@@ -86,7 +86,7 @@ public partial class SpanDetails : IDisposable
         var databaseSystem = SqlHelpers.GetDatabaseSystem(attributes) ?? SqlHelpers.GetDatabaseSystem(fallbackAttributes);
         return attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value)
         {
-            TextVisualizerFallbackFormat = SqlHelpers.GetFormat(pair.Key, databaseSystem)
+            TextVisualizerFormat = SqlHelpers.GetFormat(pair.Key, databaseSystem)
         });
     }
 

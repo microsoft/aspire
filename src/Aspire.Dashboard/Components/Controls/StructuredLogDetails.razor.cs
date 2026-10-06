@@ -79,7 +79,7 @@ public partial class StructuredLogDetails : IDisposable
                     Name = a.Key,
                     Key = $"unknown-{a.Key}",
                     Value = a.Value,
-                    TextVisualizerFallbackFormat = SqlHelpers.GetFormat(a.Key, _viewModel.LogEntry.Attributes)
+                    TextVisualizerFormat = SqlHelpers.GetLogFormat(a.Key, _viewModel.LogEntry.Scope.Name, _viewModel.LogEntry.Attributes)
                 })
                 .ToList();
 
@@ -106,7 +106,13 @@ public partial class StructuredLogDetails : IDisposable
             _logEntryAttributes =
             [
                 new TelemetryPropertyViewModel { Name = "Level", Key = KnownStructuredLogFields.LevelField, Value = _viewModel.LogEntry.Severity.ToString() },
-                new TelemetryPropertyViewModel { Name = "Message", Key = KnownStructuredLogFields.MessageField, Value = _viewModel.LogEntry.Message },
+                new TelemetryPropertyViewModel
+                {
+                    Name = "Message",
+                    Key = KnownStructuredLogFields.MessageField,
+                    Value = _viewModel.LogEntry.Message,
+                    TextVisualizerFormat = SqlHelpers.GetLogMessageFormat(_viewModel.LogEntry.Scope.Name)
+                },
                 .. attributes,
             ];
 

@@ -11,5 +11,5 @@ namespace Aspire.Dashboard.Model;
 /// <param name="ContainsSecret">Whether the text contains sensitive data.</param>
 /// <param name="DownloadFileName">Optional file name for downloading the content. If null, download is disabled.</param>
 /// <param name="FixedFormat">If set, the dialog will use this format and hide the format dropdown.</param>
-/// <param name="FallbackFormat">The initial format to use when the content is not JSON or XML.</param>
-public record TextVisualizerDialogViewModel(string Text, string Description, bool ContainsSecret, string? DownloadFileName = null, string? FixedFormat = null, string? FallbackFormat = null);
+/// <param name="InitialFormat">The initial format, overriding automatic format detection. Users can still change the format.</param>
+public record TextVisualizerDialogViewModel(string Text, string Description, bool ContainsSecret, string? DownloadFileName = null, string? FixedFormat = null, string? InitialFormat = null);

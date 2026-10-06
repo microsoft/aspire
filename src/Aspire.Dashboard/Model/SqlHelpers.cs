@@ -8,6 +8,22 @@ namespace Aspire.Dashboard.Model;
 
 internal static class SqlHelpers
 {
+    private static readonly string[] s_databaseLogSourcePrefixes =
+    [
+        "Microsoft.EntityFrameworkCore",
+        "Npgsql",
+        "MySqlConnector"
+    ];
+
+    // Whole-message highlighting is limited to command categories, not connection or transaction logs.
+    private static readonly string[] s_databaseCommandLogSourcePrefixes =
+    [
+        "Microsoft.EntityFrameworkCore.Database.Command",
+        "Npgsql.Command",
+        "MySqlConnector.MySqlCommand",
+        "NHibernate.SQL"
+    ];
+
     private static readonly Dictionary<string, (string Format, bool RequiresSqlDatabase)> s_semanticQueryFields = new(StringComparer.Ordinal)
     {
         ["db.query.text"] = (DashboardUIHelpers.SqlFormat, true),
@@ -45,6 +61,26 @@ internal static class SqlHelpers
     public static string? GetDatabaseSystem(KeyValuePair<string, string>[] attributes)
     {
         return attributes.GetValue("db.system.name") ?? attributes.GetValue("db.system");
+    }
+
+    public static string? GetLogMessageFormat(string source)
+    {
+        // Command messages can contain metadata followed by SQL, e.g.:
+        //   Executed DbCommand (5ms) [Parameters=[], CommandType='Text', CommandTimeout='30']
+        //   SELECT 1
+        // Highlight the whole message rather than parsing version-dependent log templates.
+        return s_databaseCommandLogSourcePrefixes.Any(prefix => source.StartsWith(prefix, StringComparison.Ordinal))
+            ? DashboardUIHelpers.SqlFormat
+            : null;
+    }
+
+    public static string? GetLogFormat(string name, string source, KeyValuePair<string, string>[] attributes)
+    {
+        // Logger categories include subcategories such as Microsoft.EntityFrameworkCore.Database.Command
+        // and Npgsql.Command. Restrict generic fields like commandText to known database log sources.
+        return s_databaseLogSourcePrefixes.Any(prefix => source.StartsWith(prefix, StringComparison.Ordinal))
+            ? GetFormat(name, attributes)
+            : null;
     }
 
     public static string? GetFormat(string name, KeyValuePair<string, string>[] attributes) => GetFormat(name, GetDatabaseSystem(attributes));
