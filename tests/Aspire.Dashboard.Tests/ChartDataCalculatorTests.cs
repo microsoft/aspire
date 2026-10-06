@@ -423,7 +423,7 @@ public class ChartDataCalculatorTests
     {
         ulong[]? counts = [1, 5, 0];
         double[]? bounds = [10, 100];
-        HistogramBuckets.Add(ref counts, ref bounds, [1, 2, 2, 0], [10, 50, 100]);
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [1, 2, 2, 0], [10, 50, 100], []));
 
         Assert.NotNull(bounds);
         Assert.NotNull(counts);
@@ -436,12 +436,80 @@ public class ChartDataCalculatorTests
     {
         ulong[]? counts = [1, 2, 3];
         double[]? bounds = [10, 100];
-        HistogramBuckets.Add(ref counts, ref bounds, [4, 5, 6, 7], [10, 50, 100]);
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [4, 5, 6, 7], [10, 50, 100], []));
 
         Assert.NotNull(bounds);
         Assert.NotNull(counts);
         Assert.Equal([10d, 100d], bounds);
         Assert.Equal([5ul, 13ul, 10ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_FirstContribution_SubtractsPreviousCountsWithoutChangingSource()
+    {
+        ulong[] incoming = [3, 5, 7];
+        ulong[] previous = [1, 2, 3];
+        ulong[]? counts = null;
+        double[]? bounds = null;
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, incoming, [10, 100], previous));
+
+        Assert.NotNull(counts);
+        Assert.Equal([2ul, 3ul, 4ul], counts);
+        Assert.Equal([3ul, 5ul, 7ul], incoming);
+        Assert.Equal([1ul, 2ul, 3ul], previous);
+    }
+
+    [Fact]
+    public void HistogramBuckets_CommonBoundsAreSubsetOfIncoming_ReusesIncomingBounds()
+    {
+        ulong[]? counts = [1, 2, 3, 4];
+        double[]? bounds = [10, 50, 100];
+        double[] incomingBounds = [10, 100];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [5, 6, 7], incomingBounds, []));
+
+        Assert.Same(incomingBounds, bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([6ul, 11ul, 11ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_PartiallySharedBounds_CombinesCumulativeDifferences()
+    {
+        ulong[]? counts = [1, 2, 3, 4];
+        double[]? bounds = [10, 50, 100];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [5, 6, 7, 8], [10, 75, 100], [1, 2, 3, 4]));
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([10d, 100d], bounds);
+        Assert.Equal([5ul, 13ul, 8ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_NoSharedBounds_CombinesIntoOverflowBucket()
+    {
+        ulong[]? counts = [1, 2];
+        double[]? bounds = [10];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [3, 4], [20], []));
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Empty(bounds);
+        Assert.Equal([10ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_UnchangedDifferentLayout_DoesNotReduceAccumulatorBounds()
+    {
+        ulong[] originalCounts = [1, 2, 3];
+        double[] originalBounds = [10, 100];
+        ulong[]? counts = originalCounts;
+        double[]? bounds = originalBounds;
+        Assert.False(HistogramBuckets.Add(ref counts, ref bounds, [4, 5, 6], [20, 200], [4, 5, 6]));
+
+        Assert.Same(originalCounts, counts);
+        Assert.Same(originalBounds, bounds);
+        Assert.Equal([1ul, 2ul, 3ul], originalCounts);
     }
 
     [Theory]

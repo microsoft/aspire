@@ -248,24 +248,9 @@ internal sealed class ChartDataCalculator
 
                     var previous = !isDelta && i > 0 ? GetHistogramValue(dimensionValues[i - 1]) : null;
                     var previousHistogramValues = previous is not null && previous.AggregationId == histogramValue.AggregationId ? previous.Values : null;
-                    var observationCounts = new ulong[histogramValue.Values.Length];
-
-                    for (var valuesIndex = 0; valuesIndex < histogramValue.Values.Length; valuesIndex++)
+                    if (HistogramBuckets.Add(ref currentBucketCounts, ref explicitBounds, histogramValue.Values,
+                        histogramValue.ExplicitBounds, previousHistogramValues.AsSpan()))
                     {
-                        var newValue = histogramValue.Values[valuesIndex];
-
-                        if (previousHistogramValues != null)
-                        {
-                            // Histogram values are cumulative, so subtract the previous value to get the diff.
-                            newValue -= previousHistogramValues[valuesIndex];
-                        }
-
-                        observationCounts[valuesIndex] = newValue;
-                    }
-
-                    if (observationCounts.Any(count => count > 0))
-                    {
-                        HistogramBuckets.Add(ref currentBucketCounts, ref explicitBounds, observationCounts, histogramValue.ExplicitBounds);
                         incompatibleBounds |= explicitBounds!.Length == 0;
                         hasValue = true;
                     }

@@ -51,10 +51,7 @@ public class HistogramValue : MetricValueBase
         OtlpHelpers.ValidateHistogramDataPoint(point);
         var aggregationStart = OtlpHelpers.UnixNanoSecondsToDateTime(point.StartTimeUnixNano);
         var end = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano);
-        var bounds = previous is not null && previous.ExplicitBounds.SequenceEqual(point.ExplicitBounds)
-            ? previous.ExplicitBounds
-            : point.ExplicitBounds.ToArray();
-        var counts = point.BucketCounts.ToArray();
+        var sameBounds = previous is not null && HasSameBounds(previous.ExplicitBounds, point);
         var start = aggregationStart;
         var aggregationId = end.Ticks;
 
@@ -63,16 +60,28 @@ public class HistogramValue : MetricValueBase
             var reset = aggregationStart != previous.AggregationStart || point.Count < previous.Count;
             if (!reset)
             {
-                if (!previous.ExplicitBounds.AsSpan().SequenceEqual(bounds) || previous.Values.Length != counts.Length)
+                if (!sameBounds || previous.Values.Length != point.BucketCounts.Count)
                 {
                     throw new InvalidOperationException("Histogram bucket layout changed within a cumulative aggregation.");
                 }
 
                 // A producer that omits start timestamps can still reset. Detect decreasing bucket
                 // counts before unsigned subtraction, even if the total count has already recovered.
-                for (var i = 0; i < counts.Length; i++)
+                var sameCounts = true;
+                for (var i = 0; i < point.BucketCounts.Count; i++)
                 {
-                    reset |= counts[i] < previous.Values[i];
+                    var count = point.BucketCounts[i];
+                    reset |= count < previous.Values[i];
+                    sameCounts &= count == previous.Values[i];
+                }
+
+                // Unchanged cumulative points extend the existing snapshot. Compare protobuf fields
+                // before allocating a new bucket array or a snapshot that would immediately be discarded.
+                if (!reset && sameCounts && point.Count == previous.Count && point.Sum.Equals(previous.Sum) &&
+                    previous.AggregationTemporality != OtlpAggregationTemporality.Delta)
+                {
+                    previous.End = end;
+                    return previous;
                 }
             }
 
@@ -80,16 +89,42 @@ public class HistogramValue : MetricValueBase
             aggregationId = reset ? end.Ticks : previous.AggregationId;
         }
 
-        return new HistogramValue(counts, point.Sum, point.Count, start, end, bounds, aggregationStart, aggregationId, temporality);
+        var bounds = previous is not null && sameBounds ? previous.ExplicitBounds : point.ExplicitBounds.ToArray();
+        return new HistogramValue(point.BucketCounts.ToArray(), point.Sum, point.Count, start, end, bounds, aggregationStart, aggregationId, temporality);
     }
 
-    internal bool CanMerge(HistogramValue other) =>
-        AggregationTemporality != OtlpAggregationTemporality.Delta &&
-        AggregationId == other.AggregationId &&
-        Count == other.Count &&
-        Sum.Equals(other.Sum) &&
-        Values.AsSpan().SequenceEqual(other.Values) &&
-        ExplicitBounds.AsSpan().SequenceEqual(other.ExplicitBounds);
+    internal bool CanMerge(HistogramValue other)
+    {
+        if (AggregationTemporality == OtlpAggregationTemporality.Delta)
+        {
+            return false;
+        }
+
+        return ReferenceEquals(this, other) ||
+            (AggregationId == other.AggregationId &&
+            Count == other.Count &&
+            Sum.Equals(other.Sum) &&
+            Values.AsSpan().SequenceEqual(other.Values) &&
+            ExplicitBounds.AsSpan().SequenceEqual(other.ExplicitBounds));
+    }
+
+    private static bool HasSameBounds(double[] bounds, HistogramDataPoint point)
+    {
+        if (bounds.Length != point.ExplicitBounds.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < bounds.Length; i++)
+        {
+            if (!bounds[i].Equals(point.ExplicitBounds[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     public override string ToString()
     {

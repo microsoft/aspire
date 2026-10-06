@@ -263,8 +263,8 @@ public sealed partial class SqliteTelemetryRepository
             var pendingLatest = dimension.PendingPoint;
             var latest = dimension.LatestPoint;
             var previousHistogram = pendingLatest?.Histogram ?? latest?.Histogram;
-            var histogram = HistogramValue.Create(point, temporality, previousHistogram);
             var histogramCount = checked((long)point.Count);
+            var histogram = HistogramValue.Create(point, temporality, previousHistogram);
             var endTimeTicks = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano).Ticks;
             if (previousHistogram is not null && previousHistogram.CanMerge(histogram))
             {
@@ -285,6 +285,12 @@ public sealed partial class SqliteTelemetryRepository
             }
             else
             {
+                // Reject an unsupported bucket individually before queuing it, rather than failing
+                // the entire batch when packing its SQLite blob.
+                foreach (var count in histogram.Values)
+                {
+                    _ = checked((long)count);
+                }
                 var pendingPoint = new PendingMetricPoint
                 {
                     Context = context,
@@ -296,9 +302,7 @@ public sealed partial class SqliteTelemetryRepository
                     HistogramSum = point.Sum,
                     HistogramCount = histogramCount,
                     Histogram = histogram,
-                    Flags = (long)point.Flags,
-                    HistogramBucketCounts = histogram.Values.Select(count => checked((long)count)).ToArray(),
-                    HistogramExplicitBounds = histogram.ExplicitBounds
+                    Flags = (long)point.Flags
                 };
                 pendingPoint.Exemplars.AddRange(point.Exemplars);
                 pointBatch.Inserts.Add(pendingPoint);
@@ -370,8 +374,8 @@ public sealed partial class SqliteTelemetryRepository
                 parameters[6].Value = point.DoubleValue ?? (object)DBNull.Value;
                 parameters[7].Value = point.HistogramSum ?? (object)DBNull.Value;
                 parameters[8].Value = point.HistogramCount ?? (object)DBNull.Value;
-                parameters[9].Value = point.HistogramBucketCounts is not null ? PackInt64Values(point.HistogramBucketCounts) : DBNull.Value;
-                parameters[10].Value = point.HistogramExplicitBounds is not null ? PackDoubleValues(point.HistogramExplicitBounds) : DBNull.Value;
+                parameters[9].Value = point.Histogram is not null ? PackUInt64Values(point.Histogram.Values) : DBNull.Value;
+                parameters[10].Value = point.Histogram is not null ? PackDoubleValues(point.Histogram.ExplicitBounds) : DBNull.Value;
                 parameters[11].Value = point.Flags;
                 parameters[12].Value = point.Histogram?.AggregationStart.Ticks ?? (object)DBNull.Value;
                 parameters[13].Value = point.Histogram?.AggregationId ?? (object)DBNull.Value;
@@ -611,12 +615,12 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static byte[] PackInt64Values(ReadOnlySpan<long> values)
+    private static byte[] PackUInt64Values(ReadOnlySpan<ulong> values)
     {
-        var bytes = new byte[checked(values.Length * sizeof(long))];
+        var bytes = new byte[checked(values.Length * sizeof(ulong))];
         for (var i = 0; i < values.Length; i++)
         {
-            BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(i * sizeof(long)), values[i]);
+            BinaryPrimitives.WriteUInt64LittleEndian(bytes.AsSpan(i * sizeof(ulong)), values[i]);
         }
         return bytes;
     }
@@ -960,8 +964,6 @@ public sealed partial class SqliteTelemetryRepository
         public required long Flags { get; init; }
         public long PointId { get; set; }
         public int SourcePointCount { get; set; } = 1;
-        public long[]? HistogramBucketCounts { get; init; }
-        public double[]? HistogramExplicitBounds { get; init; }
         public List<Exemplar> Exemplars { get; } = [];
     }
 

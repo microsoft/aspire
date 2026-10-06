@@ -19,6 +19,33 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     private static readonly DateTime s_start = new(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc);
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Histogram_OverflowingCount_RejectsOnlyInvalidPoint(bool overflowTotalCount)
+    {
+        using var context = await CreateRepositoryAsync();
+        var invalid = CreatePoint(s_start, s_start.AddMilliseconds(100), [1, 0], [100]);
+        if (overflowTotalCount)
+        {
+            invalid.Count = ulong.MaxValue;
+        }
+        else
+        {
+            invalid.BucketCounts[0] = ulong.MaxValue;
+        }
+        var valid = CreatePoint(s_start, s_start.AddMilliseconds(200), [1, 0], [100]);
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext,
+            [CreateMetrics(AggregationTemporality.Cumulative, invalid, valid)]);
+
+        Assert.Equal(1, addContext.FailureCount);
+        Assert.Equal(1, addContext.SuccessCount);
+        var instrument = await GetInstrumentAsync(context.Repository, rollup: false);
+        var value = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(instrument.Dimensions).Values));
+        Assert.Equal([1ul, 0ul], value.Values);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

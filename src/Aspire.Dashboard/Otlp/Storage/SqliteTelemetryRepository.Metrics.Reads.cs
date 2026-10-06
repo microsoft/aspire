@@ -445,7 +445,6 @@ public sealed partial class SqliteTelemetryRepository
             WITH {dimensionQueryRangesCteSql}
             SELECT
                 e.exemplar_id AS ExemplarId,
-                source.point_id AS SourcePointId,
                 source.dimension_id AS DimensionId,
                 source.point_type AS PointType,
                 source.histogram_aggregation_id AS HistogramAggregationId,
@@ -465,22 +464,22 @@ public sealed partial class SqliteTelemetryRepository
         var pointIds = points.ToDictionary(
             point => new MetricPointKey(point.DimensionId, point.PointType, point.StartTimeTicks, point.HistogramAggregationId),
             point => point.PointId);
-        var retainedPointIds = points.Select(point => point.PointId).ToHashSet();
         var pointIntervalTicks = dataPointInterval?.Ticks;
         var mappedRecords = new List<(long PointId, MetricExemplarRecord Record)>();
         foreach (var record in records)
         {
             // Delta intervals and reset representatives retain their own points. Other cumulative
             // exemplars attach to the representative of their rollup and aggregation, never across a reset.
-            if (retainedPointIds.Contains(record.SourcePointId))
+            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, record.SourceStartTimeTicks,
+                record.HistogramAggregationId), out var pointId))
             {
-                mappedRecords.Add((record.SourcePointId, record));
+                mappedRecords.Add((pointId, record));
                 continue;
             }
             var rollupStartTimeTicks = pointIntervalTicks is { } intervalTicks
                 ? (record.SourceStartTimeTicks / intervalTicks) * intervalTicks
                 : record.SourceStartTimeTicks;
-            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, rollupStartTimeTicks, record.HistogramAggregationId), out var pointId))
+            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, rollupStartTimeTicks, record.HistogramAggregationId), out pointId))
             {
                 mappedRecords.Add((pointId, record));
             }
@@ -546,7 +545,6 @@ public sealed partial class SqliteTelemetryRepository
     internal sealed class MetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
-        public required long SourcePointId { get; init; }
         public required long DimensionId { get; init; }
         public required int PointType { get; init; }
         public long? HistogramAggregationId { get; init; }
