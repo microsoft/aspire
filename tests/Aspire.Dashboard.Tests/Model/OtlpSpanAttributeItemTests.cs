@@ -1,21 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Xunit;
 
-namespace Aspire.Dashboard.Components.Tests.Controls;
+namespace Aspire.Dashboard.Tests.Model;
 
-public class SpanDetailsTests : DashboardTestContext
+public class OtlpSpanAttributeItemTests
 {
     [Theory]
     [InlineData("redis", null)]
     [InlineData("postgresql", DashboardUIHelpers.SqlFormat)]
-    public void GetAttributeItems_InheritsDatabaseSystem(string system, string? expectedFormat)
+    public void CreateItems_InheritsDatabaseSystem(string system, string? expectedFormat)
     {
-        var items = SpanDetails.GetAttributeItems(
+        var items = OtlpSpanAttributeItem.CreateItems(
             [KeyValuePair.Create("db.query.text", "SELECT 1")],
             [KeyValuePair.Create("db.system.name", system)]);
 
@@ -23,9 +22,9 @@ public class SpanDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void GetAttributeItems_PrefersOwnDatabaseSystem()
+    public void CreateItems_PrefersOwnDatabaseSystem()
     {
-        var items = SpanDetails.GetAttributeItems(
+        var items = OtlpSpanAttributeItem.CreateItems(
             [KeyValuePair.Create("db.statement", "SELECT 1"), KeyValuePair.Create("db.system", "redis")],
             [KeyValuePair.Create("db.system.name", "postgresql")]);
 

@@ -81,15 +81,6 @@ public partial class SpanDetails : IDisposable
 
     private readonly CancellationTokenSource _cts = new();
 
-    internal static IEnumerable<OtlpSpanAttributeItem> GetAttributeItems(KeyValuePair<string, string>[] attributes, KeyValuePair<string, string>[] fallbackAttributes)
-    {
-        var databaseSystem = SqlHelpers.GetDatabaseSystem(attributes) ?? SqlHelpers.GetDatabaseSystem(fallbackAttributes);
-        return attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value)
-        {
-            TextVisualizerFormat = SqlHelpers.GetFormat(pair.Key, databaseSystem)
-        });
-    }
-
     private bool ApplyFilter(TelemetryPropertyViewModel vm)
     {
         return vm.Name.Contains(_filter, StringComparison.CurrentCultureIgnoreCase) ||

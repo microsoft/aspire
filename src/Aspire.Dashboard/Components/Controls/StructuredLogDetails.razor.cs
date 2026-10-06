@@ -79,7 +79,7 @@ public partial class StructuredLogDetails : IDisposable
                     Name = a.Key,
                     Key = $"unknown-{a.Key}",
                     Value = a.Value,
-                    TextVisualizerFormat = SqlHelpers.GetLogFormat(a.Key, _viewModel.LogEntry.Scope.Name, _viewModel.LogEntry.Attributes)
+                    TextVisualizerFormat = TextVisualizerFormatHelpers.GetLogFormat(a.Key, _viewModel.LogEntry.Scope.Name, _viewModel.LogEntry.Attributes)
                 })
                 .ToList();
 
@@ -111,7 +111,7 @@ public partial class StructuredLogDetails : IDisposable
                     Name = "Message",
                     Key = KnownStructuredLogFields.MessageField,
                     Value = _viewModel.LogEntry.Message,
-                    TextVisualizerFormat = SqlHelpers.GetLogMessageFormat(_viewModel.LogEntry.Scope.Name)
+                    TextVisualizerFormat = TextVisualizerFormatHelpers.GetLogMessageFormat(_viewModel.LogEntry.Scope.Name)
                 },
                 .. attributes,
             ];

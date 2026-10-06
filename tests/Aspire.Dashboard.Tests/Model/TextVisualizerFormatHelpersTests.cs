@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class SqlHelpersTests
+public sealed class TextVisualizerFormatHelpersTests
 {
     [Theory]
     [InlineData("Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat)]
@@ -37,7 +37,7 @@ public sealed class SqlHelpersTests
     [InlineData("", null)]
     public void GetLogMessageFormat_OnlyKnownCommandSources_ReturnsSql(string source, string? expectedFormat)
     {
-        Assert.Equal(expectedFormat, SqlHelpers.GetLogMessageFormat(source));
+        Assert.Equal(expectedFormat, TextVisualizerFormatHelpers.GetLogMessageFormat(source));
     }
 
     [Theory]
@@ -50,7 +50,7 @@ public sealed class SqlHelpersTests
     [InlineData("MySqlConnector.MySqlCommand")]
     public void GetLogFormat_KnownDatabaseSource_ReturnsSql(string source)
     {
-        Assert.Equal(DashboardUIHelpers.SqlFormat, SqlHelpers.GetLogFormat("commandText", source, []));
+        Assert.Equal(DashboardUIHelpers.SqlFormat, TextVisualizerFormatHelpers.GetLogFormat("commandText", source, []));
     }
 
     [Theory]
@@ -64,9 +64,9 @@ public sealed class SqlHelpersTests
     [InlineData("MongoDB.Command")]
     public void GetLogFormat_OtherSourceWithoutDatabaseSystem_ReturnsNull(string source)
     {
-        Assert.Null(SqlHelpers.GetLogFormat("commandText", source, []));
-        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", source, []));
-        Assert.Null(SqlHelpers.GetLogFormat("sql", source, []));
+        Assert.Null(TextVisualizerFormatHelpers.GetLogFormat("commandText", source, []));
+        Assert.Null(TextVisualizerFormatHelpers.GetLogFormat("db.query.text", source, []));
+        Assert.Null(TextVisualizerFormatHelpers.GetLogFormat("sql", source, []));
     }
 
     [Theory]
@@ -83,7 +83,7 @@ public sealed class SqlHelpersTests
     [InlineData("MyApp.Database", "sql", "db.system.name", "redis", DashboardUIHelpers.SqlFormat)]
     public void GetLogFormat_OtherSourceWithDatabaseSystem_RespectsFieldAndDatabaseSystem(string source, string name, string systemKey, string system, string? expectedFormat)
     {
-        Assert.Equal(expectedFormat, SqlHelpers.GetLogFormat(name, source, [KeyValuePair.Create(systemKey, system)]));
+        Assert.Equal(expectedFormat, TextVisualizerFormatHelpers.GetLogFormat(name, source, [KeyValuePair.Create(systemKey, system)]));
     }
 
     [Theory]
@@ -91,13 +91,13 @@ public sealed class SqlHelpersTests
     [InlineData("db.system")]
     public void GetLogFormat_OtherSourceWithEmptyDatabaseSystem_ReturnsNull(string systemKey)
     {
-        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", "MyApp.Database", [KeyValuePair.Create(systemKey, "")]));
+        Assert.Null(TextVisualizerFormatHelpers.GetLogFormat("db.query.text", "MyApp.Database", [KeyValuePair.Create(systemKey, "")]));
     }
 
     [Fact]
     public void GetLogFormat_OtherSourceWithUnrelatedMetadata_ReturnsNull()
     {
-        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", "MyApp.Database", [KeyValuePair.Create("service.name", "postgresql")]));
+        Assert.Null(TextVisualizerFormatHelpers.GetLogFormat("db.query.text", "MyApp.Database", [KeyValuePair.Create("service.name", "postgresql")]));
     }
 
     [Theory]
@@ -105,7 +105,7 @@ public sealed class SqlHelpersTests
     [InlineData("redis", "postgresql", null)]
     public void GetLogFormat_BothDatabaseSystems_PrefersCurrentConvention(string currentSystem, string legacySystem, string? expectedFormat)
     {
-        Assert.Equal(expectedFormat, SqlHelpers.GetLogFormat("db.query.text", "MyApp.Database",
+        Assert.Equal(expectedFormat, TextVisualizerFormatHelpers.GetLogFormat("db.query.text", "MyApp.Database",
         [
             KeyValuePair.Create("db.system", legacySystem),
             KeyValuePair.Create("db.system.name", currentSystem)
@@ -121,7 +121,7 @@ public sealed class SqlHelpersTests
     [InlineData("Message", "postgresql", null)]
     public void GetLogFormat_KnownSource_RespectsFieldAndDatabaseSystem(string name, string system, string? expectedFormat)
     {
-        Assert.Equal(expectedFormat, SqlHelpers.GetLogFormat(name, "Microsoft.EntityFrameworkCore.Database.Command",
+        Assert.Equal(expectedFormat, TextVisualizerFormatHelpers.GetLogFormat(name, "Microsoft.EntityFrameworkCore.Database.Command",
             [KeyValuePair.Create("db.system.name", system)]));
     }
 
@@ -141,7 +141,7 @@ public sealed class SqlHelpersTests
     [InlineData("SQL.STATEMENT")]
     public void GetFormat_QueryField_ReturnsSql(string name)
     {
-        Assert.Equal(DashboardUIHelpers.SqlFormat, SqlHelpers.GetFormat(name, []));
+        Assert.Equal(DashboardUIHelpers.SqlFormat, TextVisualizerFormatHelpers.GetFormat(name, []));
     }
 
     [Theory]
@@ -157,7 +157,7 @@ public sealed class SqlHelpersTests
     [InlineData("Db.Statement")]
     public void GetFormat_OtherField_ReturnsNull(string name)
     {
-        Assert.Null(SqlHelpers.GetFormat(name, []));
+        Assert.Null(TextVisualizerFormatHelpers.GetFormat(name, []));
     }
 
     [Theory]
@@ -183,13 +183,13 @@ public sealed class SqlHelpersTests
     [InlineData("sql.statement", "db.system.name", "redis", true)]
     public void GetFormat_SemanticConvention_RespectsDatabaseSystem(string name, string systemKey, string system, bool isSql)
     {
-        Assert.Equal(isSql ? DashboardUIHelpers.SqlFormat : null, SqlHelpers.GetFormat(name, [KeyValuePair.Create(systemKey, system)]));
+        Assert.Equal(isSql ? DashboardUIHelpers.SqlFormat : null, TextVisualizerFormatHelpers.GetFormat(name, [KeyValuePair.Create(systemKey, system)]));
     }
 
     [Fact]
     public void GetFormat_BothDatabaseSystems_PrefersCurrentConvention()
     {
-        Assert.Null(SqlHelpers.GetFormat("db.query.text",
+        Assert.Null(TextVisualizerFormatHelpers.GetFormat("db.query.text",
         [
             KeyValuePair.Create("db.system", "mssql"),
             KeyValuePair.Create("db.system.name", "redis")

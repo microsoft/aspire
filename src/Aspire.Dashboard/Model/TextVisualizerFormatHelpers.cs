@@ -6,7 +6,7 @@ using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.Model;
 
-internal static class SqlHelpers
+internal static class TextVisualizerFormatHelpers
 {
     private static readonly string[] s_databaseLogSourcePrefixes =
     [

@@ -104,7 +104,7 @@ public sealed class StructuredLogMenuBuilder
                     DialogService = _dialogService,
                     ValueDescription = header,
                     Value = message,
-                    InitialFormat = SqlHelpers.GetLogMessageFormat(source)
+                    InitialFormat = TextVisualizerFormatHelpers.GetLogMessageFormat(source)
                 }).ConfigureAwait(false);
             }
         });

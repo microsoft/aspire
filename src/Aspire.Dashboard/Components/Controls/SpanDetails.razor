@@ -84,7 +84,7 @@
                         @if (context.Attributes.Length > 0)
                         {
                             <PropertyGrid TItem="OtlpSpanAttributeItem"
-                                          Items="@GetAttributeItems(context.Attributes, ViewModel.Span.Attributes)"
+                                          Items="@OtlpSpanAttributeItem.CreateItems(context.Attributes, ViewModel.Span.Attributes)"
                                           GridTemplateColumns="1fr 2fr"
                                           IsNameSortable="false"
                                           IsValueSortable="false"
@@ -164,7 +164,7 @@
         @if (context.Attributes.Length > 0)
         {
             <PropertyGrid TItem="OtlpSpanAttributeItem"
-                          Items="@GetAttributeItems(context.Attributes, context.Span?.Attributes ?? [])"
+                          Items="@OtlpSpanAttributeItem.CreateItems(context.Attributes, context.Span?.Attributes ?? [])"
                           GridTemplateColumns="1fr 2fr"
                           IsNameSortable="false"
                           IsValueSortable="false"
