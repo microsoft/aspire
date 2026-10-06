@@ -94,16 +94,6 @@ internal sealed class AgentInitCommand : BaseCommand
         return ExecuteAsync(parseResult, cancellationToken);
     }
 
-    /// <summary>
-    /// Offers native registration through the existing agent/scope flow without replacing local skills.
-    /// </summary>
-    internal Task<AgentInitExecutionResult> MigrateLocalSkillsAsync(
-        DirectoryInfo workspaceRoot, DirectoryInfo workingDirectory, AgentConfigurationScope defaultScope, CancellationToken cancellationToken)
-    {
-        var bindings = CreateBindings(this.Parse(["init", "--mcp", "n", "--playwright", "n", "--dotnet-inspect", "n", "--aspire-skills", "y"]), includeMcp: true);
-        return ExecuteAgentInitAsync(workspaceRoot, workingDirectory, bindings with { Scope = bindings.Scope.WithDefault(defaultScope) }, cancellationToken);
-    }
-
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
         int previousResultExitCode,

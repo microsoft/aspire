@@ -75,7 +75,7 @@ aspire <command> [options]
 
 `aspire agent init` registers native Aspire plugin/catalog sources without downloading plugins. Marketplace policies are checked against the source actually registered, including its source type, pin, and path. The shared project `.mcp.json` is not evidence that Claude Code is installed.
 
-`aspire doctor` checks for local Aspire skill files along the active directory's ancestor chain within the workspace. `aspire update --migrate` uses the selected AppHost's Git root, or the nearest `.sln`/`.slnx` directory outside Git, falling back to the selected directory when neither exists. Sibling projects are not scanned, and migration preserves existing local skill files.
+`aspire agent init` checks for possible local-skill conflicts in the selected agents' project and user locations. Project discovery follows the active directory's ancestor chain within the workspace; sibling projects are not scanned. These checks are read-only and preserve existing local skill files.
 
 Legacy installs have no reliable ownership/version receipt, so discovery reports possible conflicts without classifying files as CLI-owned or outdated. Automatic retirement is intentionally unsupported. After verifying the registered content in each client, review duplicate local skills and supporting files manually; retain customizations and intentional standalone installs.
 

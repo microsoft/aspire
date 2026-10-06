@@ -143,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MigrateOptionDescription">
-        <source>Apply pending migrations after updating the project's packages.</source>
-        <target state="new">Apply pending migrations after updating the project's packages.</target>
+        <source>Apply any pending migrations to the project after updating its packages.</source>
+        <target state="new">Apply any pending migrations to the project after updating its packages.</target>
         <note />
       </trans-unit>
       <trans-unit id="MigratedToNewSdkFormat">
