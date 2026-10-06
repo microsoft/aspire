@@ -1,0 +1,16 @@
+{
+  "id": "aspire-hosting-blazor-addblazorgatewaytests-publishproperties-filebusy",
+  "type": "flaky-test",
+  "title": "Flaky: AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration fails deleting a Windows temp directory locked by another process",
+  "test_name": "Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration",
+  "error_pattern": "System.IO.IOException : The process cannot access the file '\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Temp\\grlt4vro.bvp' because it is being used by another process.\n   at System.IO.FileSystem.RemoveDirectoryInternal\n   at System.IO.FileSystem.RemoveDirectoryRecursive\n   at System.IO.FileSystem.RemoveDirectory\n   at System.IO.DirectoryInfo.Delete\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration",
+  "occurrences": [
+    {
+      "run_id": 37543861411,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37543861411",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-06T23:39:18Z"
+    }
+  ]
+}

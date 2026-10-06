@@ -1,0 +1,87 @@
+{
+  "run_id": 37543861411,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37543861411",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-06T23:39:18Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20705,
+    "title": "Configure Windows NuGet package paths in GitHub Actions",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/workflow-nuget-packages",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20705",
+    "merged_at": "2026-10-06T22:58:14Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "f733f6f57fa539dd6c31a6313376d723ecc492a9",
+    "failed_sha": "39d96e751635c451513cb1ab0354591da67dc4c1",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f2528c5248e8b3fa0d1ec6675cb00bb7a4222f9f",
+        "message": "Add Aspire editor assistance language model tools (#19414) ## What changed Adds **six new editor-assistance language-model tools** and hardens the existing `aspire_apphost_start` and `aspire_apphost_stop` tools, which already landed in microsoft/aspire#19134. Eight tools are covered here; only six are introduced by this PR. Enable the Aspire tools in Copilot Chat's tool picker in a trusted workspace. Replace `apphost.cs` with an exact discovered AppHost path. Multi-root workspaces require the fo",
+        "html_url": "https://github.com/microsoft/aspire/commit/f2528c5248e8b3fa0d1ec6675cb00bb7a4222f9f",
+        "pull_request": {
+          "number": 19414,
+          "title": "Add Aspire editor assistance language model tools",
+          "url": "https://github.com/microsoft/aspire/pull/19414",
+          "merged_at": "2026-10-06T16:10:41Z"
+        }
+      },
+      {
+        "sha": "f40c75f6e2e0daf107c3b3a4899c04b465f937a7",
+        "message": "Raise Aspire's minimum supported .NET version to .NET 10 (#20614) ## Description Raise the supported .NET baseline on `main` for the next major Aspire release. Shipping libraries and C# templates no longer need to support .NET 8 or .NET 9, and repository builds/tests should not require those SDKs or runtimes. - Set `DefaultTargetFramework` to `net10.0` and `AllTargetFrameworks` to `net10.0;net11.0`, with framework-aligned 10.x/11.x dependencies. Keep the CLI on its existing `net11.0` target. - R",
+        "html_url": "https://github.com/microsoft/aspire/commit/f40c75f6e2e0daf107c3b3a4899c04b465f937a7",
+        "pull_request": {
+          "number": 20614,
+          "title": "Raise Aspire's minimum supported .NET version to .NET 10",
+          "url": "https://github.com/microsoft/aspire/pull/20614",
+          "merged_at": "2026-10-06T22:02:25Z"
+        }
+      },
+      {
+        "sha": "39d96e751635c451513cb1ab0354591da67dc4c1",
+        "message": "Configure Windows NuGet package paths in GitHub Actions (#20705) ## Description Use `${{ github.workspace }}/.nuget/packages` for Windows GitHub Actions scripts that restore or consume NuGet packages. Keep Windows restore, build, and test steps on the same cache instead of switching between `.packages` and `nuget-cache`. Multi-platform jobs configure the variable through `GITHUB_ENV` in Windows-only setup steps; Windows-only consumers set it at step scope. Remove conflicting Windows test-step ov",
+        "html_url": "https://github.com/microsoft/aspire/commit/39d96e751635c451513cb1ab0354591da67dc4c1",
+        "pull_request": {
+          "number": 20705,
+          "title": "Configure Windows NuGet package paths in GitHub Actions",
+          "url": "https://github.com/microsoft/aspire/pull/20705",
+          "merged_at": "2026-10-06T22:58:14Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "id": 112543665142,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37543861411/job/112543665142",
+      "classification": "flaky-test",
+      "reason": "Run tests (Windows) step failed with 1 of 123 tests failing; the test itself threw a Windows file-system race deleting a temp directory still held by another process, a known Windows transient I/O pattern unrelated to the test's own assertions.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "error": "System.IO.IOException : The process cannot access the file '\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Temp\\grlt4vro.bvp' because it is being used by another process.",
+      "stack_trace": "at System.IO.FileSystem.RemoveDirectoryInternal(String fullPath, Boolean topLevel, Boolean allowDirectoryNotEmpty)\n   at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA& findData, Boolean topLevel)\n   at System.IO.FileSystem.RemoveDirectory(String fullPath, Boolean recursive)\n   at System.IO.DirectoryInfo.Delete(Boolean recursive)\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Blazor.Tests\\AddBlazorGatewayTests.cs:line 405\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration()\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Test fails deleting a temp directory still locked by another process (e.g. antivirus/indexer) on Windows, a known transient Windows file-locking race unrelated to the Blazor gateway publish-properties logic under test; none of this run's candidate merges touch Blazor hosting or temp-directory cleanup."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-blazor-addblazorgatewaytests-publishproperties-filebusy"
+  ]
+}
