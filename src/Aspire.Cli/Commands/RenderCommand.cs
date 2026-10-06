@@ -11,6 +11,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Configuration;
@@ -564,6 +565,7 @@ internal sealed class RenderCommand : BaseCommand
         _hostEnvironment,
         _serviceProvider.GetRequiredService<IAppHostProjectFactory>(),
         _serviceProvider.GetRequiredService<IConfiguration>(),
+        _serviceProvider.GetRequiredService<AspireSecretsStoreResolver>(),
         _serviceProvider.GetRequiredService<ILogger<RenderCommand>>(),
         _ansiConsole,
         _serviceProvider.GetRequiredService<CommonCommandServices>());
@@ -812,10 +814,11 @@ internal sealed class RenderCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         IAppHostProjectFactory projectFactory,
         IConfiguration configuration,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
         ILogger logger,
         IAnsiConsole ansiConsole,
         CommonCommandServices services)
-        : PipelineCommandBase("test-render", "Test rendering", runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
+        : PipelineCommandBase("test-render", "Test rendering", runner, projectLocator, features, hostEnvironment, projectFactory, configuration, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
         protected override string OperationCompletedPrefix => "Publish";
         protected override string OperationFailedPrefix => "Publish failed";

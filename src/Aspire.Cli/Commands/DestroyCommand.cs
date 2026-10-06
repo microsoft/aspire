@@ -6,6 +6,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -20,8 +21,9 @@ internal sealed class DestroyCommand : PipelineCommandBase
     private readonly Option<bool> _yesOption;
 
     public DestroyCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
         CommonCommandServices services)
-        : base("destroy", DestroyCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
+        : base("destroy", DestroyCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
         _yesOption = new Option<bool>("--yes", "-y")
         {

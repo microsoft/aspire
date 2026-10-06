@@ -7,6 +7,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -39,8 +40,9 @@ internal sealed class PublishCommand : PipelineCommandBase
     private readonly IPublishCommandPrompter _prompter;
 
     public PublishCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IPublishCommandPrompter prompter, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<PublishCommand> logger, IAnsiConsole ansiConsole,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
         CommonCommandServices services)
-        : base("publish", PublishCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
+        : base("publish", PublishCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
         _prompter = prompter;
     }

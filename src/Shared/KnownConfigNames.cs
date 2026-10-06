@@ -72,6 +72,7 @@ internal static class KnownConfigNames
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
     public const string AspireHome = "ASPIRE_HOME";
     public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
+    public const string AspireSecretsFile = "ASPIRE_SECRETS_FILE";
     public const string MaxFileUploadSize = "ASPIRE_MAX_FILE_UPLOAD_SIZE";
 
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";

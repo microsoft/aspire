@@ -482,6 +482,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Pass synthetic UserSecretsId so AppHost Server can read secrets set via 'aspire secret'
             launchSettingsEnvVars[KnownConfigNames.AspireUserSecretsId] = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
+            if (context.EnvironmentVariables.TryGetValue(KnownConfigNames.AspireSecretsFile, out var aspireSecretsFile))
+            {
+                launchSettingsEnvVars[KnownConfigNames.AspireSecretsFile] = aspireSecretsFile;
+            }
 
             // Check if hot reload (watch mode) is enabled
             var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
@@ -1116,6 +1120,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Pass synthetic UserSecretsId so AppHost Server can read secrets set via 'aspire secret'
             launchSettingsEnvVars[KnownConfigNames.AspireUserSecretsId] = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
+            if (context.EnvironmentVariables.TryGetValue(KnownConfigNames.AspireSecretsFile, out var aspireSecretsFile))
+            {
+                launchSettingsEnvVars[KnownConfigNames.AspireSecretsFile] = aspireSecretsFile;
+            }
 
             // Step 2: Start the AppHost server process(it opens the backchannel for progress reporting)
             // Linked stop CTS is the only termination trigger we hand to the session.

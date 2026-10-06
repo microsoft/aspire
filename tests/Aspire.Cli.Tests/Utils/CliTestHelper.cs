@@ -351,7 +351,7 @@ internal static class CliTestHelper
         services.AddTransient<SecretListCommand>();
         services.AddTransient<SecretPathCommand>();
         services.AddTransient<SecretDeleteCommand>();
-        services.AddTransient<SecretStoreResolver>();
+        services.AddTransient<AspireSecretsStoreResolver>();
 #if DEBUG
         services.AddTransient<RenderCommand>();
 #endif
@@ -378,7 +378,7 @@ internal sealed class CliServiceCollectionTestOptions
 
     private CliExecutionContext CreateDefaultCliExecutionContextFactory(IServiceProvider provider)
     {
-        return TestExecutionContextHelper.CreateExecutionContext(WorkingDirectory, packagesDirectory: PackagesDirectory);
+        return TestExecutionContextHelper.CreateExecutionContext(WorkingDirectory, homeDirectory: WorkingDirectory, packagesDirectory: PackagesDirectory);
     }
 
     public DirectoryInfo WorkingDirectory { get; set; }

@@ -5,6 +5,8 @@ using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Secrets;
+using Aspire.Cli.Utils;
+using Aspire.Shared.UserSecrets;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -19,17 +21,18 @@ internal sealed class SecretDeleteCommand : BaseCommand
         Description = SecretCommandStrings.KeyDeleteArgumentDescription
     };
 
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
 
     public SecretDeleteCommand(
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         CommonCommandServices services)
         : base("delete", SecretCommandStrings.DeleteDescription, services)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
 
         Arguments.Add(s_keyArgument);
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -37,19 +40,31 @@ internal sealed class SecretDeleteCommand : BaseCommand
         // Argument arity guarantees non-null
         var key = parseResult.GetValue(s_keyArgument)!;
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        if (!result.Store.Remove(key))
+        var removed = result.AspireStore.Remove(key);
+        if (result.LegacyUserSecretsFilePath is { } legacyUserSecretsFilePath && File.Exists(legacyUserSecretsFilePath))
+        {
+            var legacyStore = new SecretsStore(legacyUserSecretsFilePath);
+            if (legacyStore.Remove(key))
+            {
+                legacyStore.Save();
+                removed = true;
+            }
+        }
+
+        if (!removed)
         {
             return CommandResult.Failure(CliExitCodes.ConfigNotFound, string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));
         }
 
-        result.Store.Save();
+        result.AspireStore.Save();
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretDeleteSuccess, key));
         return CommandResult.Success();
     }

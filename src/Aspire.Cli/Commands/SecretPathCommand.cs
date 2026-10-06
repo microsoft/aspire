@@ -13,29 +13,31 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class SecretPathCommand : BaseCommand
 {
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
 
     public SecretPathCommand(
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         CommonCommandServices services)
         : base("path", SecretCommandStrings.PathDescription, services)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
 
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        InteractionService.DisplayRawText(result.Store.FilePath, consoleOverride: ConsoleOutput.Standard);
+        InteractionService.DisplayRawText(result.AspireSecretsFilePath, consoleOverride: ConsoleOutput.Standard);
         return CommandResult.Success();
     }
 }
