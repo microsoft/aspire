@@ -771,6 +771,23 @@ public sealed class TestTriggerMapTests
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
     }
 
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/integration-host.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/transport.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/base.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/package.json")]
+    public void IntegrationRuntimeResourcesSelectLifetimeE2eConsumer(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.TypeScript");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.EndToEnd.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+        Assert.Contains("job:typescript-sdk", result.Jobs);
+    }
+
     [Fact]
     [RequiresTools(["git"])]
     public void ExtensionJavaE2eDiscoveryInputsAreNotGitIgnored()
