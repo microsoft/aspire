@@ -51,6 +51,14 @@ public class HistogramValue : MetricValueBase
         OtlpHelpers.ValidateHistogramDataPoint(point);
         var aggregationStart = OtlpHelpers.UnixNanoSecondsToDateTime(point.StartTimeUnixNano);
         var end = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano);
+
+        // Out-of-order delivery is not a reset. Reject before changing the aggregation
+        // identity or extending the previous snapshot, which would move its end backwards.
+        if (temporality != OtlpAggregationTemporality.Delta && previous is not null && end < previous.End)
+        {
+            throw new InvalidOperationException("Cumulative histogram point timestamp is earlier than the previous point.");
+        }
+
         var sameBounds = previous is not null && HasSameBounds(previous.ExplicitBounds, point);
         var start = aggregationStart;
         var aggregationId = end.Ticks;

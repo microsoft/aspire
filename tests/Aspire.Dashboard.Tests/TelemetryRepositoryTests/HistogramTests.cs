@@ -19,6 +19,106 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     private static readonly DateTime s_start = new(2025, 6, 15, 12, 0, 0, DateTimeKind.Utc);
 
     [Theory]
+    [InlineData(15ul, false)]
+    [InlineData(15ul, true)]
+    [InlineData(20ul, false)]
+    [InlineData(20ul, true)]
+    [InlineData(25ul, false)]
+    [InlineData(25ul, true)]
+    public async Task Cumulative_ReorderedArrivals_RejectsStalePoint(ulong staleCount, bool separateRequests)
+    {
+        using var context = await CreateRepositoryAsync();
+        var points = new[]
+        {
+            CreatePoint(s_start, s_start.AddMilliseconds(100), [10, 0], [100]),
+            CreatePoint(s_start, s_start.AddMilliseconds(200), [20, 0], [100]),
+            CreatePoint(s_start, s_start.AddMilliseconds(150), [staleCount, 0], [100]),
+            CreatePoint(s_start, s_start.AddMilliseconds(300), [25, 0], [100])
+        };
+        var addContext = new AddContext();
+        foreach (var batch in separateRequests ? points.Select(point => new[] { point }) : [points])
+        {
+            await context.Repository.AsWriter().AddMetricsAsync(addContext,
+                [CreateMetrics(AggregationTemporality.Cumulative, batch)]);
+        }
+
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(1, addContext.FailureCount);
+        var instrument = await GetInstrumentAsync(context.Repository, rollup: false);
+        var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        Assert.Equal(
+            [(s_start, s_start.AddMilliseconds(100), 10ul),
+             (s_start.AddMilliseconds(100), s_start.AddMilliseconds(200), 20ul),
+             (s_start.AddMilliseconds(200), s_start.AddMilliseconds(300), 25ul)],
+            values.Select(value => (value.Start, value.End, value.Count)));
+        Assert.All(values, value => Assert.Equal(values[0].AggregationId, value.AggregationId));
+        AssertPercentiles(instrument, [100, 100, 100]);
+        Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+        Assert.Equal(25, count);
+
+        var rolledUp = await GetInstrumentAsync(context.Repository, rollup: true);
+        var rolledUpValue = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(rolledUp.Dimensions).Values));
+        Assert.Equal(25ul, rolledUpValue.Count);
+        Assert.Equal(s_start, rolledUpValue.Start);
+        Assert.Equal(s_start.AddMilliseconds(300), rolledUpValue.End);
+        Assert.Equal(values[0].AggregationId, rolledUpValue.AggregationId);
+        AssertPercentiles(rolledUp, [100, 100, 100]);
+    }
+
+    [Theory]
+    [InlineData(15ul)]
+    [InlineData(20ul)]
+    [InlineData(25ul)]
+    public async Task Cumulative_ReopenedDatabase_RejectsStalePoint(ulong staleCount)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, "dashboard.db");
+        using (var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            await context.Repository.AddMetricsAsync(new AddContext(),
+                [CreateMetrics(AggregationTemporality.Cumulative,
+                    CreatePoint(s_start, s_start.AddMilliseconds(100), [10, 0], [100]),
+                    CreatePoint(s_start, s_start.AddMilliseconds(200), [20, 0], [100]))]);
+        }
+
+        using var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath);
+        var addContext = new AddContext();
+        await reopened.Repository.AddMetricsAsync(addContext,
+            [CreateMetrics(AggregationTemporality.Cumulative,
+                CreatePoint(s_start, s_start.AddMilliseconds(150), [staleCount, 0], [100]),
+                CreatePoint(s_start, s_start.AddMilliseconds(300), [25, 0], [100]))]);
+
+        Assert.Equal(1, addContext.SuccessCount);
+        Assert.Equal(1, addContext.FailureCount);
+        var instrument = await GetInstrumentAsync(reopened.Repository, rollup: false);
+        var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        Assert.Equal([10ul, 20ul, 25ul], values.Select(value => value.Count));
+        Assert.All(values, value => Assert.Equal(values[0].AggregationId, value.AggregationId));
+        Assert.Equal(s_start.AddMilliseconds(200), values[^1].Start);
+        AssertPercentiles(await GetInstrumentAsync(reopened.Repository, rollup: true), [100, 100, 100]);
+    }
+
+    [Fact]
+    public async Task Delta_ReorderedArrivals_RetainsAllIntervals()
+    {
+        using var context = await CreateRepositoryAsync();
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext,
+            [CreateMetrics(AggregationTemporality.Delta,
+                CreatePoint(s_start, s_start.AddMilliseconds(100), [10, 0], [100]),
+                CreatePoint(s_start.AddMilliseconds(200), s_start.AddMilliseconds(300), [25, 0], [100]),
+                CreatePoint(s_start.AddMilliseconds(100), s_start.AddMilliseconds(200), [20, 0], [100]))]);
+
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+        var instrument = await GetInstrumentAsync(context.Repository, rollup: true);
+        Assert.Equal([10ul, 20ul, 25ul], Assert.Single(instrument.Dimensions).Values.Select(value => value.Count));
+        AssertPercentiles(instrument, [100, 100, 100]);
+        Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+        Assert.Equal(55, count);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Histogram_OverflowingCount_RejectsOnlyInvalidPoint(bool overflowTotalCount)

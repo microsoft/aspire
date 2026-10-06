@@ -231,6 +231,8 @@ Metric dimensions are normalized into an attribute set and stable non-cryptograp
 
 Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
 
+Cumulative points ending before their dimension's latest accepted snapshot are rejected individually before reset detection or snapshot extension. This prevents reordered delivery from creating false resets or moving interval timestamps backwards. Reordered delta intervals remain accepted.
+
 Unchanged cumulative snapshots are extended in place before copying bucket arrays. Bucket counts are packed directly into database blobs without an intermediate signed array. Chart calculations subtract cumulative buckets while accumulating them, rather than allocating a temporary distribution for each contribution.
 
 Cumulative bucket layouts must remain unchanged within an aggregation. A changed layout is rejected, but a reset may start an aggregation with new boundaries. Charts combine distributions from different dimensions or aggregations by merging buckets at shared boundaries, without interpolating or splitting source buckets. When no boundaries are shared, the dashboard warns that percentiles are unavailable; observation counts remain available. The warning remains visible when **Show count** is enabled.
