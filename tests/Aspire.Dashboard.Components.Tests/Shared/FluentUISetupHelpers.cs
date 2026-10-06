@@ -115,7 +115,8 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentTab(BunitContext context)
     {
-        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.ObserveTabsChanged", _ => true);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.ObserveTabsChanged", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.Dispose", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentCheckbox(BunitContext context)

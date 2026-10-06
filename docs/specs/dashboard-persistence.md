@@ -233,7 +233,9 @@ Histogram points retain the producer's aggregation start separately from their c
 
 Unchanged cumulative snapshots are extended in place before copying bucket arrays. Bucket counts are packed directly into database blobs without an intermediate signed array. Chart calculations subtract cumulative buckets while accumulating them, rather than allocating a temporary distribution for each contribution.
 
-Cumulative bucket layouts must remain unchanged within an aggregation. A changed layout is rejected, but a reset may start an aggregation with new boundaries. Charts combine distributions from different dimensions or aggregations by merging buckets at shared boundaries, without interpolating or splitting source buckets. When no boundaries are shared, the dashboard warns that percentiles are unavailable; observation counts remain available.
+Cumulative bucket layouts must remain unchanged within an aggregation. A changed layout is rejected, but a reset may start an aggregation with new boundaries. Charts combine distributions from different dimensions or aggregations by merging buckets at shared boundaries, without interpolating or splitting source buckets. When no boundaries are shared, the dashboard warns that percentiles are unavailable; observation counts remain available. The warning remains visible when **Show count** is enabled.
+
+To exercise this warning, run the [Stress playground](../../playground/Stress/Stress.AppHost/AppHost.cs) and execute **Generate incompatible histogram bounds** on `stress-apiservice`. The command sends a raw OTLP request containing five minutes of cumulative data for `incompatible-histogram-metrics` / `incompatible.histogram.bounds`. Its two `stress.layout` dimensions use disjoint bounds `[10, 50, 100]` and `[20, 60, 200]`. Select both dimensions to see the warning in graph and table views; count mode remains available, and selecting a single layout restores percentiles.
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 

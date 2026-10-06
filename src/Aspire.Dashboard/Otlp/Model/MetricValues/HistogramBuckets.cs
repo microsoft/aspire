@@ -11,21 +11,7 @@ internal static class HistogramBuckets
     public static bool Add(ref ulong[]? counts, ref double[]? bounds, ReadOnlySpan<ulong> incomingCounts,
         double[] incomingBounds, ReadOnlySpan<ulong> previousCounts)
     {
-        if (!previousCounts.IsEmpty && previousCounts.Length != incomingCounts.Length)
-        {
-            throw new InvalidOperationException("Cumulative histogram bucket counts changed size.");
-        }
-
-        var hasObservations = false;
-        for (var i = 0; i < incomingCounts.Length; i++)
-        {
-            if (incomingCounts[i] != (previousCounts.IsEmpty ? 0 : previousCounts[i]))
-            {
-                hasObservations = true;
-                break;
-            }
-        }
-        if (!hasObservations)
+        if (!HasObservations(incomingCounts, previousCounts))
         {
             return false;
         }
@@ -66,6 +52,36 @@ internal static class HistogramBuckets
         }
 
         return true;
+    }
+
+    public static bool AddBounds(ref double[]? bounds, ReadOnlySpan<ulong> incomingCounts,
+        double[] incomingBounds, ReadOnlySpan<ulong> previousCounts)
+    {
+        if (!HasObservations(incomingCounts, previousCounts))
+        {
+            return false;
+        }
+
+        bounds = bounds is null ? incomingBounds : GetSharedBounds(bounds, incomingBounds);
+        return true;
+    }
+
+    private static bool HasObservations(ReadOnlySpan<ulong> incomingCounts, ReadOnlySpan<ulong> previousCounts)
+    {
+        if (!previousCounts.IsEmpty && previousCounts.Length != incomingCounts.Length)
+        {
+            throw new InvalidOperationException("Cumulative histogram bucket counts changed size.");
+        }
+
+        for (var i = 0; i < incomingCounts.Length; i++)
+        {
+            if (incomingCounts[i] != (previousCounts.IsEmpty ? 0 : previousCounts[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AddBuckets(ulong[] destination, ReadOnlySpan<ulong> counts, double[] bounds,

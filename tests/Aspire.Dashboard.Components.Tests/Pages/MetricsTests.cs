@@ -83,16 +83,28 @@ public partial class MetricsTests : DashboardTestContext
         await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(true));
         cut.WaitForAssertion(() =>
         {
-            Assert.Empty(cut.FindAll(".block-warning"));
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+                cut.Find(".block-warning").TextContent.Trim());
             if (view == MetricViewKind.Graph)
             {
                 Assert.True(cut.FindComponent<PlotlyChart>().Instance.InstrumentViewModel.ShowCount);
+                var invocation = JSInterop.Invocations.Last(i => i.Identifier is "initializeChart" or "updateChart");
+                var trace = Assert.Single(Assert.IsAssignableFrom<IEnumerable<PlotlyTrace>>(invocation.Arguments[1]));
+                Assert.Equal("Count", trace.Name);
+                Assert.Contains(8d, trace.Y);
             }
             else
             {
                 Assert.True(cut.FindComponent<MetricTable>().Instance.InstrumentViewModel.ShowCount);
+                Assert.Equal(["Time", "Count"], cut.FindComponent<MetricTable>().FindAll("th").Select(column => column.TextContent.Trim()));
             }
         });
+
+        await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.Equal(
+            Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+            cut.Find(".block-warning").TextContent.Trim()));
     }
 
     [Theory]

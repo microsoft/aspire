@@ -911,6 +911,17 @@ internal static class CommandResources
         serviceBuilder.WithHttpCommand("/overflow-counter", "Overflow counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/nested-trace-spans", "Out of order nested spans", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/exemplars-no-span", "Examplars with no span", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand(
+            "/incompatible-histogram-bounds",
+            "Generate incompatible histogram bounds",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of histogram data with disjoint bucket bounds. View incompatible.histogram.bounds on incompatible-histogram-metrics with both stress.layout dimensions selected to see the percentile warning."
+            });
         serviceBuilder.WithHttpCommand("/genai-trace", "Gen AI trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-langchain-trace", "Gen AI LangChain trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-trace-display-error", "Gen AI trace display error", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
@@ -1459,4 +1470,3 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-

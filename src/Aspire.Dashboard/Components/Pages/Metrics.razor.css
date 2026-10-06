@@ -68,6 +68,8 @@
 
 ::deep .metrics-chart-header {
     grid-area: header;
+    max-width: 800px;
+    margin-right: 8px;
     overflow-x: hidden;
 }
 

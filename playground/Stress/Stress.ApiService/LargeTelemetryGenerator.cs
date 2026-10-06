@@ -119,6 +119,81 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
         }
     }
 
+    public async Task ExportIncompatibleHistogramAsync(CancellationToken cancellationToken)
+    {
+        var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+            ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
+        using var channel = GrpcChannel.ForAddress(endpoint);
+        var client = new MetricsService.MetricsServiceClient(channel);
+        var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
+        var histogram = new Metric
+        {
+            Name = "incompatible.histogram.bounds",
+            Description = "Dimensions with no shared bucket boundaries. Percentiles are unavailable when both layouts are selected.",
+            Unit = "ms",
+            Histogram = new Histogram
+            {
+                AggregationTemporality = AggregationTemporality.Cumulative
+            }
+        };
+
+        // SDK histogram views normally share one layout across dimensions. Raw OTLP lets us reproduce
+        // differing producer layouts without invalidating either dimension's cumulative aggregation.
+        double[][] layouts = [[10, 50, 100], [20, 60, 200]];
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 1; second <= durationSeconds; second++)
+        {
+            var countPerBucket = (ulong)second;
+            for (var layoutIndex = 0; layoutIndex < layouts.Length; layoutIndex++)
+            {
+                histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+                {
+                    StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+                    TimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second)),
+                    Count = countPerBucket * 4,
+                    Sum = second * (5 + 25 + 75 + 250),
+                    BucketCounts = { countPerBucket, countPerBucket, countPerBucket, countPerBucket },
+                    ExplicitBounds = { layouts[layoutIndex] },
+                    Attributes =
+                    {
+                        new KeyValue
+                        {
+                            Key = "stress.layout",
+                            Value = new AnyValue { StringValue = layoutIndex.ToString(CultureInfo.InvariantCulture) }
+                        }
+                    }
+                });
+            }
+        }
+
+        var request = new ExportMetricsServiceRequest
+        {
+            ResourceMetrics =
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource("incompatible-histogram-metrics"),
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = new InstrumentationScope { Name = "Stress.Histograms" },
+                            Metrics = { histogram }
+                        }
+                    }
+                }
+            }
+        };
+        var response = await client.ExportAsync(request, headers: metadata, cancellationToken: cancellationToken);
+        if (response.PartialSuccess is { RejectedDataPoints: > 0 } partialSuccess)
+        {
+            throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedDataPoints} metric points: {partialSuccess.ErrorMessage}");
+        }
+
+        logger.LogInformation("Exported {PointCount} histogram points with incompatible bounds.", histogram.Histogram.DataPoints.Count);
+    }
+
     private async Task ExportTracesAsync(
         TraceService.TraceServiceClient client,
         Metadata metadata,

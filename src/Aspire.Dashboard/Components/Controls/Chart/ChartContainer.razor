@@ -18,7 +18,13 @@ else
             @if (_hasIncompatibleHistogramBounds)
             {
                 <div class="block-warning" role="status">
-                    @Loc[nameof(ControlsStrings.ChartContainerIncompatibleHistogramBounds)]
+                    <div class="block-warning-icon">
+                        <FluentIcon Value="new Icons.Filled.Size16.Warning()" Color="Color.Warning" />
+                    </div>
+
+                    <div class="block-warning-message">
+                        @Loc[nameof(ControlsStrings.ChartContainerIncompatibleHistogramBounds)]
+                    </div>
                 </div>
             }
 

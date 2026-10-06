@@ -21,7 +21,7 @@ internal static class MetricsSetupHelpers
     public static void SetupChartContainer(BunitContext context)
     {
         var metricTableModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
-        metricTableModule.SetupVoid("announceDataGridRows", _ => true);
+        metricTableModule.SetupVoid("announceDataGridRows", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.SetupFluentTab(context);
         FluentUISetupHelpers.SetupFluentOverflow(context);
@@ -32,8 +32,8 @@ internal static class MetricsSetupHelpers
     internal static void SetupPlotlyChart(BunitContext context)
     {
         var module = context.JSInterop.SetupModule("/js/app-metrics.js");
-        module.SetupVoid("initializeChart", _ => true);
-        module.SetupVoid("updateChart", _ => true);
+        module.SetupVoid("initializeChart", _ => true).SetVoidResult();
+        module.SetupVoid("updateChart", _ => true).SetVoidResult();
 
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
     }

@@ -530,18 +530,21 @@ public class ChartDataCalculatorTests
         Assert.False(data.HasIncompatibleHistogramBounds);
         Assert.All(data.Traces, trace => Assert.All(trace.Values.OfType<double>(), value => Assert.Equal(100, value)));
         Assert.All(data.Traces, trace => Assert.Contains(100d, trace.Values));
+        Assert.False(calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count").HasIncompatibleHistogramBounds);
     }
 
-    [Fact]
-    public void CalculateHistogramValues_NoSharedBounds_ReportsUnavailablePercentilesAndRetainsCount()
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative)]
+    [InlineData(OtlpAggregationTemporality.Delta)]
+    public void CalculateHistogramValues_NoSharedBounds_ReportsUnavailablePercentilesAndRetainsCount(OtlpAggregationTemporality temporality)
     {
         var first = new DimensionScope(100, []);
         var second = new DimensionScope(100, []);
         var time = s_startTime.UtcDateTime.AddSeconds(-1);
         first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [3, 0], [10]),
-            OtlpAggregationTemporality.Delta, CreateContext());
+            temporality, CreateContext());
         second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [5, 0], [20]),
-            OtlpAggregationTemporality.Delta, CreateContext());
+            temporality, CreateContext());
 
         var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
         var data = calculator.CalculateHistogramValues([first, second], s_startTime, ToLocal, "ms");
@@ -549,6 +552,51 @@ public class ChartDataCalculatorTests
         Assert.All(data.Traces, trace => Assert.All(trace.Values, Assert.Null));
         Assert.True(ChartDataCalculator.TryCalculatePoint([first, second], time, time.AddSeconds(1), out var count));
         Assert.Equal(8, count);
+        var countData = calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count");
+        Assert.True(countData.HasIncompatibleHistogramBounds);
+        Assert.Contains(8d, Assert.Single(countData.Traces).Values);
+
+        var filteredData = calculator.CalculateChartValues([first], s_startTime, ToLocal, "Count");
+        Assert.False(filteredData.HasIncompatibleHistogramBounds);
+        Assert.Contains(3d, Assert.Single(filteredData.Traces).Values);
+        Assert.False(calculator.CalculateChartValues([first, second], s_startTime.AddMinutes(1), ToLocal, "Count").HasIncompatibleHistogramBounds);
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative)]
+    [InlineData(OtlpAggregationTemporality.Delta)]
+    public void CalculateChartValues_UnchangedIncompatibleHistogram_DoesNotWarn(OtlpAggregationTemporality temporality)
+    {
+        var first = new DimensionScope(100, []);
+        var second = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [3, 0], [10]),
+            temporality, CreateContext());
+        second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [0, 0], [20]),
+            temporality, CreateContext());
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        Assert.False(calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count").HasIncompatibleHistogramBounds);
+    }
+
+    [Fact]
+    public void CalculateChartValues_PairwiseSharedButNoCommonHistogramBounds_Warns()
+    {
+        var dimensions = new List<DimensionScope>();
+        double[][] layouts = [[10, 100], [10, 200], [100, 200]];
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        foreach (var layout in layouts)
+        {
+            var dimension = new DimensionScope(100, []);
+            dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [1, 0, 0], layout),
+                OtlpAggregationTemporality.Delta, CreateContext());
+            dimensions.Add(dimension);
+        }
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateChartValues(dimensions, s_startTime, ToLocal, "Count");
+        Assert.True(data.HasIncompatibleHistogramBounds);
+        Assert.Contains(3d, Assert.Single(data.Traces).Values);
     }
 
     [Fact]

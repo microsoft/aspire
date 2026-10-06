@@ -57,6 +57,14 @@ app.MapPost("/large-telemetry", async (LargeTelemetryGenerationOptions options, 
     : Results.Conflict("Large telemetry generation is already running.");
 });
 
+app.MapPost("/incompatible-histogram-bounds", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportIncompatibleHistogramAsync(cancellationToken);
+
+    return TypedResults.Text("Generated incompatible.histogram.bounds on incompatible-histogram-metrics. Select both stress.layout dimensions on the Metrics page to see the percentile warning; count mode remains available.");
+})
+    .WithSummary("Generate a histogram with incompatible bucket bounds across dimensions.");
+
 app.MapGet("/write-console", () =>
 {
     for (var i = 0; i < 5000; i++)

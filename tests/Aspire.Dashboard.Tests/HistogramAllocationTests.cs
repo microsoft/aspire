@@ -121,4 +121,32 @@ public class HistogramAllocationTests
         Assert.Null(counts);
         Assert.Null(bounds);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddBounds_CompatibleLayouts_DoesNotAllocate(bool cumulative)
+    {
+        double[] originalBounds = [10, 100];
+        double[] incomingBounds = [10, 50, 100];
+        ulong[] incoming = [2, 4, 6, 8];
+        ulong[] previous = cumulative ? [1, 2, 3, 4] : [];
+        double[]? bounds = originalBounds;
+        for (var i = 0; i < 100; i++)
+        {
+            HistogramBuckets.AddBounds(ref bounds, incoming, incomingBounds, previous);
+        }
+
+        var added = false;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 1_000; i++)
+        {
+            added = HistogramBuckets.AddBounds(ref bounds, incoming, incomingBounds, previous);
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(0, allocated);
+        Assert.True(added);
+        Assert.Same(originalBounds, bounds);
+    }
 }

@@ -27,6 +27,8 @@ internal sealed class ChartDataCalculator
         var pointDuration = _duration / _pointCount;
         var yValues = new List<double?>();
         var xValues = new List<DateTimeOffset>();
+        var isHistogram = dimensions.Exists(static dimension => dimension.Values.Count > 0 && dimension.Values[0] is HistogramValue);
+        var hasIncompatibleBounds = false;
 
         // Generate the points in reverse order so that the chart is drawn from right to left.
         // Add a couple of extra points to the end so that the chart is drawn all the way to the right edge.
@@ -45,6 +47,14 @@ internal sealed class ChartDataCalculator
             {
                 yValues.Add(null);
             }
+
+            // Compatibility is a property of the histogram data, not the selected visualization.
+            // Count mode only intersects contributing bounds; it does not accumulate percentile buckets.
+            if (isHistogram && !hasIncompatibleBounds &&
+                TryAggregateHistogram(dimensions, start, end, collectBucketCounts: false, exemplars: null, toLocal, out _, out var bounds))
+            {
+                hasIncompatibleBounds = bounds!.Length == 0;
+            }
         }
 
         yValues.Reverse();
@@ -62,7 +72,8 @@ internal sealed class ChartDataCalculator
             Traces = [trace],
             XValues = xValues,
             // Exemplars on non-histogram charts don't work well and are cleared by the caller.
-            Exemplars = []
+            Exemplars = [],
+            HasIncompatibleHistogramBounds = hasIncompatibleBounds
         };
     }
 
@@ -211,11 +222,29 @@ internal sealed class ChartDataCalculator
 
     internal static bool TryCalculateHistogramPoints(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, Dictionary<int, ChartTrace> traces, List<ChartExemplar> exemplars, Func<DateTimeOffset, DateTimeOffset> toLocal, out bool incompatibleBounds)
     {
-        var hasValue = false;
-        incompatibleBounds = false;
+        var hasValue = TryAggregateHistogram(dimensions, start, end, collectBucketCounts: true, exemplars, toLocal,
+            out var currentBucketCounts, out var explicitBounds);
+        incompatibleBounds = hasValue && explicitBounds!.Length == 0;
 
-        ulong[]? currentBucketCounts = null;
-        double[]? explicitBounds = null;
+        if (hasValue)
+        {
+            foreach (var percentileValues in traces)
+            {
+                var percentileValue = CalculatePercentile(percentileValues.Key, currentBucketCounts!, explicitBounds!);
+                percentileValues.Value.Values.Add(percentileValue);
+            }
+        }
+
+        return hasValue;
+    }
+
+    private static bool TryAggregateHistogram(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end,
+        bool collectBucketCounts, List<ChartExemplar>? exemplars, Func<DateTimeOffset, DateTimeOffset> toLocal,
+        out ulong[]? currentBucketCounts, out double[]? explicitBounds)
+    {
+        var hasValue = false;
+        currentBucketCounts = null;
+        explicitBounds = null;
 
         var cumulativeStart = start.Subtract(TimeSpan.FromSeconds(1));
         var cumulativeEnd = end.Add(TimeSpan.FromSeconds(1));
@@ -237,7 +266,10 @@ internal sealed class ChartDataCalculator
                     ? metricStart >= start && metricStart < end
                     : metricStart >= cumulativeStart && metricStart <= cumulativeEnd)
                 {
-                    CollectExemplars(exemplars, metric, toLocal);
+                    if (exemplars is not null)
+                    {
+                        CollectExemplars(exemplars, metric, toLocal);
+                    }
 
                     // Only use the first recorded entry if it is the beginning of data.
                     // We can verify the first entry is the beginning of data by checking if the number of buckets equals the total count.
@@ -248,23 +280,23 @@ internal sealed class ChartDataCalculator
 
                     var previous = !isDelta && i > 0 ? GetHistogramValue(dimensionValues[i - 1]) : null;
                     var previousHistogramValues = previous is not null && previous.AggregationId == histogramValue.AggregationId ? previous.Values : null;
-                    if (HistogramBuckets.Add(ref currentBucketCounts, ref explicitBounds, histogramValue.Values,
-                        histogramValue.ExplicitBounds, previousHistogramValues.AsSpan()))
+                    var added = collectBucketCounts
+                        ? HistogramBuckets.Add(ref currentBucketCounts, ref explicitBounds, histogramValue.Values,
+                            histogramValue.ExplicitBounds, previousHistogramValues.AsSpan())
+                        : HistogramBuckets.AddBounds(ref explicitBounds, histogramValue.Values,
+                            histogramValue.ExplicitBounds, previousHistogramValues.AsSpan());
+                    if (added)
                     {
-                        incompatibleBounds |= explicitBounds!.Length == 0;
                         hasValue = true;
+                        if (!collectBucketCounts && explicitBounds!.Length == 0)
+                        {
+                            return true;
+                        }
                     }
                 }
             }
         }
-        if (hasValue)
-        {
-            foreach (var percentileValues in traces)
-            {
-                var percentileValue = CalculatePercentile(percentileValues.Key, currentBucketCounts!, explicitBounds!);
-                percentileValues.Value.Values.Add(percentileValue);
-            }
-        }
+
         return hasValue;
     }
 
