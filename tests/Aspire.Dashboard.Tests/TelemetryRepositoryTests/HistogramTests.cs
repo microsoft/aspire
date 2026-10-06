@@ -205,6 +205,101 @@ public sealed class HistogramTests(ITestOutputHelper testOutputHelper) : Telemet
     }
 
     [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task Delta_SubTickTimestamps_PreservesIntervalsAndDeduplicatesDelivery(bool rollup, bool sameStartTick, bool omitStart)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = Path.Combine(workspace.Path, "dashboard.db");
+        var timestamp = DateTimeToUnixNanoseconds(s_start);
+        var first = CreatePoint(s_start, s_start.AddTicks(2), [100, 0, 0], [10, 100]);
+        first.StartTimeUnixNano = omitStart ? 0 : timestamp + (sameStartTick ? 100ul : 0ul);
+        first.TimeUnixNano = timestamp + 140;
+        var second = CreatePoint(s_start, s_start.AddTicks(2), [0, 100, 0], [10, 100]);
+        second.StartTimeUnixNano = omitStart ? 0 : first.TimeUnixNano;
+        second.TimeUnixNano = timestamp + 180;
+        var points = new[] { first, second };
+
+        using (var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            var addContext = new AddContext();
+            foreach (var point in points)
+            {
+                await context.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, point)]);
+            }
+            Assert.Equal(2, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            await AssertInstrumentAsync(context.Repository);
+
+            var duplicateContext = new AddContext();
+            await context.Repository.AddMetricsAsync(duplicateContext, [CreateMetrics(AggregationTemporality.Delta, points)]);
+            Assert.Equal(2, duplicateContext.SuccessCount);
+            Assert.Equal(0, duplicateContext.FailureCount);
+            await AssertInstrumentAsync(context.Repository);
+        }
+
+        using (var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath))
+        {
+            await AssertInstrumentAsync(reopened.Repository);
+            var addContext = new AddContext();
+            foreach (var point in points)
+            {
+                await reopened.Repository.AddMetricsAsync(addContext, [CreateMetrics(AggregationTemporality.Delta, point)]);
+            }
+            Assert.Equal(2, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+            await AssertInstrumentAsync(reopened.Repository);
+        }
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(databasePath, readOnly: true);
+        await AssertInstrumentAsync(readOnly.Repository);
+
+        async Task AssertInstrumentAsync(ITelemetryRepository repository)
+        {
+            var instrument = await GetInstrumentAsync(repository, rollup);
+            var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().OrderBy(value => value.AggregationId).ToArray();
+            Assert.Equal([100ul, 100ul], values.Select(value => value.Count));
+            Assert.Collection(values,
+                value =>
+                {
+                    Assert.Equal(unchecked((long)first.TimeUnixNano), value.AggregationId);
+                    Assert.Equal(omitStart || sameStartTick ? s_start.AddTicks(1) : s_start, value.Start);
+                    Assert.Equal([100ul, 0ul, 0ul], value.Values);
+                },
+                value =>
+                {
+                    Assert.Equal(unchecked((long)second.TimeUnixNano), value.AggregationId);
+                    Assert.Equal(s_start.AddTicks(1), value.Start);
+                    Assert.Equal([0ul, 100ul, 0ul], value.Values);
+                });
+            Assert.All(values, value => Assert.Equal(s_start.AddTicks(1), value.End));
+            AssertPercentiles(instrument, [10, 100, 100]);
+            Assert.True(ChartDataCalculator.TryCalculatePoint(instrument.Dimensions, s_start, s_start.AddSeconds(1), out var count));
+            Assert.Equal(200, count);
+        }
+    }
+
+    [Theory]
+    [InlineData((ulong)long.MaxValue, long.MaxValue)]
+    [InlineData((ulong)long.MaxValue + 1, long.MinValue)]
+    [InlineData(ulong.MaxValue, -1L)]
+    public void Delta_IntervalIdentity_PreservesNanosecondTimestampBits(ulong timestamp, long expectedId)
+    {
+        var point = CreatePoint(DateTime.UnixEpoch, s_start, [1, 0], [100]);
+        point.TimeUnixNano = timestamp;
+
+        var value = HistogramValue.Create(point, OtlpAggregationTemporality.Delta, previous: null);
+
+        Assert.Equal(expectedId, value.AggregationId);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]
     [InlineData(true, false)]

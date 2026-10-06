@@ -233,6 +233,8 @@ Metric dimensions are normalized into an attribute set and stable non-cryptograp
 
 Histogram points retain the producer's aggregation start separately from their chart interval and an aggregation identity that changes on a cumulative reset. Cumulative rollups retain the latest snapshot for each aggregation, so resets inside a rollup are not lost. Delta histogram intervals are retained individually rather than treated as cumulative snapshots; percentile and count charts combine the intervals in each chart window.
 
+Delta interval identities preserve the original nanosecond end timestamp, so distinct intervals are not collapsed by the chart timestamps' 100-nanosecond resolution. Exact duplicate deliveries retain the same identity across requests and database reopening, including rolled-up reads. Schema version 21 replaces the earlier tick-based identity encoding; incompatible databases follow the standard persistence-mode behavior described above.
+
 Delta histogram points with an omitted start timestamp use their end timestamp for chart placement, including after persistence and rollup. The original zero aggregation start timestamp is preserved for export.
 
 Cumulative points ending before their dimension's latest accepted snapshot are rejected individually before reset detection or snapshot extension. This prevents reordered delivery from creating false resets or moving interval timestamps backwards. Reordered delta intervals remain accepted.

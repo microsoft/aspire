@@ -64,7 +64,11 @@ public class HistogramValue : MetricValueBase
         // for delta chart placement, but retain the original aggregation start for export.
         // See https://opentelemetry.io/docs/specs/otel/metrics/data-model/#timestamps.
         var start = temporality == OtlpAggregationTemporality.Delta && point.StartTimeUnixNano == 0 ? end : aggregationStart;
-        var aggregationId = end.Ticks;
+        // Delta ends 40 ns and 80 ns into the same tick must have distinct identities.
+        // The unchecked cast preserves all timestamp bits in an opaque signed database key.
+        var aggregationId = temporality == OtlpAggregationTemporality.Delta
+            ? unchecked((long)point.TimeUnixNano)
+            : end.Ticks;
 
         if (temporality != OtlpAggregationTemporality.Delta && previous is not null)
         {
