@@ -157,15 +157,16 @@ public class TelemetryErrorRecorderTests
         Assert.Equal(DashboardTelemetryService.EventLogCategoryName, log.CategoryName);
         Assert.Collection(log.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal),
             attribute => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, attribute.Key),
-            attribute => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, attribute.Key),
             attribute => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionRuntimeVersion, VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty), attribute),
             attribute => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ExceptionType, exception.GetType().FullName), attribute),
+            attribute => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, attribute.Key),
             attribute => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error), attribute),
             attribute => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error), attribute));
     }
 
     private static List<TestDashboardTelemetryLog> ReadErrors(DashboardTelemetryFixture fixture)
     {
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
         var logs = new List<TestDashboardTelemetryLog>();
         while (fixture.LogChannel.Reader.TryRead(out var log))
         {
