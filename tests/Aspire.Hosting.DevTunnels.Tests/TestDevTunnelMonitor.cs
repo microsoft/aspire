@@ -62,6 +62,12 @@ internal sealed class TestDevTunnelMonitor : IDisposable
 
     public Task LogAsync(string content) => Monitor.ProcessLogAsync(content, CancellationToken.None).DefaultTimeout();
 
+    public async Task ReconcileAsync()
+    {
+        await Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await Monitor.WaitForAccessRefreshAsync(CancellationToken.None).DefaultTimeout();
+    }
+
     public async Task ReadyAsync()
     {
         await LogAsync("""

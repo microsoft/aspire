@@ -195,6 +195,60 @@ public class DevTunnelMonitorTests
         Assert.Null(test.Tunnel.LastKnownStatus);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EstablishedConnectionLossRequiresFreshLocalEvidence(bool deletion)
+    {
+        using var test = new TestDevTunnelMonitor();
+        await test.StartAsync();
+        await test.ReadyAsync();
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.App.ResourceNotifications.PublishUpdateAsync(test.Port, s => s with
+        {
+            Urls = [new("tunnel", "https://original-3000.usw2.devtunnels.ms/", false)]
+        });
+        var connectedStatus = test.Client.TunnelStatus;
+        if (deletion)
+        {
+            test.Client.GetTunnelCallback = (_, _) => throw new DevTunnelNotFoundException("mytunnel.usw2", "Tunnel not found.");
+        }
+        else
+        {
+            test.Client.TunnelStatus = connectedStatus with { HostConnections = 0 };
+        }
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(HealthStatus.Unhealthy, test.Snapshot(test.Port).HealthStatus);
+        Assert.True(Assert.Single(test.Snapshot(test.Port).Urls).IsInactive);
+
+        // A replacement/foreign host is positive service metadata, not evidence of a local reconnect.
+        test.Client.GetTunnelCallback = null;
+        test.Client.TunnelStatus = connectedStatus;
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(HealthStatus.Unhealthy, test.Snapshot(test.Port).HealthStatus);
+        Assert.Equal(HealthStatus.Unhealthy, Assert.Single(test.Snapshot(test.Tunnel).HealthReports, r => r.Name == "tunnel-connection").Status);
+        Assert.True(Assert.Single(test.Snapshot(test.Port).Urls).IsInactive);
+
+        await test.LogAsync("Connection to host tunnel relay restored.");
+        Assert.Equal(HealthStatus.Healthy, test.Snapshot(test.Port).HealthStatus);
+        Assert.False(Assert.Single(test.Snapshot(test.Port).Urls).IsInactive);
+    }
+
+    [Fact]
+    public async Task InitialZeroHostObservationDoesNotDiscardStartupEvidence()
+    {
+        using var test = new TestDevTunnelMonitor();
+        await test.StartAsync();
+        await test.ReadyAsync();
+        var connectedStatus = test.Client.TunnelStatus;
+        test.Client.TunnelStatus = connectedStatus with { HostConnections = 0 };
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(HealthStatus.Unhealthy, test.Snapshot(test.Port).HealthStatus);
+        test.Client.TunnelStatus = connectedStatus;
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(HealthStatus.Healthy, test.Snapshot(test.Port).HealthStatus);
+    }
+
     [Fact]
     public async Task CustomizedUrlsSurviveReadinessReconciliationAndReconnect()
     {
@@ -460,8 +514,43 @@ public class DevTunnelMonitorTests
         await health.DefaultTimeout();
         Assert.Equal(HealthStatus.Healthy, test.Snapshot(test.Port).HealthStatus);
         response.SetResult(test.Client.AccessStatus);
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         Assert.Same(test.Client.AccessStatus, test.Port.LastKnownAccessStatus);
+    }
+
+    [Fact]
+    public async Task StalledAccessRefreshDoesNotBlockSubsequentStatusQueries()
+    {
+        using var test = new TestDevTunnelMonitor();
+        var queried = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<DevTunnelAccessStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var accessQueries = 0;
+        test.Client.GetAccessCallback = (_, ct) =>
+        {
+            if (Interlocked.Increment(ref accessQueries) == 2)
+            {
+                queried.TrySetResult();
+            }
+            return response.Task.WaitAsync(ct);
+        };
+        await test.StartAsync();
+        await test.ReadyAsync();
+        await queried.Task.DefaultTimeout();
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        Assert.False(response.Task.IsCompleted);
+
+        test.Client.TunnelStatus = test.Client.TunnelStatus with { Ports = [] };
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(3, test.Client.Calls.Count(c => c.Method == nameof(IDevTunnelClient.GetTunnelAsync)));
+        Assert.Equal(2, accessQueries);
+        Assert.Equal(HealthStatus.Unhealthy, test.Snapshot(test.Port).HealthStatus);
+        Assert.Null(test.Port.LastKnownStatus);
+        Assert.False(response.Task.IsCompleted);
+
+        // Shared access work still belongs to the run and is canceled/tracked during stop.
+        await test.Monitor.StopAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Finished, test.Snapshot(test.Port).State?.Text);
     }
 
     [Theory]
@@ -480,7 +569,7 @@ public class DevTunnelMonitorTests
         };
         await test.StartAsync();
         await test.ReadyAsync();
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         Assert.Equal("Denied", Assert.Single(test.Snapshot(test.Port).Properties, p => p.Name == "Anonymous access").Value);
         Assert.Equal("Denied", Assert.Single(test.Snapshot(otherPort).Properties, p => p.Name == "Anonymous access").Value);
 
@@ -496,7 +585,7 @@ public class DevTunnelMonitorTests
             }
             return Task.FromResult(allowed);
         };
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
 
         Assert.Same(allowed, test.Port.LastKnownAccessStatus);
         Assert.Equal("Allowed", Assert.Single(test.Snapshot(test.Port).Properties, p => p.Name == "Anonymous access").Value);
@@ -515,7 +604,7 @@ public class DevTunnelMonitorTests
         Assert.Equal(0, (await test.LogsAsync()).Count(l => l.Content.Contains("Some devtunnel output was not recognized", StringComparison.Ordinal)));
 
         test.Client.GetAccessCallback = (_, _) => Task.FromResult(allowed);
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         Assert.Same(allowed, test.Tunnel.LastKnownAccessStatus);
         Assert.Equal("Allowed", Assert.Single(test.Snapshot(otherPort).Properties, p => p.Name == "Anonymous access").Value);
     }
@@ -526,29 +615,52 @@ public class DevTunnelMonitorTests
         using var test = new TestDevTunnelMonitor();
         await test.StartAsync();
         await test.ReadyAsync();
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
+        await test.ReconcileAsync();
         Assert.Single(await test.LogsAsync(test.Port), l => l.Content.Contains("Anonymous access is not allowed", StringComparison.Ordinal));
 
         test.Client.AccessStatus = new()
         {
             AccessControlEntries = [new("Anonymous", false, true, [], ["connect"])]
         };
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         test.Client.AccessStatus = new()
         {
             AccessControlEntries = [new("Anonymous", false, false, [], ["connect"])]
         };
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         Assert.Single(await test.LogsAsync(test.Port), l => l.Content.Contains("!! Anonymous access is allowed", StringComparison.Ordinal));
         Assert.Equal("Allowed", Assert.Single(test.Snapshot(test.Port).Properties, p => p.Name == "Anonymous access").Value);
 
         test.Client.GetAccessCallback = (_, _) => throw new DistributedApplicationException("Access query failed.");
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         Assert.Equal(0, test.Snapshot(test.Port).Properties.Count(p => p.Name == "Anonymous access"));
         test.Client.GetAccessCallback = null;
-        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+        await test.ReconcileAsync();
         Assert.Equal(2, (await test.LogsAsync(test.Port)).Count(l => l.Content.Contains("!! Anonymous access is allowed", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task ExpirationAndInverseSemanticsFlowToAccessProperties()
+    {
+        var time = new TestDevTunnelTimeProvider();
+        using var test = new TestDevTunnelMonitor(time);
+        var expiration = time.GetUtcNow().AddMinutes(1);
+        test.Client.AccessStatus = new()
+        {
+            AccessControlEntries = [
+                new("Anonymous", false, true, [], ["connect"]),
+                new("Anonymous", true, false, [], ["connect"]) { Expiration = expiration },
+                new("Anonymous", true, false, [], ["connect"]) { IsInverse = true }
+            ]
+        };
+        await test.StartAsync();
+        await test.ReadyAsync();
+        await test.ReconcileAsync();
+        Assert.Equal("Denied", Assert.Single(test.Snapshot(test.Port).Properties, p => p.Name == "Anonymous access").Value);
+        time.Advance(TimeSpan.FromMinutes(1));
+        await test.ReconcileAsync();
+        Assert.Equal("Allowed", Assert.Single(test.Snapshot(test.Port).Properties, p => p.Name == "Anonymous access").Value);
     }
 
     [Fact]

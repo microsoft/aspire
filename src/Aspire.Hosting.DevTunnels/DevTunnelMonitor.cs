@@ -146,6 +146,12 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
         return true;
     }, cancellationToken);
 
+    internal async Task WaitForAccessRefreshAsync(CancellationToken cancellationToken)
+    {
+        var task = await InvokeAsync(() => Task.FromResult(_run?.AccessTask ?? Task.CompletedTask), cancellationToken).ConfigureAwait(false);
+        await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task MonitorInitialHealthAsync(Run run)
     {
         try
@@ -227,10 +233,21 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                 {
                     run.TunnelId = status.TunnelId;
                     _resource.LastKnownStatus = status;
+                    if (status.HostConnections == 0 && run.ServiceConnectionConfirmed)
+                    {
+                        // A zero count before the service has ever seen this connection can be
+                        // startup propagation. After confirmation, it is observed connection loss;
+                        // a later positive count might be a foreign host and requires new local evidence.
+                        InvalidateConnectionEvidence(run);
+                    }
                     // Aggregate connections can belong to another machine, including before this
                     // run has ever connected. Service metadata can fill in unknown port URLs,
                     // but it cannot establish local connectivity or override a local disconnect.
                     run.Connected = run.HasConnectionEvidence && !run.LocallyDisconnected && status.HostConnections > 0;
+                    if (run.Connected)
+                    {
+                        run.ServiceConnectionConfirmed = true;
+                    }
                     run.Ports.Clear();
                     foreach (var port in status.Ports)
                     {
@@ -247,15 +264,16 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                 return alreadyReady;
             }, cancellationToken).ConfigureAwait(false);
 
-            var accessTask = await InvokeAsync(() =>
+            await InvokeAsync(() =>
             {
                 if (IsCurrent(run) && wasReady && run.AccessTask.IsCompleted)
                 {
                     run.AccessTask = QueryAccessAsync(run);
                 }
-                return Task.FromResult(run.AccessTask);
+                return Task.FromResult(true);
             }, cancellationToken).ConfigureAwait(false);
-            await accessTask.ConfigureAwait(false);
+            // AccessTask remains tracked and coalesced independently. Waiting here would keep
+            // ReconciliationTask incomplete and block future status queries if access metadata stalls.
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -273,7 +291,7 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                         if (ex is DevTunnelNotFoundException)
                         {
                             _resource.LastKnownStatus = null;
-                            run.Connected = false;
+                            InvalidateConnectionEvidence(run);
                             run.Ports.Clear();
                         }
                         else if (!run.HasConnectionEvidence)
@@ -335,7 +353,7 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                     else
                     {
                         port.LastKnownAccessStatus = access;
-                        await DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(port, _notifications, _logs).ConfigureAwait(false);
+                        await DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(port, _notifications, _logs, _timeProvider.GetUtcNow()).ConfigureAwait(false);
                     }
                 }
                 return true;
@@ -509,8 +527,7 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                         changed = true;
                         break;
                     case DevTunnelOutputParser.OutputKind.Disconnected:
-                        run.Connected = false;
-                        run.LocallyDisconnected = true;
+                        InvalidateConnectionEvidence(run);
                         changed = true;
                         break;
                     case DevTunnelOutputParser.OutputKind.Unrecognized when canWarn:
@@ -525,6 +542,14 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
             run.Error = null;
             await PublishAsync(run).ConfigureAwait(false);
         }
+    }
+
+    private static void InvalidateConnectionEvidence(Run run)
+    {
+        run.Connected = false;
+        run.HasConnectionEvidence = false;
+        run.ServiceConnectionConfirmed = false;
+        run.LocallyDisconnected = true;
     }
 
     private static bool IsHostDiagnostic(string content) =>
@@ -744,6 +769,7 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
         public long Revision { get; set; }
         public bool Connected { get; set; }
         public bool HasConnectionEvidence { get; set; }
+        public bool ServiceConnectionConfirmed { get; set; }
         public bool LocallyDisconnected { get; set; }
         public bool WarnedAboutOutput { get; set; }
         public string? Error { get; set; }

@@ -401,10 +401,7 @@ internal sealed class DevTunnelCliClient : IDevTunnelClient
             // deny rules take precedence over allows. Preserve those entries and add a deny
             // if needed, rather than weakening the policy to obtain an exact ACL shape.
             // https://github.com/microsoft/dev-tunnels/blob/main/cs/src/Contracts/TunnelAccessControl.cs
-            if (explicitEntries.Any(e => e.IsDeny
-                && string.Equals(e.Type, "Anonymous", StringComparison.OrdinalIgnoreCase)
-                && e.Subjects.Count == 0
-                && e.Scopes.Any(s => string.Equals(s, "connect", StringComparison.OrdinalIgnoreCase))))
+            if (explicitEntries.Any(e => e.IsPermanentAnonymousConnectRule(deny: true)))
             {
                 return;
             }
@@ -416,11 +413,8 @@ internal sealed class DevTunnelCliClient : IDevTunnelClient
         var matches = allowAnonymous is null
             ? explicitEntries.Length == 0
             : explicitEntries is [var entry]
-                && string.Equals(entry.Type, "Anonymous", StringComparison.OrdinalIgnoreCase)
-                && entry.IsDeny == !allowAnonymous.Value
-                && entry.Subjects.Count == 0
-                && entry.Scopes is [var scope]
-                && string.Equals(scope, "connect", StringComparison.OrdinalIgnoreCase);
+                && entry.IsPermanentAnonymousConnectRule(deny: !allowAnonymous.Value)
+                && entry.Scopes.Count == 1;
         if (matches)
         {
             return;

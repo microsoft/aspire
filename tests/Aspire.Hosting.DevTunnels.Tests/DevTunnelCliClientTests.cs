@@ -424,6 +424,75 @@ public class DevTunnelCliClientTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task InverseAnonymousRulesCannotSatisfyModeledPortPolicy(bool allowAnonymous)
+    {
+        var cli = new TestDevTunnelCli();
+        var inverse = AnonymousAccess(deny: !allowAnonymous) with { IsInverse = true };
+        cli.EnqueueShowPortResult(0, PortJson(access: allowAnonymous
+            ? [inverse]
+            : [AnonymousAccess(deny: false) with { IsInherited = true }, inverse]));
+        cli.EnqueueResetAccessResult(0, """{"accessControlEntries":[]}""");
+        cli.EnqueueCreateAccessResult(0, """{"accessControlEntries":[]}""");
+        var port = await CreateClient(cli).CreatePortAsync("mytunnel.usw2", 3000,
+            new() { Protocol = "http", Labels = ["label"], AllowAnonymous = allowAnonymous });
+
+        Assert.True(Assert.Single(port.AccessControl!, e => !e.IsInherited).IsInverse);
+        Assert.Equal(allowAnonymous
+            ? new[] { nameof(DevTunnelCli.ShowPortAsync), nameof(DevTunnelCli.ResetAccessAsync), nameof(DevTunnelCli.CreateAccessAsync) }
+            : [nameof(DevTunnelCli.ShowPortAsync), nameof(DevTunnelCli.CreateAccessAsync)],
+            cli.Calls.Select(c => c.Method));
+        Assert.Equal(!allowAnonymous, cli.Calls.Last().Arguments.Contains("--deny"));
+    }
+
+    [Theory]
+    [InlineData("2099-01-01T00:00:00Z")]
+    [InlineData("2000-01-01T00:00:00Z")]
+    public async Task ExpiringAnonymousDenyDoesNotSatisfyPermanentRestriction(string expiration)
+    {
+        var cli = new TestDevTunnelCli();
+        cli.EnqueueShowPortResult(0, PortJson(access: [
+            AnonymousAccess(deny: false) with { IsInherited = true },
+            AnonymousAccess(deny: true) with { Expiration = DateTimeOffset.Parse(expiration, System.Globalization.CultureInfo.InvariantCulture) }
+        ]));
+        cli.EnqueueCreateAccessResult(0, """{"accessControlEntries":[]}""");
+        var port = await CreateClient(cli).CreatePortAsync("mytunnel.usw2", 3000,
+            new() { Protocol = "http", Labels = ["label"], AllowAnonymous = false });
+
+        Assert.NotNull(Assert.Single(port.AccessControl!, e => e.IsDeny).Expiration);
+        Assert.Equal([nameof(DevTunnelCli.ShowPortAsync), nameof(DevTunnelCli.CreateAccessAsync)], cli.Calls.Select(c => c.Method));
+        Assert.Contains("--deny", cli.Calls.Last().Arguments);
+    }
+
+    [Fact]
+    public async Task ExpiringAnonymousAllowDoesNotSatisfyPermanentGrant()
+    {
+        var cli = new TestDevTunnelCli();
+        cli.EnqueueShowPortResult(0, PortJson(access: [AnonymousAccess(deny: false) with { Expiration = DateTimeOffset.MaxValue }]));
+        cli.EnqueueResetAccessResult(0, """{"accessControlEntries":[]}""");
+        cli.EnqueueCreateAccessResult(0, """{"accessControlEntries":[]}""");
+        await CreateClient(cli).CreatePortAsync("mytunnel.usw2", 3000,
+            new() { Protocol = "http", Labels = ["label"], AllowAnonymous = true });
+        Assert.Equal([nameof(DevTunnelCli.ShowPortAsync), nameof(DevTunnelCli.ResetAccessAsync), nameof(DevTunnelCli.CreateAccessAsync)], cli.Calls.Select(c => c.Method));
+    }
+
+    [Fact]
+    public async Task AdditionalPermanentDenyAvoidsMutatingExpiringOrInverseRules()
+    {
+        var cli = new TestDevTunnelCli();
+        cli.EnqueueShowPortResult(0, PortJson(access: [
+            AnonymousAccess(deny: false) with { IsInherited = true },
+            AnonymousAccess(deny: true) with { IsInverse = true },
+            AnonymousAccess(deny: true) with { Expiration = DateTimeOffset.MaxValue },
+            AnonymousAccess(deny: true)
+        ]));
+        await CreateClient(cli).CreatePortAsync("mytunnel.usw2", 3000,
+            new() { Protocol = "http", Labels = ["label"], AllowAnonymous = false });
+        Assert.Equal(nameof(DevTunnelCli.ShowPortAsync), Assert.Single(cli.Calls).Method);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task AddingMissingDenyNeverResetsExistingPolicyOnFailure(bool cancel)
     {
         using var cts = new CancellationTokenSource();

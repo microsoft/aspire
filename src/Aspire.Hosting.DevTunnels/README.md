@@ -229,9 +229,9 @@ Health checks also reconcile tunnel ports and access settings with the dev tunne
 
 Starting a tunnel checks its remote configuration and reuses matching tunnels and ports. Unchanged access policies are left intact; changed policies are reconciled before hosting. Ports are recreated only when their protocol, description, or labels differ from the application model. Remote drift is checked on each start rather than relying on a cached successful setup.
 
-For ports configured with `allowAnonymous: false`, an existing anonymous connection deny is retained even if additional access rules are present. If the deny is missing, it is added without first clearing the other rules. This avoids temporarily removing an existing restriction during in-place reconciliation.
+For ports configured with `allowAnonymous: false`, an existing permanent, non-inverse anonymous connection deny is retained even if additional access rules are present. An expiring deny is not a permanent restriction, and inverse anonymous rules apply to authenticated users rather than anonymous callers. If a permanent deny is missing, it is added without first clearing the other rules. This avoids temporarily removing an existing restriction during in-place reconciliation.
 
-If tunnel status is incorrect after such a warning, include the output of `devtunnel --version` and the relevant tunnel console logs in an Aspire issue, after removing sensitive information. A service response indicating an active host will not override a disconnect reported by the local CLI, because that connection may belong to another host.
+If tunnel status is incorrect after such a warning, include the output of `devtunnel --version` and the relevant tunnel console logs in an Aspire issue, after removing sensitive information. A service response indicating an active host will not override a disconnect reported by the local CLI or reactivate a connection whose loss or tunnel deletion was established by reconciliation, because that connection may belong to another host. Initial service-status propagation is tracked separately from the loss of a previously confirmed connection.
 
 ### Port forwarding logs
 
@@ -243,7 +243,7 @@ Forwarding from https://37tql9l1-7023.usw2.devtunnels.ms to https://localhost:70
 
 ### Anonymous access logging
 
-Port resources also log their effective anonymous access policy when first known or when it changes, showing both the current access level and the configuration that led to it. A failed policy query clears that port's access property instead of retaining a stale value; successful policy queries for other ports are still applied.
+Port resources also log their effective anonymous access policy when first known or when it changes, showing both the current access level and the configuration that led to it. The display ignores inverse rules and expired entries. A failed policy query clears that port's access property instead of retaining a stale value; successful policy queries for other ports are still applied. Access metadata refreshes do not block subsequent tunnel/port status checks.
 
 **When anonymous access is allowed:**
 ```text

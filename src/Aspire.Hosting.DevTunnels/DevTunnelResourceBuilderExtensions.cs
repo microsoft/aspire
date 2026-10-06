@@ -796,15 +796,15 @@ public static partial class DevTunnelsResourceBuilderExtensions
             : updated.AbsoluteUri;
     }
 
-    internal static async Task UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs)
+    internal static async Task UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs, DateTimeOffset now)
     {
-        var effectivePolicy = portResource.LastKnownAccessStatus?.GetAnonymousAccessPolicy();
+        var effectivePolicy = portResource.LastKnownAccessStatus?.GetAnonymousAccessPolicy(now);
         var previousPolicy = notifications.TryGetCurrentState(portResource.Name, out var current)
             ? current.Snapshot.Properties.FirstOrDefault(p => p.Name == "Anonymous access")?.Value as string
             : null;
         if (!string.Equals(effectivePolicy, previousPolicy, StringComparison.Ordinal) && portResource.LastKnownAccessStatus is { } access)
         {
-            access.LogAnonymousAccessPolicy(logs.GetLogger(portResource));
+            access.LogAnonymousAccessPolicy(logs.GetLogger(portResource), now);
         }
 
         ResourcePropertySnapshot[] policyProperties = effectivePolicy is null ? [] : [new("Anonymous access", effectivePolicy)];

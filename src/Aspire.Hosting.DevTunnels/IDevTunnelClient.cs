@@ -75,32 +75,39 @@ internal sealed record DevTunnelAccessStatus
     [JsonRequired]
     public IReadOnlyList<AccessControlEntry> AccessControlEntries { get; init; } = [];
 
-    public sealed record AccessControlEntry(string Type, bool IsDeny, bool IsInherited, IReadOnlyList<string> Subjects, IReadOnlyList<string> Scopes);
-
-    internal string GetAnonymousAccessPolicy() => EvaluateAnonymousAccessPolicy(logger: null);
-
-    internal string LogAnonymousAccessPolicy(ILogger logger) => EvaluateAnonymousAccessPolicy(logger);
-
-    private string EvaluateAnonymousAccessPolicy(ILogger? logger)
+    public sealed record AccessControlEntry(string Type, bool IsDeny, bool IsInherited, IReadOnlyList<string> Subjects, IReadOnlyList<string> Scopes)
     {
-        const string AnonymousType = "Anonymous";
-        const string ConnectScope = "connect";
+        public bool IsInverse { get; init; }
 
-        static bool HasConnectScope(AccessControlEntry entry) => entry.Scopes is { } scopes && scopes.Any(s => string.Equals(s, ConnectScope, StringComparison.OrdinalIgnoreCase));
+        public DateTimeOffset? Expiration { get; init; }
 
-        var entries = AccessControlEntries;
+        // Inverse Anonymous rules apply to authenticated users, not anonymous callers.
+        // A finite-lived rule may affect access now, but cannot satisfy a permanent modeled policy.
+        // https://github.com/microsoft/dev-tunnels/blob/main/cs/src/Contracts/TunnelAccessControlEntry.cs
+        private bool IsAnonymousConnectRule =>
+            !IsInverse
+            && string.Equals(Type, "Anonymous", StringComparison.OrdinalIgnoreCase)
+            && Subjects.Count == 0
+            && Scopes.Any(s => string.Equals(s, "connect", StringComparison.OrdinalIgnoreCase));
 
-        var portHasInheritedAnonymousAllow = entries.Any(e => string.Equals(e.Type, AnonymousType, StringComparison.OrdinalIgnoreCase)
-                                                              && !e.IsDeny
-                                                              && e.IsInherited
-                                                              && HasConnectScope(e));
-        var portHasExplicitAnonymousAllow = entries.Any(e => string.Equals(e.Type, AnonymousType, StringComparison.OrdinalIgnoreCase)
-                                                             && !e.IsDeny
-                                                             && !e.IsInherited
-                                                             && HasConnectScope(e));
-        var portHasExplicitAnonymousDeny = entries.Any(e => string.Equals(e.Type, AnonymousType, StringComparison.OrdinalIgnoreCase)
-                                                            && e.IsDeny
-                                                            && HasConnectScope(e));
+        internal bool IsPermanentAnonymousConnectRule(bool deny) =>
+            IsAnonymousConnectRule && IsDeny == deny && Expiration is null;
+
+        internal bool IsActiveAnonymousConnectRule(DateTimeOffset now) =>
+            IsAnonymousConnectRule && (Expiration is null || Expiration > now);
+    }
+
+    internal string GetAnonymousAccessPolicy(DateTimeOffset now) => EvaluateAnonymousAccessPolicy(logger: null, now);
+
+    internal string LogAnonymousAccessPolicy(ILogger logger, DateTimeOffset now) => EvaluateAnonymousAccessPolicy(logger, now);
+
+    private string EvaluateAnonymousAccessPolicy(ILogger? logger, DateTimeOffset now)
+    {
+        var entries = AccessControlEntries.Where(e => e.IsActiveAnonymousConnectRule(now)).ToArray();
+
+        var portHasInheritedAnonymousAllow = entries.Any(e => !e.IsDeny && e.IsInherited);
+        var portHasExplicitAnonymousAllow = entries.Any(e => !e.IsDeny && !e.IsInherited);
+        var portHasExplicitAnonymousDeny = entries.Any(e => e.IsDeny);
 
         // Derive tunnel-level allow from presence of inherited allow (since we don't receive tunnel access status directly here)
         var tunnelHasAnonymousAllow = portHasInheritedAnonymousAllow;
