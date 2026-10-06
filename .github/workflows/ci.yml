@@ -43,6 +43,13 @@ jobs:
         with:
           patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
 
+      - name: Check dependency review constraints
+        if: ${{ github.event_name == 'pull_request' }}
+        run: |
+          python3 -m unittest discover -s eng/dependency-review -p 'test_*.py'
+          python3 eng/dependency-review/check.py
+          (cd extension && node scripts/validate-lockfile-registry.cjs)
+
       - id: compute_version_suffix
         name: Compute version suffix for PRs
         if: ${{ github.event_name == 'pull_request' }}

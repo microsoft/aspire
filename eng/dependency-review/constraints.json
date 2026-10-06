@@ -1,0 +1,30 @@
+{
+  "properties": {
+    "Npgsql8Version": {
+      "major": 8,
+      "reason": "Npgsql and the net8 EF Core provider must have matching majors (Directory.Packages.props)."
+    },
+    "Npgsql9Version": {
+      "major": 9,
+      "reason": "Npgsql and the net9 EF Core provider must have matching majors (Directory.Packages.props)."
+    }
+  },
+  "packages": {
+    "Microsoft.Build.Utilities.Core": {
+      "version": "17.9.5",
+      "reason": "Preserve older Visual Studio support (Directory.Packages.props)."
+    },
+    "Azure.Provisioning.Cdn": {
+      "version": "1.0.0-beta.2",
+      "reason": "Hold generated resource names until Azure/azure-sdk-for-net#63274 is fixed."
+    },
+    "Azure.Provisioning.Kusto": {
+      "version": "1.0.0-beta.2",
+      "reason": "Cluster renaming and removal of older API versions require a separate deployment migration."
+    },
+    "Microsoft.AI.Foundry.Local": {
+      "version": "1.1.0",
+      "reason": "Newer runtime targets break RID-independent restores (Directory.Packages.props)."
+    }
+  }
+}
