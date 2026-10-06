@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Utils;
+using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +37,7 @@ internal sealed class TelemetryManager : IDisposable
 {
     // Remote export connection string for CLI Application Insights. Intentionally hard-coded.
     private const string ApplicationInsightsConnectionString = "InstrumentationKey=e39510fc-95a1-423d-9f33-6121bf0d2113;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=4d8bb9db-b7ab-49f9-978b-80ae1e83f6da";
+    private const string ApplicationInsightsServiceName = "ddc-cor-prd-usce-ai-aspirecli";
 
 #if DEBUG
     // No timeout in debug builds
@@ -147,8 +148,9 @@ internal sealed class TelemetryManager : IDisposable
             TracerProvider? debugDiagnosticProvider = null;
             try
             {
-                var resource = CreateResourceBuilder();
-                CreateProviders(resource, out azureMonitorProvider, out profilingProvider, out debugDiagnosticProvider);
+                var azureMonitorResource = CreateResourceBuilder(ApplicationInsightsServiceName);
+                var otlpResource = CreateResourceBuilder("aspire-cli");
+                CreateProviders(azureMonitorResource, otlpResource, out azureMonitorProvider, out profilingProvider, out debugDiagnosticProvider);
                 if (azureMonitorProvider is not null)
                 {
                     _telemetry.SetEventLogger(azureMonitorProvider.EventLogger);
@@ -171,7 +173,7 @@ internal sealed class TelemetryManager : IDisposable
         }
     }
 
-    private void CreateProviders(ResourceBuilder resource, out AzureMonitorTelemetryProvider? azureMonitorProvider, out TracerProvider? profilingProvider, out TracerProvider? debugDiagnosticProvider)
+    private void CreateProviders(ResourceBuilder azureMonitorResource, ResourceBuilder otlpResource, out AzureMonitorTelemetryProvider? azureMonitorProvider, out TracerProvider? profilingProvider, out TracerProvider? debugDiagnosticProvider)
     {
         azureMonitorProvider = null;
         profilingProvider = null;
@@ -196,19 +198,19 @@ internal sealed class TelemetryManager : IDisposable
 
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
-            azureMonitorProvider = _createReportedProvider(resource, AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
+            azureMonitorProvider = _createReportedProvider(azureMonitorResource, AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
         }
 
         if (telemetryConfiguration.UseProfilingProvider)
         {
-            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, resource, tagsSource, _telemetry)
+            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, otlpResource, tagsSource, _telemetry)
                 .AddOtlpExporter()
                 .Build();
         }
 
         if (useDebugDiagnosticProvider)
         {
-            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, resource, tagsSource, _telemetry);
+            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, otlpResource, tagsSource, _telemetry);
 
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
@@ -232,11 +234,11 @@ internal sealed class TelemetryManager : IDisposable
             .AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
     }
 
-    internal static ResourceBuilder CreateResourceBuilder() => ResourceBuilder.CreateDefault().AddService(
-        serviceName: "aspire-cli",
+    internal static ResourceBuilder CreateResourceBuilder(string serviceName) => ResourceBuilder.CreateDefault().AddService(
+        serviceName: serviceName,
         // The resource identifies the physical binary, not an emulated ASPIRE_CLI_VERSION.
         // See docs/specs/cli-identity-sidecar.md; emulated identity is reported as identity.* tags.
-        serviceVersion: VersionHelper.GetDefaultTemplateVersion());
+        serviceVersion: AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly));
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.

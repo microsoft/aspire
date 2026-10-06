@@ -34,6 +34,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
         using var process = RemoteExecutor.Invoke(static async (directory, enabledValue, flushValue) =>
         {
             Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", null);
             var isEnabled = bool.Parse(enabledValue);
             var configuration = new TelemetryConfiguration { ReportedTelemetryEnabled = isEnabled };
             var loggingOptions = new Program.CliLoggingOptions(LogLevel.Error, false, directory, Path.Combine(directory, "cli.log"));
@@ -101,6 +102,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             foreach (var record in records)
             {
                 Assert.Equal("MessageData", record.GetProperty("data").GetProperty("baseType").GetString());
+                Assert.Equal("ddc-cor-prd-usce-ai-aspirecli", record.GetProperty("tags").GetProperty("ai.cloud.role").GetString());
                 var properties = record.GetProperty("data").GetProperty("baseData").GetProperty("properties");
                 Assert.Equal(AspireCliTelemetry.EventLogCategoryName, properties.GetProperty("CategoryName").GetString());
                 Assert.False(properties.TryGetProperty("secret", out _));
@@ -140,7 +142,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             var exported = new ConcurrentQueue<JsonElement>();
             using var handler = CreateHandler(exported);
             using var client = new HttpClient(handler);
-            using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), TelemetryManager.CreateResourceBuilder(),
+            using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), TelemetryManager.CreateResourceBuilder("ddc-cor-prd-usce-ai-aspirecli"),
                 AspireCliTelemetry.ReportedActivitySourceName, AspireCliTelemetry.EventLogCategoryName,
                 $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/",
                 directory, builder =>

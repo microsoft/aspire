@@ -4,9 +4,11 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared;
 using Aspire.Shared.Telemetry;
 using Aspire.TestUtilities;
 using Azure.Core.Pipeline;
@@ -16,6 +18,7 @@ using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -132,6 +135,62 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         Assert.False(manager.IsInitialized);
         Assert.Throws<InvalidOperationException>(manager.Initialize);
         Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
+    }
+
+    [Theory]
+    [InlineData(true)]
+#if DEBUG
+    [InlineData(false)]
+#endif
+    public void TelemetryManager_UsesSeparateAzureMonitorAndOtlpResources(bool profilingEnabled)
+    {
+        using var process = RemoteExecutor.Invoke(static profilingValue =>
+        {
+            Environment.SetEnvironmentVariable("OTEL_SERVICE_NAME", "environment-service");
+            Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", null);
+            var profilingEnabled = bool.Parse(profilingValue);
+            var configuration = new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = true,
+                ProfilingEnabled = profilingEnabled,
+                RequestedOtlpExporter = true
+            };
+            using var fixture = new TelemetryFixture(telemetryConfiguration: configuration, initialize: false);
+            Resource? azureTraceResource = null;
+            Resource? azureLogResource = null;
+            using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
+                (resource, _) =>
+                {
+                    var provider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, AspireCliTelemetry.EventLogCategoryName,
+                        () => Sdk.CreateTracerProviderBuilder().SetResourceBuilder(resource).Build(),
+                        loggerProvider => azureLogResource = loggerProvider.GetResource());
+                    azureTraceResource = provider.Resource;
+                    return provider;
+                });
+
+            manager.Initialize();
+
+            Assert.True(manager.HasAzureMonitor);
+            Assert.Equal(profilingEnabled, manager.HasProfilingProvider);
+            Assert.Equal(!profilingEnabled, manager.HasDiagnosticProvider);
+            Assert.NotNull(azureTraceResource);
+            Assert.NotNull(azureLogResource);
+            Assert.Equal(azureTraceResource.Attributes.ToArray(), azureLogResource.Attributes.ToArray());
+            Assert.Equal("ddc-cor-prd-usce-ai-aspirecli", azureTraceResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+
+            // Inspect the actual OTLP provider without exposing manager-owned providers to callers.
+            var field = typeof(TelemetryManager).GetField(profilingEnabled ? "_profilingProvider" : "_debugDiagnosticProvider",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            var otlpProvider = Assert.IsAssignableFrom<TracerProvider>(field.GetValue(manager));
+            var otlpResource = otlpProvider.GetResource();
+            Assert.NotSame(azureTraceResource, otlpResource);
+            Assert.Equal("aspire-cli", otlpResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+            var expectedVersion = AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
+            Assert.NotEmpty(expectedVersion);
+            Assert.Equal(expectedVersion, azureTraceResource.Attributes.Single(attribute => attribute.Key == "service.version").Value);
+            Assert.Equal(expectedVersion, otlpResource.Attributes.Single(attribute => attribute.Key == "service.version").Value);
+        }, profilingEnabled.ToString());
     }
 
     [Fact]

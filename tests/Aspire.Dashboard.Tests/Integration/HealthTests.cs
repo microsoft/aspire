@@ -117,14 +117,7 @@ public class HealthTests(HealthTests.Fixture fixture) : IClassFixture<HealthTest
             Assert.Equal(expectedServiceInstanceId, resourceAttributes["service.instance.id"]);
         }
 
-        var usageLogAttributes = app.Services.GetRequiredService<LoggerProvider>().GetResource().Attributes;
-        Assert.Collection(usageLogAttributes.OrderBy(t => t.Key, StringComparer.Ordinal),
-            tag => Assert.Equal(new KeyValuePair<string, object>("service.name", "aspire-dashboard"), tag),
-            tag =>
-            {
-                Assert.Equal("service.version", tag.Key);
-                Assert.NotEmpty(Assert.IsType<string>(tag.Value));
-            });
+        Assert.Null(app.Services.GetService<LoggerProvider>());
     }
 
     public sealed class Fixture : IAsyncLifetime
