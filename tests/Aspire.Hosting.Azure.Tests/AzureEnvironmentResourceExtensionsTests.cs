@@ -637,6 +637,28 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
     }
 
     [Fact]
+    public async Task EnsureProvisioned_DoesNotCreateProvisioningContextWhenAllResourcesAreSatisfiedFromCachedState()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var cachedStateProvisioner = new CachedStateTestBicepProvisioner();
+        var provisioningContextProvider = new TestProvisioningContextProvider();
+        AddTestAzureProvisioning(builder, bicepProvisioner: cachedStateProvisioner, provisioningContextProvider: provisioningContextProvider);
+
+        builder.AddBicepTemplateString("storage", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+        builder.AddBicepTemplateString("storage2", "resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {}");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+
+        await controller.EnsureProvisionedAsync(model);
+
+        Assert.Equal(2, cachedStateProvisioner.ConfigureResourceCallCount);
+        Assert.Equal(0, cachedStateProvisioner.GetOrCreateResourceCallCount);
+        Assert.Equal(0, provisioningContextProvider.CreateProvisioningContextCallCount);
+    }
+
+    [Fact]
     public async Task OnBeforeStartAsync_AddsPerResourceCommandsToDeployableAzureResourcesOnly()
     {
         var builder = CreateBuilder(isRunMode: true);
