@@ -62,11 +62,54 @@ public sealed class SqlHelpersTests
     [InlineData("Microsoft.EntityFramework")]
     [InlineData("microsoft.entityframeworkcore.Database.Command")]
     [InlineData("MongoDB.Command")]
-    public void GetLogFormat_OtherSource_ReturnsNull(string source)
+    public void GetLogFormat_OtherSourceWithoutDatabaseSystem_ReturnsNull(string source)
     {
         Assert.Null(SqlHelpers.GetLogFormat("commandText", source, []));
-        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", source, [KeyValuePair.Create("db.system.name", "postgresql")]));
+        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", source, []));
         Assert.Null(SqlHelpers.GetLogFormat("sql", source, []));
+    }
+
+    [Theory]
+    [InlineData("MyApp.Database", "db.query.text", "db.system.name", "postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("MyApp.Database", "db.statement", "db.system", "mysql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("MyApp.Database", "commandText", "db.system.name", "mssql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("MyApp.Database", "queryText", "db.system", "postgresql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("NHibernate.SQL", "commandText", "db.system.name", "mssql", DashboardUIHelpers.SqlFormat)]
+    [InlineData("", "db.query.text", "db.system.name", "sqlite", DashboardUIHelpers.SqlFormat)]
+    [InlineData("MyApp.Database", "db.query.text", "db.system.name", "redis", null)]
+    [InlineData("MyApp.Database", "db.statement", "db.system", "mongodb", null)]
+    [InlineData("MyApp.Database", "commandText", "db.system.name", "custom", null)]
+    [InlineData("MyApp.Database", "Message", "db.system.name", "postgresql", null)]
+    [InlineData("MyApp.Database", "sql", "db.system.name", "redis", DashboardUIHelpers.SqlFormat)]
+    public void GetLogFormat_OtherSourceWithDatabaseSystem_RespectsFieldAndDatabaseSystem(string source, string name, string systemKey, string system, string? expectedFormat)
+    {
+        Assert.Equal(expectedFormat, SqlHelpers.GetLogFormat(name, source, [KeyValuePair.Create(systemKey, system)]));
+    }
+
+    [Theory]
+    [InlineData("db.system.name")]
+    [InlineData("db.system")]
+    public void GetLogFormat_OtherSourceWithEmptyDatabaseSystem_ReturnsNull(string systemKey)
+    {
+        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", "MyApp.Database", [KeyValuePair.Create(systemKey, "")]));
+    }
+
+    [Fact]
+    public void GetLogFormat_OtherSourceWithUnrelatedMetadata_ReturnsNull()
+    {
+        Assert.Null(SqlHelpers.GetLogFormat("db.query.text", "MyApp.Database", [KeyValuePair.Create("service.name", "postgresql")]));
+    }
+
+    [Theory]
+    [InlineData("postgresql", "redis", DashboardUIHelpers.SqlFormat)]
+    [InlineData("redis", "postgresql", null)]
+    public void GetLogFormat_BothDatabaseSystems_PrefersCurrentConvention(string currentSystem, string legacySystem, string? expectedFormat)
+    {
+        Assert.Equal(expectedFormat, SqlHelpers.GetLogFormat("db.query.text", "MyApp.Database",
+        [
+            KeyValuePair.Create("db.system", legacySystem),
+            KeyValuePair.Create("db.system.name", currentSystem)
+        ]));
     }
 
     [Theory]

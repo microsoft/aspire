@@ -76,10 +76,12 @@ internal static class SqlHelpers
 
     public static string? GetLogFormat(string name, string source, KeyValuePair<string, string>[] attributes)
     {
-        // Logger categories include subcategories such as Microsoft.EntityFrameworkCore.Database.Command
-        // and Npgsql.Command. Restrict generic fields like commandText to known database log sources.
-        return s_databaseLogSourcePrefixes.Any(prefix => source.StartsWith(prefix, StringComparison.Ordinal))
-            ? GetFormat(name, attributes)
+        var databaseSystem = GetDatabaseSystem(attributes);
+        // Database metadata also identifies custom sources. Without it, require a known provider
+        // category such as Microsoft.EntityFrameworkCore.Database.Command or Npgsql.Command.
+        return !string.IsNullOrEmpty(databaseSystem) ||
+            s_databaseLogSourcePrefixes.Any(prefix => source.StartsWith(prefix, StringComparison.Ordinal))
+            ? GetFormat(name, databaseSystem)
             : null;
     }
 

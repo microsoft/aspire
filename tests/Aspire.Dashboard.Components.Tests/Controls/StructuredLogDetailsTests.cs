@@ -23,25 +23,32 @@ public class StructuredLogDetailsTests : DashboardTestContext
     [InlineData("commandText", "mssql", "Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
     [InlineData("db.query.text", "postgresql", "Npgsql.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
     [InlineData("db.statement", "mysql", "MySqlConnector.MySqlCommand", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
-    [InlineData("commandText", "mssql", "NHibernate.SQL", null, DashboardUIHelpers.SqlFormat)]
+    [InlineData("commandText", "mssql", "NHibernate.SQL", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
     [InlineData("db.statement", "sqlite", "Microsoft.EntityFrameworkCore.Database.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
     [InlineData("db.query.text", "redis", "Microsoft.EntityFrameworkCore.Database.Command", null, DashboardUIHelpers.SqlFormat)]
-    [InlineData("commandText", "mssql", "MyApp.Controllers.CommandsController", null, null)]
-    [InlineData("sql", "postgresql", "MyApp.Services.QueryService", null, null)]
+    [InlineData("commandText", "mssql", "MyApp.Controllers.CommandsController", DashboardUIHelpers.SqlFormat, null)]
+    [InlineData("sql", "postgresql", "MyApp.Services.QueryService", DashboardUIHelpers.SqlFormat, null)]
     [InlineData("commandText", "mssql", "Microsoft.EntityFrameworkCore.Query", DashboardUIHelpers.SqlFormat, null)]
-    public void Render_QueryField_SetsVisualizerFormatOnlyOnValue(string name, string system, string source, string? expectedFormat, string? expectedMessageFormat)
+    [InlineData("db.query.text", "postgresql", "MyApp.Services.QueryService", DashboardUIHelpers.SqlFormat, null)]
+    [InlineData("db.statement", "mongodb", "MyApp.Services.QueryService", null, null)]
+    [InlineData("db.query.text", null, "MyApp.Services.QueryService", null, null)]
+    [InlineData("sql", null, "MyApp.Services.QueryService", null, null)]
+    [InlineData("commandText", null, "Npgsql.Command", DashboardUIHelpers.SqlFormat, DashboardUIHelpers.SqlFormat)]
+    public void Render_QueryField_SetsVisualizerFormatOnlyOnValue(string name, string? system, string source, string? expectedFormat, string? expectedMessageFormat)
     {
         StructuredLogsSetupHelpers.SetupStructuredLogsDetails(this);
+        var attributes = new List<KeyValuePair<string, string>> { KeyValuePair.Create(name, "SELECT 1") };
+        if (system is not null)
+        {
+            attributes.Add(KeyValuePair.Create("db.system.name", system));
+        }
+
         var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
         var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
         var model = new StructureLogsDetailsViewModel
         {
             LogEntry = TelemetryTestHelpers.CreateOtlpLogEntry(
-                record: TelemetryTestHelpers.CreateLogRecord(message: "Executed DbCommand\nSELECT 1", attributes:
-                [
-                    KeyValuePair.Create(name, "SELECT 1"),
-                    KeyValuePair.Create("db.system.name", system)
-                ]),
+                record: TelemetryTestHelpers.CreateLogRecord(message: "Executed DbCommand\nSELECT 1", attributes: attributes),
                 resourceView: resource.GetView([]),
                 scope: TelemetryTestHelpers.CreateOtlpScope(context, name: source),
                 context: context)
