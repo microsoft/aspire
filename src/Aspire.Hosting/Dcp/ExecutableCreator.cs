@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
@@ -16,15 +17,17 @@ internal sealed class ExecutableCreator(
     DcpNameGenerator nameGenerator,
     DistributedApplicationModel model,
     DcpAppResourceStore appResources,
+    ContainerNetworkEndpointProvisioner containerNetworkEndpointProvisioner,
     ExecutableConfigurationResolver configurationResolver,
     IConfiguration configuration,
     DistributedApplicationOptions distributedApplicationOptions,
     ExecutableLaunchPolicy launchPolicy,
-    ILogger<ExecutableCreator> logger) : IObjectCreator<Executable, EmptyCreationContext>
+    ILogger<ExecutableCreator> logger) : IObjectCreator<Executable, ContainerNetworkEndpointContext>
 {
     private readonly DcpNameGenerator _nameGenerator = nameGenerator;
     private readonly DistributedApplicationModel _model = model;
     private readonly DcpAppResourceStore _appResources = appResources;
+    private readonly ContainerNetworkEndpointProvisioner _containerNetworkEndpointProvisioner = containerNetworkEndpointProvisioner;
     private readonly ExecutableConfigurationResolver _configurationResolver = configurationResolver;
     private readonly IConfiguration _configuration = configuration;
     private readonly DistributedApplicationOptions _distributedApplicationOptions = distributedApplicationOptions;
@@ -41,14 +44,14 @@ internal sealed class ExecutableCreator(
 
     public bool IsReadyToCreate(
         RenderedModelResource<Executable> resource,
-        EmptyCreationContext context) =>
+        ContainerNetworkEndpointContext context) =>
         !DcpModelUtilities.ShouldDeferCreateForExplicitStart(
             resource.ModelResource,
             resource.DcpResource.Spec.Start);
 
     public async Task CreateObjectAsync(
         RenderedModelResource<Executable> renderedResource,
-        EmptyCreationContext context,
+        ContainerNetworkEndpointContext context,
         ILogger resourceLogger,
         IDcpObjectFactory factory,
         CancellationToken cancellationToken)
@@ -56,7 +59,11 @@ internal sealed class ExecutableCreator(
         cancellationToken.ThrowIfCancellationRequested();
 
         var configuration = await _configurationResolver
-            .ResolveAsync(renderedResource, resourceLogger, cancellationToken)
+            .ResolveAsync(
+                renderedResource,
+                resourceLogger,
+                new PrepareExecutableConfigurationGatherer(this, context, factory),
+                cancellationToken)
             .ConfigureAwait(false);
         if (configuration.Configuration.Exception is not null)
         {
@@ -112,6 +119,75 @@ internal sealed class ExecutableCreator(
         await factory
             .CreateDcpObjectsAsync([renderedResource.DcpResource], cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task PrepareExecutableConfigurationAsync(
+        IExecutionConfigurationGathererContext context,
+        IResource resource,
+        ContainerNetworkEndpointContext endpointContext,
+        IDcpObjectFactory factory,
+        CancellationToken cancellationToken)
+    {
+        var endpointsByResource = new Dictionary<IResourceWithEndpoints, HashSet<EndpointAnnotation>>(ReferenceEqualityComparer.Instance);
+        var executableResources = _appResources.Get()
+            .OfType<RenderedModelResource<Executable>>()
+            .Select(executable => executable.ModelResource)
+            .ToHashSet(new ResourceNameComparer());
+        var hasContainerResources = _model.Resources.Any(resource => resource.IsContainer());
+
+        foreach (var endpointReference in context.GetReferences<EndpointReference>())
+        {
+            if (endpointReference.ContextNetworkID != KnownNetworkIdentifiers.DefaultAspireContainerNetwork ||
+                !endpointReference.Exists ||
+                !executableResources.Contains(endpointReference.Resource))
+            {
+                continue;
+            }
+
+            if (!hasContainerResources)
+            {
+                throw new FailedToApplyEnvironmentException(
+                    $"Resource '{resource.Name}' references endpoint '{endpointReference.EndpointName}' on executable resource " +
+                    $"'{endpointReference.Resource.Name}' using the default Aspire container network, but the application does not contain any container resources.");
+            }
+
+            if (!_containerNetworkEndpointProvisioner.CanProvisionEndpoint(endpointReference.EndpointAnnotation))
+            {
+                throw new FailedToApplyEnvironmentException(
+                    $"Resource '{resource.Name}' references endpoint '{endpointReference.EndpointName}' on executable resource " +
+                    $"'{endpointReference.Resource.Name}' using the default Aspire container network, but the Aspire container tunnel only supports TCP endpoints.");
+            }
+
+            if (!endpointsByResource.TryGetValue(endpointReference.Resource, out var endpoints))
+            {
+                endpoints = new HashSet<EndpointAnnotation>(ReferenceEqualityComparer.Instance);
+                endpointsByResource.Add(endpointReference.Resource, endpoints);
+            }
+
+            endpoints.Add(endpointReference.EndpointAnnotation);
+        }
+
+        if (endpointsByResource.Count == 0)
+        {
+            return;
+        }
+
+        var hostEndpoints = endpointsByResource
+            .Select(pair => new HostResourceWithEndpoints(pair.Key, pair.Value))
+            .ToImmutableArray();
+
+        await _containerNetworkEndpointProvisioner
+            .EnsureEndpointsAsync(hostEndpoints, endpointContext, factory, cancellationToken)
+            .ConfigureAwait(false);
+
+        var allocatedEndpointTasks = hostEndpoints
+            .SelectMany(host => host.Endpoints)
+            .Select(endpoint => endpoint.AllAllocatedEndpoints.GetAllocatedEndpointAsync(
+                KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+                cancellationToken))
+            .ToArray();
+
+        await Task.WhenAll(allocatedEndpointTasks).ConfigureAwait(false);
     }
 
     internal static async Task<ExecutableLaunchPlan> ResolveLaunchPlanAsync(
@@ -236,14 +312,23 @@ internal sealed class ExecutableCreator(
         {
             EnsureRequiredAnnotations(resource);
 
-            var instance = DcpExecutor.GetDcpInstance(resource, instanceIndex: 0);
-            var executable = Executable.Create(instance.Name, resource.Command);
-            executable.Spec.WorkingDirectory = resource.WorkingDirectory;
+            if (!resource.TryGetInstances(out var instances))
+            {
+                throw new DistributedApplicationException($"Couldn't find required {nameof(DcpInstancesAnnotation)} annotation on resource {resource.Name}.");
+            }
 
-            ApplyCommonAnnotations(executable, resource, instance, replicaCount: 1, replicaIndex: 0);
-            ApplyExplicitStart(resource, executable.Spec);
-            DcpExecutor.SetInitialResourceState(resource, executable);
-            AddRenderedResource(resource, executable);
+            // Naming determines replica eligibility. Consume those instances without enabling
+            // replica annotations on ordinary executables that still receive only one instance.
+            foreach (var instance in instances)
+            {
+                var executable = Executable.Create(instance.Name, resource.Command);
+                executable.Spec.WorkingDirectory = resource.WorkingDirectory;
+
+                ApplyCommonAnnotations(executable, resource, instance, instances.Length, instance.Index);
+                ApplyExplicitStart(resource, executable.Spec);
+                DcpExecutor.SetInitialResourceState(resource, executable);
+                AddRenderedResource(resource, executable);
+            }
         }
     }
 
@@ -336,5 +421,37 @@ internal sealed class ExecutableCreator(
         var renderedResource = new RenderedModelResource<Executable>(resource, executable);
         DcpModelUtilities.AddServicesProducedInfo(renderedResource, _appResources.Get());
         _appResources.Add(renderedResource);
+    }
+
+    /// <summary>
+    /// Prepares network-scoped endpoints after configuration gathering and before value resolution.
+    /// </summary>
+    private sealed class PrepareExecutableConfigurationGatherer(
+        ExecutableCreator creator,
+        ContainerNetworkEndpointContext endpointContext,
+        IDcpObjectFactory factory) : IExecutionConfigurationGatherer
+    {
+        public async ValueTask GatherAsync(
+            IExecutionConfigurationGathererContext context,
+            IResource resource,
+            ILogger resourceLogger,
+            DistributedApplicationExecutionContext executionContext,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await creator.PrepareExecutableConfigurationAsync(
+                    context,
+                    resource,
+                    endpointContext,
+                    factory,
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (FailedToApplyEnvironmentException ex)
+            {
+                resourceLogger.LogError(ex, "{Message}", ex.Message);
+                throw;
+            }
+        }
     }
 }

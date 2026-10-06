@@ -4,10 +4,11 @@
     "language": "go"
   },
   "features": {
-    "experimentalPolyglot:go": true
+    "experimentalPolyglotGo": true
   },
   "packages": {
     "Aspire.Hosting.Azure.AppContainers": "",
-    "Aspire.Hosting.Azure.ContainerRegistry": ""
+    "Aspire.Hosting.Azure.ContainerRegistry": "",
+    "Aspire.Hosting.Azure.Provisioning.ContainerRegistry": ""
   }
 }

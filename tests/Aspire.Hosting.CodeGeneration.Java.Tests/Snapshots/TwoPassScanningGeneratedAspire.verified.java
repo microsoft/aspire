@@ -1895,6 +1895,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString", (h, c) -> new IResourceWithConnectionString(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport", (h, c) -> new IResourceWithWaitSupport(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithParent", (h, c) -> new IResourceWithParent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource", (h, c) -> new IDotnetProgramResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", (h, c) -> new ContainerResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", (h, c) -> new ExecutableResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", (h, c) -> new ProjectResource(h, c));
@@ -15961,6 +15962,20 @@ public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
 
 }
 
+// ===== aspire/IDotnetProgramResource.java =====
+// IDotnetProgramResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class IDotnetProgramResource extends ResourceBuilderBase {
+    IDotnetProgramResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
 // ===== aspire/IExecutionConfigurationBuilder.java =====
 // IExecutionConfigurationBuilder.java - GENERATED CODE - DO NOT EDIT
 
@@ -22638,6 +22653,7 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     private String url;
     private String displayText;
     private EndpointReference endpoint;
+    private Number displayOrder;
     private UrlDisplayLocation displayLocation;
 
     public String getUrl() { return url; }
@@ -22646,6 +22662,8 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     public void setDisplayText(String value) { this.displayText = value; }
     public EndpointReference getEndpoint() { return endpoint; }
     public void setEndpoint(EndpointReference value) { this.endpoint = value; }
+    public Number getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Number value) { this.displayOrder = value; }
     public UrlDisplayLocation getDisplayLocation() { return displayLocation; }
     public void setDisplayLocation(UrlDisplayLocation value) { this.displayLocation = value; }
 
@@ -22658,6 +22676,8 @@ public class ResourceUrlAnnotation implements JsonSerializable {
         value.setDisplayText(displayTextValue == null ? null : (String) displayTextValue);
         var endpointValue = map.get("Endpoint");
         value.setEndpoint((EndpointReference) endpointValue);
+        var displayOrderValue = map.get("DisplayOrder");
+        value.setDisplayOrder(displayOrderValue == null ? null : ((Number) displayOrderValue).doubleValue());
         var displayLocationValue = map.get("DisplayLocation");
         value.setDisplayLocation(UrlDisplayLocation.fromValue((String) displayLocationValue));
         return value;
@@ -22668,6 +22688,7 @@ public class ResourceUrlAnnotation implements JsonSerializable {
         map.put("Url", AspireClient.serializeValue(url));
         map.put("DisplayText", AspireClient.serializeValue(displayText));
         map.put("Endpoint", AspireClient.serializeValue(endpoint));
+        map.put("DisplayOrder", AspireClient.serializeValue(displayOrder));
         map.put("DisplayLocation", AspireClient.serializeValue(displayLocation));
         return map;
     }
@@ -30535,6 +30556,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/IDistributedApplicationEventing.java
 .aspire/modules/aspire/IDistributedApplicationPipeline.java
 .aspire/modules/aspire/IDistributedApplicationResourceEvent.java
+.aspire/modules/aspire/IDotnetProgramResource.java
 .aspire/modules/aspire/IExecutionConfigurationBuilder.java
 .aspire/modules/aspire/IExecutionConfigurationResult.java
 .aspire/modules/aspire/IExpressionValue.java

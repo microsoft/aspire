@@ -2,10 +2,22 @@ import aspire.*;
 
 void main() throws Exception {
         // Aspire TypeScript AppHost - Azure Key Vault validation
-        // Exercises every exported member of Aspire.Hosting.Azure.KeyVault
+        // Exercises the Key Vault resource and opt-in provisioning exports.
         var builder = DistributedApplication.CreateBuilder();
         // ── 1. addAzureKeyVault ──────────────────────────────────────────────────────
         var vault = builder.addAzureKeyVault("vault");
+        vault.configureInfrastructure((infrastructure) -> {
+            var service = infrastructure.getKeyVaultService();
+            var properties = service.properties();
+            var bicep = infrastructure.bicep();
+            var retention = bicep.binary(
+                bicep.integer(20),
+                BinaryBicepOperator.ADD,
+                bicep.integer(10));
+            properties.setEnablePurgeProtection(true);
+            properties.setSoftDeleteRetentionInDays(retention);
+            properties.sku().setName(KeyVaultSkuName.PREMIUM);
+        });
         // Parameters for secret-based APIs
         var secretParam = builder.addParameter("secret-param", new AddParameterOptions().secret(true));
         var namedSecretParam = builder.addParameter("named-secret-param", new AddParameterOptions().secret(true));

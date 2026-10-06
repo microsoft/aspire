@@ -100,6 +100,19 @@ export function createWorkspaceFolder(name: string, fsPath: string, index: numbe
     };
 }
 
+export function createMockExtension<T>(id: string, extensionPath: string, api: T): vscode.Extension<T> {
+    return {
+        id,
+        extensionPath,
+        extensionUri: vscode.Uri.file(extensionPath),
+        isActive: false,
+        packageJSON: {},
+        extensionKind: vscode.ExtensionKind.Workspace,
+        exports: api,
+        activate: async () => api,
+    };
+}
+
 /**
  * Removes a directory created by a test, tolerating the handle-release races that make plain
  * `rmSync` flaky on Windows CI.

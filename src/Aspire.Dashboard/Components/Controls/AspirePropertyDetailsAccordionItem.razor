@@ -1,0 +1,14 @@
+<FluentAccordionItem Class="property-details-accordion-item" Header="@Header" Expanded="@_expanded" ExpandedChanged="@HandleExpandedChangedAsync">
+    <div slot="start">
+        <FluentBadge Class="property-details-accordion-badge" Appearance="BadgeAppearance.Ghost" Color="BadgeColor.Subtle" Circular="true">
+            @Count
+        </FluentBadge>
+    </div>
+    <div class="accordion-marker" slot="marker-expanded">
+        <FluentIcon Icon="Icons.Regular.Size12.ChevronUp" Color="Color.Default" />
+    </div>
+    <div class="accordion-marker" slot="marker-collapsed">
+        <FluentIcon Icon="Icons.Regular.Size12.ChevronDown" Color="Color.Default" />
+    </div>
+    @ChildContent
+</FluentAccordionItem>

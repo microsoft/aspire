@@ -45,8 +45,8 @@ internal sealed class DashboardServiceData : IDisposable
                 // If the resource has a TerminalAnnotation, stamp the per-replica terminal
                 // properties onto the snapshot so the Dashboard can:
                 //   * detect that a terminal is available (HasTerminal),
-                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
-                //     at the right replica (TryGetTerminalReplicaInfo).
+                //   * attach through /api/terminal?resource=<instance-name> using
+                //     the matching snapshot's consumer UDS path.
                 //
                 // The dashboard never *follows* this path itself - it only displays it
                 // (masked) in the resource details panel and uses it via
@@ -209,6 +209,13 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
                         return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptTerminal:
+                        if (interaction.InteractionInfo is not Interaction.TerminalInteractionInfo terminal ||
+                            !string.Equals(terminal.TerminalId, request.PromptTerminal.TerminalId, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("The terminal response must match the interaction's terminal.");
+                        }
+                        return new InteractionCompletionState { Complete = true, State = request.PromptTerminal.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
@@ -388,4 +395,3 @@ internal enum ExecuteCommandResultType
     Failure,
     Canceled
 }
-

@@ -78,7 +78,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project</source>
+        <source>Update integrations and repository Aspire CLI references</source>
         <target state="needs-review-translation">Atualizar integrações no projeto Aspire. (Versão Prévia)</target>
         <note />
       </trans-unit>
@@ -110,6 +110,16 @@
       <trans-unit id="FailedFetchItemsAndPropertiesFormat">
         <source>Failed to fetch items and properties for project: {0}</source>
         <target state="translated">Falha ao buscar itens e propriedades para o projeto: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedReadToolManifestFormat">
+        <source>Failed to read tool manifest '{0}': {1}</source>
+        <target state="new">Failed to read tool manifest '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedResolveNpmToolFormat">
+        <source>Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</source>
+        <target state="new">Could not resolve @microsoft/aspire-cli@{0} from npm. Check that npm is available and this version is published. Repository tool manifests were not changed.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
@@ -277,6 +287,31 @@
         <target state="translated">Removida a referência obsoleta ao pacote Aspire.Hosting.AppHost</target>
         <note />
       </trans-unit>
+      <trans-unit id="RepositoryToolUpdateFormat">
+        <source>{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</source>
+        <target state="new">{0}: [bold yellow]{1}[/] [bold green]{2}[/] to [bold green]{3}[/]</target>
+        <note>{0} = manifest path, {1} = package ID, {2} = current version, {3} = new version. Values are markup-escaped.</note>
+      </trans-unit>
+      <trans-unit id="RepositoryToolsUpToDate">
+        <source>Repository Aspire CLI references are up to date.</source>
+        <target state="new">Repository Aspire CLI references are up to date.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RepositoryToolsUpdated">
+        <source>Repository Aspire CLI references updated. The running CLI was not replaced.</source>
+        <target state="new">Repository Aspire CLI references updated. The running CLI was not replaced.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreRepositoryDotNetTool">
+        <source>Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</source>
+        <target state="new">Run 'dotnet tool restore' in the repository to use the updated .NET tool. Ensure its NuGet configuration includes the selected channel's feed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoreRepositoryNpmTool">
+        <source>Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</source>
+        <target state="new">Lockfiles were not changed. Run your package manager's install command (for example, 'npm install') to refresh the lockfile and use the updated npm tool.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RestoringPackagesAfterUpdate">
         <source>Restoring packages...</source>
         <target state="new">Restoring packages...</target>
@@ -302,6 +337,16 @@
         <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
+      <trans-unit id="ToolManifestChangedFormat">
+        <source>The tool manifest '{0}' changed during update. Run 'aspire update' again.</source>
+        <target state="new">The tool manifest '{0}' changed during update. Run 'aspire update' again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnsupportedToolVersionFormat">
+        <source>Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</source>
+        <target state="new">Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnxpectedCodePath">
         <source>Unexpected code path.</source>
         <target state="translated">Caminho de código inesperado.</target>
@@ -325,6 +370,11 @@
       <trans-unit id="UpdatePackageFormat">
         <source>Update package {0} from {1} to {2}</source>
         <target state="translated">Atualizar o pacote {0} de {1} para {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateRepositoryTools">
+        <source>Update repository Aspire CLI references</source>
+        <target state="new">Update repository Aspire CLI references</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateSuccessfulMessage">

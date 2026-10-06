@@ -139,6 +139,38 @@
           StandardErrorImportance="Normal" />
   </Target>
 
+  <!-- Refresh dependency inputs before planning independent, restore-only template graphs. -->
+  <Target Name="RefreshTemplatePackageInputsForCgManifest">
+    <Copy SourceFiles="@(TemplateProjectFiles);@(TemplateConfigFiles)"
+          DestinationFiles="@(TemplateProjectFilesObj);@(TemplateConfigFilesObj)" />
+  </Target>
+
+  <!-- Invoked after the managed repository pack, not this project's Build/Pack: restoring
+       template graphs requires the other Aspire packages from the same build to exist. -->
+  <Target Name="GenerateTemplateCgManifest"
+          DependsOnTargets="RefreshTemplatePackageInputsForCgManifest;ReplacePackageVersionOnTemplates">
+    <PropertyGroup>
+      <TemplateCgManifestPath Condition="'$(TemplateCgManifestPath)' == ''">$([MSBuild]::NormalizePath('$(RepoRoot)', 'artifacts', 'cg', 'templates', 'cgmanifest.json'))</TemplateCgManifestPath>
+      <TemplateCgPackageDirectory Condition="'$(TemplateCgPackageDirectory)' == ''">$([MSBuild]::NormalizePath('$(ArtifactsShippingPackagesDir)', '.'))</TemplateCgPackageDirectory>
+      <_TemplateCgGeneratorProject>$([MSBuild]::NormalizePath('$(RepoRoot)', 'tools', 'GenerateTemplateManifest', 'GenerateTemplateManifest.csproj'))</_TemplateCgGeneratorProject>
+      <_TemplateCgSourceDirectory>$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', 'templates'))</_TemplateCgSourceDirectory>
+      <_TemplateCgProcessedDirectory>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'content', 'templates'))</_TemplateCgProcessedDirectory>
+      <_TemplateCgNuGetConfig>$([MSBuild]::NormalizePath('$(RepoRoot)', 'NuGet.config'))</_TemplateCgNuGetConfig>
+      <_TemplateCgRestoreDirectory>$([MSBuild]::NormalizePath('$(IntermediateOutputPath)', 'template-cg-restore'))</_TemplateCgRestoreDirectory>
+      <_TemplateCgManifestCommand>dotnet run --project &quot;$(_TemplateCgGeneratorProject)&quot; --no-launch-profile -- &quot;$(_TemplateCgSourceDirectory)&quot; &quot;$(_TemplateCgProcessedDirectory)&quot; &quot;$(TemplateCgManifestPath)&quot; &quot;$(_TemplateCgNuGetConfig)&quot; &quot;$(TemplateCgPackageDirectory)&quot; &quot;$(_TemplateCgRestoreDirectory)&quot;</_TemplateCgManifestCommand>
+    </PropertyGroup>
+    <Delete Files="$(TemplateCgManifestPath)" />
+    <Exec Command="$(_TemplateCgManifestCommand)" />
+    <RemoveDir Directories="$(_TemplateCgRestoreDirectory)" />
+    <OnError ExecuteTargets="_CleanTemplateCgRestore" />
+  </Target>
+
+  <Target Name="_CleanTemplateCgRestore">
+    <!-- CG scans assets files independently of cgmanifest.json. Keep only the final inventory,
+         not the synthetic graph inputs/caches that would register our same-build packages again. -->
+    <RemoveDir Directories="$(_TemplateCgRestoreDirectory)" />
+  </Target>
+
   <!-- Grabs the contents of the templates folder and copies them to IntermediateOutputPath directory -->
   <Target Name="CopyTemplatesToIntermediateOutputPath"
           Inputs="@(TemplateFiles);@(TemplateProjectFiles)"

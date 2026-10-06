@@ -67,6 +67,13 @@ internal static class RadiusSecretStoreTypeExtensions
         _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown Radius secret-store type."),
     };
 
+    /// <summary>
+    /// Every literal the closed <c>properties.type</c> enum accepts, for diagnostics that need to
+    /// list the permitted set.
+    /// </summary>
+    internal static IReadOnlyList<string> AllRadiusTypeStrings { get; } =
+        Enum.GetValues<RadiusSecretStoreType>().Select(ToRadiusTypeString).ToList();
+
     /// <summary>Returns the Radius <c>encoding</c> string (<c>raw</c>/<c>base64</c>) for <paramref name="encoding"/>.</summary>
     internal static string ToRadiusEncodingString(this RadiusSecretStoreEncoding encoding) => encoding switch
     {
@@ -84,6 +91,43 @@ internal static class RadiusSecretStoreTypeExtensions
         RadiusSecretStoreType.AwsIrsa => ["roleARN"],
         _ => [],
     };
+
+    /// <summary>
+    /// Maps a legacy <c>Applications.Core/secretStores</c> <c>properties.type</c> string back to its
+    /// enum value. Used to validate a literal a callback assigned to the public, freely mutable
+    /// <c>RadiusSecretStoreConstruct.StoreType</c>, which bypasses the enum-typed builder API.
+    /// </summary>
+    /// <remarks>
+    /// This vocabulary belongs to the <em>legacy</em> type only. The replacement
+    /// <c>Radius.Security/secrets</c> type spells its equivalent field <c>kind</c> and uses a
+    /// different vocabulary — see <see cref="RadiusSecuritySecretKinds"/>. Returns
+    /// <see langword="false"/> for an unrecognized string so the caller can leave a value it does
+    /// not understand alone rather than rejecting a type a newer control plane may have added.
+    /// </remarks>
+    internal static bool TryParseRadiusTypeString(string? value, out RadiusSecretStoreType type)
+    {
+        switch (value)
+        {
+            case "generic":
+                type = RadiusSecretStoreType.Generic;
+                return true;
+            case "certificate":
+                type = RadiusSecretStoreType.Certificate;
+                return true;
+            case "basicAuthentication":
+                type = RadiusSecretStoreType.BasicAuthentication;
+                return true;
+            case "azureWorkloadIdentity":
+                type = RadiusSecretStoreType.AzureWorkloadIdentity;
+                return true;
+            case "awsIRSA":
+                type = RadiusSecretStoreType.AwsIrsa;
+                return true;
+            default:
+                type = default;
+                return false;
+        }
+    }
 
     /// <summary>
     /// The default per-key encoding for <paramref name="type"/> — <c>base64</c> for

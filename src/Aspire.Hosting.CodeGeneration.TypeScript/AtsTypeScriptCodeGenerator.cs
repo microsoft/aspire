@@ -133,13 +133,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             parameterDocs,
             capability.ReturnType.TypeId == AtsConstants.Void ? null : capability.Documentation?.Returns,
             suppressReturns: capability.ReturnType.TypeId == AtsConstants.Void,
+            isExperimental: AtsTypeSystemCompatibility.IsExperimental(capability),
             isObsolete: capability.IsObsolete,
             obsoleteMessage: capability.ObsoleteMessage);
     }
 
     private void WritePropertyDocComment(string indent, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
     {
-        var capability = getter is not null && (getter.Documentation is not null || !string.IsNullOrWhiteSpace(getter.Description) || getter.IsObsolete)
+        var capability = getter is not null &&
+            (getter.Documentation is not null ||
+                !string.IsNullOrWhiteSpace(getter.Description) ||
+                AtsTypeSystemCompatibility.IsExperimental(getter) ||
+                getter.IsObsolete)
             ? getter
             : setter;
 
@@ -156,6 +161,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         IReadOnlyList<(string Name, string? Summary)>? parameters = null,
         string? returns = null,
         bool suppressReturns = false,
+        bool isExperimental = false,
         bool isObsolete = false,
         string? obsoleteMessage = null)
     {
@@ -171,6 +177,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         if (!suppressReturns)
         {
             AddTaggedDocumentationLines(lines, "@returns", returns ?? documentation?.Returns);
+        }
+
+        if (isExperimental)
+        {
+            lines.Add("@experimental");
         }
 
         if (isObsolete)

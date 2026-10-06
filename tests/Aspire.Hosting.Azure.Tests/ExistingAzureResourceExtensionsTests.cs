@@ -6,12 +6,12 @@ using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class ExistingAzureExtensionsResourceTests
+public class ExistingAzureExtensionsResourceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void RunAsExistingInPublishModeNoOps()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -25,7 +25,7 @@ public class ExistingAzureExtensionsResourceTests
     [Fact]
     public void RunAsExistingInRunModeWorks()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -43,7 +43,7 @@ public class ExistingAzureExtensionsResourceTests
     [Fact]
     public void MultipleRunAsExistingInRunModeUsesLast()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -64,7 +64,7 @@ public class ExistingAzureExtensionsResourceTests
     [Fact]
     public void PublishAsExistingInPublishModeWorks()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -82,7 +82,7 @@ public class ExistingAzureExtensionsResourceTests
     [Fact]
     public void MultiplePublishAsExistingInRunModeUsesLast()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -100,18 +100,18 @@ public class ExistingAzureExtensionsResourceTests
         Assert.Equal("resourceGroup1", existingResourceGroupParameter.Name);
     }
 
-    public static TheoryData<Func<string, string, string, IResourceBuilder<IAzureResource>>> AsExistingMethodsWithString =>
+    public static TheoryData<Func<ITestOutputHelper, string, string, string, IResourceBuilder<IAzureResource>>> AsExistingMethodsWithString =>
         new()
         {
-            { (name, resourceGroup, type) => TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).AddAzureServiceBus(type).RunAsExisting(name, resourceGroup) },
-            { (name, resourceGroup, type) => TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).AddAzureServiceBus(type).PublishAsExisting(name, resourceGroup) }
+            { (output, name, resourceGroup, type) => TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output).AddAzureServiceBus(type).RunAsExisting(name, resourceGroup) },
+            { (output, name, resourceGroup, type) => TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output).AddAzureServiceBus(type).PublishAsExisting(name, resourceGroup) }
         };
 
     [Theory]
     [MemberData(nameof(AsExistingMethodsWithString))]
-    public void CanCallAsExistingWithStringArguments(Func<string, string, string, IResourceBuilder<IAzureResource>> runAsExisting)
+    public void CanCallAsExistingWithStringArguments(Func<ITestOutputHelper, string, string, string, IResourceBuilder<IAzureResource>> runAsExisting)
     {
-        var serviceBus = runAsExisting("existingName", "existingResourceGroup", "sb");
+        var serviceBus = runAsExisting(testOutputHelper, "existingName", "existingResourceGroup", "sb");
 
         Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
         Assert.Equal("existingName", existingAzureResourceAnnotation.Name);
@@ -123,7 +123,7 @@ public class ExistingAzureExtensionsResourceTests
     [InlineData(true)]
     public void AsExistingInBothModesWorks(bool isPublishMode)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -143,7 +143,7 @@ public class ExistingAzureExtensionsResourceTests
     [InlineData(true)]
     public void AsExistingInResourceGroupInBothModesWorks(bool isPublishMode)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
@@ -165,7 +165,7 @@ public class ExistingAzureExtensionsResourceTests
     [Fact]
     public void CanCallAsExistingInResourceGroupWithStringArguments()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var serviceBus = builder.AddAzureServiceBus("sb")
             .AsExistingInResourceGroup("existingName", "existingResourceGroup", "12345678-1234-1234-1234-123456789012");
@@ -182,7 +182,7 @@ public class ExistingAzureExtensionsResourceTests
     [InlineData(true)]
     public void AsExistingInSubscriptionInBothModesWorks(bool isPublishMode)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
         var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
@@ -204,7 +204,7 @@ public class ExistingAzureExtensionsResourceTests
     [InlineData(true)]
     public void AsExistingInTenantInBothModesWorks(bool isPublishMode)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run, testOutputHelper);
 
         var nameParameter = builder.AddParameter("name", "existingName");
 

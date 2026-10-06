@@ -23,7 +23,6 @@ public partial class MetricTable : ChartBase
     private List<ChartExemplar> _exemplars = [];
     private string _unitColumnHeader = string.Empty;
     private IJSObjectReference? _jsModule;
-    private FluentDataGrid<MetricViewBase> _dataGrid = null!;
 
     private OtlpInstrumentSummary? _instrument;
     private bool _showCount;
@@ -31,7 +30,7 @@ public partial class MetricTable : ChartBase
 
     protected override TimeSpan UpdateInterval => TimeSpan.FromSeconds(1);
 
-    private IQueryable<MetricViewBase> _metricsView => _metrics.Values.AsEnumerable().Reverse().ToList().AsQueryable();
+    private IEnumerable<MetricViewBase> _metricsView => _metrics.Values.Reverse();
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -110,8 +109,7 @@ public partial class MetricTable : ChartBase
             Title = DialogsLoc[nameof(Dashboard.Resources.Dialogs.ExemplarsDialogTitle)],
             PrimaryAction = DialogsLoc[nameof(Dashboard.Resources.Dialogs.DialogCloseButtonText)],
             SecondaryAction = string.Empty,
-            Width = "800px",
-            Height = "auto"
+            Width = "800px"
         };
         await DialogService.ShowDialogAsync<ExemplarsDialog>(vm, parameters);
     }
@@ -239,16 +237,9 @@ public partial class MetricTable : ChartBase
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<MetricViewBase>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Controls/Chart/MetricTable.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["Components/Controls/Chart/MetricTable.razor.js"]}");
         }
 
         await base.OnAfterRenderAsync(firstRender);
@@ -306,13 +297,6 @@ public partial class MetricTable : ChartBase
         public required SortedDictionary<int, (string Name, double? Value, ValueDirectionChange Direction)> Percentiles { get; init; }
     }
 
-    public enum ValueDirectionChange
-    {
-        Up,
-        Down,
-        Constant
-    }
-
     private (Icon Icon, string Title)? GetIconAndTitleForDirection(ValueDirectionChange? directionChange)
     {
         return directionChange switch
@@ -328,4 +312,27 @@ public partial class MetricTable : ChartBase
     {
         return value is null ? string.Empty : value.Value.ToString("F3", CultureInfo.CurrentCulture);
     }
+}
+
+// Keep this outside the component: Blazor's component preservation includes nested types and
+// would otherwise retain Enum.GetValues(Type), which requires dynamic code under Native AOT.
+/// <summary>
+/// Describes how a metric value changed relative to its previous value.
+/// </summary>
+public enum ValueDirectionChange
+{
+    /// <summary>
+    /// The value increased.
+    /// </summary>
+    Up,
+
+    /// <summary>
+    /// The value decreased.
+    /// </summary>
+    Down,
+
+    /// <summary>
+    /// The value did not change.
+    /// </summary>
+    Constant
 }

@@ -6,18 +6,25 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 
-public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashboardServerFixture>, IAsyncDisposable
+public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashboardServerFixture>, IAsyncLifetime
     where TDashboardServerFixture : DashboardServerFixture
 {
     public DashboardServerFixture DashboardServerFixture { get; }
     public PlaywrightFixture PlaywrightFixture { get; }
 
     private IBrowserContext? _context;
+    private bool _ownsTestGate;
 
     public PlaywrightTestsBase(DashboardServerFixture dashboardServerFixture)
     {
         DashboardServerFixture = dashboardServerFixture;
         PlaywrightFixture = dashboardServerFixture.PlaywrightFixture;
+    }
+
+    public async ValueTask InitializeAsync()
+    {
+        await DashboardServerFixture.TestGate.WaitAsync();
+        _ownsTestGate = true;
     }
 
     public async Task RunTestAsync(Func<IPage, Task> test)
@@ -35,20 +42,34 @@ public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashb
 
     private async Task<IPage> CreateNewPageAsync()
     {
-        _context ??= await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        if (_context is null)
         {
-            IgnoreHTTPSErrors = true,
-            BaseURL = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress()
-        });
+            _context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
+            {
+                IgnoreHTTPSErrors = true,
+                BaseURL = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress()
+            });
+        }
 
         return await _context.NewPageAsync();
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_context is not null)
+        try
         {
-            await _context.DisposeAsync();
+            if (_context is not null)
+            {
+                await _context.DisposeAsync();
+            }
+        }
+        finally
+        {
+            if (_ownsTestGate)
+            {
+                _ownsTestGate = false;
+                DashboardServerFixture.TestGate.Release();
+            }
         }
     }
 }

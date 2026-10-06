@@ -258,7 +258,7 @@ public static class AspireKafkaProducerExtensions
         configSection.GetSection(nameof(KafkaProducerSettings.Config)).Bind(settings.Config);
         namedConfigSection.GetSection(nameof(KafkaProducerSettings.Config)).Bind(settings.Config);
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ConnectionString = connectionString;
         }

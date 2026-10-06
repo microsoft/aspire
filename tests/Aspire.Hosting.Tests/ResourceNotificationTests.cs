@@ -265,14 +265,36 @@ public class ResourceNotificationTests
     {
         var resource1 = new CustomResource("myResource1");
 
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
 
         // Publish the state update first
         await notificationService.PublishUpdateAsync(resource1, snapshot => snapshot with { State = "SomeState" }).DefaultTimeout();
+        var previousLogs = logger.Collector.GetSnapshot().Select(record => record.Message).ToArray();
 
         var waitTask = notificationService.WaitForResourceAsync("myResource1", "SomeState");
 
         Assert.True(waitTask.IsCompletedSuccessfully);
+        Assert.Equal(previousLogs, logger.Collector.GetSnapshot().Select(record => record.Message));
+    }
+
+    [Fact]
+    public async Task WaitingOnResourceReturnsImmediatelyWhenResourceIsInOneOfTargetStatesAlready()
+    {
+        var resource = new CustomResource("myResource");
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with { State = "SomeOtherState" }).DefaultTimeout();
+        var previousLogs = logger.Collector.GetSnapshot().Select(record => record.Message).ToArray();
+
+        for (var i = 0; i < 2; i++)
+        {
+            var waitTask = notificationService.WaitForResourceAsync("MYRESOURCE", ["SomeState", "someotherstate"]);
+            Assert.True(waitTask.IsCompletedSuccessfully);
+            Assert.Equal("SomeOtherState", await waitTask.DefaultTimeout());
+        }
+
+        Assert.Equal(previousLogs, logger.Collector.GetSnapshot().Select(record => record.Message));
     }
 
     [Fact]
@@ -295,14 +317,32 @@ public class ResourceNotificationTests
     {
         var resource1 = new CustomResource("myResource1");
 
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
 
         var waitTask = notificationService.WaitForResourceAsync("myResource1", ["SomeState", "SomeOtherState"]);
+        Assert.False(waitTask.IsCompleted);
+        Assert.Collection(logger.Collector.GetSnapshot(), record =>
+        {
+            Assert.Equal(LogLevel.Debug, record.Level);
+            Assert.Equal("Waiting for resource 'myResource1' to enter one of the target state: SomeState, SomeOtherState", record.Message);
+        });
 
         await notificationService.PublishUpdateAsync(resource1, snapshot => snapshot with { State = "SomeOtherState" }).DefaultTimeout();
         var reachedState = await waitTask.DefaultTimeout();
 
         Assert.Equal("SomeOtherState", reachedState);
+        var waitLogs = logger.Collector.GetSnapshot()
+            .Where(record => record.Message.StartsWith("Waiting for resource", StringComparison.Ordinal) ||
+                record.Message.StartsWith("Finished waiting for resource", StringComparison.Ordinal))
+            .ToArray();
+        Assert.All(waitLogs, record => Assert.Equal(LogLevel.Debug, record.Level));
+        Assert.Equal(
+            [
+                "Waiting for resource 'myResource1' to enter one of the target state: SomeState, SomeOtherState",
+                "Finished waiting for resource 'myResource1'. Resource state is 'SomeOtherState'."
+            ],
+            waitLogs.Select(record => record.Message));
     }
 
     [Fact]
@@ -341,7 +381,8 @@ public class ResourceNotificationTests
     [Fact]
     public async Task WaitingOnResourceThrowsOperationCanceledExceptionIfResourceDoesntReachStateBeforeCancellationTokenSignaled()
     {
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
 
         using var cts = new CancellationTokenSource();
         var waitTask = notificationService.WaitForResourceAsync("myResource1", "SomeState", cts.Token);
@@ -352,6 +393,11 @@ public class ResourceNotificationTests
         {
             await waitTask;
         }).DefaultTimeout();
+        Assert.Collection(logger.Collector.GetSnapshot(), record =>
+        {
+            Assert.Equal(LogLevel.Debug, record.Level);
+            Assert.Equal("Waiting for resource 'myResource1' to enter one of the target state: SomeState", record.Message);
+        });
     }
 
     [Fact]
@@ -1369,6 +1415,251 @@ public class ResourceNotificationTests
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Waiting for resource 'myResource' to enter the 'Healthy' state."));
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Waiting for resource ready to execute for 'myResource'."));
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Finished waiting for resource 'myResource'."));
+    }
+
+    [Theory]
+    [InlineData(WaitBehavior.StopOnResourceUnavailable)]
+    [InlineData(WaitBehavior.WaitOnResourceUnavailable)]
+    public async Task WaitForResourceHealthyAsyncAlreadyReadyDoesNotLog(WaitBehavior waitBehavior)
+    {
+        var resource = new CustomResource("myResource");
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+        var previousLogs = logger.Collector.GetSnapshot().Select(record => record.Message).ToArray();
+
+        for (var i = 0; i < 2; i++)
+        {
+            var resourceEvent = await notificationService.WaitForResourceHealthyAsync(resource.Name, waitBehavior).DefaultTimeout();
+            Assert.Equal(HealthStatus.Healthy, resourceEvent.Snapshot.HealthStatus);
+            Assert.True(resourceEvent.Snapshot.ResourceReadyEvent?.EventTask.IsCompletedSuccessfully);
+        }
+
+        Assert.Equal(previousLogs, logger.Collector.GetSnapshot().Select(record => record.Message));
+    }
+
+    [Fact]
+    public async Task WaitForResourcePredicateIsEvaluatedOncePerSnapshot()
+    {
+        var resource = new CustomResource("myResource");
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Starting
+        }).DefaultTimeout();
+        var calls = 0;
+
+        var waitTask = notificationService.WaitForResourceAsync(resource.Name, resourceEvent =>
+        {
+            Interlocked.Increment(ref calls);
+            return resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running;
+        });
+
+        Assert.False(waitTask.IsCompleted);
+        Assert.Equal(1, Volatile.Read(ref calls));
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.Equal(KnownResourceStates.Running, (await waitTask.DefaultTimeout()).Snapshot.State?.Text);
+        Assert.Equal(2, Volatile.Read(ref calls));
+        var waitLogs = logger.Collector.GetSnapshot()
+            .Where(record => record.Message.StartsWith("Waiting for resource", StringComparison.Ordinal) ||
+                record.Message.StartsWith("Finished waiting for resource", StringComparison.Ordinal))
+            .ToArray();
+        Assert.All(waitLogs, record => Assert.Equal(LogLevel.Debug, record.Level));
+        Assert.Equal(
+            [
+                "Waiting for resource 'myResource' to match predicate.",
+                "Finished waiting for resource 'myResource'."
+            ],
+            waitLogs.Select(record => record.Message));
+    }
+
+    [Fact]
+    public async Task WaitForResourcePredicateAlreadyMatchedCompletesSynchronously()
+    {
+        var resource = new CustomResource("myResource");
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        var previousLogs = logger.Collector.GetSnapshot().Select(record => record.Message).ToArray();
+        var calls = 0;
+
+        for (var i = 0; i < 2; i++)
+        {
+            var waitTask = notificationService.WaitForResourceAsync(resource.Name, resourceEvent =>
+            {
+                calls++;
+                return resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running;
+            });
+
+            Assert.True(waitTask.IsCompletedSuccessfully);
+            Assert.Equal(KnownResourceStates.Running, (await waitTask).Snapshot.State?.Text);
+        }
+
+        Assert.Equal(2, calls);
+        Assert.Equal(previousLogs, logger.Collector.GetSnapshot().Select(record => record.Message));
+    }
+
+    [Fact]
+    public async Task WaitForResourcePredicateCancellationLogsWaitWithoutCompletion()
+    {
+        var logger = new FakeLogger<ResourceNotificationService>();
+        var notificationService = ResourceNotificationServiceTestHelpers.Create(logger: logger);
+        using var cts = new CancellationTokenSource();
+
+        var waitTask = notificationService.WaitForResourceAsync("myResource", _ => true, cts.Token);
+        Assert.False(waitTask.IsCompleted);
+        await cts.CancelAsync();
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => waitTask).DefaultTimeout();
+        Assert.True(exception.CancellationToken.IsCancellationRequested);
+        Assert.Collection(logger.Collector.GetSnapshot(), record =>
+        {
+            Assert.Equal(LogLevel.Debug, record.Level);
+            Assert.Equal("Waiting for resource 'myResource' to match predicate.", record.Message);
+        });
+    }
+
+    [Fact]
+    public async Task WaitForResourcePredicatePropagatesExceptionFromCurrentSnapshot()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        var expectedException = new InvalidOperationException("Predicate failed.");
+
+        var waitTask = notificationService.WaitForResourceAsync(resource.Name, _ => throw expectedException);
+
+        Assert.True(waitTask.IsFaulted);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => waitTask).DefaultTimeout();
+        Assert.Same(expectedException, exception);
+    }
+
+    [Fact]
+    public async Task WatchAsyncUnsubscribesWhenReplayIsStoppedEarly()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+        var subscription = typeof(ResourceNotificationService).GetProperty("OnResourceUpdated", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(subscription);
+
+        await foreach (var resourceEvent in notificationService.WatchAsync())
+        {
+            Assert.Equal(resource.Name, resourceEvent.Resource.Name);
+            Assert.NotNull(subscription.GetValue(notificationService));
+            break;
+        }
+
+        Assert.Null(subscription.GetValue(notificationService));
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncWaitsWhenReadyEventIsMissing()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(resource.Name);
+        Assert.False(waitTask.IsCompleted);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+        Assert.True((await waitTask.DefaultTimeout()).Snapshot.ResourceReadyEvent?.EventTask.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncWaitsWhenReadyEventIsIncomplete()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(completion.Task)
+        }).DefaultTimeout();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(resource.Name);
+
+        Assert.False(waitTask.IsCompleted);
+        completion.SetResult();
+        Assert.True((await waitTask.DefaultTimeout()).Snapshot.ResourceReadyEvent?.EventTask.IsCompletedSuccessfully);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncAlreadyReadyHonorsCancellation()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => notificationService.WaitForResourceHealthyAsync(resource.Name, WaitBehavior.StopOnResourceUnavailable, cts.Token));
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncPropagatesCompletedReadyEventFailure()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.FromException(new InvalidOperationException("ResourceReady failed")))
+        }).DefaultTimeout();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => notificationService.WaitForResourceHealthyAsync(resource.Name));
+        Assert.Equal("ResourceReady failed", exception.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncDoesNotReturnPreviouslyReadyResourceThatIsUnhealthy()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        }).DefaultTimeout();
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.FailedToStart
+        }).DefaultTimeout();
+
+        await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => notificationService.WaitForResourceHealthyAsync(resource.Name, WaitBehavior.StopOnResourceUnavailable));
     }
 
     [Fact]

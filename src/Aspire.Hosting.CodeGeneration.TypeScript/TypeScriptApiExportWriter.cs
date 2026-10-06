@@ -99,6 +99,10 @@ internal static class TypeScriptApiExportWriter
         AddIfPresent(json, "remarks", item.Remarks);
         AddIfPresent(json, "examples", item.Examples);
         AddIfPresent(json, "extends", item.Extends);
+        if (item.IsExperimental)
+        {
+            json["experimental"] = true;
+        }
 
         if (item.Members.Count > 0)
         {
@@ -129,6 +133,10 @@ internal static class TypeScriptApiExportWriter
         AddIfPresent(json, "summary", member.Summary);
         AddIfPresent(json, "remarks", member.Remarks);
         AddIfPresent(json, "examples", member.Examples);
+        if (member.IsExperimental)
+        {
+            json["experimental"] = true;
+        }
         if (member.DeprecationMessage is not null)
         {
             json["deprecated"] = member.DeprecationMessage;

@@ -1,0 +1,34 @@
+@page "/terminal-window/apphost/{TerminalId}"
+@page "/terminal-window/resource/{ResourceName}"
+@layout EmptyLayout
+@namespace Aspire.Dashboard.Components.Pages
+@using Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Components.Layout
+
+<PageTitle>@(string.IsNullOrEmpty(_terminalState.Title) ? _title : _terminalState.Title)</PageTitle>
+
+@* Without dashboard navigation or a page toolbar, the terminal fills the window and fits its available space. *@
+<div class="terminal-window">
+    @if (_windowTrackingFailed)
+    {
+        <div class="terminal-window-ended">@Loc[nameof(Dashboard.Resources.TerminalStrings.TerminalWindowTrackingFailed)]</div>
+    }
+    else if (_ended)
+    {
+        <div class="terminal-window-ended">@Loc[nameof(Dashboard.Resources.TerminalStrings.TerminalWindowEnded)]</div>
+    }
+    else if (_windowReady)
+    {
+        <div class="terminal-window-titlebar">
+            <TerminalTitle State="@_terminalState" IdleIcon="@_resourceIcon" FallbackTitle="@_title" />
+        </div>
+        <div class="terminal-window-body">
+            <TerminalView ResourceName="@_resourceInstanceName"
+                          EndpointPathAndQuery="@_endpoint"
+                          InitialFontSize="@FontSize"
+                          AutoFit="true"
+                          Chromeless="true"
+                          OnToolbarStateChanged="@OnTerminalToolbarStateChanged" />
+        </div>
+    }
+</div>

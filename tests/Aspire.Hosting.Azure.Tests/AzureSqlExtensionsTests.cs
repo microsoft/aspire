@@ -8,7 +8,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSqlExtensionsTests
+public class AzureSqlExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     // [InlineData(true, true)] this scenario is covered in RoleAssignmentTests.SqlSupport. The output doesn't match the pattern here because the role assignment isn't generated
@@ -17,7 +17,7 @@ public class AzureSqlExtensionsTests
     [InlineData(false, false)]
     public async Task AddAzureSqlServer(bool publishMode, bool useAcaInfrastructure)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(publishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(publishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run, testOutputHelper);
 
         var sql = builder.AddAzureSqlServer("sql");
 
@@ -63,7 +63,7 @@ public class AzureSqlExtensionsTests
     [InlineData(false)]
     public async Task AddAzureSqlServerRunAsContainerProducesCorrectConnectionString(bool addDbBeforeRunAsContainer)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var sql = builder.AddAzureSqlServer("sql");
 
@@ -112,7 +112,7 @@ public class AzureSqlExtensionsTests
     [InlineData(false)]
     public async Task AddAzureSqlServerRunAsContainerProducesCorrectPasswordAndPort(bool addDbBeforeRunAsContainer)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var sql = builder.AddAzureSqlServer("sql");
         var pass = builder.AddParameter("pass", "p@ssw0rd1");
@@ -176,7 +176,7 @@ public class AzureSqlExtensionsTests
     [InlineData(false, false)]
     public void RunAsContainerAppliesAnnotationsCorrectly(bool annotationsBefore, bool addDatabaseBefore)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var sql = builder.AddAzureSqlServer("sql");
         IResourceBuilder<AzureSqlDatabaseResource>? db = null;
@@ -238,7 +238,7 @@ public class AzureSqlExtensionsTests
     [Fact]
     public async Task AsAzureSqlDatabaseViaRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var sql = builder.AddSqlServer("sql").AsAzureSqlDatabase();
@@ -269,7 +269,7 @@ public class AzureSqlExtensionsTests
     [Fact]
     public async Task AsAzureSqlDatabaseViaPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var sql = builder.AddSqlServer("sql").AsAzureSqlDatabase();
@@ -315,7 +315,7 @@ public class AzureSqlExtensionsTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureSqlServerResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-sql-name");
         var existingResourceGroup = builder.AddParameter("existing-sql-rg");
 

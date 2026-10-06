@@ -14,6 +14,15 @@ func main() {
 
 	// 1) AddAzureCosmosDB
 	cosmos := builder.AddAzureCosmosDB("cosmos")
+	_ = cosmos.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		account := infrastructure.GetCosmosDBAccount()
+		account.Tags().Set("provisioning-proxy", "go")
+		bypassResourceID := infrastructure.CreateCosmosDBResourceIdentifier(
+			"/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/shared/providers/Microsoft.DocumentDB/databaseAccounts/bypass")
+		if err := account.NetworkAclBypassResourceIds().Add(bypassResourceID); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
 
 	// 2) WithDefaultAzureSku
 	cosmos.WithDefaultAzureSku()

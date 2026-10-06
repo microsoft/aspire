@@ -8,7 +8,7 @@
        console log scroll region in LogViewer.razor. *@
     <div class="log-overflow @(IsUnformatted ? "text-visualizer-unformatted" : null)" tabindex="0" role="region" aria-label="@Loc[nameof(ControlsStrings.TextVisualizerContentLabel)]">
         <div class="log-container" @ref="_containerElement">
-            <Virtualize @ref="VirtualizeRef" Items="@(!DisplayUnformatted ? ViewModel.FormattedLines : ViewModel.Lines)" ItemSize="20" OverscanCount="200" ItemContent="@RenderLogLine">
+            <Virtualize @ref="VirtualizeRef" Items="@(!DisplayUnformatted ? ViewModel.FormattedLines : ViewModel.Lines)" ItemSize="20" OverscanCount="100" ItemContent="@RenderLogLine">
             </Virtualize>
         </div>
     </div>

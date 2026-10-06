@@ -55,6 +55,28 @@ Aspire deployment environments should configure OTEL environment variables that 
 
 Aspire telemetry works best in environments that support OTLP. OTLP exporting is disabled if `OTEL_EXPORTER_OTLP_ENDPOINT` isn't configured.
 
+### OpenTelemetry upgrade limits
+
+OpenTelemetry 1.18 reduces the default maximum serialized OTLP request from 128 MiB to 64 MiB. A batch exceeding that limit is dropped. Applications that need the previous capacity can configure `OtlpExporterOptions.MaxRequestSizeBytes` to `128 * 1024 * 1024`. The default maximum OTLP response is now 4 MiB; oversized responses are treated as non-retryable failures.
+
+Newly generated ServiceDefaults projects use the updated package versions. Existing generated projects retain their package references until explicitly updated.
+
 ## Non-.NET apps
 
 OTEL isn't limited to .NET projects. Apps and containers that include OTEL can be passed environment variables to configure exporting telemetry. For example, the dapr sidecar (written in golang) includes OTEL and standard OTEL environment variables can be used to enable telemetry.
+
+## Agent usage telemetry
+
+Agent usage reporting is separate from application OTLP telemetry. `aspire agent init` registers an all-tool hook for supported Copilot and Claude clients. Rerun initialization after updating the CLI to replace existing script registrations with direct executable registrations; unrelated user hooks are preserved.
+
+The native hook receives every invocation but only reports the existing allowlisted Aspire skill, reference-file, and MCP-tool events. It runs through normal CLI command dispatch without launching PowerShell or Bash. `TelemetryManager` construction does not create providers: ordinary commands call `Initialize()` before enrichment, while the agent command defers initialization until classification finds an eligible event. For a hook invocation with no eligible event, `TryShutdownAsync()` skips shutdown without constructing exporters or starting enrichment. Neither wildcard coverage nor event sampling is reduced.
+
+The native classifier reads skill names and `references/` file inventories from the embedded bundle's `skill-manifest.json`, without extracting files to disk. Only manifest-listed reference paths are eligible; `SKILL.md` reads are skill invocations, and other assets such as evals and scripts are not reference events. MCP tool names still come from the embedded canonical hook because the manifest does not yet contain a tool inventory. Neither source is read from mutable installed scripts or arbitrary local skills. Tests verify that the shipped manifest preserves the canonical hook's skill/reference reporting set.
+
+`ASPIRE_AGENT_TELEMETRY_MAX_PAYLOAD_CHARACTERS` controls the native hook's input memory bound before JSON parsing. Its default is 65,536 UTF-16 characters, matching the legacy PowerShell hook; valid values range from 1 to 1,048,576. Larger input is drained without being retained or reported. Invalid configuration is reported on stderr without interrupting the agent. The hook reads this setting through `IEnvironment` before initializing telemetry.
+
+Eligible events pass through the existing `aspire agent telemetry` command and are persisted to Azure Monitor Exporter's disk-backed storage before the hook returns. Uploading is not on the hook's critical path. An independent CLI uploader keeps the exporter alive while there is pending data, using the exporter's own batching, retry, and cross-process lease recovery. No additional queue format or ingestion client is used.
+
+The uploader survives the originating agent process and exits when storage is drained. A failed launch leaves persisted data for a later invocation to recover. An interrupted upload may remain leased for several minutes before retry; delivery is at-least-once, so a crash after acceptance can result in duplicates. Disk access failures, exporter storage limits, permanent ingestion errors, and retention still limit delivery. Persistence/launch failures are recorded in CLI logs without breaking the agent.
+
+`ASPIRE_CLI_TELEMETRY_OPTOUT` continues to suppress collection and uploader startup for opted-out invocations. Like other environment settings, it is inherited by processes at launch; changing a shell environment does not retroactively alter an already-running process.

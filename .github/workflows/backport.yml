@@ -14,23 +14,55 @@ on:
     # once a day at 13:00 UTC to cleanup old runs
     - cron: '0 13 * * *'
 
-permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  actions: write
+permissions: {}
 
 jobs:
   cleanup:
-    if: github.event_name == 'schedule'
-    uses: dotnet/arcade/.github/workflows/scheduled-action-cleanup-base.yml@main
-    with:
-      repository_owners: 'dotnet,microsoft'
+    if: >-
+      github.event_name == 'schedule' &&
+      contains(fromJSON('["dotnet", "microsoft"]'), github.repository_owner)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Cleanup workflow runs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const currentRun = await github.rest.actions.getWorkflowRun({
+              owner,
+              repo,
+              run_id: context.runId
+            });
+
+            const runIds = await github.paginate(
+              github.rest.actions.listWorkflowRuns,
+              {
+                owner,
+                repo,
+                workflow_id: currentRun.data.workflow_id,
+                status: 'completed',
+                per_page: 100
+              },
+              response => response.data.map(run => run.id)
+            );
+
+            for (const runId of new Set(runIds)) {
+              console.log(`Deleting workflow run ${runId}`);
+              await github.rest.actions.deleteWorkflowRun({
+                owner,
+                repo,
+                run_id: runId
+              });
+            }
 
   backport:
     if: >-
       github.event_name == 'issue_comment' &&
-      contains(format('{0},', 'dotnet,microsoft'), format('{0},', github.repository_owner)) &&
+      contains(fromJSON('["dotnet", "microsoft"]'), github.repository_owner) &&
       github.event.issue.pull_request != '' &&
       contains(github.event.comment.body, '/backport to')
     runs-on: ubuntu-latest
@@ -102,13 +134,18 @@ jobs:
     # to avoid minting a privileged token for unauthorized users.
     - name: Generate GitHub App Token
       id: app-token
-      uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+      uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
       with:
-        app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+        client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
         private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+        # contents pushes the backport branch; workflows permits backported workflow-file changes;
+        # pull-requests reads and creates pull requests and posts status comments on the source PR.
+        permission-contents: write
+        permission-pull-requests: write
+        permission-workflows: write
 
     - name: Checkout repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         fetch-depth: 0
         token: ${{ steps.app-token.outputs.token }}

@@ -45,6 +45,14 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     // The stable key avoids retaining stale entries when a delete is missed, while the UID distinguishes
     // a recreated object from an unchanged watch replay. See ProcessResourceChange.
     private readonly ConcurrentDictionary<(string Kind, string Name), ObservedResource> _observedResources = new();
+    // Service and endpoint watches can read this map while a resource restart marks another kind.
+    // Only the immediately previous UID is retained. An event delayed across multiple serialized
+    // restarts could therefore be accepted, but retaining every historical UID would grow this map
+    // for the lifetime of the AppHost. DCP watches normally deliver deletion events promptly enough
+    // that this bounded tradeoff is preferable.
+    private readonly ConcurrentDictionary<(string Kind, string Name), string> _supersededResourceUids = new();
+    private readonly object _incarnationLock = new();
+    private readonly SemaphoreSlim _outputSemaphore = new(1);
 
     // Holds names of resources that reached terminal state and logs have already been flushed for them.
     // Prevents re-reading DCP's log store every time an already-terminal resource is reported again.
@@ -81,6 +89,29 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     // Internal for testing.
     internal Func<string?, ValueTask>? BeforeLogBatchDeliveryAsync { get; set; }
 
+    internal void MarkPreviousIncarnationSuperseded(string kind, string name, string? uid)
+    {
+        // Resource-stopped callbacks run under the watcher's output semaphore and may restart
+        // their resource. Only synchronize UID state here, not the callbacks that publish it.
+        lock (_incarnationLock)
+        {
+            var key = (kind, name);
+            if (string.IsNullOrEmpty(uid) && _observedResources.TryGetValue(key, out var previous))
+            {
+                uid = previous.Uid;
+            }
+
+            if (string.IsNullOrEmpty(uid))
+            {
+                return;
+            }
+
+            // Deleting a DCP object does not drain its watch. A final status update from the
+            // old UID may arrive after the replacement's Starting state was published.
+            _supersededResourceUids[key] = uid;
+        }
+    }
+
     public DcpResourceWatcher(
         ILogger logger,
         IKubernetesService kubernetesService,
@@ -115,12 +146,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     public void Start()
     {
-        var outputSemaphore = new SemaphoreSlim(1);
-
         var cancellationToken = _shutdownToken;
         var watchResourcesTask = Task.Run(async () =>
         {
-            using (outputSemaphore)
+            using (_outputSemaphore)
             {
                 await Task.WhenAll(
                     Task.Run(() => WatchKubernetesResourceAsync<Executable>((t, r) => ProcessResourceChange(t, r, _resourceState.ExecutablesMap, Model.Dcp.ExecutableKind, (e, s) => _snapshotBuilder.ToSnapshot(e, s)))),
@@ -205,7 +234,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 {
                     await foreach (var (eventType, resource) in _kubernetesService.WatchAsync<T>(cancellationToken: pipelineCancellationToken).ConfigureAwait<(global::k8s.WatchEventType, T)>(false))
                     {
-                        await outputSemaphore.WaitAsync(pipelineCancellationToken).ConfigureAwait(false);
+                        await _outputSemaphore.WaitAsync(pipelineCancellationToken).ConfigureAwait(false);
 
                         try
                         {
@@ -213,7 +242,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         }
                         finally
                         {
-                            outputSemaphore.Release();
+                            _outputSemaphore.Release();
                         }
                     }
                 }, cancellationToken).ConfigureAwait(false);
@@ -270,7 +299,16 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private async Task ProcessResourceChange<T>(WatchEventType watchEventType, T resource, ConcurrentDictionary<string, T> resourceByName, string resourceKind, Func<T, CustomResourceSnapshot, CustomResourceSnapshot> snapshotFactory) where T : CustomResource, IKubernetesStaticMetadata
     {
-        var resourceChange = ProcessResourceChange(resourceByName, watchEventType, resource);
+        // Read the DCP state before replacing the cached object. The published snapshot can
+        // already say Waiting or Starting if a stopped handler has requested a restart.
+        var previousState = resourceByName.TryGetValue(resource.Metadata.Name, out var previousResource)
+            ? GetResourceStatus(previousResource).State
+            : null;
+        ResourceChangeResult resourceChange;
+        lock (_incarnationLock)
+        {
+            resourceChange = ProcessResourceChange(resourceByName, watchEventType, resource);
+        }
         if (resourceChange != ResourceChangeResult.Ignored)
         {
             if (resourceChange is ResourceChangeResult.Deleted or ResourceChangeResult.Replaced)
@@ -349,7 +387,23 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         _allLogsFlushed.TryRemove(resource.Metadata.Name, out _);
                     }
 
-                    await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
+                    Task publishTask;
+                    lock (_incarnationLock)
+                    {
+                        // Log flushing can yield while a restart supersedes this UID. PublishAsync
+                        // updates the snapshot synchronously before invoking resource-stopped callbacks,
+                        // so keep that publication atomic with marking the old UID.
+                        if (IsSuperseded(resourceKind, resource.Metadata.Name, resource.Metadata.Uid))
+                        {
+                            return;
+                        }
+
+                        publishTask = _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status,
+                            resourceChange == ResourceChangeResult.Replaced ? null : previousState,
+                            s => snapshotFactory(resource, s)));
+                    }
+
+                    await publishTask.ConfigureAwait(false);
 
                     if (logsAvailable)
                     {
@@ -858,14 +912,62 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             return;
         }
 
-        if (endpoint.Metadata.OwnerReferences is null)
+        if (endpoint.Metadata.OwnerReferences is not null)
+        {
+            foreach (var ownerReference in endpoint.Metadata.OwnerReferences)
+            {
+                await TryRefreshResource(ownerReference.Kind, ownerReference.Name).ConfigureAwait(false);
+            }
+        }
+
+        // A resource can display a URL for an endpoint owned by a different resource (see
+        // ResourceUrlAnnotation.Endpoint and the cross-resource URL handling in ResourceSnapshotBuilder.GetUrls).
+        // The refresh above only covers the endpoint's owning resource, so resources that merely reference the
+        // endpoint would otherwise never learn that it became active/inactive and their URL would get stuck.
+        await RefreshResourcesReferencingEndpoint(endpoint).ConfigureAwait(false);
+    }
+
+    private async Task RefreshResourcesReferencingEndpoint(Endpoint endpoint)
+    {
+        // Resolved from AppResources rather than ServicesMap: AppResources is built synchronously from the app
+        // model before the resource watcher starts, so it can't race against the separate Service watch loop
+        // that populates ServicesMap.
+        var service = endpoint.Spec.ServiceName is { } serviceName
+            ? _resourceState.AppResources.OfType<ServiceWithModelResource>().Select(s => s.Service).FirstOrDefault(s => s.Metadata.Name == serviceName)
+            : null;
+
+        if (service is null ||
+            service.AppModelResourceName is not { } endpointOwnerResourceName ||
+            service.EndpointName is not { } endpointName)
         {
             return;
         }
 
-        foreach (var ownerReference in endpoint.Metadata.OwnerReferences)
+        foreach (var (resourceName, resource) in _resourceState.ApplicationModel)
         {
-            await TryRefreshResource(ownerReference.Kind, ownerReference.Name).ConfigureAwait(false);
+            if (StringComparers.ResourceName.Equals(resourceName, endpointOwnerResourceName))
+            {
+                // The owning resource was already refreshed above.
+                continue;
+            }
+
+            if (!resource.TryGetUrls(out var urls) ||
+                !urls.Any(u => u.Endpoint is { } e &&
+                    StringComparers.ResourceName.Equals(e.Resource.Name, endpointOwnerResourceName) &&
+                    string.Equals(e.EndpointName, endpointName, StringComparisons.EndpointAnnotationName)))
+            {
+                continue;
+            }
+
+            foreach (var appResource in _resourceState.AppResources)
+            {
+                if (appResource is IResourceReference reference &&
+                    reference is not ServiceWithModelResource &&
+                    StringComparers.ResourceName.Equals(reference.ModelResource.Name, resourceName))
+                {
+                    await TryRefreshResource(appResource.DcpResourceKind, appResource.DcpResourceName).ConfigureAwait(false);
+                }
+            }
         }
     }
 
@@ -904,23 +1006,36 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             if (appModelResourceName is not null &&
                 _resourceState.ApplicationModel.TryGetValue(appModelResourceName, out var appModelResource))
             {
-                var status = GetResourceStatus(cr);
-                await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceKind, appModelResource, resourceName, status, s =>
+                Task publishTask;
+                lock (_incarnationLock)
                 {
-                    if (cr is Container container)
+                    // An endpoint or service change can refresh a cached workload after its UID
+                    // was superseded but before the workload watch receives its delete event.
+                    if (IsSuperseded(resourceKind, resourceName, cr.Metadata.Uid))
                     {
-                        return _snapshotBuilder.ToSnapshot(container, s);
+                        return;
                     }
-                    else if (cr is Executable exe)
+
+                    var status = GetResourceStatus(cr);
+                    publishTask = _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceKind, appModelResource, resourceName, status, status.State, s =>
                     {
-                        return _snapshotBuilder.ToSnapshot(exe, s);
-                    }
-                    else if (cr is ContainerExec containerExec)
-                    {
-                        return _snapshotBuilder.ToSnapshot(containerExec, s);
-                    }
-                    return s;
-                })).ConfigureAwait(false);
+                        if (cr is Container container)
+                        {
+                            return _snapshotBuilder.ToSnapshot(container, s);
+                        }
+                        else if (cr is Executable exe)
+                        {
+                            return _snapshotBuilder.ToSnapshot(exe, s);
+                        }
+                        else if (cr is ContainerExec containerExec)
+                        {
+                            return _snapshotBuilder.ToSnapshot(containerExec, s);
+                        }
+                        return s;
+                    }));
+                }
+
+                await publishTask.ConfigureAwait(false);
             }
         }
     }
@@ -929,6 +1044,18 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             where T : CustomResource, IKubernetesStaticMetadata
     {
         var resourceKey = (T.ObjectKind, resource.Metadata.Name);
+
+        if (IsSuperseded(resourceKey.ObjectKind, resourceKey.Name, resource.Metadata.Uid))
+        {
+            // A delete for the old object still cleans up its cached state, unless the
+            // replacement has already been observed under the same name.
+            if (watchEventType != WatchEventType.Deleted ||
+                (_observedResources.TryGetValue(resourceKey, out var current) &&
+                 !string.Equals(current.Uid, resource.Metadata.Uid, StringComparison.Ordinal)))
+            {
+                return ResourceChangeResult.Ignored;
+            }
+        }
 
         switch (watchEventType)
         {
@@ -987,6 +1114,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 return isReplacement ? ResourceChangeResult.Replaced : ResourceChangeResult.Updated;
 
             case WatchEventType.Deleted:
+                // A delete can reach this watcher before StartResourceAsync receives NotFound
+                // from the API, leaving no observed UID for that path to mark later.
+                if (!string.IsNullOrEmpty(resource.Metadata.Uid))
+                {
+                    _supersededResourceUids[resourceKey] = resource.Metadata.Uid;
+                }
                 _observedResources.TryRemove(resourceKey, out _);
                 map.Remove(resource.Metadata.Name, out _);
                 return ResourceChangeResult.Deleted;
@@ -994,6 +1127,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             default:
                 return ResourceChangeResult.Ignored;
         }
+    }
+
+    private bool IsSuperseded(string kind, string name, string? uid)
+    {
+        return _supersededResourceUids.TryGetValue((kind, name), out var supersededUid) &&
+            string.Equals(supersededUid, uid, StringComparison.Ordinal);
     }
 
     private static bool HasSameResourceIdentity(string? previousUid, string? resourceUid)

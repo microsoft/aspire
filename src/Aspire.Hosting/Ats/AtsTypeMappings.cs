@@ -1,5 +1,6 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREINTERACTION001
+#pragma warning disable ASPIREPROJECTS001
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -42,6 +43,7 @@ using Microsoft.Extensions.Logging;
 [assembly: AspireExport(typeof(IResourceWithConnectionString))]
 [assembly: AspireExport(typeof(IResourceWithWaitSupport))]
 [assembly: AspireExport(typeof(IResourceWithParent))]
+[assembly: AspireExport(typeof(IDotnetProgramResource))]
 
 // Concrete resource types (from Aspire.Hosting namespace)
 [assembly: AspireExport(typeof(ContainerResource))]

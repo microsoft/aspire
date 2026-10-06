@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@godaddy/terminus": "^4.12.1",
-    "@grpc/grpc-js": "^1.14.4",
+    "@grpc/grpc-js": "^1.14.5",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-logs-otlp-grpc": "^0.218.0",
@@ -36,21 +36,23 @@
     "nodemon": "^3.1.14"
   },
   "overrides": {
+    "@grpc/grpc-js": "$@grpc/grpc-js",
     "uuid": "14.0.0",
     "protobufjs": "8.6.6",
-    "qs": "^6.15.2",
+    "qs": "6.16.0",
     "@opentelemetry/core": "2.8.0",
     "@opentelemetry/propagator-jaeger": "2.9.0",
-    "brace-expansion": "5.0.8",
+    "brace-expansion": "5.0.12",
     "body-parser": "2.3.0"
   },
   "pnpm": {
     "overrides": {
       "protobufjs": "8.6.6",
+      "qs": "6.16.0",
       "@opentelemetry/core": "2.8.0",
       "@opentelemetry/propagator-jaeger": "2.9.0",
       "esbuild": "0.28.1",
-      "brace-expansion": "5.0.8",
+      "brace-expansion": "5.0.12",
       "body-parser": "2.3.0"
     }
   }

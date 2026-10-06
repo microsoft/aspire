@@ -7,6 +7,9 @@ plugins {
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
+// Override Boot's Jackson BOM to include the CVE-2026-91776 and CVE-2026-91777 fixes.
+ext['jackson-bom.version'] = '2.21.7'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)

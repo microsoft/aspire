@@ -34,7 +34,7 @@ internal interface IExtensionBackchannel
     Task DisplayDashboardUrlsAsync(DashboardUrlsState dashboardUrls, CancellationToken cancellationToken);
     Task ShowStatusAsync(string? status, CancellationToken cancellationToken);
     Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull;
-    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull;
+    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull;
     Task<bool> ConfirmAsync(string promptText, bool defaultValue, CancellationToken cancellationToken);
     Task<string> PromptForStringAsync(string promptText, string? defaultValue, Func<string, ValidationResult>? validator, bool required, CancellationToken cancellationToken);
     Task<string> PromptForSecretStringAsync(string promptText, Func<string, ValidationResult>? validator, bool required, CancellationToken cancellationToken);
@@ -54,7 +54,6 @@ internal interface IExtensionBackchannel
 internal sealed class ExtensionBackchannel : IExtensionBackchannel
 {
     private const string Name = "Aspire Extension";
-
     private readonly ActivitySource _activitySource = new(nameof(ExtensionBackchannel));
     private readonly TaskCompletionSource<JsonRpc> _rpcTaskCompletionSource = new();
     private readonly object _connectionSetupLock = new();
@@ -65,6 +64,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     private readonly IExtensionRpcTarget _target;
     private readonly IConfiguration _configuration;
     private readonly Func<CancellationToken, Task>? _connectCoreAsyncOverride;
+    private int _connected;
 
     public ExtensionBackchannel(ILogger<ExtensionBackchannel> logger, IExtensionRpcTarget target, IConfiguration configuration)
         : this(logger, target, configuration, connectCoreAsyncOverride: null)
@@ -86,6 +86,11 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
+            if (Volatile.Read(ref _connected) == 0)
+            {
+                return;
+            }
+
             try
             {
                 StopDebuggingAsync().GetAwaiter().GetResult();
@@ -164,6 +169,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                 {
                     await ConnectCoreAsync().ConfigureAwait(false);
                     _logger.LogDebug("Connected to ExtensionBackchannel at {Endpoint}", endpoint);
+                    Volatile.Write(ref _connected, 1);
                     connectionSetupTcs.TrySetResult();
                     return;
                 }
@@ -563,13 +569,16 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        CancellationToken cancellationToken) where T : notnull
+        IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull
     {
         await ConnectAsync(cancellationToken);
 
         var choicesList = choices.ToList();
         // this will throw if formatting results in non-distinct values. that should happen because we cannot send the formatter over the wire.
         var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
+        var preSelectedArray = preSelected?
+            .Select(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)))
+            .ToArray() ?? [];
 
         using var activity = _activitySource.StartActivity();
 
@@ -580,7 +589,7 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         var choicesArray = choicesByFormattedValue.Keys.ToArray();
         var result = await rpc.InvokeWithCancellationAsync<string[]?>(
             "promptForSelections",
-            [_token, promptText, choicesArray],
+            [_token, promptText, choicesArray, preSelectedArray],
             cancellationToken);
 
         if (result is null)

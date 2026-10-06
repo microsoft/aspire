@@ -28,13 +28,9 @@ public sealed class ResourceUrlAnnotation : IResourceAnnotation
     public EndpointReference? Endpoint { get; init; }
 
     /// <summary>
-    /// The display order the URL. Higher values mean sort higher in the list.
+    /// Gets or sets the display order of the URL. Higher values mean sort higher in the list.
     /// </summary>
-    /// <remarks>
-    /// This member was incorrectly created as a field. It will be re-added as a property in a future Aspire version.
-    /// </remarks>
-    [Obsolete("DisplayOrder was incorrectly created as a field. It will be re-added as a property in a future Aspire version.")]
-    public int? DisplayOrder;
+    public int? DisplayOrder { get; set; }
 
     /// <summary>
     /// Locations where this URL should be shown on the dashboard. Defaults to <see cref="UrlDisplayLocation.SummaryAndDetails"/>.
@@ -45,7 +41,6 @@ public sealed class ResourceUrlAnnotation : IResourceAnnotation
 
     internal ResourceUrlAnnotation WithEndpoint(EndpointReference endpoint)
     {
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be copied for compatibility.
         return new()
         {
             Url = Url,
@@ -54,7 +49,6 @@ public sealed class ResourceUrlAnnotation : IResourceAnnotation
             DisplayOrder = DisplayOrder,
             DisplayLocation = DisplayLocation
         };
-#pragma warning restore CS0618
     }
 }
 

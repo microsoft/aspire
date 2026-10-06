@@ -40,14 +40,16 @@ Aspire client integration packages will be serviced regularly, capturing the lat
 
 In the situation that a client library associated with an Aspire client integration package releases an update with a breaking change, the nature of the change will be assessed to determine its impact severity on the associated Aspire client integration package and Aspire applications that depend on it. If it’s decided that the change has high enough impact such that it would constitute a breaking change necessary to address, the Aspire client integration package will be split into 2 packages to support both versions.
 
-To understand how this will work, an example of this is the `RabbitMQ.Client` library made many large breaking changes between version `6.8.1` and `7.0.0`. To handle this:
+As a historical example, the `RabbitMQ.Client` library made many large breaking changes between version `6.8.1` and `7.0.0`. The following scenario illustrates how versioned packages supported that transition during Aspire 8.x and 9; it does not describe the currently maintained packages:
 
-1. For the current `Aspire.RabbitMQ.Client` package, we put a NuGet version limit on our dependency: `[6.8.1,7.0.0)`. This way people won't be able to update to the `7.0.0` version, which will break their app.
-2. When `RabbitMQ.Client` ships an official `7.0.0` stable package during the Aspire `8.x` lifetime, we can add a new, forked client integration named `Aspire.RabbitMQ.Client.v7` which will have a dependency on `7.0.0` and contain any updates so the Aspire client integration will work with v7. People who explicitly want to use v7 can opt into using this package.
-3. When Aspire 9 ships, we can "swap" the dependencies around.
-    - The `Aspire.RabbitMQ.Client` package will be updated to depend on v7 of `RabbitMQ.Client`.
-    - If `RabbitMQ.Client` v6 is still in support, we can create `Aspire.RabbitMQ.Client.v6` which has the dependency limit `[6.8.1, 7.0.0)` and works with the version 6 of RabbitMQ.Client.
-    - `Aspire.RabbitMQ.Client.v7` will be dead-ended. We won't make new Aspire 9 versions of this package.
+1. For the Aspire 8.x `Aspire.RabbitMQ.Client` package, we put a NuGet version limit on our dependency: `[6.8.1,7.0.0)`. This prevented applications from inadvertently updating to the breaking `7.0.0` version.
+2. When `RabbitMQ.Client` shipped an official `7.0.0` stable package during the Aspire `8.x` lifetime, we added a new, forked client integration named `Aspire.RabbitMQ.Client.v7` with a dependency on `7.0.0` and the updates needed to work with v7. This let people explicitly opt into using v7.
+3. When Aspire 9 shipped, we "swapped" the dependencies around.
+    - The `Aspire.RabbitMQ.Client` package was updated to depend on v7 of `RabbitMQ.Client`.
+    - We created `Aspire.RabbitMQ.Client.v6` with the dependency limit `[6.8.1, 7.0.0)` to continue supporting version 6 of RabbitMQ.Client.
+    - `Aspire.RabbitMQ.Client.v7` was dead-ended, with no new Aspire 9 versions of this package.
+
+The currently maintained integration is `Aspire.RabbitMQ.Client`, which uses RabbitMQ.Client 7.x. The version-suffixed packages in this historical example are no longer maintained in this repository.
 
 ## Icon
 

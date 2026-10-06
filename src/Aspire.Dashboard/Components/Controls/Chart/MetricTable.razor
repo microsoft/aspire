@@ -15,11 +15,10 @@
     }
 }
 
-<div id="metric-table-container" style="height: 40vh; overflow-y: auto; width:1200px;">
+<div id="metric-table-container" class="metric-table-container">
     @* ItemKey is to preserve row focus by associating rows with their associated time *@
-    <FluentDataGrid
-        @ref="_dataGrid"
-        Items="@_metricsView"
+    <FluentDataGrid Class="aspire-spaced-grid"
+        ItemsProvider="@EnumerableGridItemsProvider.Create(() => _metricsView)"
         ItemSize="46"
         Virtualize="true"
         GridTemplateColumns="@string.Join(" ", Enumerable.Repeat("1fr", columnCount))"
@@ -44,7 +43,7 @@
 
                             if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, title))
                             {
-                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title"/>
+                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
                             }
                         }
                     </TemplateColumn>
@@ -71,7 +70,7 @@
                         <span style="margin-right: 4px;">@metricValueView.Value</span>
                         if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, title))
                         {
-                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title"/>
+                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
                         }
                     }
                 </TemplateColumn>
@@ -82,7 +81,7 @@
                     @if (context.Exemplars.Count > 0)
                     {
                         @* min-width ensures a consistent button width up to 999 metrics *@
-                        <FluentButton Appearance="Appearance.Accent"
+                        <FluentButton Appearance="ButtonAppearance.Primary"
                                       aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
                                       @onclick="() => OpenExemplarsDialogAsync(context)"
                                       Style="min-width: 45px">@context.Exemplars.Count</FluentButton>
@@ -97,7 +96,7 @@
         <EmptyContent>
             @if (_hasUpdated)
             {
-                <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" />@:&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
+                <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />@:&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
             }
             else
             {

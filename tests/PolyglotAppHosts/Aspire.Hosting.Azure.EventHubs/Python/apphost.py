@@ -1,11 +1,17 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import AzureResourceInfrastructure, create_builder
+
+
+def configure_provisioning(infrastructure: AzureResourceInfrastructure) -> None:
+    namespace = infrastructure.get_event_hubs_namespace()
+    namespace.tags.set("provisioning-proxy", "python")
 
 
 with create_builder() as builder:
     event_hubs = builder.add_azure_event_hubs("resource")
+    event_hubs.configure_infrastructure(configure_provisioning)
     event_hubs.with_event_hubs_role_assignments(event_hubs, ["AzureEventHubsDataOwner"])
     hub = event_hubs.add_hub("resource")
     hub.with_properties(lambda _properties: None)

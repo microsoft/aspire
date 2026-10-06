@@ -33,7 +33,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureContainerAppEnvironmentResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var existingName = builder.AddParameter("existing-env-name");
         var existingResourceGroup = builder.AddParameter("existing-env-rg");
 
@@ -55,7 +55,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     public async Task WithAzureLogAnalyticsWorkspace_RespectsExistingWorkspaceInDifferentResourceGroup()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         
         // Create parameters for existing Log Analytics Workspace in resource group "X"
         var lawName = builder.AddParameter("log-env-shared-name");
@@ -90,7 +90,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public void ContainerRegistry_ReturnsDefaultContainerRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var containerAppEnvironment = builder.AddAzureContainerAppEnvironment("env");
 
@@ -103,7 +103,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public void ContainerRegistry_PrefersExplicitContainerRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var acr = builder.AddAzureContainerRegistry("myacr");
         var containerAppEnvironment = builder.AddAzureContainerAppEnvironment("env")
@@ -126,7 +126,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public void ContainerRegistry_ThrowsWhenNonAzureRegistryConfigured()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var dockerRegistry = builder.AddContainerRegistry("docker-hub", "docker.io", "myuser");
         var containerAppEnvironment = builder.AddAzureContainerAppEnvironment("env")
@@ -141,7 +141,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task WithDelegatedSubnet_ConfiguresVnetConfiguration()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
@@ -163,7 +163,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // When AsExisting is used on AddAzureContainerAppEnvironment, the published Bicep
         // must reference the existing managed environment instead of generating a new one
         // plus a new Log Analytics workspace and a new Aspire Dashboard component.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environmentName = builder.AddParameter("environmentName");
         var sharedResourceGroup = builder.AddParameter("sharedRg");
@@ -183,7 +183,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // When AsExisting is combined with an explicit AsExisting ACR (a common deployment
         // scenario where everything is pre-provisioned), the resulting Bicep should not
         // create either a new managed environment or a new container registry.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environmentName = builder.AddParameter("environmentName");
         var registryName = builder.AddParameter("registryName");
@@ -209,7 +209,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // Bicep should NOT declare an env_mi resource or an AcrPull role assignment - the
         // identity id should flow into the env module via a parameter and be emitted as
         // AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var mi = builder.AddAzureUserAssignedIdentity("shared-mi");
 
@@ -229,7 +229,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // existing env + existing ACR + BYO identity that already has AcrPull on the ACR.
         // The generated env module should reference existing resources only and contain
         // neither a new identity nor a new role assignment.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environmentName = builder.AddParameter("environmentName");
         var registryName = builder.AddParameter("registryName");
@@ -256,7 +256,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task CrossResourceGroupRegistry_UsesStandaloneAcrPullIdentityForFinalRegistry()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var firstRegistry = builder.AddAzureContainerRegistry("first-registry")
             .PublishAsExisting("firstacr", "first-resource-group");
@@ -291,7 +291,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task CrossSubscriptionRegistry_RoleModulePreservesSubscriptionAndResourceGroupScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExistingInResourceGroup("myacr", "my-existing-resource-group", "00000000-0000-0000-0000-000000000001");
@@ -312,7 +312,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task CrossResourceGroupRegistry_ThrowsTargetedErrorWhenGeneratedIdentityNameAlreadyExists()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", "my-existing-resource-group");
@@ -333,7 +333,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task CrossResourceGroupRegistry_WithAzdNaming_PreservesIdentityName()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", "my-existing-resource-group");
@@ -355,9 +355,9 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task CrossResourceGroupRegistry_WithCompactNaming_PreservesDefaultIdentityName()
     {
-        static async Task<string> GetIdentityBicepAsync(bool useCompactNaming)
+        async Task<string> GetIdentityBicepAsync(bool useCompactNaming)
         {
-            using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+            using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
             var registry = builder.AddAzureContainerRegistry("registry")
                 .PublishAsExisting("myacr", "my-existing-resource-group");
@@ -386,7 +386,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task SameScopeExistingRegistry_KeepsInlineAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", resourceGroup: null);
@@ -405,7 +405,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task CrossResourceGroupRegistry_PreservesAcrPullIdentityAddedAfterEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", "my-existing-resource-group");
@@ -425,7 +425,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task MultipleEnvironments_SharingCrossScopeRegistry_EachGetDistinctStandaloneAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // A single existing registry in another resource group, shared by two environments in the same app host.
         var registry = builder.AddAzureContainerRegistry("registry")
@@ -460,7 +460,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task AsExisting_ThrowsWhenCombinedWithDelegatedSubnet()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environmentName = builder.AddParameter("environmentName");
 
@@ -486,7 +486,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // attached to the managed env, which we don't own here). Asserts the
         // configureInfrastructure callback throws a clear error in that case so the
         // guard isn't silently dropped by future refactors.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environmentName = builder.AddParameter("environmentName");
 
@@ -514,7 +514,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     [Fact]
     public async Task AsExisting_ThrowsWhenCombinedWithAzureLogAnalyticsWorkspace()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environmentName = builder.AddParameter("environmentName");
 
@@ -549,7 +549,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // dependency edge that caused the publish-time ResolveStepsAsync to fail.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path);
 
         var acr = builder.AddAzureContainerRegistry("acr");
         builder.AddAzureContainerAppEnvironment("env")
@@ -581,7 +581,7 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         // once in the BeforeStart pipeline and again in the publish DAG. Without a guard the second
         // pass adds a second DeploymentTargetAnnotation, and GetDeploymentTargetAnnotation then throws
         // on the ambiguity, which fails every publish that goes through both paths.
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var environment = builder.AddAzureContainerAppEnvironment("env");
 

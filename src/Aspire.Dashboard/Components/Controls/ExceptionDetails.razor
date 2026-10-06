@@ -7,12 +7,13 @@
 
 @if (!string.IsNullOrWhiteSpace(ExceptionText))
 {
-    <FluentButton Appearance="Appearance.Lightweight"
+    <FluentButton Appearance="ButtonAppearance.Transparent"
+                  IconOnly="true"
                   OnClick="OnExceptionDetailsClickedAsync"
                   Title="@Loc[nameof(ControlsStrings.ExceptionDetailsTitle)]"
                   Class="exception-details-button">
         <FluentIcon Icon="Icons.Filled.Size16.DocumentError"
-                    Color="Color.Accent" />
+                    Color="Color.Primary" />
     </FluentButton>
 }
 

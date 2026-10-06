@@ -108,19 +108,17 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
     [Theory]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    [InlineData("Light", "fluent-text-field", "root")]
-    [InlineData("Light", "fluent-search", "root")]
-    [InlineData("Light", "fluent-number-field", "root")]
-    [InlineData("Light", "fluent-text-area", "control")]
-    [InlineData("Dark", "fluent-text-field", "root")]
-    [InlineData("Dark", "fluent-search", "root")]
-    [InlineData("Dark", "fluent-number-field", "root")]
-    [InlineData("Dark", "fluent-text-area", "control")]
-    public async Task FluentDelegatedInput_ShowsVisibleFocusIndicator(string theme, string controlName, string partName)
+    [InlineData("Light", "fluent-text-input", "text", "root")]
+    [InlineData("Light", "fluent-text-input", "number", "root")]
+    [InlineData("Light", "fluent-textarea", null, "root")]
+    [InlineData("Dark", "fluent-text-input", "text", "root")]
+    [InlineData("Dark", "fluent-text-input", "number", "root")]
+    [InlineData("Dark", "fluent-textarea", null, "root")]
+    public async Task FluentDelegatedInput_ShowsVisibleFocusIndicator(string theme, string controlName, string? inputType, string partName)
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -131,34 +129,27 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync("/").DefaultTimeout();
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
         await page.WaitForSelectorAsync(
             $"html[data-theme='{theme.ToLowerInvariant()}']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
         await Assertions.Expect(page.GetByText("frontend", new PageGetByTextOptions { Exact = true }).First).ToBeVisibleAsync();
         await WaitForComponentsAndFontsAsync(page);
 
-        ILocator control;
-        if (string.Equals(controlName, "fluent-search", StringComparison.Ordinal))
-        {
-            control = page.Locator("fluent-search[name='resources-search']");
-        }
-        else
-        {
-            await page.EvaluateAsync(
-                """
-                async controlName => {
-                    await customElements.whenDefined(controlName);
-                    const control = document.createElement(controlName);
-                    control.id = 'delegated-focus-probe';
-                    control.style.cssText = 'position:fixed;left:-99999px;top:0;';
-                    document.body.appendChild(control);
-                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await page.EvaluateAsync(
+            """
+            async options => {
+                await customElements.whenDefined(options.controlName);
+                const control = document.createElement(options.controlName);
+                control.id = 'delegated-focus-probe';
+                control.style.cssText = 'position:fixed;left:-99999px;top:0;';
+                if (options.inputType) {
+                    control.setAttribute('type', options.inputType);
                 }
-                """,
-                controlName).DefaultTimeout();
-            control = page.Locator("#delegated-focus-probe");
-        }
+                document.body.appendChild(control);
+            }
+            """,
+            new { controlName, inputType }).DefaultTimeout();
+        var control = page.Locator("#delegated-focus-probe");
 
         await AssertVisibleFocusIndicatorAsync(control, partName);
     }
@@ -169,7 +160,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -180,7 +171,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync("/").DefaultTimeout();
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
         await page.WaitForSelectorAsync(
             "html[data-theme='dark']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
@@ -242,12 +232,10 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // The settings button lives in the top header on every page (MainLayout.SettingsButtonId).
         await page.Locator("#dashboard-settings-button").ClickAsync();
 
-        // The settings panel is a right-aligned fluent-dialog with a fixed id (MainLayout.SettingsDialogId).
-        // Wait on a light-DOM descendant rather than the <fluent-dialog> host: Fluent projects the dialog
-        // body through a slot, so the custom-element host carries no layout box and never satisfies
-        // Playwright's visibility check even once the panel is fully open. .input-container wraps each
-        // settings group in SettingsDialog.razor and is a reliable "content has rendered" signal.
-        await Assertions.Expect(page.Locator("fluent-dialog#SettingsDialog .input-container").First).ToBeVisibleAsync();
+        // Fluent v5 projects the dialog body outside the custom-element host's descendant tree.
+        // The role is carried by the native <dialog> in shadow DOM and becomes visible only after
+        // the panel has opened, so it is the stable readiness signal across Fluent DOM revisions.
+        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
     }
 
     private static async Task OpenAddFilterDialogAsync(IPage page)
@@ -257,9 +245,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         // regardless of test culture rather than hard-coding the English text.
         await page.Locator($"fluent-button[aria-label='{StructuredFiltering.AddFilter}']").ClickAsync();
 
-        // FilterDialog opens as a right-aligned panel with no id, so wait for its distinctive
-        // .filter-button-container (see FilterDialog.razor) to confirm the dialog body has rendered.
-        await Assertions.Expect(page.Locator("fluent-dialog .filter-button-container")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Dialog)).ToBeVisibleAsync();
     }
 
     /// <summary>
@@ -277,7 +263,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -288,7 +274,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync("/").DefaultTimeout();
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
         await page.WaitForSelectorAsync(
             $"html[data-theme='{theme.ToLowerInvariant()}']",
             new PageWaitForSelectorOptions { State = WaitForSelectorState.Attached }).DefaultTimeout();
@@ -329,7 +314,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
 
-        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        await using var context = await PlaywrightFixture.CreateContextAsync(new BrowserNewContextOptions
         {
             IgnoreHTTPSErrors = true,
             BaseURL = baseUrl,
@@ -343,11 +328,6 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         var page = await context.NewPageAsync();
         await page.GotoAsync(relativeUrl).DefaultTimeout();
-
-        // Wait until Blazor has upgraded the Fluent web components - app.js removes the
-        // `before-upgrade` class from <body> once the components are ready (before then <body> is
-        // visibility:hidden). Scanning earlier would audit the pre-hydration shell.
-        await page.WaitForSelectorAsync("body:not(.before-upgrade)").DefaultTimeout();
 
         // Confirm the requested theme actually applied (app-theme.js sets data-theme on <html>),
         // otherwise a contrast scan could silently run against the wrong palette.
@@ -364,7 +344,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
         }
         else
         {
-            await Assertions.Expect(page.Locator("main")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator("main.custom-body-content")).ToBeVisibleAsync();
         }
 
         await WaitForPageContentAsync(page, relativeUrl);
@@ -383,7 +363,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             await openSurfaceAsync(page);
 
             // The just-opened dialog mounts its own custom elements (e.g. the Settings language
-            // <fluent-select>); wait for those to upgrade too so the scan doesn't sample a
+            // <fluent-dropdown>); wait for those to upgrade too so the scan doesn't sample a
             // half-hydrated combobox inside the panel.
             await WaitForComponentsAndFontsAsync(page);
         }
@@ -420,10 +400,9 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
             BuildFailureMessage(axeResults, blockingViolations, relativeUrl, theme, viewportLabel, surfaceLabel));
     }
 
-    // Blazor + Fluent web components hydrate asynchronously and independently: app.js clears the
-    // <body> `before-upgrade` class as soon as the *first* custom element upgrades, but other component
-    // types on the page (notably the Settings language <fluent-select> and the filter comboboxes) can
-    // still be mid-upgrade at that moment. axe scanning a half-upgraded combobox reads a transient
+    // Blazor + Fluent web components hydrate asynchronously and independently. Component types on
+    // the page (notably the Settings language dropdown and the filter comboboxes) can still be
+    // mid-upgrade when the page first renders. Axe scanning a half-upgraded combobox reads a transient
     // role/accessible-name and yields non-deterministic pass/fail results. Wait for every custom element
     // currently in the DOM to finish upgrading, then for web fonts to finish loading, so the scan (and
     // any preceding interaction) samples a fully settled, stable page.
@@ -530,7 +509,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
     {
         var focusJson = await host.EvaluateAsync<string>(
             """
-            (element, partName) => {
+            async (element, partName) => {
                 const focusTarget = element.shadowRoot?.querySelector(
                     'input, textarea, [role="combobox"], [tabindex]:not([tabindex="-1"])');
                 if (!focusTarget) {
@@ -548,13 +527,19 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                         `No ${partName} part found for ${element.localName}. Available parts: ${availableParts}.`);
                 }
 
-                const style = getComputedStyle(part);
+                // Chromium suspends requestAnimationFrame for background pages when theory rows run
+                // concurrently. Timers still advance, so wait past Fluent's underline transition.
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                const style = getComputedStyle(part, '::after');
+                const transform = style.transform;
+                const indicatorScale = transform === 'none' ? 1 : new DOMMatrixReadOnly(transform).a;
                 return JSON.stringify({
                     focusWithin: element.matches(':focus-within'),
                     focusVisible: element.matches(':focus-visible'),
-                    outlineStyle: style.outlineStyle,
-                    outlineWidth: Number.parseFloat(style.outlineWidth),
-                    outlineColor: style.outlineColor
+                    borderWidth: Number.parseFloat(style.borderBottomWidth),
+                    borderColor: style.borderBottomColor,
+                    indicatorScale: indicatorScale
                 });
             }
             """,
@@ -562,16 +547,16 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
 
         using var focus = JsonDocument.Parse(focusJson);
         var root = focus.RootElement;
-        var outlineStyle = root.GetProperty("outlineStyle").GetString();
-        var outlineWidth = root.GetProperty("outlineWidth").GetDouble();
-        var outlineColor = root.GetProperty("outlineColor").GetString();
-        var hasOpaqueOutline = !string.Equals(outlineColor, "transparent", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(outlineColor, "rgba(0, 0, 0, 0)", StringComparison.OrdinalIgnoreCase);
+        var borderWidth = root.GetProperty("borderWidth").GetDouble();
+        var borderColor = root.GetProperty("borderColor").GetString();
+        var indicatorScale = root.GetProperty("indicatorScale").GetDouble();
+        var hasOpaqueBorder = !string.Equals(borderColor, "transparent", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(borderColor, "rgba(0, 0, 0, 0)", StringComparison.OrdinalIgnoreCase);
 
         Assert.True(root.GetProperty("focusWithin").GetBoolean(), $"Expected {await host.EvaluateAsync<string>("element => element.localName")} to contain delegated focus.");
         Assert.True(
-            !string.Equals(outlineStyle, "none", StringComparison.Ordinal) && outlineWidth >= 2 && hasOpaqueOutline,
-            $"Expected a visible focus outline on the {partName} part, but got style '{outlineStyle}', width {outlineWidth}px, color {outlineColor}, host :focus-visible={root.GetProperty("focusVisible").GetBoolean()}.");
+            borderWidth >= 2 && hasOpaqueBorder && indicatorScale >= 0.99,
+            $"Expected a visible focus indicator on the {partName} part, but got border width {borderWidth}px, color {borderColor}, scale {indicatorScale}, host :focus-visible={root.GetProperty("focusVisible").GetBoolean()}.");
     }
 
     private static async Task<((int R, int G, int B) Foreground, (int R, int G, int B) Background)> ReadFluentControlColorsAsync(ILocator host)
@@ -594,12 +579,9 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                     throw new Error('unparseable color: ' + s);
                 }
 
-                const control = element.shadowRoot?.querySelector('[part~="control"]');
-                if (!control) {
-                    throw new Error(`No control part found for ${element.localName}.`);
-                }
-
-                const style = getComputedStyle(control);
+                // Fluent v5 applies the button palette directly to the custom-element host. Its
+                // previous shadow control part no longer exists, while slotted text inherits these colors.
+                const style = getComputedStyle(element);
                 const foreground = parseRgb(style.color);
                 const background = parseRgb(style.backgroundColor);
                 return JSON.stringify({
@@ -715,7 +697,7 @@ public sealed class AccessibilityTests : PlaywrightTestsBase<AccessibilityTests.
                     await readSurface(
                         'text visualizer',
                         dialog,
-                        () => dialog.shadowRoot?.querySelector('[part~="control"]'),
+                        () => dialog.shadowRoot?.querySelector('[part~="dialog"]'),
                         visualizerLine),
                     await readSurface('rendered markdown', markdown, () => codeBlock, markdownCode)
                 ]

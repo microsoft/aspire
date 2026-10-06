@@ -27,6 +27,23 @@ internal sealed class ProcessTreeGracefulShutdownService(
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_processTerminationPollInterval = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    /// Stops only the connected AppHost, without signalling its launcher or escalating to process-tree cleanup.
+    /// </summary>
+    public async Task<bool> StopAppHostByConnectionAsync(
+        AppHostInformation appHostInfo,
+        Func<CancellationToken, Task<bool>> requestRpcStopAsync,
+        CancellationToken cancellationToken)
+    {
+        var process = CreateAppHostProcessTarget(appHostInfo);
+
+        // Keep instance-targeted stops bound to the original RPC connection. A shared launcher
+        // or a reconnect by project path could stop sibling instances, and PID reuse must not
+        // redirect a failed RPC to another process. Only observe exit after the request succeeds.
+        return await TryRequestRpcStopAsync(requestRpcStopAsync, cancellationToken).ConfigureAwait(false) &&
+            await MonitorProcessesForTerminationAsync([process], cancellationToken).ConfigureAwait(false);
+    }
+
     public Task<bool> StopProcessTreeAsync(
         int pid,
         DateTimeOffset? startTime,

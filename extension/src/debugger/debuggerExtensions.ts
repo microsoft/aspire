@@ -1,5 +1,5 @@
 import path from "path";
-import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, isProjectLaunchConfiguration } from "../dcp/types";
+import { ExecutableLaunchConfiguration, EnvVar, LaunchOptions, AspireResourceExtendedDebugConfiguration, AspireExtendedDebugConfiguration, AspireResourceDebugSession, getLaunchConfigurationExecutablePaths, getLaunchConfigurationTargetPath, isProjectLaunchConfiguration } from "../dcp/types";
 import { debugProject, runProject } from "../loc/strings";
 import { getEnvironmentForChildProcess, mergeEnvs } from "../utils/environment";
 import { extensionLogOutputChannel } from "../utils/logging";
@@ -85,10 +85,28 @@ export async function prepareDebugSession(debugSessionConfig: AspireExtendedDebu
         }
     }
 
+    // These fields identify and control the Aspire run, so workspace debugger settings cannot
+    // override them. `resourceType` also lets lifecycle code distinguish browser sessions from
+    // process-backed sessions without duplicating a termination policy across every debugger.
+    configuration.runId = launchOptions.runId;
+    configuration.debugSessionId = launchOptions.debugSessionId;
+    configuration.isApphost = launchOptions.isApphost;
+    configuration.resourceType = debuggerExtension.resourceType;
 
     let alreadyStartedSession: AlreadyStartedResourceDebugSession | undefined;
     if (debuggerExtension.createDebugSessionConfigurationCallback) {
         alreadyStartedSession = await debuggerExtension.createDebugSessionConfigurationCallback(launchConfig, args, env, launchOptions, configuration) ?? undefined;
+    }
+
+    // Debugger-specific callbacks can replace `program` with an output binary,
+    // runtime executable, or package-manager command. Keep the source target and
+    // resource executable identity from DCP's typed launch metadata so editor
+    // assistance never has to inspect the final debug configuration or infer
+    // identity from free-form args/environment.
+    configuration.targetPath = getLaunchConfigurationTargetPath(launchConfig);
+    const resourceExecutablePaths = getLaunchConfigurationExecutablePaths(launchConfig);
+    if (resourceExecutablePaths.length > 0) {
+        configuration.resourceExecutablePaths = resourceExecutablePaths;
     }
 
     return {

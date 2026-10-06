@@ -24,6 +24,54 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 [Trait("Partition", "3")]
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData("Waiting")]
+    [InlineData("Starting")]
+    [InlineData("Running")]
+    public async Task ResourceStoppedEventIsNotRepeatedWhenHandlerChangesSnapshotState(string snapshotState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("resource", "unused", ".");
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var stoppedCount = 0;
+
+        resource.OnResourceStopped(async (_, @event, _) =>
+        {
+            Interlocked.Increment(ref stoppedCount);
+            Assert.Equal(KnownResourceStates.Finished, @event.ResourceEvent.Snapshot.State?.Text);
+            Assert.Equal(0, @event.ResourceEvent.Snapshot.ExitCode);
+            await notifications.PublishUpdateAsync(resource.Resource, resource.Resource.Name,
+                snapshot => snapshot with { State = snapshotState });
+        });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var orchestrator = CreateOrchestrator(model, notificationService: notifications, dcpEvents: events, applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+
+        await PublishStateAsync(null, null);
+        await PublishStateAsync(KnownResourceStates.Running, null);
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Running);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Finished);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Exited, KnownResourceStates.Finished);
+        await PublishStateAsync(KnownResourceStates.FailedToStart, KnownResourceStates.Exited);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Running, KnownResourceStates.FailedToStart);
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Running);
+        Assert.Equal(2, stoppedCount);
+
+        Task PublishStateAsync(string? state, string? previousState) => events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, resource.Resource.Name,
+            new ResourceStatus(state, null, null), previousState,
+            snapshot => snapshot with { State = state is not null ? new(state, null) : snapshot.State, ExitCode = state == KnownResourceStates.Finished ? 0 : null }));
+    }
+
     [Fact]
     public async Task ParentPropertySetOnChildResource()
     {
@@ -1311,6 +1359,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             parentContainer.Resource,
             "parent-container-dcp",
             new ResourceStatus(KnownResourceStates.FailedToStart, null, null),
+            PreviousState: null,
             snapshot => snapshot with { State = KnownResourceStates.FailedToStart }));
 
         // Check final states
@@ -1358,6 +1407,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             parentContainer.Resource,
             "parent-container-dcp",
             new ResourceStatus(KnownResourceStates.FailedToStart, null, null),
+            PreviousState: null,
             snapshot => snapshot with { State = KnownResourceStates.FailedToStart }));
 
         // Check final states

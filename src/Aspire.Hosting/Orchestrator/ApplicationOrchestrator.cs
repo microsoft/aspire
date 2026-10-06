@@ -225,9 +225,7 @@ internal sealed class ApplicationOrchestrator
                 // Endpoint URLs are inactive (hidden in the dashboard) when published here. It is assumed they will get activated later when the endpoint is considered active
                 // by whatever allocated the endpoint in the first place, e.g. for resources controlled by DCP, when DCP detects the endpoint is listening.
                 IsInactive = url.Endpoint is not null,
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be flowed for compatibility.
                 DisplayProperties = new(url.DisplayText ?? "", url.DisplayOrder ?? 0)
-#pragma warning restore CS0618
             });
         }
         return urls;
@@ -579,13 +577,6 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceChanged(OnResourceChangedContext context)
     {
-        // Get the previous state before updating to detect transitions to stopped states
-        string? previousState = null;
-        if (_notificationService.TryGetCurrentState(context.DcpResourceName, out var previousResourceEvent))
-        {
-            previousState = previousResourceEvent.Snapshot.State?.Text;
-        }
-
         await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot).ConfigureAwait(false);
 
         if (context.ResourceType == KnownResourceTypes.Container)
@@ -593,13 +584,12 @@ internal sealed class ApplicationOrchestrator
             await SetChildResourceAsync(context.Resource, context.Status.State, context.Status.StartupTimestamp, context.Status.FinishedTimestamp).ConfigureAwait(false);
         }
 
-        // Check if the resource has transitioned to a terminal/stopped state
-        var currentState = context.Status.State;
-        if (currentState is not null &&
-            KnownResourceStates.TerminalStates.Contains(currentState) &&
-            previousState != currentState &&
-            (previousState is null ||
-            !KnownResourceStates.TerminalStates.Contains(previousState)))
+        // Use the previous DCP state from the context, not the published snapshot. A stopped handler
+        // can restart the resource and change the snapshot to Waiting or Starting while DCP still
+        // reports the same terminal state, which would otherwise fire another stopped event.
+        if (context.Status.State is { } state &&
+            KnownResourceStates.TerminalStates.Contains(state) &&
+            !KnownResourceStates.TerminalStates.Contains(context.PreviousState))
         {
             // Get the current state from notification service after the update
             if (_notificationService.TryGetCurrentState(context.DcpResourceName, out var currentResourceEvent))

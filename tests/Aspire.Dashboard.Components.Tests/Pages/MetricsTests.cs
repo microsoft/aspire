@@ -46,7 +46,7 @@ public partial class MetricsTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isReadOnly: dashboardClientIsReadOnly));
         await FluentUISetupHelpers.ConfigureTelemetryRepository(this, telemetryRepositoryIsReadOnly, _ => Task.CompletedTask);
 
-        var cut = RenderComponent<Metrics>(builder => builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+        var cut = Render<Metrics>(builder => builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
         Assert.Equal(telemetryRepositoryIsReadOnly, cut.FindComponent<PauseIncomingDataSwitch>().Instance.Disabled);
         Assert.Equal(telemetryRepositoryIsReadOnly, cut.FindComponent<ClearSignalsButton>().FindComponent<AspireMenuButton>().Instance.Disabled);
@@ -105,8 +105,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         var resource = telemetryRepository.GetResources().Single();
-
-        var cut = RenderComponent<ChartContainer>(builder =>
+        var cut = Render<ChartContainer>(builder =>
         {
             builder.Add(component => component.ResourceKey, resource.ResourceKey);
             builder.Add(component => component.MeterName, "test-meter");
@@ -123,12 +122,10 @@ public partial class MetricsTests : DashboardTestContext
             Assert.Single(cut.FindComponents<PlotlyChart>());
             Assert.Empty(cut.FindComponents<MetricTable>());
         });
-        var dimensionFilters = cut.Instance.DimensionFilters;
-
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(telemetryRepository.SqlActivitySource, onActivityStopped: activities.Enqueue);
 
-        cut.SetParametersAndRender(builder => builder.Add(component => component.ActiveView, MetricViewKind.Table));
+        cut.Render(builder => builder.Add(component => component.ActiveView, MetricViewKind.Table));
 
         Assert.Empty(cut.FindComponents<PlotlyChart>());
         Assert.Single(cut.FindComponents<MetricTable>());
@@ -139,11 +136,17 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Contains("1Value increased", cut.FindAll("[role='gridcell']").Select(cell => cell.TextContent.Trim())));
         Assert.Empty(activities);
 
-        cut.SetParametersAndRender(builder => builder.Add(component => component.ActiveView, MetricViewKind.Graph));
+        cut.Render(builder => builder.Add(component => component.ActiveView, MetricViewKind.Graph));
 
         Assert.Single(cut.FindComponents<PlotlyChart>());
         Assert.Empty(cut.FindComponents<MetricTable>());
         Assert.Empty(activities);
+
+        var chartFilters = cut.FindComponent<ChartFilters>().Instance;
+        var filterPopover = cut.FindComponent<ChartFilterPopover>().Instance;
+        var filterButtonId = cut.Find(".chart-filter-button").Id;
+        cut.Find(".chart-filter-button").Click();
+        Assert.Equal("true", cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("opened"));
 
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -168,16 +171,19 @@ public partial class MetricsTests : DashboardTestContext
         });
         activities.Clear();
 
-        cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(5)));
+        cut.Render(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(5)));
 
         Assert.Empty(activities);
 
-        cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(1)));
+        cut.Render(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(1)));
 
         cut.WaitForAssertion(() =>
         {
             var updatedFilter = Assert.Single(cut.Instance.DimensionFilters);
-            Assert.NotSame(dimensionFilters, cut.Instance.DimensionFilters);
+            Assert.Same(chartFilters, cut.FindComponent<ChartFilters>().Instance);
+            Assert.Same(filterPopover, cut.FindComponent<ChartFilterPopover>().Instance);
+            Assert.Equal(filterButtonId, cut.Find(".chart-filter-button").Id);
+            Assert.Equal("true", cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("opened"));
             Assert.Collection(
                 updatedFilter.SelectedValues.Select(value => value.Value).Order(),
                 value => Assert.Equal("GET", value),
@@ -220,7 +226,7 @@ public partial class MetricsTests : DashboardTestContext
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var resource = telemetryRepository.GetResources().Single();
-        var cut = RenderComponent<ChartContainer>(builder =>
+        var cut = Render<ChartContainer>(builder =>
         {
             builder.Add(component => component.ResourceKey, resource.ResourceKey);
             builder.Add(component => component.MeterName, "test-meter");
@@ -236,7 +242,7 @@ public partial class MetricsTests : DashboardTestContext
         table.Render();
         table.WaitForAssertion(() => Assert.Contains("1Value increased", table.FindAll("[role='gridcell']").Select(cell => cell.TextContent.Trim())));
 
-        cut.SetParametersAndRender(builder => builder.Add(component => component.InstrumentName, "instrument-2"));
+        cut.Render(builder => builder.Add(component => component.InstrumentName, "instrument-2"));
 
         cut.WaitForAssertion(() =>
         {
@@ -308,7 +314,7 @@ public partial class MetricsTests : DashboardTestContext
         try
         {
             CultureInfo.CurrentCulture = componentCulture;
-            var cut = RenderComponent<ChartContainer>(builder =>
+            var cut = Render<ChartContainer>(builder =>
             {
                 builder.Add(component => component.ResourceKey, resource.ResourceKey);
                 builder.Add(component => component.MeterName, "test-meter");
@@ -382,7 +388,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         // Act
-        var cut = RenderComponent<Metrics>(builder =>
+        var cut = Render<Metrics>(builder =>
         {
             builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -466,7 +472,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         // Act
-        var cut = RenderComponent<Metrics>(builder =>
+        var cut = Render<Metrics>(builder =>
         {
             builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
@@ -480,6 +486,68 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal("test-instrument", query["instrument"]);
         Assert.Equal("720", query["duration"]);
         Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("test-instrument")]
+    public async Task InitialLoad_RouteSelection_SelectsTreeItem(string? instrumentName)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(
+            resource: "TestApp",
+            meter: "test-meter",
+            instrument: instrumentName,
+            duration: 5,
+            view: MetricViewKind.Table.ToString()));
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        });
+
+        var cut = Render<Metrics>(builder =>
+        {
+            builder.Add(component => component.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var tree = cut.FindComponent<FluentTreeView>();
+            var treeItems = cut.FindComponents<FluentTreeItem>();
+            var selectedItem = Assert.Single(treeItems, item => item.Instance.Id == tree.Instance.SelectedId);
+            var meterItems = treeItems.Where(item => item.Instance.Data is string).ToList();
+            var expandedMeterItems = meterItems.Where(item => item.Find("fluent-tree-item").HasAttribute("expanded")).ToList();
+
+            Assert.True(selectedItem.Find("fluent-tree-item").HasAttribute("selected"));
+            Assert.Equal("test-meter", Assert.Single(expandedMeterItems).Instance.Data);
+            if (instrumentName is null)
+            {
+                Assert.Equal("test-meter", selectedItem.Instance.Data);
+            }
+            else
+            {
+                Assert.Equal(instrumentName, Assert.IsType<OtlpInstrumentSummary>(selectedItem.Instance.Data).Name);
+            }
+        });
     }
 
     [Fact]
@@ -511,7 +579,7 @@ public partial class MetricsTests : DashboardTestContext
         navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument"));
 
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var cut = RenderComponent<Metrics>(builder =>
+        var cut = Render<Metrics>(builder =>
         {
             builder.Add(m => m.ResourceName, "TestApp");
             builder.AddCascadingValue(viewport);
@@ -575,7 +643,7 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 1
         // Initial page load
-        var cut = RenderComponent<Metrics>(builder =>
+        var cut = Render<Metrics>(builder =>
         {
             builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
             builder.Add(m => m.ResourceName, "TestApp");
@@ -671,7 +739,7 @@ public partial class MetricsTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo(
             DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString()));
 
-        var cut = RenderComponent<Metrics>(builder =>
+        var cut = Render<Metrics>(builder =>
         {
             builder.Add(m => m.ResourceName, "TestApp");
             builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
@@ -732,7 +800,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         // Act 1
-        var cut = RenderComponent<Metrics>(builder =>
+        var cut = Render<Metrics>(builder =>
         {
             builder.Add(m => m.ResourceName, "TestApp");
             builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
@@ -743,7 +811,7 @@ public partial class MetricsTests : DashboardTestContext
             var expectedUrl = DashboardUrls.MetricsUrl(resource: "TestApp2", meter: expectedMeterNameAfterChange, instrument: expectedInstrumentNameAfterChange, duration: 720, view: "Table");
             Assert.EndsWith(expectedUrl, e.Location);
 
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "TestApp2");
             });
@@ -757,8 +825,8 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 2
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("TestApp2");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "TestApp2");
+        await resourceSelect.InvokeAsync(() => resourceSelect.Instance.SelectedResourceChanged.InvokeAsync(selectedResource));
 
         cut.WaitForAssertion(() => Assert.Equal("TestApp2", viewModel.SelectedResource.Name));
 

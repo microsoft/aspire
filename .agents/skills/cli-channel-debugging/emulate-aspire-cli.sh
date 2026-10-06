@@ -89,7 +89,7 @@ __aspire_emulate_main() {
 
     # Build (or locate) the CLI. The override only changes identity/decisions — it never
     # materializes package bytes — so a normal local build of the CLI is all we need.
-    local cli_dll="$repo_root/artifacts/bin/Aspire.Cli/$config/net10.0/aspire.dll"
+    local cli_dll="$repo_root/artifacts/bin/Aspire.Cli/$config/net11.0/aspire.dll"
     if [ "$no_build" != "true" ]; then
         echo "emulate-aspire-cli: building Aspire.Cli ($config)..." >&2
         ( cd "$repo_root" && MSBUILDTERMINALLOGGER=false dotnet build src/Aspire.Cli/Aspire.Cli.csproj \

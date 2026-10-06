@@ -1,4 +1,5 @@
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -199,6 +200,28 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Empty(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
     }
 
+    [Fact]
+    public async Task BeforeStartAsync_ProjectDashboard_IncludesProjectLifecycleCommands()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration);
+        var dashboardResource = new ProjectResource(KnownResourceNames.AspireDashboard);
+        dashboardResource.Annotations.Add(new ProjectLaunchDefaultsAnnotation());
+        var model = new DistributedApplicationModel(new ResourceCollection([dashboardResource]));
+
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+        dashboardResource.AddLifeCycleCommands();
+
+        Assert.Collection(
+            dashboardResource.Annotations.OfType<ResourceCommandAnnotation>(),
+            command => Assert.Equal(KnownResourceCommands.StartCommand, command.Name),
+            command => Assert.Equal(KnownResourceCommands.StopCommand, command.Name),
+            command => Assert.Equal(KnownResourceCommands.RestartCommand, command.Name),
+            command => Assert.Equal(KnownResourceCommands.RebuildCommand, command.Name));
+    }
+
     [Theory]
     [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", true)]
     [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", false)]
@@ -234,7 +257,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var dashboardOptions = Options.Create(new DashboardOptions
         {
             TelemetryOptOut = telemetryEnabled,
-            DashboardPath = "test.dll",
+            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location,
             DashboardUrl = "http://localhost:8080",
             OtlpGrpcEndpointUrl = "http://localhost:4317"
         });
@@ -286,7 +309,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var configuration = configurationBuilder.Build();
         var dashboardOptions = Options.Create(new DashboardOptions
         {
-            DashboardPath = "test.dll",
+            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location,
             DashboardUrl = "http://localhost:8080",
             OtlpGrpcEndpointUrl = "http://localhost:4317",
         });
@@ -428,7 +451,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         // Configure dashboard with a specific URL - we'll allocate a different port
         var dashboardOptions = Options.Create(new DashboardOptions
         {
-            DashboardPath = "test.dll",
+            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location,
             DashboardUrl = configuredUrl,
             DashboardToken = "test-token",
         });
@@ -510,7 +533,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         var dashboardOptions = Options.Create(new DashboardOptions
         {
-            DashboardPath = "test.dll",
+            DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location,
             DashboardUrl = "http://localhost:18888",
             DashboardToken = "test-token",
             OtlpGrpcEndpointUrl = "http://otel-grpc.example.com:1234",
@@ -553,7 +576,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task AddDashboardResource_CreatesExecutableResourceWithCustomRuntimeConfig()
+    public async Task AddDashboardResource_UsesDashboardRuntimeConfigWithoutReplacingFrameworkVersions()
     {
         // Arrange
         var resourceLoggerService = new ResourceLoggerService();
@@ -578,12 +601,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             {
                 runtimeOptions = new
                 {
-                    tfm = "net8.0",
-                    rollForward = "Major",
+                    tfm = "net11.0",
                     frameworks = new[]
                     {
-                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
-                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                        new { name = "Microsoft.NETCore.App", version = "11.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "11.0.0" }
                     },
                     configProperties = new
                     {
@@ -619,19 +641,20 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
 
-            // Verify that the custom runtime config has been updated with current framework versions
-            var customConfigContent = File.ReadAllText((string)args[2]);
-            var customConfig = JsonSerializer.Deserialize<JsonElement>(customConfigContent);
+            // Verify that the Dashboard's framework versions were preserved rather than replaced
+            // with the lower-targeted AppHost's versions.
+            var dashboardConfigContent = File.ReadAllText((string)args[2]);
+            var dashboardConfig = JsonSerializer.Deserialize<JsonElement>(dashboardConfigContent);
 
-            var frameworks = customConfig.GetProperty("runtimeOptions").GetProperty("frameworks").EnumerateArray().ToArray();
+            var frameworks = dashboardConfig.GetProperty("runtimeOptions").GetProperty("frameworks").EnumerateArray().ToArray();
             var netCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.NETCore.App");
             var aspNetCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.AspNetCore.App");
 
-            Assert.Equal("8.0.0", netCoreFramework.GetProperty("version").GetString());
-            Assert.Equal("8.0.0", aspNetCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("11.0.0", netCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("11.0.0", aspNetCoreFramework.GetProperty("version").GetString());
         }
         finally
         {
@@ -699,7 +722,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
         }
         finally
@@ -768,7 +791,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
         }
         finally
@@ -835,7 +858,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(4, args.Count);
             Assert.Equal("exec", args[0]);
             Assert.Equal("--runtimeconfig", args[1]);
-            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(runtimeConfig, args[2]);
             Assert.Equal(dashboardDll, args[3]);
         }
         finally
@@ -844,6 +867,64 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             {
                 Directory.Delete(tempDir, recursive: true);
             }
+        }
+    }
+
+    [Theory]
+    [InlineData("Aspire.Dashboard.exe")]
+    [InlineData("Aspire.Dashboard")]
+    public async Task AddDashboardResource_WithNativeExecutable_RunsDirectly(string executableName)
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var tempDir = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var dashboardExecutable = Path.Combine(tempDir.FullName, executableName);
+            File.WriteAllText(dashboardExecutable, "mock native executable");
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExecutable });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            var dashboardResource = Assert.Single(model.Resources);
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal(dashboardExecutable, executableResource.Command);
+            Assert.Empty(executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>());
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AddDashboardResource_WithManagedAssemblyMissingRuntimeConfig_Throws()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var dashboardDll = Path.Combine(tempDirectory.FullName, "Aspire.Dashboard.dll");
+            File.WriteAllText(dashboardDll, "mock managed assembly");
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardDll });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None));
+
+            Assert.Contains("Aspire.Dashboard.runtimeconfig.json", exception.Message);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
         }
     }
 
@@ -859,7 +940,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         )
     {
         codespacesOptions ??= Options.Create(new CodespacesOptions());
-        dashboardOptions ??= Options.Create(new DashboardOptions { DashboardPath = "test.dll" });
+        dashboardOptions ??= Options.Create(new DashboardOptions { DashboardPath = typeof(DashboardEventHandlersTests).Assembly.Location });
         var rewriter = new CodespacesUrlRewriter(codespacesOptions);
         var executionContextServiceProvider = new TestServiceProvider(configuration)
             .AddService<IDeveloperCertificateService>(new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
@@ -880,8 +961,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             new DcpNameGenerator(configuration, Options.Create(new DcpOptions())),
             new TestHostApplicationLifetime(),
             eventing ?? new Hosting.Eventing.DistributedApplicationEventing(),
-            rewriter,
-            new FileSystemService(configuration)
+            rewriter
             );
     }
 

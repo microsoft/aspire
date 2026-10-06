@@ -6,28 +6,18 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
 public partial class ResourceActions : ComponentBase
 {
-    private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
-
     private AspireMenuButton? _menuButton;
 
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.Resources> Loc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlLoc { get; init; }
-
-    [Inject]
-    public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
     public required IconResolver IconResolver { get; init; }
@@ -80,6 +70,7 @@ public partial class ResourceActions : ComponentBase
             CommandSelected,
             IsCommandExecuting,
             showViewDetails: true,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: false);
 

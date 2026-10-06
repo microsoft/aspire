@@ -80,7 +80,11 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
             new PauseManager(),
             TimeProvider.System,
             []);
-        using var resourceRepository = new SqliteResourceRepository(database, new MockKnownPropertyLookup(), NullLoggerFactory.Instance);
+        using var resourceRepository = new SqliteResourceRepository(
+            database,
+            new MockKnownPropertyLookup(),
+            NullLoggerFactory.Instance,
+            Options.Create(new DashboardOptions()));
 
         Task telemetryWriteTask;
         Task resourceWriteTask;

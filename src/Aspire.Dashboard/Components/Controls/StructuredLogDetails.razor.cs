@@ -31,18 +31,18 @@ public partial class StructuredLogDetails : IDisposable
     [Inject]
     public required StructuredLogMenuBuilder StructuredLogMenuBuilder { get; init; }
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredItems =>
-        _logEntryAttributes.Where(ApplyFilter).AsQueryable();
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredItems =>
+        _logEntryAttributes.Where(ApplyFilter);
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredExceptionItems =>
-        _exceptionAttributes.Where(ApplyFilter).AsQueryable();
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredExceptionItems =>
+        _exceptionAttributes.Where(ApplyFilter);
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredContextItems =>
-        _contextAttributes.Where(ApplyFilter).AsQueryable();
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredContextItems =>
+        _contextAttributes.Where(ApplyFilter);
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredResourceItems =>
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredResourceItems =>
         ViewModel.LogEntry.ResourceView.AllProperties().Select(p => new TelemetryPropertyViewModel { Name = p.DisplayName, Key = p.Key, Value = p.Value })
-            .Where(ApplyFilter).AsQueryable();
+            .Where(ApplyFilter);
 
     private string _filter = "";
     private bool _dataChanged;

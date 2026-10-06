@@ -231,6 +231,15 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
     }
 }
 
-internal sealed class NuGetPackageCacheException(string message) : Exception(message)
+internal sealed class NuGetPackageCacheException : Exception
 {
+    public NuGetPackageCacheException(string message)
+        : base(message)
+    {
+    }
+
+    public NuGetPackageCacheException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
 }

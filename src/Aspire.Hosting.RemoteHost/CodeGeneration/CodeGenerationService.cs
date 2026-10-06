@@ -108,6 +108,7 @@ internal sealed class CodeGenerationService
         QualifiedMethodName = c.QualifiedMethodName,
         Description = c.Description,
         Documentation = MapDocumentation(c.Documentation),
+        IsExperimental = c.IsExperimental,
         CapabilityKind = c.CapabilityKind.ToString(),
         TargetTypeId = c.TargetTypeId,
         TargetParameterName = c.TargetParameterName,
@@ -474,6 +475,7 @@ internal sealed class CapabilityResponse
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
     public DocumentationResponse? Documentation { get; set; }
+    public bool IsExperimental { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }

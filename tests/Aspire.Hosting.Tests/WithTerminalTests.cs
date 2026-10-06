@@ -5,8 +5,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,7 +16,8 @@ namespace Aspire.Hosting.Tests;
 
 public class WithTerminalTests : IAsyncLifetime
 {
-    private readonly string _terminalDirectory = Directory.CreateTempSubdirectory("aspire-terminal-tests-").FullName;
+    private readonly string _terminalRoot = Directory.CreateTempSubdirectory().FullName;
+    private string _terminalDirectory => Path.Combine(_terminalRoot, "terminals");
 
     [Fact]
     public void TerminalImplementationTypesAreInternal()
@@ -24,13 +27,39 @@ public class WithTerminalTests : IAsyncLifetime
         Assert.True(typeof(TerminalHostLayout).IsNotPublic);
     }
 
-    [Fact]
-    public void TerminalOptionsIsExperimental()
+    [Theory]
+    [InlineData(typeof(TerminalOptions))]
+    [InlineData(typeof(TerminalService))]
+    [InlineData(typeof(AspireTerminal))]
+    [InlineData(typeof(AspireTerminalKey))]
+    [InlineData(typeof(TerminalLaunchOptions))]
+    [InlineData(typeof(TerminalOwner))]
+    [InlineData(typeof(TerminalPlacement))]
+    [InlineData(typeof(TerminalInteractionOptions))]
+    [InlineData(typeof(TerminalContext))]
+    public void TerminalTypesUseSharedExperimentalDiagnostic(Type terminalType)
     {
-        var attribute = Assert.Single(typeof(TerminalOptions).GetCustomAttributes<ExperimentalAttribute>());
+        var attribute = Assert.Single(terminalType.GetCustomAttributes<ExperimentalAttribute>());
 
         Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
         Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+    }
+
+    [Theory]
+    [InlineData(typeof(TerminalResourceBuilderExtensions), nameof(TerminalResourceBuilderExtensions.WithTerminal))]
+    [InlineData(typeof(IInteractionService), nameof(IInteractionService.PromptTerminalAsync))]
+    public void TerminalMethodsUseSharedExperimentalDiagnostic(Type declaringType, string methodName)
+    {
+        var methods = declaringType.GetMethods().Where(method => method.Name == methodName).ToArray();
+        Assert.NotEmpty(methods);
+
+        foreach (var method in methods)
+        {
+            var attribute = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
+
+            Assert.Equal("ASPIRETERMINAL001", attribute.DiagnosticId);
+            Assert.Equal("https://aka.ms/aspire/diagnostics/{0}", attribute.UrlFormat);
+        }
     }
 
     [Fact]
@@ -43,8 +72,8 @@ public class WithTerminalTests : IAsyncLifetime
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
-        Assert.Equal(120, annotation.Options.Columns);
-        Assert.Equal(30, annotation.Options.Rows);
+        Assert.Equal(132, annotation.Options.Columns);
+        Assert.Equal(50, annotation.Options.Rows);
 
         // Until BeforeStartEvent fires the per-replica hosts are not yet materialized:
         // TerminalHosts is empty and IsInitialized is false. This deferral is what
@@ -274,6 +303,54 @@ public class WithTerminalTests : IAsyncLifetime
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalHostTelemetryFollowsVisibility(bool showTerminalHost)
+    {
+        using var builder = CreateBuilder();
+        const string otlpEndpoint = "http://localhost:4317";
+        builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = otlpEndpoint;
+        builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "true";
+
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithOtlpExporter()
+            .WithTerminal(options => options.ShowTerminalHost = showTerminalHost);
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(2, hosts.Count);
+        foreach (var host in hosts)
+        {
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(host, serviceProvider: app.Services);
+            Assert.Equal(showTerminalHost ? "true" : "false", environment[KnownConfigNames.TerminalHostTelemetryEnabled]);
+
+            if (showTerminalHost)
+            {
+                Assert.Equal(otlpEndpoint, environment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+                Assert.Equal("grpc", environment["OTEL_EXPORTER_OTLP_PROTOCOL"]);
+            }
+            else
+            {
+                Assert.Equal(
+                    [
+                        KnownConfigNames.TerminalHostParentProcessId,
+                        KnownConfigNames.TerminalHostParentProcessStartedStable,
+                        KnownConfigNames.TerminalHostTelemetryEnabled,
+                    ],
+                    environment.Keys.Order(StringComparer.Ordinal));
+            }
+        }
+
+        var parentEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource, serviceProvider: app.Services);
+        Assert.Equal(otlpEndpoint, parentEnvironment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.False(parentEnvironment.ContainsKey(KnownConfigNames.TerminalHostTelemetryEnabled));
+    }
+
     [Fact]
     public async Task WithTerminalCleansUpPerReplicaFilesOnApplicationStopped()
     {
@@ -406,6 +483,8 @@ public class WithTerminalTests : IAsyncLifetime
 
             if (!OperatingSystem.IsWindows())
             {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                    File.GetUnixFileMode(_terminalDirectory));
                 // 0600 — defense-in-depth; parent dir is already 0700.
                 var mode = File.GetUnixFileMode(host.Layout.MetadataPath);
                 Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
@@ -1308,13 +1387,55 @@ public class WithTerminalTests : IAsyncLifetime
         Assert.True(resource.Resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>());
     }
 
-    public ValueTask InitializeAsync() => ValueTask.CompletedTask;
+    [Fact]
+    public async Task WithTerminalCreatesMissingOverrideDirectoryAtConfiguredPath()
+    {
+        using var builder = CreateBuilder();
+        var directory = Path.Combine(_terminalRoot, "custom");
+        builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = directory;
+        var resource = builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        var host = Assert.Single(resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts);
+        Assert.Equal(directory, Path.GetDirectoryName(host.Layout.MetadataPath));
+        Assert.True(File.Exists(host.Layout.MetadataPath));
+    }
+
+    [Fact]
+    public async Task WithTerminalRejectsPermissiveOverrideBeforeWritingMetadata()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.OtherRead;
+        File.SetUnixFileMode(_terminalDirectory, mode);
+        using var builder = CreateBuilder();
+        builder.AddExecutable("myapp", "myapp", ".").WithTerminal();
+        await using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await Assert.ThrowsAsync<IOException>(async () => await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model)));
+
+        Assert.Equal(mode, File.GetUnixFileMode(_terminalDirectory));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_terminalDirectory));
+    }
+
+    public ValueTask InitializeAsync()
+    {
+        SocketPermissionHelper.CreateDirectory(_terminalDirectory, repairExisting: false);
+        return ValueTask.CompletedTask;
+    }
 
     public ValueTask DisposeAsync()
     {
-        if (Directory.Exists(_terminalDirectory))
+        if (Directory.Exists(_terminalRoot))
         {
-            Directory.Delete(_terminalDirectory, recursive: true);
+            Directory.Delete(_terminalRoot, recursive: true);
         }
 
         return ValueTask.CompletedTask;

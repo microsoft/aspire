@@ -8,6 +8,7 @@
 #pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
@@ -29,7 +30,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -58,7 +59,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDockerfileWithAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -92,7 +93,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppEnvironmentAddsDeploymentTargetWithContainerAppToProjectResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
@@ -122,11 +123,38 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    public async Task AddContainerAppEnvironmentAddsDeploymentTargetToDotnetProjectResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var project = builder.AddDotnetProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpEndpoint();
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        Assert.Same(environment.Resource, target.ComputeEnvironment);
+        var provisioningResource = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(provisioningResource);
+        Assert.Contains("autoConfigureDataProtection", bicep);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments(bool useExpress)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var acaEnv = builder.AddAzureContainerAppEnvironment("env");
+        if (useExpress)
+        {
+#pragma warning disable ASPIREACAEXPRESS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            acaEnv = acaEnv.AsExpress();
+#pragma warning restore ASPIREACAEXPRESS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        }
 
         var project = builder.AddFoundry("foundry")
             .AddProject("project");
@@ -177,7 +205,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddExecutableResourceWithPublishAsDockerFileWithAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var infra = builder.AddAzureContainerAppEnvironment("infra");
 
@@ -219,7 +247,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanTweakContainerAppEnvironmentUsingPublishAsContainerAppOnExecutable()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
@@ -250,7 +278,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppsInfrastructureWithParameterReference()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -292,7 +320,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppsEntrypointAndArgs()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -322,7 +350,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ProjectWithManyReferenceTypes()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -400,9 +428,36 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithManyReferenceTypesAndContainerAppEnvironment()
+    public async Task ConnectionStringNamesWithHyphens_PreserveBothAliases()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var container = Assert.Single(model.GetContainerResources());
+        var resource = Assert.IsAssignableFrom<AzureProvisioningResource>(
+            container.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(resource);
+
+        var aliases = Regex.Matches(bicep, @"name: '(ConnectionStrings__[^']+)'")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
+    }
+
+    [Fact]
+    public async Task ProjectWithManyReferenceTypesAndContainerAppEnvironment()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("cae");
 
@@ -479,7 +534,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AzureContainerAppsBicepGenerationIsIdempotent()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -516,7 +571,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AzureContainerAppsMapsPortsForBaitAndSwitchResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -547,7 +602,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsContainerAppInfluencesContainerAppDefinition()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
         builder.AddContainer("api", "myimage")
@@ -581,7 +636,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureCustomDomainMutatesIngress()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var customDomain = builder.AddParameter("customDomain");
         var certificateName = builder.AddParameter("certificateName");
@@ -617,7 +672,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureDuplicateCustomDomainMutatesIngress()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var customDomain = builder.AddParameter("customDomain");
         var initialCertificateName = builder.AddParameter("initialCertificateName");
@@ -655,7 +710,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfigureMultipleCustomDomainsMutatesIngress()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var customDomain1 = builder.AddParameter("customDomain1");
         var certificateName1 = builder.AddParameter("certificateName1");
@@ -695,7 +750,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task VolumesAndBindMountsAreTranslation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -727,7 +782,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ProjectAndExecutableVolumesIncludeEnvironmentPaths()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -763,7 +818,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task MultipleVolumesHaveUniqueNamesInBicep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("my-ace");
 
@@ -807,7 +862,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task KeyVaultReferenceHandling()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -847,7 +902,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SecretOutputsThrowNotSupportedExceptionWithContainerAppEnvironmentResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("cae");
 
@@ -899,7 +954,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanCustomizeWithProvisioningBuildOptions()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new MyResourceNamePropertyResolver()));
         builder.AddAzureContainerAppEnvironment("env");
@@ -947,7 +1002,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExternalEndpointBecomesIngress()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -978,7 +1033,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FirstHttpEndpointBecomesIngress()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1009,7 +1064,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EndpointWithHttp2SetsTransportToH2()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1041,7 +1096,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ProjectUsesTheTargetPortAsADefaultPortForFirstHttpEndpoint()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1072,7 +1127,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RoleAssignmentsWithAsExisting()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1117,7 +1172,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RoleAssignmentsWithAsExistingCosmosDB()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1161,7 +1216,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RoleAssignmentsWithAsExistingRedis()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1202,7 +1257,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NonHttpSchemeWithTcpTransportIsAllowed()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1218,7 +1273,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UnsupportedTransportThrows()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1237,7 +1292,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task MultipleExternalEndpointsAreNotSupported()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1259,7 +1314,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExternalNonHttpEndpointsAreNotSupported()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1279,7 +1334,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task HttpAndTcpEndpointsCannotHaveTheSameTargetPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1300,7 +1355,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DefaultHttpIngressUsesPort80EvenWithDifferentDevPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1331,7 +1386,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DefaultHttpsIngressUsesPort443EvenWithDifferentDevPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1367,7 +1422,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // endpoint on a non-standard port (e.g. management UI on 15672) should
         // publish successfully. The HTTP endpoint becomes the primary ingress and
         // the TCP endpoint goes to additionalPortMappings.
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1398,7 +1453,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanPreserveHttpSchemeUsingWithHttpsUpgrade()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env")
             .WithHttpsUpgrade(false);  // Preserve HTTP scheme, don't upgrade to HTTPS
@@ -1429,7 +1484,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppEnvironmentDoesNotAddEnvironmentResourceInRunMode()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1447,7 +1502,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [InlineData(false)]
     public async Task AddContainerAppEnvironmentAddsEnvironmentResource(bool useAzdNaming)
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
@@ -1481,7 +1536,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppEnvironmentWithCompactNamingPreservesUniqueString()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Use a deliberately long name (15 chars) that would cause collisions without compact naming
         var env = builder.AddAzureContainerAppEnvironment("my-long-env-name");
@@ -1511,7 +1566,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CompactNamingMultipleVolumesHaveUniqueNames()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("my-ace");
         env.WithCompactResourceNaming();
@@ -1541,7 +1596,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddContainerAppEnvironmentWorksWithSqlServer()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1564,7 +1619,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ContainerAppEnvironmentWithCustomRegistry()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Create a custom registry
         var registry = builder.AddAzureContainerRegistry("customregistry");
@@ -1615,7 +1670,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ContainerAppEnvironmentWithCustomWorkspace()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Create a custom Log Analytics Workspace
         var workspace = builder.AddAzureLogAnalyticsWorkspace("customworkspace");
@@ -1666,7 +1721,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanReferenceContainerAppEnvironment()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
@@ -1693,7 +1748,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ContainerAppEnvironmentWithDashboardEnabled()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env")
                .WithDashboard(true);
@@ -1715,7 +1770,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ContainerAppEnvironmentWithDashboardDisabled()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env")
                .WithDashboard(false);
@@ -1737,7 +1792,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task UnknownManifestExpressionProviderIsHandledWithAllocateParameter()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1771,7 +1826,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void AzureContainerAppEnvironmentImplementsIAzureComputeEnvironmentResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create();
+        var builder = TestDistributedApplicationBuilder.Create(outputHelper);
         var env = builder.AddAzureContainerAppEnvironment("env");
 
         Assert.IsAssignableFrom<IAzureComputeEnvironmentResource>(env.Resource);
@@ -1789,7 +1844,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ContainerAppWithUppercaseName_ShouldUseLowercaseInManifest()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1836,9 +1891,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsAzureContainerApp_ThrowsIfNoEnvironment()
     {
-        static async Task RunTest(Action<IDistributedApplicationBuilder> action)
+        async Task RunTest(Action<IDistributedApplicationBuilder> action)
         {
-            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
             // Do not add AzureContainerAppEnvironment
 
             action(builder);
@@ -1885,7 +1940,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // model. If a compute resource still ends up with an AzureContainerAppCustomizationAnnotation
         // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
         // PublishAs* customizations are only meaningful at publish/deploy time.
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -1905,7 +1960,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper, workspace.Path, step: "publish-manifest");
 
         var env1 = builder.AddAzureContainerAppEnvironment("env1")
             .WithUniqueResourceNaming();
@@ -1929,7 +1984,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task MultipleAzureContainerAppEnvironmentsGenerateDistinctManagedEnvironmentNames()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Two environments in the same AppHost (and therefore the same resource group). Opting into
         // unique naming keeps each resource name's digits so the environments get distinct names.
@@ -1983,7 +2038,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task MultipleAzureContainerAppEnvironmentsShareManagedEnvironmentNameByDefault()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Without opting into unique naming, both environments fall through to Azure.Provisioning's default
         // name, whose sanitizer keeps only lowercase letters and drops the trailing digit. This preserves the
@@ -2026,7 +2081,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
+            DistributedApplicationOperation.Publish, outputHelper,
             workspace.Path,
             step: "publish-manifest");
 
@@ -2056,7 +2111,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
+            DistributedApplicationOperation.Publish, outputHelper,
             workspace.Path,
             step: "publish-manifest");
 
@@ -2075,7 +2130,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DirectlyAddedAzureContainerAppEnvironmentDoesNotRequireContainerAppsValidationStep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureProvisioning();
         builder.AddResource(new AzureContainerAppEnvironmentResource("env", _ => { }));
 
@@ -2087,7 +2142,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithUniqueResourceNamingPreservesDigitsInManagedEnvironmentName()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Opting into unique naming keeps the resource name's trailing digit, so the environment name is
         // distinct from other digit-suffixed environments in the same resource group.
@@ -2115,7 +2170,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithUniqueResourceNamingComputesNameLikeStandardAzureResourceNaming()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // A hyphenated resource name normalizes to a bicep identifier with an underscore ("my_cae"). The managed
         // environment character set doesn't allow underscores, so the sanitizer drops it exactly like it does for
@@ -2145,7 +2200,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConfiguredNameResolverWinsOverManagedEnvironmentNameFallback()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.Services.Configure<AzureProvisioningOptions>(options =>
             options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new BicepIdentifierManagedEnvironmentNameResolver()));
@@ -2176,7 +2231,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
+            DistributedApplicationOperation.Publish, outputHelper,
             workspace.Path,
             step: "publish-manifest");
 
@@ -2202,7 +2257,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
+            DistributedApplicationOperation.Publish, outputHelper,
             workspace.Path,
             step: "publish-manifest");
 
@@ -2231,7 +2286,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
+            DistributedApplicationOperation.Publish, outputHelper,
             workspace.Path,
             step: "publish-manifest");
 
@@ -2260,7 +2315,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = TestDistributedApplicationBuilder.Create(
-            DistributedApplicationOperation.Publish,
+            DistributedApplicationOperation.Publish, outputHelper,
             workspace.Path,
             step: "publish-manifest");
 
@@ -2291,7 +2346,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithCompactResourceNamingGeneratesDistinctManagedEnvironmentNames()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         // Compact naming doesn't set the managed environment name itself. Combined with unique naming, two
         // compact environments in one resource group must still get distinct, digit-preserving names to avoid
@@ -2349,7 +2404,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsContainerAppJobInfluencesContainerAppDefinition()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
         builder.AddContainer("api", "myimage")
             .PublishAsAzureContainerAppJob((infra, j) =>
@@ -2378,7 +2433,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsContainerAppJob_WorksForProjectResource()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
         builder.AddProject<Project>("job", launchProfileName: null)
             .PublishAsAzureContainerAppJob();
@@ -2400,7 +2455,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsContainerAppJob_ThrowsIfBothCustomizationsAreApplied()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddProject<Project>("job", launchProfileName: null)
@@ -2414,7 +2469,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsContainerAppJob_ThrowsForAzureFunctions()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddAzureFunctionsProject<TestFunctionsProject>("funcjob")
@@ -2452,7 +2507,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CanMixContainerAppsAndJobsInSameManifest()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddContainer("web", "nginx:latest")
@@ -2490,7 +2545,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsScheduledAzureContainerAppJobConfiguresScheduleTrigger()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         const string cronExpression = "0 0 * * *"; // Run every day at midnight
@@ -2525,7 +2580,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishAsAzureContainerAppJobParameterlessConfiguresManualTrigger()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
         builder.AddContainer("manual-job", "myimage")
@@ -2550,7 +2605,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceWithProbes_HttpEndpoint()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -2592,7 +2647,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceWithProbes_HttpEndpoint_TargetPort()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -2632,7 +2687,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResourceWithProbes_HttpsEndpoint_TargetPort_MatchIngress()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -2672,7 +2727,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildOnlyContainerResource_DoesNotGetDeployed()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -2710,7 +2765,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BindMountNamesWithHyphensAreNormalized()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -2745,7 +2800,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetHostAddressExpression()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
@@ -2774,7 +2829,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [InlineData(EndpointProperty.TlsEnabled, "True")]
     public async Task GetEndpointPropertyExpression_ReturnsContainerAppEndpointPropertyExpression(EndpointProperty property, string expected)
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
         env.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
@@ -2794,7 +2849,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ContainerAppProvisionDependsOnTargetPushStep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
         builder.AddProject<Project>("api", launchProfileName: null)
@@ -2817,7 +2872,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnvironmentCreatesDefaultAcrWhenNoExplicitRegistry()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -2839,7 +2894,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DefaultAcrNotAddedToModelWhenExplicitRegistryExists()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var customRegistry = builder.AddAzureContainerRegistry("customregistry");
         builder.AddAzureContainerAppEnvironment("env")
@@ -2861,7 +2916,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnvironmentDelegatesToAssociatedRegistry()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var customRegistry = builder.AddAzureContainerRegistry("customregistry");
         var env = builder.AddAzureContainerAppEnvironment("env")
@@ -2879,7 +2934,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DefaultContainerRegistryUsesAzdNamingWhenEnvironmentDoes()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env")
             .WithAzdResourceNaming();
@@ -2905,7 +2960,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task MultipleComputeEnvironmentsOnlyProcessTargetedResources()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var aca = builder.AddAzureContainerAppEnvironment("aca");
         var appService = builder.AddAzureAppServiceEnvironment("appservice");
@@ -2980,7 +3035,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RedisWithConditionalConnectionString()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -3010,7 +3065,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RedisWithTlsEnabledConditionalConnectionString()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -3041,7 +3096,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConditionalExpressionWithParameterCondition()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -3081,7 +3136,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConditionalBranchWithParameterReference()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -3122,7 +3177,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NestedConditionalExpressions()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
 
@@ -3171,7 +3226,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     [InlineData(false)]
     public async Task WithDashboardControlsDashboardUrlPrintStep(bool enableDashboard)
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env")
             .WithDashboard(enableDashboard);

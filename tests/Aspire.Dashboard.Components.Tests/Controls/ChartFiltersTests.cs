@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -89,6 +90,175 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.DoesNotContain("(None)", cut.Markup);
         Assert.Single(cut.FindAll(".chart-filter-button-container"));
         Assert.Contains("aria-label=\"All tags\"", cut.Markup);
+        Assert.NotNull(cut.Find(".dimension-popup-container"));
+        Assert.All(cut.FindAll(".dimension-popup fluent-field"), field => Assert.Contains("aspire-checkbox", field.ClassList));
+        Assert.Equal("0", cut.Find(".dimension-overflow").GetAttribute("threshold"));
+        var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
+        Assert.Equal("ellipsis", overflowItems[0].GetAttribute("behavior"));
+        Assert.Contains("dimension-overflow-ellipsis", overflowItems[0].ClassList);
+        Assert.All(overflowItems.Skip(1), item => Assert.Null(item.GetAttribute("behavior")));
+        Assert.All(overflowItems.Skip(1), item => Assert.DoesNotContain("dimension-overflow-ellipsis", item.ClassList));
+    }
+
+    [Fact]
+    public void Render_MoreThanMaxTags_RendersBoundedPayloadAndHighlightsSelectedOverflow()
+    {
+        SetupChartFilters();
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.status_code" };
+        for (var i = 0; i < 30; i++)
+        {
+            dimensionFilter.Values.Add(new DimensionValueViewModel { Text = i.ToString(), Value = i.ToString() });
+        }
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[25]]);
+
+        var cut = RenderChartFilters(dimensionFilter);
+
+        var overflow = cut.Find(".dimension-overflow");
+        var overflowItems = cut.FindAll(".dimension-overflow > div:not(.fluent-overflow-more)");
+        var moreButton = cut.Find(".dimension-overflow .fluent-overflow-more .filter-value-tag");
+        Assert.Equal("10", overflow.GetAttribute("pre-overflow-count"));
+        Assert.Equal(20, overflowItems.Count);
+        Assert.Equal("+10", moreButton.TextContent.Trim());
+        Assert.Contains("included-in-filters", moreButton.ClassList);
+    }
+
+    [Fact]
+    public void Click_FilterValueOverflow_OpensPopover()
+    {
+        SetupChartFilters();
+        var dimensionFilter = new DimensionFilterViewModel { Name = "http.status_code" };
+        for (var i = 0; i < 30; i++)
+        {
+            dimensionFilter.Values.Add(new DimensionValueViewModel { Text = i.ToString(), Value = i.ToString() });
+        }
+        var cut = RenderChartFilters(dimensionFilter);
+
+        cut.Find(".dimension-overflow .fluent-overflow-more .filter-value-tag").Click();
+
+        Assert.Equal("true", cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("opened"));
+    }
+
+    [Fact]
+    public void Render_PartiallySelectedValues_ShowsIndeterminateAllCheckbox()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.SetSelectedValues([dimensionFilter.Values[0]]);
+
+        var cut = RenderChartFilters(dimensionFilter);
+        var allCheckbox = cut.FindComponents<FluentCheckbox>()[0].Instance;
+
+        Assert.False(allCheckbox.Value);
+        Assert.Null(allCheckbox.CheckState);
+    }
+
+    [Fact]
+    public async Task SelectionChanged_HighlightsFilterButtonUntilAllValuesSelected()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.AreAllValuesSelected = true;
+        var cut = RenderChartFilters(dimensionFilter);
+        var popover = cut.FindComponent<ChartFilterPopover>();
+        var buttonId = cut.Find(".chart-filter-button").Id;
+        var checkboxes = popover.FindComponents<FluentCheckbox>();
+
+        AssertButtonAppearance(highlighted: false);
+
+        await cut.InvokeAsync(() => checkboxes[1].Instance.ValueChanged.InvokeAsync(false));
+        AssertButtonAppearance(highlighted: true);
+
+        await cut.InvokeAsync(() => checkboxes[0].Instance.CheckStateChanged.InvokeAsync(true));
+        AssertButtonAppearance(highlighted: false);
+
+        await cut.InvokeAsync(() => checkboxes[0].Instance.CheckStateChanged.InvokeAsync(false));
+        AssertButtonAppearance(highlighted: true);
+
+        await cut.InvokeAsync(() => checkboxes[0].Instance.CheckStateChanged.InvokeAsync(true));
+        AssertButtonAppearance(highlighted: false);
+
+        void AssertButtonAppearance(bool highlighted)
+        {
+            cut.WaitForAssertion(() =>
+            {
+                var button = cut.Find(".chart-filter-button");
+                Assert.Equal(buttonId, button.Id);
+                Assert.Equal(highlighted ? "primary" : "transparent", button.GetAttribute("appearance"));
+                Assert.Equal(highlighted ? "Filtered tags" : "All tags", button.GetAttribute("aria-label"));
+                var icon = cut.FindComponent<FluentIcon<Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size20.Filter>>().Instance;
+                Assert.Equal(Color.Custom, icon.Color);
+                Assert.Equal(highlighted ? "currentColor" : "var(--colorBrandForeground1)", icon.CustomColor);
+            });
+        }
+    }
+
+    [Fact]
+    public void Click_FilterButton_KeepsStableAnchorAndOpensPopover()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        var cut = RenderChartFilters(dimensionFilter);
+        var button = cut.Find(".chart-filter-button");
+        var buttonId = button.Id;
+
+        button.Click();
+
+        Assert.Equal(buttonId, cut.Find(".chart-filter-button").Id);
+        var popover = cut.Find("fluent-popover-b");
+        Assert.Equal(buttonId, popover.GetAttribute("anchor-id"));
+        Assert.Equal("true", popover.GetAttribute("opened"));
+        Assert.Contains("chart-filter-popover", popover.ClassList);
+    }
+
+    [Fact]
+    public void Render_NamesWithSameSanitizedId_HaveDistinctPopoverAnchors()
+    {
+        SetupChartFilters();
+        var firstFilter = new DimensionFilterViewModel { Name = "foo.bar" };
+        var secondFilter = new DimensionFilterViewModel { Name = "foo/bar" };
+        var cut = RenderChartFilters(firstFilter);
+        cut.Render(builder => builder.Add(component => component.DimensionFilters, [firstFilter, secondFilter]));
+
+        var buttons = cut.FindAll(".chart-filter-button");
+        var popovers = cut.FindAll("fluent-popover-b.chart-filter-popover");
+
+        Assert.Equal(2, buttons.Count);
+        Assert.Equal(2, popovers.Count);
+        Assert.NotEqual(buttons[0].Id, buttons[1].Id);
+        Assert.StartsWith("typeFilterButton-foo_bar-", buttons[0].Id);
+        Assert.StartsWith("typeFilterButton-foo_bar-", buttons[1].Id);
+        Assert.Equal(buttons[0].Id, popovers[0].GetAttribute("anchor-id"));
+        Assert.Equal(buttons[1].Id, popovers[1].GetAttribute("anchor-id"));
+
+        buttons[1].Click();
+
+        Assert.Equal("false", cut.FindAll("fluent-popover-b.chart-filter-popover")[0].GetAttribute("opened"));
+        Assert.Equal("true", cut.FindAll("fluent-popover-b.chart-filter-popover")[1].GetAttribute("opened"));
+        Assert.Equal(buttons[0].Id, cut.FindAll(".chart-filter-button")[0].Id);
+        Assert.Equal(buttons[1].Id, cut.FindAll(".chart-filter-button")[1].Id);
+    }
+
+    [Fact]
+    public void ReplaceFilterSnapshot_KeepsOpenPopoverMounted()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        var cut = RenderChartFilters(dimensionFilter);
+        var buttonId = cut.Find(".chart-filter-button").Id;
+        var popover = cut.FindComponent<ChartFilterPopover>().Instance;
+        cut.Find(".chart-filter-button").Click();
+
+        var updatedFilter = CreateDimensionFilter();
+        updatedFilter.Values.Add(new DimensionValueViewModel { Text = "PUT", Value = "PUT", });
+        updatedFilter.SetSelectedValues(updatedFilter.Values);
+        cut.Render(builder => builder.Add(component => component.DimensionFilters, [updatedFilter]));
+
+        Assert.Same(popover, cut.FindComponent<ChartFilterPopover>().Instance);
+        Assert.Same(updatedFilter, popover.Filter);
+        Assert.Equal(buttonId, cut.Find(".chart-filter-button").Id);
+        Assert.Equal(buttonId, cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("anchor-id"));
+        Assert.Equal("true", cut.Find("fluent-popover-b.chart-filter-popover").GetAttribute("opened"));
+        Assert.Equal(4, cut.FindAll(".dimension-popup fluent-field").Count);
     }
 
     [Fact]
@@ -180,7 +350,7 @@ public class ChartFiltersTests : DashboardTestContext
         DimensionFilterViewModel dimensionFilter,
         Action<DimensionFilterViewModel>? onDimensionValuesChanged = null)
     {
-        return RenderComponent<ChartFilters>(builder =>
+        return Render<ChartFilters>(builder =>
         {
             builder.Add(p => p.InstrumentType, OtlpInstrumentType.Sum);
             builder.Add(p => p.ShowCount, false);

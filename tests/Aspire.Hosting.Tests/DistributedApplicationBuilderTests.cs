@@ -11,6 +11,7 @@ using System.Reflection.Emit;
 using System.Security.Cryptography;
 using System.Text;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers;
@@ -23,6 +24,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
@@ -63,6 +65,7 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
             s => Assert.IsType<DashboardEventHandlers>(s),
             s => Assert.IsType<DevcontainerPortForwardingEventingSubscriber>(s),
             s => Assert.IsType<RequiredCommandValidationEventingSubscriber>(s),
+            s => Assert.IsType<DotnetBuildCommandEventingSubscriber>(s),
             s => Assert.IsType<TerminalHostEventingSubscriber>(s)
         );
 
@@ -256,6 +259,41 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
 
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AspireLogLevelTest");
         Assert.True(logger.IsEnabled(LogLevel.Trace));
+    }
+
+    [Fact]
+    public void HttpClientFactoryDebugLogsAreFilteredFromAllProviders()
+    {
+        var testSink = new TestSink();
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            Args = [$"{KnownConfigNames.AspireLogLevel}=Trace"],
+            DisableDashboard = true
+        });
+        appBuilder.Services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(testSink));
+        using var app = appBuilder.Build();
+
+        var factory = app.Services.GetRequiredService<ILoggerFactory>();
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory").LogDebug("HTTP cleanup");
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory").LogWarning("HTTP warning");
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory.Handlers").LogInformation("HTTP nested");
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory").LogError("HTTP error");
+        factory.CreateLogger("Microsoft.Extensions.Http.OtherCategory").LogDebug("Other HTTP debug");
+
+        var backchannel = app.Services.GetRequiredService<BackchannelLoggerProvider>();
+        var (entries, subscriberId, _) = backchannel.Subscribe();
+        backchannel.Unsubscribe(subscriberId);
+
+        Assert.Collection(entries,
+            entry => Assert.Equal("HTTP warning", entry.Message),
+            entry => Assert.Equal("HTTP nested", entry.Message),
+            entry => Assert.Equal("HTTP error", entry.Message),
+            entry => Assert.Equal("Other HTTP debug", entry.Message));
+        Assert.Equal(
+            ["HTTP warning", "HTTP nested", "HTTP error", "Other HTTP debug"],
+            testSink.Writes
+                .Select(write => write.Message)
+                .Where(message => message is "HTTP cleanup" or "HTTP warning" or "HTTP nested" or "HTTP error" or "Other HTTP debug"));
     }
 
     [Fact]

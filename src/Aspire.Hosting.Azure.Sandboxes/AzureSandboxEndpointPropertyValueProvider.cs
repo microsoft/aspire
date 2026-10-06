@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREAZURE001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;

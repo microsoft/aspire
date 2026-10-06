@@ -20,10 +20,12 @@ using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
+using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -40,6 +42,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using OpenIdConnectOptions = Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions;
 
@@ -62,10 +65,17 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
-    private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
-    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
-    private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+    private const string DashboardAntiForgeryCookieNamePrefix = ".Aspire.Dashboard.Antiforgery";
     private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
+    private const string DefaultOtlpServiceName = "aspire-dashboard";
+    // Blazor discovers routed pages and layouts as Type values, then activates them and assigns
+    // component parameters and [Inject] properties through reflection.
+    // The explicit DynamicDependency annotations below can probably be removed once Blazor is
+    // fully annotated for trimming and Native AOT.
+    private const DynamicallyAccessedMemberTypes RuntimeActivatedComponentMembers =
+        DynamicallyAccessedMemberTypes.PublicConstructors |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties;
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -125,6 +135,19 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     /// <param name="preConfigureBuilder">Configuration for the internal app builder *before* normal dashboard configuration is done. This is for unit testing.</param>
     /// <param name="options">Environment configuration for the internal app builder. This is for unit testing</param>
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Layout.MainLayout))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ConsoleLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Error))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Login))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Metrics))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Terminals))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TraceDetail))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Traces))]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddRazorComponents and AddInteractiveServerComponents still warn that Blazor does not support trimming. Routed components and MainLayout are explicitly preserved, and circuit serialization uses generated Dashboard and Fluent UI contexts. Remove when Blazor supports trimming: https://aka.ms/aspnet/nativeaot.")]
     public DashboardWebApplication(
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
@@ -229,8 +252,22 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         ConfigureAuthentication(builder, dashboardOptions);
 
+        builder.Services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.TypeInfoResolverChain.Insert(0, DashboardJsonSerializerContext.Default);
+            options.SerializerOptions.TypeInfoResolverChain.Insert(1, OtlpJsonSerializerContext.Default);
+        });
+
         // Add services to the container.
-        builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+        builder.Services.AddRazorComponents().AddInteractiveServerComponents(options =>
+        {
+#pragma warning disable FLUENTUI0001 // Fluent UI Native AOT serialization support is experimental.
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+            options.JsonTypeInfoResolvers.Add(FluentUIJsonSerializerContext.Default);
+            options.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
+#pragma warning restore ASPNETCORE9004
+#pragma warning restore FLUENTUI0001
+        });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -275,7 +312,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
-                options.KnownNetworks.Clear();
+                options.KnownIPNetworks.Clear();
                 options.KnownProxies.Clear();
             });
         }
@@ -291,9 +328,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddHostedService<DashboardDataSourceInitializer>();
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
-        builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
+        // TryAdd, so a preConfigureBuilder callback can substitute the client. That callback runs before this method,
+        // and the last registration wins, so a plain AddScoped here would silently override the substitute. The
+        // Playwright fixture relies on this to serve a mock AppHost.
+        builder.Services.TryAddScoped<IDashboardClient, SelectedDashboardClient>();
 
-        builder.Services.TryAddSingleton<INotificationService, NotificationService>();
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Model.INotificationService, Aspire.Dashboard.Model.NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.TryAddScoped<DashboardCommandExecutor>();
 
@@ -308,6 +348,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
         {
             builder.Services.AddOpenTelemetry()
+                .ConfigureResource(resource => resource
+                    .AddService(DefaultOtlpServiceName, autoGenerateServiceInstanceId: false)
+                    // Reapply the detector after the fallback so OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
+                    // from the application's IConfiguration retain their precedence.
+                    .AddEnvironmentVariableDetector())
                 .WithTracing(tracing => tracing
                     .AddAspNetCoreInstrumentation()
                     .AddSource(DashboardActivitySource.ActivitySourceName)
@@ -319,7 +364,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
-        builder.Services.AddSingleton<IRepositoryFactory, RepositoryFactory>();
+        // TryAdd for the same reason as IDashboardClient above: the factory decides which resource repository the
+        // dashboard reads from, so a substituted client is only actually reachable if its factory survives too.
+        builder.Services.TryAddSingleton<IRepositoryFactory, RepositoryFactory>();
         builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
         // OTLP ingestion and telemetry mutations always target the current dashboard run, even when a browser circuit selects a historical run.
         builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
@@ -342,6 +389,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
         builder.Services.AddFluentUIComponents();
+        builder.Services.AddScoped<NavigationDialogService>();
+        builder.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
 
         builder.Services.AddSingleton<IconResolver>();
 
@@ -368,9 +417,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // path the AppHost stamped onto the snapshot.
         builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver>(services =>
             new Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver(services.GetRequiredService<DashboardClient>()));
+        builder.Services.TryAddSingleton<TerminalViewSessionRegistry>();
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
+        builder.Services.AddScoped<DashboardMessageBarService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();
@@ -380,7 +431,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = DashboardAntiForgeryCookieName;
+            var applicationNameKey = DashboardApplicationNameKey.Create(dashboardOptions.GetApplicationNameOrDefault());
+            options.Cookie.Name = $"{DashboardAntiForgeryCookieNamePrefix}.{applicationNameKey}";
         });
 
         _app = builder.Build();
@@ -475,7 +527,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath))
             {
-                var client = context.RequestServices.GetRequiredService<DashboardClient>();
+                var client = context.RequestServices.GetRequiredService<IDashboardClient>();
                 if (!client.IsEnabled)
                 {
                     context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);
@@ -560,7 +612,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode(options =>
+        {
+            options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
+        });
 
         // Terminal WebSocket proxy
         _app.MapTerminalWebSocket();
@@ -793,8 +848,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
             .AddCertificate(options =>
             {
-                // Bind options to configuration so they can be overridden by environment variables.
-                builder.Configuration.Bind("Dashboard:Otlp:CertificateAuthOptions", options);
+                BindCertificateAuthenticationOptions(
+                    builder.Configuration.GetSection("Dashboard:Otlp:CertificateAuthOptions"),
+                    options);
 
                 options.Events = new CertificateAuthenticationEvents
                 {
@@ -843,6 +899,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 };
             });
 
+        var (authCookieName, httpAuthCookieName) = DashboardAuthenticationCookieNames.Create(dashboardOptions.GetApplicationNameOrDefault());
+
         switch (dashboardOptions.Frontend.AuthMode)
         {
             case FrontendAuthMode.OpenIdConnect:
@@ -855,8 +913,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 authentication.AddCookie(options =>
                 {
-                    options.Cookie.Name = DashboardAuthCookieName;
-                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
+                    options.Cookie.Name = authCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
 
                 authentication.AddOpenIdConnect(options =>
@@ -915,8 +973,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         claimsIdentity.AddClaim(new Claim(FrontendAuthorizationDefaults.BrowserTokenClaimName, bool.TrueString));
                         return Task.CompletedTask;
                     };
-                    options.Cookie.Name = DashboardAuthCookieName;
-                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
+                    options.Cookie.Name = authCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:
@@ -976,6 +1034,56 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 _ => CookieAuthenticationDefaults.AuthenticationScheme
             };
         }
+    }
+
+    internal static void BindCertificateAuthenticationOptions(
+        IConfigurationSection configuration,
+        CertificateAuthenticationOptions options)
+    {
+        // Binding the entire options object produces SYSLIB1100/SYSLIB1101 even for scalar-only config:
+        // TimeProvider has no public constructor, and CustomTrustStore contains unsupported certificate
+        // types. Generated certificate bindings also access obsolete APIs. Bind supported scalars explicitly
+        // rather than suppressing these diagnostics or falling back to reflection under Native AOT.
+        // https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1100
+        options.AllowedCertificateTypes = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.AllowedCertificateTypes),
+            options.AllowedCertificateTypes);
+        options.ChainTrustValidationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ChainTrustValidationMode),
+            options.ChainTrustValidationMode);
+        options.RevocationFlag = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationFlag),
+            options.RevocationFlag);
+        options.RevocationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationMode),
+            options.RevocationMode);
+        options.ValidateCertificateUse = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateCertificateUse),
+            options.ValidateCertificateUse);
+        options.ValidateValidityPeriod = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateValidityPeriod),
+            options.ValidateValidityPeriod);
+        options.ClaimsIssuer = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ClaimsIssuer),
+            options.ClaimsIssuer);
+        options.ForwardAuthenticate = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardAuthenticate),
+            options.ForwardAuthenticate);
+        options.ForwardChallenge = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardChallenge),
+            options.ForwardChallenge);
+        options.ForwardDefault = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardDefault),
+            options.ForwardDefault);
+        options.ForwardForbid = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardForbid),
+            options.ForwardForbid);
+        options.ForwardSignIn = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignIn),
+            options.ForwardSignIn);
+        options.ForwardSignOut = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignOut),
+            options.ForwardSignOut);
     }
 
     internal static Action<OpenIdConnectOptions> GetOidcClaimActionConfigure(ClaimAction action)

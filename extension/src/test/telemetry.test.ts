@@ -9,13 +9,17 @@ import {
     __setTelemetryLoggerFactoryForTests,
     __setTelemetryReporterFactoryForTests,
     classifyError,
+    clearTelemetryEnrichmentTask,
     initializeTelemetry,
+    getActiveCommandCount,
     isCommandCancellation,
     isExtensionTelemetryEnabled,
+    isExtensionUsageTelemetryEnabled,
     sendTelemetryErrorEvent,
     sendTelemetryEvent,
     setCommandInvocationListener,
     setCommonTelemetryProperties,
+    setTelemetryEnrichmentTask,
     withCommandTelemetry,
 } from '../utils/telemetry';
 
@@ -149,6 +153,124 @@ suite('telemetry utilities', () => {
         });
     });
 
+    test('survey telemetry excludes employee identity and AppHost common properties', () => {
+        setCommonTelemetryProperties({
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+            apphost_languages: 'csharp',
+            apphost_target_versions: '13.6.0',
+            apphost_present: 'true',
+        });
+        // Exercise the runtime filter even if a caller bypasses the event schema's TypeScript checks.
+        sendTelemetryEvent('aspire/vscode/survey/result', {
+            campaign_id: 'test-v1',
+            question_id: 'aspire-usefulness-v1',
+            outcome: 'yes',
+            microsoft_internal_alias: 'caller-supplied',
+            microsoft_internal_domain: 'caller.example',
+            apphost_present: 'caller-supplied',
+        } as never);
+        assert.deepStrictEqual(fake.events[0].properties, {
+            is_microsoft_internal: 'true',
+            campaign_id: 'test-v1',
+            question_id: 'aspire-usefulness-v1',
+            outcome: 'yes',
+        });
+
+        sendTelemetryEvent('aspire/vscode/survey/result', {
+            campaign_id: 'test-v1', question_id: 'aspire-usefulness-v1', outcome: 'yes',
+        });
+        assert.deepStrictEqual(fake.events[1].properties, {
+            is_microsoft_internal: 'true',
+            campaign_id: 'test-v1', question_id: 'aspire-usefulness-v1', outcome: 'yes',
+        });
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.test' });
+        assert.strictEqual(fake.events[2].properties?.microsoft_internal_alias, 'test.user');
+    });
+
+    test('survey events are usage-only and never queued for identity enrichment', async () => {
+        let resolveEnrichment!: () => void;
+        const enrichment = new Promise<void>(resolve => { resolveEnrichment = resolve; });
+        setTelemetryEnrichmentTask(enrichment);
+        for (const level of ['error', 'crash', 'off'] as const) {
+            fake.telemetryLevel = level;
+            sendTelemetryEvent('aspire/vscode/survey/invitation', { campaign_id: 'test-v1', question_id: 'test-v1' });
+        }
+        assert.strictEqual(fake.events.length, 0);
+        fake.telemetryLevel = 'all';
+        sendTelemetryEvent('aspire/vscode/survey/invitation', { campaign_id: 'test-v1', question_id: 'test-v1' });
+        assert.strictEqual(fake.events.length, 1);
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.strictEqual(fake.events.length, 1);
+    });
+
+    test('surveys share the normal telemetry route without adding an unknown cohort key', async () => {
+        restore();
+        let reporterCreations = 0;
+        const restoreReporterFactory = __setTelemetryReporterFactoryForTests(aiKey => {
+            assert.strictEqual(aiKey, 'test-key');
+            reporterCreations++;
+            return fake as unknown as TelemetryReporter;
+        });
+        const loggedProperties: unknown[] = [];
+        const restoreLoggerFactory = __setTelemetryLoggerFactoryForTests((sender, options) => {
+            const logger = createPrefixingTelemetryLogger(sender, options);
+            return {
+                ...logger,
+                logUsage(name, data) {
+                    loggedProperties.push(data?.properties);
+                    logger.logUsage(name, data);
+                },
+            };
+        });
+        const subscriptions: vscode.Disposable[] = [];
+        try {
+            initializeTelemetry(createContext(subscriptions));
+            setCommonTelemetryProperties({
+                microsoft_internal_alias: 'test.user', apphost_languages: 'csharp',
+            });
+            sendTelemetryEvent('aspire/vscode/survey/invitation', { campaign_id: 'test-v1', question_id: 'test-v1' });
+            sendTelemetryEvent('aspire/vscode/survey/result', { campaign_id: 'test-v1', question_id: 'test-v1', outcome: 'yes' });
+            assert.deepStrictEqual(loggedProperties, [
+                { campaign_id: 'test-v1', question_id: 'test-v1' },
+                { campaign_id: 'test-v1', question_id: 'test-v1', outcome: 'yes' },
+            ]);
+            sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.test' });
+            assert.strictEqual(reporterCreations, 1);
+            assert.deepStrictEqual(fake.events.map(event => event.name), [
+                'aspire/vscode/survey/invitation', 'aspire/vscode/survey/result', 'aspire/vscode/command/invoked',
+            ]);
+            for (const event of fake.events) {
+                assert.strictEqual(Object.prototype.hasOwnProperty.call(event.properties, 'is_microsoft_internal'), false);
+                assert.strictEqual(event.isDangerous, true);
+                assert.strictEqual(event.properties?.['common.sqmid'], 'test-sqm-id');
+                assert.strictEqual(event.properties?.['common.os'], process.platform);
+            }
+        }
+        finally {
+            await Promise.resolve(subscriptions[0]?.dispose());
+            restoreLoggerFactory();
+            restoreReporterFactory();
+        }
+    });
+
+    test('active command count includes nested and failed operations without requiring telemetry', async () => {
+        fake.telemetryLevel = 'off';
+        assert.strictEqual(getActiveCommandCount(), 0);
+        await assert.rejects(withCommandTelemetry('outer', async () => {
+            assert.strictEqual(getActiveCommandCount(), 1);
+            await withCommandTelemetry('inner', async () => {
+                assert.strictEqual(getActiveCommandCount(), 2);
+            });
+            assert.strictEqual(getActiveCommandCount(), 1);
+            throw new Error('Test failure.');
+        }));
+        assert.strictEqual(getActiveCommandCount(), 0);
+    });
+
     test('setCommonTelemetryProperties replaces and clears keys', () => {
         setCommonTelemetryProperties({ apphost_languages: 'first', apphost_present: 'keep' });
         setCommonTelemetryProperties({ apphost_languages: undefined });
@@ -160,7 +282,126 @@ suite('telemetry utilities', () => {
         });
     });
 
+    test('queues events until common telemetry enrichment completes', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.enriched' });
+        assert.strictEqual(fake.events.length, 0);
+
+        setCommonTelemetryProperties({
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+        });
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.deepStrictEqual(fake.events[0].properties, {
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+            command: 'cmd.enriched',
+        });
+    });
+
+    test('does not export an event that occurred while its telemetry level was disabled', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+        fake.telemetryLevel = 'off';
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.disabled' });
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', { resource_type: 'test' });
+        fake.telemetryLevel = 'all';
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.strictEqual(fake.events.length, 0);
+    });
+
+    test('rechecks the telemetry level before emitting a queued event', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.enabled' });
+        fake.telemetryLevel = 'off';
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.strictEqual(fake.events.length, 0);
+    });
+
+    test('does not export a queued event after telemetry is disabled and re-enabled', async () => {
+        let resolveInitialEnrichment: () => void = () => { };
+        const initialEnrichment = new Promise<void>(resolve => {
+            resolveInitialEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(initialEnrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.before-opt-out' });
+        fake.telemetryLevel = 'off';
+        clearTelemetryEnrichmentTask();
+
+        let resolveReplacementEnrichment: () => void = () => { };
+        const replacementEnrichment = new Promise<void>(resolve => {
+            resolveReplacementEnrichment = resolve;
+        });
+        fake.telemetryLevel = 'all';
+        setTelemetryEnrichmentTask(replacementEnrichment);
+
+        resolveInitialEnrichment();
+        await initialEnrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+        assert.strictEqual(fake.events.length, 0);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.after-opt-in' });
+        resolveReplacementEnrichment();
+        await replacementEnrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.deepStrictEqual(fake.events.map(event => event.properties?.command), ['cmd.after-opt-in']);
+    });
+
+    test('preserves queued error events when usage telemetry is disabled', async () => {
+        let resolveEnrichment: () => void = () => { };
+        const enrichment = new Promise<void>(resolve => {
+            resolveEnrichment = resolve;
+        });
+        setTelemetryEnrichmentTask(enrichment);
+
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.usage' });
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', { resource_type: 'test' });
+        fake.telemetryLevel = 'error';
+        clearTelemetryEnrichmentTask();
+
+        resolveEnrichment();
+        await enrichment;
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        assert.strictEqual(fake.events.length, 1);
+        const [event] = fake.events;
+        assert.strictEqual(event.name, 'aspire/vscode/debug/runsession/end');
+        assert.strictEqual(event.isError, true);
+    });
+
     test('usage and dashboard events keep their registry wire names', () => {
+        setCommonTelemetryProperties({
+            is_microsoft_internal: 'true',
+            microsoft_internal_alias: 'test.user',
+            microsoft_internal_domain: 'microsoft.com',
+        });
         sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.prefixed' });
         sendTelemetryEvent('aspire/dashboard/operation', {
             dashboard_event_name: 'aspire/dashboard/command',
@@ -171,6 +412,10 @@ suite('telemetry utilities', () => {
             'aspire/vscode/command/invoked',
             'aspire/dashboard/operation',
         ]);
+        assert.ok(fake.events.every(event =>
+            event.properties?.is_microsoft_internal === 'true' &&
+            event.properties.microsoft_internal_alias === 'test.user' &&
+            event.properties.microsoft_internal_domain === 'microsoft.com'));
         assert.ok(fake.events.every(event => event.isDangerous === true));
     });
 
@@ -225,6 +470,14 @@ suite('telemetry utilities', () => {
 
         fake.telemetryLevel = 'crash';
         assert.strictEqual(isExtensionTelemetryEnabled(), false);
+    });
+
+    test('isExtensionUsageTelemetryEnabled excludes errors-only telemetry', () => {
+        fake.telemetryLevel = 'error';
+        assert.strictEqual(isExtensionUsageTelemetryEnabled(), false);
+
+        fake.telemetryLevel = 'all';
+        assert.strictEqual(isExtensionUsageTelemetryEnabled(), true);
     });
 
     test('uninitialized telemetry drops regular and error events', () => {

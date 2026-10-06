@@ -32,6 +32,36 @@ namespace Aspire.Cli.Resources {
         internal RootCommandStrings() {
         }
 
+        public static string CompletionsDescription {
+            get {
+                return ResourceManager.GetString("CompletionsDescription", resourceCulture);
+            }
+        }
+
+        public static string CompletionScriptDescription {
+            get {
+                return ResourceManager.GetString("CompletionScriptDescription", resourceCulture);
+            }
+        }
+
+        public static string CompletionShellDescription {
+            get {
+                return ResourceManager.GetString("CompletionShellDescription", resourceCulture);
+            }
+        }
+
+        public static string CompletionShellRequired {
+            get {
+                return ResourceManager.GetString("CompletionShellRequired", resourceCulture);
+            }
+        }
+
+        public static string InvalidCompletionRequest {
+            get {
+                return ResourceManager.GetString("InvalidCompletionRequest", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>

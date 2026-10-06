@@ -26,7 +26,6 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ConsoleLogsTests : DashboardTestContext
 {
     private readonly ITestOutputHelper _testOutputHelper;
-    private IRenderedComponent<FluentMenuProvider>? _menuProvider;
 
     public ConsoleLogsTests(ITestOutputHelper testOutputHelper)
     {
@@ -71,7 +70,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act 1
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -116,7 +115,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act 1
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -144,7 +143,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var expectedUrl = DashboardUrls.ConsoleLogsUrl(resource: "test-resource2");
             Assert.EndsWith(expectedUrl, e.Location);
 
-            cut.SetParametersAndRender(builder =>
+            cut.Render(builder =>
             {
                 builder.Add(m => m.ResourceName, "test-resource2");
             });
@@ -154,8 +153,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Act 2
         logger.LogInformation("Changing resource.");
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var innerSelect = resourceSelect.Find("fluent-select");
-        innerSelect.Change("test-resource2");
+        var selectedResource = resourceSelect.Instance.Resources!.Single(resource => resource.Name == "test-resource2");
+        var innerSelect = resourceSelect.FindComponent<FluentSelect<SelectViewModel<ResourceTypeDetails>, SelectViewModel<ResourceTypeDetails>>>();
+        await innerSelect.InvokeAsync(() => innerSelect.Instance.ValueChanged.InvokeAsync(selectedResource));
 
         // Assert 2
         logger.LogInformation("Waiting for selected resource.");
@@ -192,7 +192,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act & Assert 1: Render component - initially hidden resource should not be visible
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
         });
@@ -203,24 +203,18 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             var resourceSelect = cut.FindComponent<ResourceSelect>();
-            var selectElement = resourceSelect.Find("fluent-select");
-            var selectOptions = selectElement.QuerySelectorAll("fluent-option");
-
             // Should have "All" + 2 regular resources when resources are loaded
-            Assert.Equal(3, selectOptions.Length);
+            Assert.Equal(3, resourceSelect.Instance.Resources!.Count());
         });
 
         // Initially, hidden resources should not be shown
         var resourceSelect = cut.FindComponent<ResourceSelect>();
-        var selectElement = resourceSelect.Find("fluent-select");
-        var selectOptions = selectElement.QuerySelectorAll("fluent-option");
-
         // Should have "All" + 2 regular resources (hidden resource filtered out)
-        Assert.Equal(3, selectOptions.Length);
-        var optionValues = selectOptions.Select(opt => opt.GetAttribute("value")).ToList();
-        Assert.Contains("regular-resource1", optionValues);
-        Assert.Contains("regular-resource2", optionValues);
-        Assert.DoesNotContain("hidden-resource", optionValues);
+        Assert.Collection(
+            resourceSelect.Instance.Resources!,
+            resource => Assert.Equal(Resources.ControlsStrings.LabelAll, resource.Name),
+            resource => Assert.Equal("regular-resource1", resource.Name),
+            resource => Assert.Equal("regular-resource2", resource.Name));
 
         // Act & Assert 2: Click the settings menu button to show the menu, then click "Show hidden resources"
         var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
@@ -238,14 +232,10 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Wait for UI to update
         cut.WaitForAssertion(() =>
         {
-            var updatedSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
-            var updatedOptions = updatedSelectElement.QuerySelectorAll("fluent-option");
             // Should now have "All" + all three resources
-            Assert.Equal(4, updatedOptions.Length);
-            var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource1", updatedOptionValues);
-            Assert.Contains("regular-resource2", updatedOptionValues);
-            Assert.Contains("hidden-resource", updatedOptionValues);
+            Assert.Equal(
+                new[] { Resources.ControlsStrings.LabelAll, "regular-resource1", "regular-resource2", "hidden-resource" }.Order(),
+                cut.FindComponent<ResourceSelect>().Instance.Resources!.Select(resource => resource.Name).Order());
         });
 
         // Act & Assert 3: Click "Hide hidden resources" to hide them again
@@ -262,14 +252,10 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
-            var finalSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
-            var finalOptions = finalSelectElement.QuerySelectorAll("fluent-option");
             // Should be back to "All" + 2 regular resources only
-            Assert.Equal(3, finalOptions.Length);
-            var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
-            Assert.Contains("regular-resource1", finalOptionValues);
-            Assert.Contains("regular-resource2", finalOptionValues);
-            Assert.DoesNotContain("hidden-resource", finalOptionValues);
+            Assert.Equal(
+                new[] { Resources.ControlsStrings.LabelAll, "regular-resource1", "regular-resource2" }.Order(),
+                cut.FindComponent<ResourceSelect>().Instance.Resources!.Select(resource => resource.Name).Order());
         });
     }
 
@@ -295,7 +281,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act: Render component with a specific resource selected
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ViewportInformation, viewport);
             builder.Add(p => p.ResourceName, "test-resource");
@@ -314,7 +300,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Assert: The "Show hidden resources" / "Hide hidden resources" menu item should NOT be present
         cut.WaitForAssertion(() =>
         {
-            var menuItems = _menuProvider!.FindAll("fluent-menu-item");
+            var menuItems = cut.FindAll("fluent-menu-item");
             var hiddenResourcesMenuItems = menuItems.Where(item =>
             {
                 var text = item.TextContent;
@@ -351,7 +337,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -465,7 +451,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
 
         var search = isDesktop
-            ? Assert.Single(cut.FindComponents<FluentSearch>())
+            ? Assert.Single(cut.FindComponents<FluentTextInput>())
             : OpenMobileToolbarAndFindSearch(cut, dialogProvider!);
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("banana"));
 
@@ -528,7 +514,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -577,7 +563,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -624,7 +610,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -650,7 +636,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Clear current entries.");
         cut.Find(".clear-button").Click();
 
-        _menuProvider!.WaitForElement("#clear-menu-all");
+        cut.WaitForElement("#clear-menu-all");
         var clearMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Id == "clear-menu-all"));
         var clearAllMenuItem = clearMenu.Instance.Items.Single(i => i.Id == "clear-menu-all");
         Assert.NotNull(clearAllMenuItem.OnClick);
@@ -691,7 +677,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == selectedResource.Name);
 
         cut.Find(".clear-button").Click();
-        _menuProvider!.WaitForElement("#clear-menu-resource");
+        cut.WaitForElement("#clear-menu-resource");
         var clearMenu = cut.FindComponents<AspireMenu>().Single(menu => menu.Instance.Items.Any(item => item.Id == "clear-menu-resource"));
         var clearResourceMenuItem = clearMenu.Instance.Items.Single(item => item.Id == "clear-menu-resource");
         Assert.NotNull(clearResourceMenuItem.OnClick);
@@ -728,7 +714,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var consoleLogsManager = Services.GetRequiredService<ConsoleLogsManager>();
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -825,7 +811,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act 1
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -893,10 +879,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var commandButton = Assert.Single(
-                cut.FindComponents<FluentButton>(),
-                button => string.Equals(button.Instance.Class, "highlighted-command", StringComparison.Ordinal));
-            Assert.True(commandButton.Instance.Disabled);
+            var commandButton = cut.Find(".highlighted-command");
+            Assert.True(commandButton.HasAttribute("disabled"));
 
             var clearButton = Assert.Single(
                 cut.FindComponents<FluentButton>(),
@@ -939,7 +923,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
         var dashboardCommandExecutor = Services.GetRequiredService<DashboardCommandExecutor>();
 
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -996,7 +980,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
         // Act
-        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        var cut = Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, "test-resource");
             builder.Add(p => p.ViewportInformation, viewport);
@@ -1120,8 +1104,6 @@ public partial class ConsoleLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
-        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
@@ -1129,7 +1111,6 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
         Services.AddSingleton<ILoggerFactory>(loggerFactory);
-        Services.AddSingleton<IToastService, ToastService>();
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
         Services.AddScoped<DashboardCommandExecutor>();
@@ -1142,7 +1123,6 @@ public partial class ConsoleLogsTests : DashboardTestContext
         }
 
         FluentUISetupHelpers.SetupFluentUIComponents(this);
-        _menuProvider = RenderComponent<FluentMenuProvider>();
     }
 
     private IRenderedComponent<Components.Pages.ConsoleLogs> RenderConsoleLogsPage(ViewportInformation viewport, string resourceName)
@@ -1150,7 +1130,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        return RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        return Render<Components.Pages.ConsoleLogs>(builder =>
         {
             builder.Add(p => p.ResourceName, resourceName);
             builder.Add(p => p.ViewportInformation, viewport);
@@ -1162,16 +1142,16 @@ public partial class ConsoleLogsTests : DashboardTestContext
         return new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
     }
 
-    private static IRenderedComponent<FluentSearch> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedFragment dialogProvider)
+    private static IRenderedComponent<FluentTextInput> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedComponent<IComponent> dialogProvider)
     {
         cut.Find(".mobile-toolbar").Click();
 
-        dialogProvider.WaitForAssertion(() => Assert.Single(dialogProvider.FindComponents<FluentSearch>()));
+        dialogProvider.WaitForAssertion(() => Assert.Single(dialogProvider.FindComponents<FluentTextInput>()));
 
-        return Assert.Single(dialogProvider.FindComponents<FluentSearch>());
+        return Assert.Single(dialogProvider.FindComponents<FluentTextInput>());
     }
 
-    private IRenderedFragment RenderDialogProvider(ViewportInformation viewport)
+    private IRenderedComponent<IComponent> RenderDialogProvider(ViewportInformation viewport)
     {
         return Render(builder =>
         {

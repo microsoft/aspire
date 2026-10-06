@@ -14,27 +14,29 @@ public class AspireSqlServerSqlClientExtensionsTests
     private const string ConnectionString = "Data Source=fake;Database=master;Encrypt=True";
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ReadsFromConnectionStringsCorrectly(bool useKeyed)
+    [InlineData(true, "sqlconnection", "ConnectionStrings:sqlconnection")]
+    [InlineData(false, "sqlconnection", "ConnectionStrings:sqlconnection")]
+    [InlineData(true, "9-sql.connection", "ConnectionStrings:_9_sql_connection")]
+    [InlineData(false, "9-sql.connection", "ConnectionStrings:_9_sql_connection")]
+    public void ReadsFromConnectionStringsCorrectly(bool useKeyed, string connectionName, string connectionStringKey)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("ConnectionStrings:sqlconnection", ConnectionString)
+            new KeyValuePair<string, string?>(connectionStringKey, ConnectionString)
         ]);
 
         if (useKeyed)
         {
-            builder.AddKeyedSqlServerClient("sqlconnection");
+            builder.AddKeyedSqlServerClient(connectionName);
         }
         else
         {
-            builder.AddSqlServerClient("sqlconnection");
+            builder.AddSqlServerClient(connectionName);
         }
 
         using var host = builder.Build();
         var connection = useKeyed ?
-            host.Services.GetRequiredKeyedService<SqlConnection>("sqlconnection") :
+            host.Services.GetRequiredKeyedService<SqlConnection>(connectionName) :
             host.Services.GetRequiredService<SqlConnection>();
 
         Assert.Equal(ConnectionString, connection.ConnectionString);

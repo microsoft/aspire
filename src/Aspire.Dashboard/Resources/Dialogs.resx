@@ -223,6 +223,9 @@
   <data name="HelpDialogGoToSettings" xml:space="preserve">
     <value>Go to Settings</value>
   </data>
+  <data name="HelpDialogToggleTerminalDock" xml:space="preserve">
+    <value>Toggle terminal</value>
+  </data>
   <data name="HelpDialogKeyboardShortcutsTitle" xml:space="preserve">
     <value>Keyboard Shortcuts</value>
   </data>
@@ -390,6 +393,9 @@
   </data>
   <data name="GenAILLMBadgeText" xml:space="preserve">
     <value>LLM</value>
+  </data>
+  <data name="GenAIMessageTreeLabel" xml:space="preserve">
+    <value>Generative AI messages</value>
   </data>
   <data name="GenAIMessageCategoryToolCalls" xml:space="preserve">
     <value>Tool calls</value>

@@ -5,12 +5,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureLogAnalyticsWorkspaceExtensionsTests
+public class AzureLogAnalyticsWorkspaceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddLogAnalyticsWorkspace()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var logAnalyticsWorkspace = builder.AddAzureLogAnalyticsWorkspace("logAnalyticsWorkspace");
 
@@ -47,7 +47,7 @@ public class AzureLogAnalyticsWorkspaceExtensionsTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureLogAnalyticsWorkspaceResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-logworkspace-name");
         var existingResourceGroup = builder.AddParameter("existing-logworkspace-rg");
 

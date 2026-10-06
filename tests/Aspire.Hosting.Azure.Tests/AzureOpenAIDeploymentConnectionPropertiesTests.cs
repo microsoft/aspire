@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureOpenAIDeploymentConnectionPropertiesTests
+public class AzureOpenAIDeploymentConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureOpenAIDeploymentResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var openai = builder.AddAzureOpenAI("openai");
         var deployment = openai.AddDeployment("mydeployment", "gpt-4", "1.0");
 

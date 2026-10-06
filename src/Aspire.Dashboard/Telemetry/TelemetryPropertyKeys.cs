@@ -46,4 +46,7 @@ public static class TelemetryPropertyKeys
 
     // Command properties
     public const string CommandName = AspireDashboardPropertyPrefix + "Command.Name";
+
+    // Terminal dock properties
+    public const string TerminalDockTrigger = AspireDashboardPropertyPrefix + "TerminalDock.Trigger";
 }

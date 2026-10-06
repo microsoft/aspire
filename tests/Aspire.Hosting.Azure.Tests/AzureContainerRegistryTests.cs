@@ -13,12 +13,12 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureContainerRegistryTests
+public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureContainerRegistry_AddsResourceAndImplementsIContainerRegistry()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         _ = builder.AddAzureContainerRegistry("acr");
 
@@ -39,7 +39,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithRegistry_AttachesContainerRegistryReferenceAnnotation()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var registryBuilder = builder.AddAzureContainerRegistry("acr");
         _ = builder.AddAzureContainerAppEnvironment("env")
@@ -58,7 +58,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task AddAzureContainerRegistry_GeneratesCorrectManifestAndBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -71,7 +71,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithRoleAssignments_GeneratesCorrectRoleAssignmentBicep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         // Add container app environment since it's required for role assignments
         builder.AddAzureContainerAppEnvironment("env");
@@ -112,7 +112,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureContainerRegistryResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var existingName = builder.AddParameter("existing-acr-name");
         var existingResourceGroup = builder.AddParameter("existing-acr-rg");
 
@@ -133,7 +133,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task AzureContainerRegistryHasLoginStep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -163,7 +163,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task LoginStepRequiredByPushPrereq()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -192,7 +192,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task AzureContainerRegistryHasProvisionStep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -221,7 +221,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public void LoginStepDependsOnProvisionStep()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -232,7 +232,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithPurgeTask_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
             .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
@@ -245,7 +245,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithPurgeTask_MultipleTasks_GeneratesUniqueNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
             .WithPurgeTask("0 1 * * *", filter: "app1:.*", keep: 3)
@@ -259,7 +259,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithPurgeTask_CustomTaskName_UsedInBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
             .WithPurgeTask("0 3 * * *", taskName: "myCustomPurge");
@@ -275,7 +275,7 @@ public class AzureContainerRegistryTests
     [InlineData("  ")]
     public void WithPurgeTask_InvalidSchedule_Throws(string schedule)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -285,7 +285,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public void WithPurgeTask_NullSchedule_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -297,7 +297,7 @@ public class AzureContainerRegistryTests
     [InlineData(-1)]
     public void WithPurgeTask_InvalidKeep_Throws(int keep)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -310,7 +310,7 @@ public class AzureContainerRegistryTests
     [InlineData("00:00:59")]
     public void WithPurgeTask_InvalidAgo_Throws(string ago)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
@@ -320,7 +320,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithPurgeTask_DuplicateTaskName_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
             .WithPurgeTask("0 1 * * *", taskName: "myPurge")
@@ -332,7 +332,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public async Task WithPurgeTask_WithHoursAndMinutesAgo_FormatsCorrectly()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr")
             .WithPurgeTask("0 0 * * *", ago: new TimeSpan(2, 3, 6, 0));
@@ -345,7 +345,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public void GetAzureContainerRegistry_ReturnsRegistryFromEnvironment()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var acr = builder.AddAzureContainerRegistry("acr");
         var env = builder.AddAzureContainerAppEnvironment("env")
@@ -359,7 +359,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public void GetAzureContainerRegistry_ReturnsDefaultRegistryWhenNoExplicitRegistry()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
@@ -372,7 +372,7 @@ public class AzureContainerRegistryTests
     [Fact]
     public void GetAzureContainerRegistry_ThrowWhenExplicitNoRegistry()
     {
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var registry = builder.AddContainerRegistry("ghcr", "ghcr.io", "owner/repo");

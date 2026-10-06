@@ -19,10 +19,10 @@ public sealed class ProcessExecutionFactoryEnvironmentTests
     private const string ControlEnvVarName = "ASPIRE_TEST_PROCESS_EXECUTION_FACTORY_CONTROL";
 
     [Fact]
-    public void InvocationScopedEnvVarNames_ContainsAppHostSelectionOrigin()
+    public void InvocationScopedEnvVarNames_ContainsExpectedVariables()
     {
         Assert.Equal(
-            new[] { KnownConfigNames.CliAppHostSelectionOrigin },
+            [KnownConfigNames.CliAppHostSelectionOrigin],
             ProcessExecutionFactory.InvocationScopedEnvVarNames);
     }
 

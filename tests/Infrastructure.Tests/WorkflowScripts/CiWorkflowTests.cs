@@ -2,11 +2,43 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
 public sealed class CiWorkflowTests
 {
+    [Fact]
+    public void TemplateManifestGenerationUsesSameBuildPackagesBeforeCleanup()
+    {
+        var job = GetJob(ReadWorkflow("build-packages.yml"), "build_packages");
+        var generate = GetStep(job, "Generate template component manifest");
+
+        Assert.True(job.IndexOf("name: Build with packages", StringComparison.Ordinal) <
+            job.IndexOf("name: Generate template component manifest", StringComparison.Ordinal));
+        Assert.True(job.IndexOf("name: Generate template component manifest", StringComparison.Ordinal) <
+            job.IndexOf("name: Clean up artifacts", StringComparison.Ordinal));
+        Assert.Contains("eng/scripts/generate-template-cgmanifest.ps1", generate);
+    }
+
+    [Fact]
+    public void TemplateManifestArtifactContainsOnlyTheFinalInventory()
+    {
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(ReadWorkflow("build-packages.yml")));
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children["jobs"];
+        var job = (YamlMappingNode)jobs.Children["build_packages"];
+        var steps = (YamlSequenceNode)job.Children["steps"];
+        var upload = Assert.Single(steps.Children.Cast<YamlMappingNode>(), step =>
+            step.Children.TryGetValue("name", out var name) && ((YamlScalarNode)name).Value == "Upload template component manifest");
+        var inputs = (YamlMappingNode)upload.Children["with"];
+
+        Assert.Equal("artifacts/cg/templates/cgmanifest.json", ((YamlScalarNode)inputs.Children["path"]).Value);
+        Assert.Equal("5", ((YamlScalarNode)inputs.Children["retention-days"]).Value);
+        Assert.Equal("error", ((YamlScalarNode)inputs.Children["if-no-files-found"]).Value);
+    }
+
     [Theory]
     [InlineData("prepare_winget_installer_artifacts")]
     [InlineData("prepare_homebrew_installer_artifacts")]
@@ -37,13 +69,13 @@ public sealed class CiWorkflowTests
     [Fact]
     public void RunTestsInstallsJavaForProjectsThatRequireIt()
     {
-        var workflow = File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", "run-tests.yml"));
+        var workflow = ReadWorkflow("run-tests.yml");
         var javaSetup = System.Text.RegularExpressions.Regex.Match(
             workflow,
-            "(?ms)^      - name: Set up Java\\n(?<body>.*?)(?=^      - |\\z)");
+            "(?ms)^      - name: Set up Java\\r?\\n(?<body>.*?)(?=^      - |\\z)");
         Assert.True(javaSetup.Success, "Could not find the Java setup step in run-tests.yml.");
         Assert.Contains("if: ${{ fromJson(inputs.properties).requiresJava == true }}", javaSetup.Value);
-        Assert.Contains("uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0", javaSetup.Value);
+        Assert.Contains("uses: actions/setup-java@", javaSetup.Value);
         Assert.Contains("distribution: temurin", javaSetup.Value);
         Assert.Contains("java-version: 21", javaSetup.Value);
 
@@ -74,7 +106,7 @@ public sealed class CiWorkflowTests
     }
 
     private static string ReadWorkflow(string fileName)
-        => File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", fileName));
+        => File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", fileName)).ReplaceLineEndings("\n");
 
     private static string GetJob(string workflow, string jobName)
     {

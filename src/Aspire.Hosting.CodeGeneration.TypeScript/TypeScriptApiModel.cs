@@ -105,6 +105,9 @@ internal sealed record TypeScriptApiMember
     /// <summary>Gets the deprecation message, or <see langword="null"/> when the member is not deprecated.</summary>
     public string? DeprecationMessage { get; init; }
 
+    /// <summary>Gets a value indicating whether the member is experimental.</summary>
+    public bool IsExperimental { get; init; }
+
     /// <summary>Gets the ATS capability that produced this member, used as source metadata.</summary>
     public string? CapabilityId { get; init; }
 
@@ -152,6 +155,9 @@ internal sealed record TypeScriptApiItem
 
     /// <summary>Gets the documentation examples.</summary>
     public IReadOnlyList<string> Examples { get; init; } = [];
+
+    /// <summary>Gets a value indicating whether the item is experimental.</summary>
+    public bool IsExperimental { get; init; }
 
     /// <summary>Gets the interfaces this item extends, for relationship rendering.</summary>
     public IReadOnlyList<string> Extends { get; init; } = [];

@@ -116,7 +116,8 @@ public static class TestTrxBuilder
             new XElement(
                 s_namespace + "Output",
                 CreateErrorInfoElement(testCase),
-                string.IsNullOrEmpty(testCase.StdOut) ? null : new XElement(s_namespace + "StdOut", testCase.StdOut)));
+                string.IsNullOrEmpty(testCase.StdOut) ? null : new XElement(s_namespace + "StdOut", testCase.StdOut),
+                string.IsNullOrEmpty(testCase.StdErr) ? null : new XElement(s_namespace + "StdErr", testCase.StdErr)));
     }
 
     private static XElement? CreateErrorInfoElement(TestTrxCase testCase)
@@ -142,4 +143,5 @@ public sealed record TestTrxCase(
     string StdOut = "",
     string? TestMethodName = null,
     string? StartTime = null,
-    string? EndTime = null);
+    string? EndTime = null,
+    string StdErr = "");

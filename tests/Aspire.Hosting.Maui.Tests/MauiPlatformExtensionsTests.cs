@@ -13,6 +13,7 @@ using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net.Sockets;
@@ -293,7 +294,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
         {
             await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-                .PublishAsync(new BeforeResourceStartedEvent(platform.Resource, app.Services), CancellationToken.None);
+                .PublishAsync(new BeforeResourceStartedEvent(platform.Resource, app.Services), CancellationToken.None)
+                .DefaultTimeout();
         });
 
         Assert.Contains($"Unable to detect {config.DisplayName}", exception.Message, StringComparison.OrdinalIgnoreCase);
@@ -319,7 +321,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             androidEmulator.Resource,
             DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
         Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
@@ -466,7 +468,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var argsContext = new CommandLineArgsCallbackContext(args, simulator.Resource);
         foreach (var argsAnnotation in simulator.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>())
         {
-            await argsAnnotation.Callback(argsContext);
+            await argsAnnotation.Callback(argsContext).DefaultTimeout();
         }
 
         Assert.Collection(args,
@@ -548,7 +550,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
             DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
         Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
@@ -589,8 +591,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
                 app.Services.GetRequiredService<ResourceLoggerService>(),
                 app.Services.GetRequiredService<ResourceNotificationService>(),
                 app.Services.GetRequiredService<IFileSystemService>());
-        await environmentSubscriber.SubscribeAsync(eventing, executionContext, CancellationToken.None);
-        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource, app.Services), CancellationToken.None);
+        await environmentSubscriber.SubscribeAsync(eventing, executionContext, CancellationToken.None).DefaultTimeout();
+        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource, app.Services), CancellationToken.None).DefaultTimeout();
 
         var targetsFileCallback = Assert.Single(
             resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>(),
@@ -611,7 +613,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         static async Task<string> EvaluateTargetsFileAsync(CommandLineArgsCallbackAnnotation callback, IResource resource)
         {
             var args = new List<object>();
-            await callback.Callback(new CommandLineArgsCallbackContext(args, resource, CancellationToken.None));
+            await callback.Callback(new CommandLineArgsCallbackContext(args, resource, CancellationToken.None)).DefaultTimeout();
             var property = Assert.Single(
                 args.OfType<string>(),
                 argument => argument.StartsWith("-p:CustomAfterMicrosoftCommonTargets=", StringComparison.Ordinal));
@@ -724,7 +726,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             platform.Resource,
             DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         // Assert - OTEL_EXPORTER_OTLP_ENDPOINT should be set directly from the tunnel endpoint
         Assert.True(envVars.TryGetValue("OTEL_EXPORTER_OTLP_ENDPOINT", out var endpointValue));
@@ -771,7 +773,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
         dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
-        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None).DefaultTimeout();
 
         Assert.Equal("http", stubEndpoint.UriScheme);
         Assert.Equal(55075, stubEndpoint.Port);
@@ -785,7 +787,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
             DistributedApplicationOperation.Run,
-            app.Services);
+            app.Services).DefaultTimeout();
 
         Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
         Assert.Equal("grpc", envVars[KnownOtelConfigNames.ExporterOtlpProtocol]);
@@ -829,7 +831,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         await appBuilder.Eventing.PublishAsync(
             new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services),
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
         Assert.Equal(55077, stubEndpoint.Port);
@@ -841,7 +843,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         httpEndpoint.AllocatedEndpoint = new AllocatedEndpoint(httpEndpoint, "localhost", 55088, targetPortExpression: "55089");
         await appBuilder.Eventing.PublishAsync(
             new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services),
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
         Assert.Equal(55077, stubEndpoint.Port);
 
         var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
@@ -851,7 +853,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var environmentVariables = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
             DistributedApplicationOperation.Run,
-            app.Services);
+            app.Services).DefaultTimeout();
 
         Assert.Equal("http/protobuf", environmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol]);
     }
@@ -889,7 +891,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             targetPortExpression: "55077");
         await appBuilder.Eventing.PublishAsync(
             new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services),
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(55076, tunnelConfig.OtlpStub.OtlpEndpoint.Port);
         Assert.Equal("http://localhost:55076", tunnelConfig.OtlpStub.OtlpEndpoint.AllocatedEndpoint?.UriString);
@@ -928,7 +930,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
                         "http://localhost:55077",
                         IsFromSpec: false)
                 ]
-            });
+            }).DefaultTimeout();
 
         var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single();
         dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(
@@ -939,7 +941,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         await appBuilder.Eventing.PublishAsync(
             new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services),
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
         Assert.Equal(55077, stubEndpoint.Port);
@@ -991,11 +993,11 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         await using var app = appBuilder.Build();
 
-        await appBuilder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None);
+        await appBuilder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None).DefaultTimeout();
         Assert.True(stubEndpointEventPublished);
 
         dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
-        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None).DefaultTimeout();
 
         Assert.Equal("http", stubEndpoint.UriScheme);
         Assert.Equal(18889, stubEndpoint.Port);
@@ -1008,7 +1010,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             androidEmulator.Resource,
             DistributedApplicationOperation.Run,
-            app.Services);
+            app.Services).DefaultTimeout();
 
         Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
         Assert.Equal("grpc", envVars[KnownOtelConfigNames.ExporterOtlpProtocol]);
@@ -1044,7 +1046,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var environmentVariables = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
             DistributedApplicationOperation.Run,
-            app.Services);
+            app.Services).DefaultTimeout();
 
         Assert.Equal("http/protobuf", environmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol]);
     }
@@ -1084,7 +1086,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var environmentVariables = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
             DistributedApplicationOperation.Publish,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.DoesNotContain(KnownOtelConfigNames.ExporterOtlpEndpoint, environmentVariables.Keys);
         Assert.DoesNotContain(KnownOtelConfigNames.ExporterOtlpProtocol, environmentVariables.Keys);
@@ -1115,7 +1117,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.False(environmentTask.IsCompleted);
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
-            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
+            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None).DefaultTimeout());
 
         Assert.Contains("requires the Aspire dashboard", exception.Message);
         await AssertEnvironmentResolutionFailsAsync(environmentTask, exception);
@@ -1141,7 +1143,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         await using var app = appBuilder.Build();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
-            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
+            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None).DefaultTimeout());
 
         Assert.Contains("does not have a concrete OTLP endpoint", exception.Message);
         Assert.Contains(KnownEndpointNames.OtlpGrpcEndpointName, exception.Message);
@@ -1172,7 +1174,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
             appBuilder.Eventing.PublishAsync(
                 new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services),
-                CancellationToken.None));
+                CancellationToken.None).DefaultTimeout());
 
         Assert.Contains("does not have a concrete OTLP endpoint", exception.Message);
         Assert.False(tunnelConfig.IsOtlpEndpointResolved);
@@ -1218,12 +1220,12 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             .PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
             {
                 State = KnownResourceStates.Running
-            });
+            }).DefaultTimeout();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
             appBuilder.Eventing.PublishAsync(
                 new BeforeResourceStartedEvent(resolutionEventResource, app.Services),
-                CancellationToken.None));
+                CancellationToken.None).DefaultTimeout());
 
         Assert.Contains("did not publish a concrete OTLP listener", exception.Message);
 
@@ -1244,10 +1246,10 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
                         "http://localhost:55077",
                         IsFromSpec: false)
                 ]
-            });
+            }).DefaultTimeout();
         await appBuilder.Eventing.PublishAsync(
             new BeforeResourceStartedEvent(resolutionEventResource, app.Services),
-            CancellationToken.None);
+            CancellationToken.None).DefaultTimeout();
 
         tunnelConfig.TunnelEndpoint.EndpointAnnotation.AllocatedEndpoint =
             new AllocatedEndpoint(tunnelConfig.TunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
@@ -1255,7 +1257,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var recoveredEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
             DistributedApplicationOperation.Run,
-            app.Services);
+            app.Services).DefaultTimeout();
         Assert.Equal("https://mobile-otlp.devtunnels.ms:443", recoveredEnvironment[KnownOtelConfigNames.ExporterOtlpEndpoint]);
         Assert.Equal("http/protobuf", recoveredEnvironment[KnownOtelConfigNames.ExporterOtlpProtocol]);
     }
@@ -1286,7 +1288,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
                 iosSimulator.Resource,
                 DistributedApplicationOperation.Run,
-                app.Services));
+                app.Services).DefaultTimeout());
 
         Assert.Equal(2, exception.InnerExceptions.Count);
         Assert.All(exception.InnerExceptions, innerException => Assert.IsType<DistributedApplicationException>(innerException));
@@ -1329,7 +1331,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         await notificationService.PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
         {
             State = KnownResourceStates.Running
-        });
+        }).DefaultTimeout();
 
         var environmentTask = EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             iosSimulator.Resource,
@@ -1345,10 +1347,10 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         await notificationService.PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
         {
             State = dashboardState
-        });
+        }).DefaultTimeout();
 
         var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
-            () => beforeStartTask.WaitAsync(TimeSpan.FromSeconds(10)));
+            () => beforeStartTask.DefaultTimeout(TimeSpan.FromSeconds(10)));
         Assert.Contains("terminated", exception.Message);
 
         await AssertEnvironmentResolutionFailsAsync(environmentTask, exception);
@@ -1385,7 +1387,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         DistributedApplicationException expectedException)
     {
         var environmentException = await Assert.ThrowsAsync<AggregateException>(
-            () => environmentTask.WaitAsync(TimeSpan.FromSeconds(10)));
+            () => environmentTask.DefaultTimeout(TimeSpan.FromSeconds(10)));
         Assert.All(
             environmentException.InnerExceptions,
             innerException => Assert.Same(expectedException, innerException));
@@ -1428,7 +1430,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
             resource,
             ExecutableLaunchMode.Debug);
         var json = JsonSerializer.Serialize(
-            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext).DefaultTimeout());
         var launchConfiguration = JsonSerializer.Deserialize<SerializedMauiLaunchConfiguration>(json);
         Assert.NotNull(launchConfiguration);
 

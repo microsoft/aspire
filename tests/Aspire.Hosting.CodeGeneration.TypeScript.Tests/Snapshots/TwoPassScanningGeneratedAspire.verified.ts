@@ -1313,6 +1313,8 @@ export interface ResourceUrlAnnotation {
     displayText?: string | null;
     /** The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint. */
     endpoint?: EndpointReference;
+    /** Gets or sets the display order of the URL. Higher values mean sort higher in the list. */
+    displayOrder?: number | null;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
     displayLocation?: UrlDisplayLocation;
 }
@@ -2510,13 +2512,25 @@ const ConnectionStringAvailableEventPromiseImpl = $aspireCreateFluentPromiseClas
 /** Context for configuring container build options via a callback. */
 export interface ContainerBuildOptionsCallbackContext {
     toJSON(): MarshalledHandle;
-    /** Gets the resource being built. */
+    /**
+     * Gets the resource being built.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the service provider. */
+    /**
+     * Gets the service provider.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the logger instance. */
+    /**
+     * Gets the logger instance.
+     * @experimental
+     */
     logger(): LoggerPromise;
-    /** Gets the cancellation token. */
+    /**
+     * Gets the cancellation token.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the distributed application execution context.
@@ -2524,34 +2538,58 @@ export interface ContainerBuildOptionsCallbackContext {
      * Use `IsPublishMode` or
      * `IsRunMode` to vary build options
      * (for example `TargetPlatform`) between local run and publish operations.
+     * @experimental
      */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets or sets the destination for the container image. */
+    /**
+     * Gets or sets the destination for the container image.
+     * @experimental
+     */
     destination: {
         get: () => Promise<ContainerImageDestination | null>;
         set: (value: ContainerImageDestination | null) => Promise<void>;
     };
-    /** Gets or sets the output path for the container archive. */
+    /**
+     * Gets or sets the output path for the container archive.
+     *
+     * For .NET SDK publishing, a non-existent path with any filename extension is an archive filename.
+     * End a directory path with the platform's directory separator to make directory intent explicit,
+     * especially when its name contains a period. Prefer an explicit archive filename to avoid ambiguity.
+     * Other container image builders may interpret this path as an output directory.
+     * @experimental
+     */
     outputPath: {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
     };
-    /** Gets or sets the container image format. */
+    /**
+     * Gets or sets the container image format.
+     * @experimental
+     */
     imageFormat: {
         get: () => Promise<ContainerImageFormat | null>;
         set: (value: ContainerImageFormat | null) => Promise<void>;
     };
-    /** Gets or sets the target platform for the container. */
+    /**
+     * Gets or sets the target platform for the container.
+     * @experimental
+     */
     targetPlatform: {
         get: () => Promise<ContainerTargetPlatform | null>;
         set: (value: ContainerTargetPlatform | null) => Promise<void>;
     };
-    /** Gets or sets the local image name for the built container. */
+    /**
+     * Gets or sets the local image name for the built container.
+     * @experimental
+     */
     localImageName: {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
     };
-    /** Gets or sets the local image tag for the built container. */
+    /**
+     * Gets or sets the local image tag for the built container.
+     * @experimental
+     */
     localImageTag: {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
@@ -2559,13 +2597,25 @@ export interface ContainerBuildOptionsCallbackContext {
 }
 
 export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike<ContainerBuildOptionsCallbackContext> {
-    /** Gets the resource being built. */
+    /**
+     * Gets the resource being built.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the service provider. */
+    /**
+     * Gets the service provider.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the logger instance. */
+    /**
+     * Gets the logger instance.
+     * @experimental
+     */
     logger(): LoggerPromise;
-    /** Gets the cancellation token. */
+    /**
+     * Gets the cancellation token.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the distributed application execution context.
@@ -2573,6 +2623,7 @@ export interface ContainerBuildOptionsCallbackContextPromise extends PromiseLike
      * Use `IsPublishMode` or
      * `IsRunMode` to vary build options
      * (for example `TargetPlatform`) between local run and publish operations.
+     * @experimental
      */
     executionContext(): DistributedApplicationExecutionContextPromise;
 }
@@ -2936,12 +2987,18 @@ const ContainerFileSystemCallbackContextPromiseImpl = $aspireCreateFluentPromise
  */
 export interface ContainerImagePushOptions {
     toJSON(): MarshalledHandle;
-    /** Gets or sets the remote image name (repository path without registry endpoint or tag). */
+    /**
+     * Gets or sets the remote image name (repository path without registry endpoint or tag).
+     * @experimental
+     */
     remoteImageName: {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
     };
-    /** Gets or sets the remote image tag. */
+    /**
+     * Gets or sets the remote image tag.
+     * @experimental
+     */
     remoteImageTag: {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
@@ -3005,20 +3062,38 @@ class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
 /** Provides context information for container image push options callbacks. */
 export interface ContainerImagePushOptionsCallbackContext {
     toJSON(): MarshalledHandle;
-    /** Gets the resource being configured for container image push operations. */
+    /**
+     * Gets the resource being configured for container image push operations.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the cancellation token to observe while configuring image push options. */
+    /**
+     * Gets the cancellation token to observe while configuring image push options.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
-    /** Gets the container image push options that can be modified by the callback. */
+    /**
+     * Gets the container image push options that can be modified by the callback.
+     * @experimental
+     */
     options(): Promise<ContainerImagePushOptions>;
 }
 
 export interface ContainerImagePushOptionsCallbackContextPromise extends PromiseLike<ContainerImagePushOptionsCallbackContext> {
-    /** Gets the resource being configured for container image push operations. */
+    /**
+     * Gets the resource being configured for container image push operations.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the cancellation token to observe while configuring image push options. */
+    /**
+     * Gets the cancellation token to observe while configuring image push options.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
-    /** Gets the container image push options that can be modified by the callback. */
+    /**
+     * Gets the container image push options that can be modified by the callback.
+     * @experimental
+     */
     options(): Promise<ContainerImagePushOptions>;
 }
 
@@ -3361,7 +3436,10 @@ export interface DistributedApplicationExecutionContext {
     };
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
-    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    /**
+     * Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value.
+     * @experimental
+     */
     runConfiguration(): Promise<RunConfiguration>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
@@ -3376,7 +3454,10 @@ export interface DistributedApplicationExecutionContext {
 export interface DistributedApplicationExecutionContextPromise extends PromiseLike<DistributedApplicationExecutionContext> {
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
-    /** Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value. */
+    /**
+     * Describes how the AppHost is being run. Only meaningful when `Operation` is `Run`; otherwise every aspect holds its default value.
+     * @experimental
+     */
     runConfiguration(): Promise<RunConfiguration>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
@@ -3691,24 +3772,48 @@ const DockerfileBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DockerfileB
 /** Provides context information for Dockerfile build callbacks. */
 export interface DockerfileBuilderCallbackContext {
     toJSON(): MarshalledHandle;
-    /** Gets the resource being built. */
+    /**
+     * Gets the resource being built.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the Dockerfile builder instance. */
+    /**
+     * Gets the Dockerfile builder instance.
+     * @experimental
+     */
     builder(): DockerfileBuilderPromise;
-    /** Gets the service provider for dependency injection. */
+    /**
+     * Gets the service provider for dependency injection.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the cancellation token to observe while waiting for the task to complete. */
+    /**
+     * Gets the cancellation token to observe while waiting for the task to complete.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
 }
 
 export interface DockerfileBuilderCallbackContextPromise extends PromiseLike<DockerfileBuilderCallbackContext> {
-    /** Gets the resource being built. */
+    /**
+     * Gets the resource being built.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the Dockerfile builder instance. */
+    /**
+     * Gets the Dockerfile builder instance.
+     * @experimental
+     */
     builder(): DockerfileBuilderPromise;
-    /** Gets the service provider for dependency injection. */
+    /**
+     * Gets the service provider for dependency injection.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the cancellation token to observe while waiting for the task to complete. */
+    /**
+     * Gets the cancellation token to observe while waiting for the task to complete.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
 }
 
@@ -5365,44 +5470,98 @@ const HttpCommandPrepareRequestContextPromiseImpl = $aspireCreateFluentPromiseCl
 /** Context provided to a `HttpsCertificateConfigurationCallbackAnnotation` callback. */
 export interface HttpsCertificateConfigurationCallbackAnnotationContext {
     toJSON(): MarshalledHandle;
-    /** Gets the `DistributedApplicationExecutionContext` for this session. */
+    /**
+     * Gets the `DistributedApplicationExecutionContext` for this session.
+     * @experimental
+     */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets the resource to which the annotation is applied. */
+    /**
+     * Gets the resource to which the annotation is applied.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** A value provider that will resolve to a path to the certificate file. */
+    /**
+     * A value provider that will resolve to a path to the certificate file.
+     * @experimental
+     */
     certificatePath(): Promise<ReferenceExpression>;
-    /** A value provider that will resolve to a path to the private key for the certificate. */
+    /**
+     * A value provider that will resolve to a path to the private key for the certificate.
+     * @experimental
+     */
     keyPath(): Promise<ReferenceExpression>;
-    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    /**
+     * A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
+     * @experimental
+     */
     certificateWithKeyPath(): Promise<ReferenceExpression>;
-    /** A value provider that will resolve to a path to a PFX file for the key pair. */
+    /**
+     * A value provider that will resolve to a path to a PFX file for the key pair.
+     * @experimental
+     */
     pfxPath(): Promise<ReferenceExpression>;
-    /** Gets the `CancellationToken` that can be used to cancel the operation. */
+    /**
+     * Gets the `CancellationToken` that can be used to cancel the operation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
-    /** Gets the editor used to manipulate the command-line arguments in polyglot callbacks. */
+    /**
+     * Gets the editor used to manipulate the command-line arguments in polyglot callbacks.
+     * @experimental
+     */
     arguments(): CommandLineArgsEditorPromise;
-    /** Gets the editor used to set environment variables in polyglot callbacks. */
+    /**
+     * Gets the editor used to set environment variables in polyglot callbacks.
+     * @experimental
+     */
     environment(): EnvironmentEditorPromise;
 }
 
 export interface HttpsCertificateConfigurationCallbackAnnotationContextPromise extends PromiseLike<HttpsCertificateConfigurationCallbackAnnotationContext> {
-    /** Gets the `DistributedApplicationExecutionContext` for this session. */
+    /**
+     * Gets the `DistributedApplicationExecutionContext` for this session.
+     * @experimental
+     */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets the resource to which the annotation is applied. */
+    /**
+     * Gets the resource to which the annotation is applied.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** A value provider that will resolve to a path to the certificate file. */
+    /**
+     * A value provider that will resolve to a path to the certificate file.
+     * @experimental
+     */
     certificatePath(): Promise<ReferenceExpression>;
-    /** A value provider that will resolve to a path to the private key for the certificate. */
+    /**
+     * A value provider that will resolve to a path to the private key for the certificate.
+     * @experimental
+     */
     keyPath(): Promise<ReferenceExpression>;
-    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    /**
+     * A value provider that will resolve to a path to the certificate and key concatenated together in PEM format.
+     * @experimental
+     */
     certificateWithKeyPath(): Promise<ReferenceExpression>;
-    /** A value provider that will resolve to a path to a PFX file for the key pair. */
+    /**
+     * A value provider that will resolve to a path to a PFX file for the key pair.
+     * @experimental
+     */
     pfxPath(): Promise<ReferenceExpression>;
-    /** Gets the `CancellationToken` that can be used to cancel the operation. */
+    /**
+     * Gets the `CancellationToken` that can be used to cancel the operation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
-    /** Gets the editor used to manipulate the command-line arguments in polyglot callbacks. */
+    /**
+     * Gets the editor used to manipulate the command-line arguments in polyglot callbacks.
+     * @experimental
+     */
     arguments(): CommandLineArgsEditorPromise;
-    /** Gets the editor used to set environment variables in polyglot callbacks. */
+    /**
+     * Gets the editor used to set environment variables in polyglot callbacks.
+     * @experimental
+     */
     environment(): EnvironmentEditorPromise;
 }
 
@@ -5519,24 +5678,48 @@ const HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl = $aspir
 /** Context provided to the callback of `SubscribeHttpsEndpointsUpdate``1` when an HTTPS certificate is determined to be available for the resource. */
 export interface HttpsEndpointUpdateCallbackContext {
     toJSON(): MarshalledHandle;
-    /** Gets the `IServiceProvider` instance from the application. */
+    /**
+     * Gets the `IServiceProvider` instance from the application.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the `IResource` that is being configured for HTTPS. */
+    /**
+     * Gets the `IResource` that is being configured for HTTPS.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the `DistributedApplicationModel` instance. */
+    /**
+     * Gets the `DistributedApplicationModel` instance.
+     * @experimental
+     */
     model(): DistributedApplicationModelPromise;
-    /** Gets the `CancellationToken` for the operation. */
+    /**
+     * Gets the `CancellationToken` for the operation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
 }
 
 export interface HttpsEndpointUpdateCallbackContextPromise extends PromiseLike<HttpsEndpointUpdateCallbackContext> {
-    /** Gets the `IServiceProvider` instance from the application. */
+    /**
+     * Gets the `IServiceProvider` instance from the application.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the `IResource` that is being configured for HTTPS. */
+    /**
+     * Gets the `IResource` that is being configured for HTTPS.
+     * @experimental
+     */
     resource(): ResourcePromise;
-    /** Gets the `DistributedApplicationModel` instance. */
+    /**
+     * Gets the `DistributedApplicationModel` instance.
+     * @experimental
+     */
     model(): DistributedApplicationModelPromise;
-    /** Gets the `CancellationToken` for the operation. */
+    /**
+     * Gets the `CancellationToken` for the operation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
 }
 
@@ -6448,27 +6631,41 @@ const LogFacadePromiseImpl = $aspireCreateFluentPromiseClass<LogFacade, LogFacad
 /** Provides contextual information for pipeline configuration callbacks. */
 export interface PipelineConfigurationContext {
     toJSON(): MarshalledHandle;
-    /** Gets the pipeline editor used by polyglot callbacks. */
+    /**
+     * Gets the pipeline editor used by polyglot callbacks.
+     * @experimental
+     */
     pipeline(): PipelineEditorPromise;
-    /** Gets the logger facade used by polyglot callbacks. */
+    /**
+     * Gets the logger facade used by polyglot callbacks.
+     * @experimental
+     */
     log(): LogFacadePromise;
     /**
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
+     * @experimental
      */
     getSteps(tag: string): Promise<PipelineStep[]>;
 }
 
 export interface PipelineConfigurationContextPromise extends PromiseLike<PipelineConfigurationContext> {
-    /** Gets the pipeline editor used by polyglot callbacks. */
+    /**
+     * Gets the pipeline editor used by polyglot callbacks.
+     * @experimental
+     */
     pipeline(): PipelineEditorPromise;
-    /** Gets the logger facade used by polyglot callbacks. */
+    /**
+     * Gets the logger facade used by polyglot callbacks.
+     * @experimental
+     */
     log(): LogFacadePromise;
     /**
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
+     * @experimental
      */
     getSteps(tag: string): Promise<PipelineStep[]>;
 }
@@ -6510,6 +6707,7 @@ class PipelineConfigurationContextImpl implements PipelineConfigurationContext {
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
+     * @experimental
      */
     async getSteps(tag: string): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, tag };
@@ -6535,15 +6733,30 @@ const PipelineConfigurationContextPromiseImpl = $aspireCreateFluentPromiseClass<
 /** Provides contextual information and services for the pipeline execution process of a distributed application. */
 export interface PipelineContext {
     toJSON(): MarshalledHandle;
-    /** Gets the distributed application model to be deployed. */
+    /**
+     * Gets the distributed application model to be deployed.
+     * @experimental
+     */
     model(): DistributedApplicationModelPromise;
-    /** Gets the execution context for the distributed application. */
+    /**
+     * Gets the execution context for the distributed application.
+     * @experimental
+     */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets the service provider for dependency resolution. */
+    /**
+     * Gets the service provider for dependency resolution.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the logger for pipeline operations. */
+    /**
+     * Gets the logger for pipeline operations.
+     * @experimental
+     */
     logger(): LoggerPromise;
-    /** Gets the cancellation token for the pipeline operation. */
+    /**
+     * Gets the cancellation token for the pipeline operation.
+     * @experimental
+     */
     cancellationToken: {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
@@ -6553,24 +6766,38 @@ export interface PipelineContext {
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
 
 export interface PipelineContextPromise extends PromiseLike<PipelineContext> {
-    /** Gets the distributed application model to be deployed. */
+    /**
+     * Gets the distributed application model to be deployed.
+     * @experimental
+     */
     model(): DistributedApplicationModelPromise;
-    /** Gets the execution context for the distributed application. */
+    /**
+     * Gets the execution context for the distributed application.
+     * @experimental
+     */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets the service provider for dependency resolution. */
+    /**
+     * Gets the service provider for dependency resolution.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the logger for pipeline operations. */
+    /**
+     * Gets the logger for pipeline operations.
+     * @experimental
+     */
     logger(): LoggerPromise;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
@@ -6678,12 +6905,14 @@ export interface PipelineEditor {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
+     * @experimental
      */
     steps(): Promise<PipelineStep[]>;
     /**
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
+     * @experimental
      */
     stepsByTag(tag: string): Promise<PipelineStep[]>;
 }
@@ -6692,12 +6921,14 @@ export interface PipelineEditorPromise extends PromiseLike<PipelineEditor> {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
+     * @experimental
      */
     steps(): Promise<PipelineStep[]>;
     /**
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
+     * @experimental
      */
     stepsByTag(tag: string): Promise<PipelineStep[]>;
 }
@@ -6716,6 +6947,7 @@ class PipelineEditorImpl implements PipelineEditor {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
+     * @experimental
      */
     async steps(): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
@@ -6729,6 +6961,7 @@ class PipelineEditorImpl implements PipelineEditor {
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
+     * @experimental
      */
     async stepsByTag(tag: string): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, tag };
@@ -6753,67 +6986,99 @@ const PipelineEditorPromiseImpl = $aspireCreateFluentPromiseClass<PipelineEditor
 /** Represents a step in the deployment pipeline. */
 export interface PipelineStep {
     toJSON(): MarshalledHandle;
-    /** Gets or initializes the unique name of the step. */
+    /**
+     * Gets or initializes the unique name of the step.
+     * @experimental
+     */
     name(): Promise<string>;
     /**
      * Gets or initializes the description of the step.
      *
      * The description provides human-readable context about what the step does,
      * helping users and tools understand the purpose of the step.
+     * @experimental
      */
     description(): Promise<string | null>;
-    /** Gets or initializes the list of step names that this step depends on. */
+    /**
+     * Gets or initializes the list of step names that this step depends on.
+     * @experimental
+     */
     dependsOnSteps(): Promise<AspireList<string>>;
-    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    /**
+     * Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
+     * @experimental
+     */
     requiredBySteps(): Promise<AspireList<string>>;
-    /** Gets or initializes the list of tags that categorize this step. */
+    /**
+     * Gets or initializes the list of tags that categorize this step.
+     * @experimental
+     */
     tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
+     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise;
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
+     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise;
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
+     * @experimental
      */
     addTag(tag: string): PipelineStepPromise;
 }
 
 export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
-    /** Gets or initializes the unique name of the step. */
+    /**
+     * Gets or initializes the unique name of the step.
+     * @experimental
+     */
     name(): Promise<string>;
     /**
      * Gets or initializes the description of the step.
      *
      * The description provides human-readable context about what the step does,
      * helping users and tools understand the purpose of the step.
+     * @experimental
      */
     description(): Promise<string | null>;
-    /** Gets or initializes the list of step names that this step depends on. */
+    /**
+     * Gets or initializes the list of step names that this step depends on.
+     * @experimental
+     */
     dependsOnSteps(): Promise<AspireList<string>>;
-    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    /**
+     * Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
+     * @experimental
+     */
     requiredBySteps(): Promise<AspireList<string>>;
-    /** Gets or initializes the list of tags that categorize this step. */
+    /**
+     * Gets or initializes the list of tags that categorize this step.
+     * @experimental
+     */
     tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
+     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise;
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
+     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise;
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
+     * @experimental
      */
     addTag(tag: string): PipelineStepPromise;
 }
@@ -6895,6 +7160,7 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
+     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._dependsOnInternal(stepName), this._client);
@@ -6913,6 +7179,7 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
+     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._requiredByInternal(stepName), this._client);
@@ -6931,6 +7198,7 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
+     * @experimental
      */
     addTag(tag: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._addTagInternal(tag), this._client);
@@ -6962,49 +7230,93 @@ const PipelineStepPromiseImpl = $aspireCreateFluentPromiseClass<PipelineStep, Pi
  */
 export interface PipelineStepContext {
     toJSON(): MarshalledHandle;
-    /** Gets the pipeline context shared across all steps. */
+    /**
+     * Gets the pipeline context shared across all steps.
+     * @experimental
+     */
     pipelineContext(): PipelineContextPromise;
-    /** Gets the publishing step associated with this specific step execution. */
+    /**
+     * Gets the publishing step associated with this specific step execution.
+     * @experimental
+     */
     reportingStep(): ReportingStepPromise;
-    /** Gets the distributed application model to be deployed. */
+    /**
+     * Gets the distributed application model to be deployed.
+     * @experimental
+     */
     model(): DistributedApplicationModelPromise;
-    /** Gets the execution context for the distributed application. */
+    /**
+     * Gets the execution context for the distributed application.
+     * @experimental
+     */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets the service provider for dependency resolution. */
+    /**
+     * Gets the service provider for dependency resolution.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
+    /**
+     * Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
+     * @experimental
+     */
     logger(): LoggerPromise;
-    /** Gets the cancellation token for the pipeline operation. */
+    /**
+     * Gets the cancellation token for the pipeline operation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
 
 export interface PipelineStepContextPromise extends PromiseLike<PipelineStepContext> {
-    /** Gets the pipeline context shared across all steps. */
+    /**
+     * Gets the pipeline context shared across all steps.
+     * @experimental
+     */
     pipelineContext(): PipelineContextPromise;
-    /** Gets the publishing step associated with this specific step execution. */
+    /**
+     * Gets the publishing step associated with this specific step execution.
+     * @experimental
+     */
     reportingStep(): ReportingStepPromise;
-    /** Gets the distributed application model to be deployed. */
+    /**
+     * Gets the distributed application model to be deployed.
+     * @experimental
+     */
     model(): DistributedApplicationModelPromise;
-    /** Gets the execution context for the distributed application. */
+    /**
+     * Gets the execution context for the distributed application.
+     * @experimental
+     */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /** Gets the service provider for dependency resolution. */
+    /**
+     * Gets the service provider for dependency resolution.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
+    /**
+     * Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
+     * @experimental
+     */
     logger(): LoggerPromise;
-    /** Gets the cancellation token for the pipeline operation. */
+    /**
+     * Gets the cancellation token for the pipeline operation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
@@ -7131,16 +7443,28 @@ const PipelineStepContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineS
 /** Provides contextual information for creating pipeline steps from a {@link PipelineStepAnnotation}. */
 export interface PipelineStepFactoryContext {
     toJSON(): MarshalledHandle;
-    /** Gets the pipeline context that has the model and other properties. */
+    /**
+     * Gets the pipeline context that has the model and other properties.
+     * @experimental
+     */
     pipelineContext(): PipelineContextPromise;
-    /** Gets the resource that this factory is associated with. */
+    /**
+     * Gets the resource that this factory is associated with.
+     * @experimental
+     */
     resource(): ResourcePromise;
 }
 
 export interface PipelineStepFactoryContextPromise extends PromiseLike<PipelineStepFactoryContext> {
-    /** Gets the pipeline context that has the model and other properties. */
+    /**
+     * Gets the pipeline context that has the model and other properties.
+     * @experimental
+     */
     pipelineContext(): PipelineContextPromise;
-    /** Gets the resource that this factory is associated with. */
+    /**
+     * Gets the resource that this factory is associated with.
+     * @experimental
+     */
     resource(): ResourcePromise;
 }
 
@@ -7207,6 +7531,7 @@ export interface PipelineSummary {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
+     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise;
     /**
@@ -7222,6 +7547,7 @@ export interface PipelineSummaryPromise extends PromiseLike<PipelineSummary> {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
+     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise;
     /**
@@ -7268,6 +7594,7 @@ class PipelineSummaryImpl implements PipelineSummary {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
+     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise {
         return new PipelineSummaryPromiseImpl(this._addInternal(key, value), this._client);
@@ -7307,12 +7634,18 @@ const PipelineSummaryPromiseImpl = $aspireCreateFluentPromiseClass<PipelineSumma
 /** Provides context to the work callback of a progress interaction. */
 export interface ProgressContext {
     toJSON(): MarshalledHandle;
-    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    /**
+     * Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
 }
 
 export interface ProgressContextPromise extends PromiseLike<ProgressContext> {
-    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    /**
+     * Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
 }
 
@@ -7583,41 +7916,63 @@ const ReferenceExpressionBuilderPromiseImpl = $aspireCreateFluentPromiseClass<Re
 /** Provides context for validating a required command. */
 export interface RequiredCommandValidationContext {
     toJSON(): MarshalledHandle;
-    /** Gets the resolved full path to the command executable. */
+    /**
+     * Gets the resolved full path to the command executable.
+     * @experimental
+     */
     resolvedPath(): Promise<string>;
-    /** Gets the service provider for accessing application services. */
+    /**
+     * Gets the service provider for accessing application services.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets a cancellation token that can be used to cancel the validation. */
+    /**
+     * Gets a cancellation token that can be used to cancel the validation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
+     * @experimental
      */
     success(): RequiredCommandValidationResultPromise;
     /**
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
+     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise;
 }
 
 export interface RequiredCommandValidationContextPromise extends PromiseLike<RequiredCommandValidationContext> {
-    /** Gets the resolved full path to the command executable. */
+    /**
+     * Gets the resolved full path to the command executable.
+     * @experimental
+     */
     resolvedPath(): Promise<string>;
-    /** Gets the service provider for accessing application services. */
+    /**
+     * Gets the service provider for accessing application services.
+     * @experimental
+     */
     services(): ServiceProviderPromise;
-    /** Gets a cancellation token that can be used to cancel the validation. */
+    /**
+     * Gets a cancellation token that can be used to cancel the validation.
+     * @experimental
+     */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
+     * @experimental
      */
     success(): RequiredCommandValidationResultPromise;
     /**
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
+     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise;
 }
@@ -7672,6 +8027,7 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
+     * @experimental
      */
     success(): RequiredCommandValidationResultPromise {
         return new RequiredCommandValidationResultPromiseImpl(this._successInternal(), this._client);
@@ -7691,6 +8047,7 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
+     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise {
         return new RequiredCommandValidationResultPromiseImpl(this._failureInternal(validationMessage), this._client);
@@ -7714,16 +8071,28 @@ const RequiredCommandValidationContextPromiseImpl = $aspireCreateFluentPromiseCl
 /** Represents the result of validating a required command. */
 export interface RequiredCommandValidationResult {
     toJSON(): MarshalledHandle;
-    /** Gets a value indicating whether the command validation succeeded. */
+    /**
+     * Gets a value indicating whether the command validation succeeded.
+     * @experimental
+     */
     isValid(): Promise<boolean>;
-    /** Gets an optional validation message describing why validation failed. */
+    /**
+     * Gets an optional validation message describing why validation failed.
+     * @experimental
+     */
     validationMessage(): Promise<string | null>;
 }
 
 export interface RequiredCommandValidationResultPromise extends PromiseLike<RequiredCommandValidationResult> {
-    /** Gets a value indicating whether the command validation succeeded. */
+    /**
+     * Gets a value indicating whether the command validation succeeded.
+     * @experimental
+     */
     isValid(): Promise<boolean>;
-    /** Gets an optional validation message describing why validation failed. */
+    /**
+     * Gets an optional validation message describing why validation failed.
+     * @experimental
+     */
     validationMessage(): Promise<string | null>;
 }
 
@@ -9294,6 +9663,7 @@ export interface DistributedApplicationBuilder {
      *
      * The pipeline allows adding custom deployment steps that execute during the deploy process.
      * Steps can declare dependencies on other steps to control execution order.
+     * @experimental
      */
     pipeline(): DistributedApplicationPipelinePromise;
     /**
@@ -9301,6 +9671,7 @@ export interface DistributedApplicationBuilder {
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
+     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -9317,6 +9688,7 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a container registry resource
      * @param options Additional options.
+     * @experimental
      */
     addContainerRegistry(name: string, endpoint: string | ParameterResource | Awaitable<ParameterResource>, options?: AddContainerRegistryOptions): ContainerRegistryResourcePromise;
     /**
@@ -9371,6 +9743,7 @@ export interface DistributedApplicationBuilder {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -9378,6 +9751,7 @@ export interface DistributedApplicationBuilder {
      * @param name The name of the resource.
      * @param packageId The package id of the tool.
      * @returns The resource builder.
+     * @experimental
      */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     /**
@@ -9426,6 +9800,7 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a C# application resource
      * @param options Additional options.
+     * @experimental
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -9521,6 +9896,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The pipeline allows adding custom deployment steps that execute during the deploy process.
      * Steps can declare dependencies on other steps to control execution order.
+     * @experimental
      */
     pipeline(): DistributedApplicationPipelinePromise;
     /**
@@ -9528,6 +9904,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
+     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -9544,6 +9921,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a container registry resource
      * @param options Additional options.
+     * @experimental
      */
     addContainerRegistry(name: string, endpoint: string | ParameterResource | Awaitable<ParameterResource>, options?: AddContainerRegistryOptions): ContainerRegistryResourcePromise;
     /**
@@ -9598,6 +9976,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -9605,6 +9984,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @param name The name of the resource.
      * @param packageId The package id of the tool.
      * @returns The resource builder.
+     * @experimental
      */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     /**
@@ -9653,6 +10033,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a C# application resource
      * @param options Additional options.
+     * @experimental
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -9843,6 +10224,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a container registry resource
      * @param options Additional options.
+     * @experimental
      */
     addContainerRegistry(name: string, endpoint: string | ParameterResource | Awaitable<ParameterResource>, options?: AddContainerRegistryOptions): ContainerRegistryResourcePromise {
         let repository = options?.repository;
@@ -9967,6 +10349,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
         const stage = options?.stage;
@@ -9988,6 +10371,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
      * @param name The name of the resource.
      * @param packageId The package id of the tool.
      * @returns The resource builder.
+     * @experimental
      */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._addDotnetToolInternal(name, packageId), this._client);
@@ -10160,6 +10544,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
+     * @experimental
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
@@ -10502,6 +10887,7 @@ export interface DistributedApplicationPipeline {
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
+     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
@@ -10526,6 +10912,7 @@ export interface DistributedApplicationPipelinePromise extends PromiseLike<Distr
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
+     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
@@ -10570,6 +10957,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
+     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise {
         return new DistributedApplicationPipelinePromiseImpl(this._disableBuildOnlyContainerValidationInternal(), this._client);
@@ -10670,6 +11058,7 @@ export interface ExecutionConfigurationBuilder {
      * Adds a certificate trust configuration gatherer to the builder.
      * @param configContextFactory A factory function to create the configuration context.
      * @returns The builder with the configuration gatherer added.
+     * @experimental
      */
     withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise;
 }
@@ -10702,6 +11091,7 @@ export interface ExecutionConfigurationBuilderPromise extends PromiseLike<Execut
      * Adds a certificate trust configuration gatherer to the builder.
      * @param configContextFactory A factory function to create the configuration context.
      * @returns The builder with the configuration gatherer added.
+     * @experimental
      */
     withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise;
 }
@@ -10821,6 +11211,7 @@ class ExecutionConfigurationBuilderImpl implements ExecutionConfigurationBuilder
      * Adds a certificate trust configuration gatherer to the builder.
      * @param configContextFactory A factory function to create the configuration context.
      * @returns The builder with the configuration gatherer added.
+     * @experimental
      */
     withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise {
         return new ExecutionConfigurationBuilderPromiseImpl(this._withCertificateTrustConfigInternal(configContextFactory), this._client);
@@ -12373,15 +12764,20 @@ export interface UserSecretsManager {
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
+     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /** Gets the path to the user secrets file. */
+    /**
+     * Gets the path to the user secrets file.
+     * @experimental
+     */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
+     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12390,6 +12786,7 @@ export interface UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
+     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12412,15 +12809,20 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
+     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /** Gets the path to the user secrets file. */
+    /**
+     * Gets the path to the user secrets file.
+     * @experimental
+     */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
+     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12429,6 +12831,7 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
+     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12476,6 +12879,7 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
+     * @experimental
      */
     async trySetSecret(name: string, value: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name, value };
@@ -12491,6 +12895,7 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
+     * @experimental
      */
     async tryDeleteSecret(name: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name };
@@ -12567,6 +12972,7 @@ export interface ContainerRegistryResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
@@ -12585,6 +12991,7 @@ export interface ContainerRegistryResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
@@ -12610,16 +13017,19 @@ export interface ContainerRegistryResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ContainerRegistryResourcePromise;
     /**
@@ -12629,12 +13039,14 @@ export interface ContainerRegistryResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
     /**
@@ -12684,11 +13096,15 @@ export interface ContainerRegistryResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
@@ -12707,6 +13123,7 @@ export interface ContainerRegistryResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -12766,12 +13183,14 @@ export interface ContainerRegistryResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -12816,6 +13235,7 @@ export interface ContainerRegistryResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -12884,6 +13304,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
@@ -12902,6 +13323,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
@@ -12927,16 +13349,19 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ContainerRegistryResourcePromise;
     /**
@@ -12946,12 +13371,14 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
     /**
@@ -13001,11 +13428,15 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerRegistryResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
@@ -13024,6 +13455,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -13083,12 +13515,14 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -13133,6 +13567,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -13220,6 +13655,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -13253,6 +13689,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise {
         const buildImage = options?.buildImage;
@@ -13314,6 +13751,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise {
         const helpLink = options?.helpLink;
@@ -13333,6 +13771,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -13351,6 +13790,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -13374,6 +13814,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -13393,6 +13834,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -13623,7 +14065,10 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -13675,6 +14120,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
@@ -13711,6 +14157,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -13905,6 +14352,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -13933,6 +14381,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -14085,6 +14534,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -14540,6 +14990,7 @@ export interface ContainerResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
@@ -14725,6 +15176,7 @@ export interface ContainerResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -14743,6 +15195,7 @@ export interface ContainerResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     /**
@@ -14763,6 +15216,7 @@ export interface ContainerResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -14801,16 +15255,19 @@ export interface ContainerResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ContainerResourcePromise;
     /**
@@ -14820,12 +15277,14 @@ export interface ContainerResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
@@ -14995,11 +15454,15 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
@@ -15062,6 +15525,7 @@ export interface ContainerResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise;
     /**
@@ -15073,6 +15537,7 @@ export interface ContainerResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ContainerResourcePromise;
     /**
@@ -15090,6 +15555,7 @@ export interface ContainerResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15107,6 +15573,7 @@ export interface ContainerResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15146,6 +15613,7 @@ export interface ContainerResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -15181,6 +15649,7 @@ export interface ContainerResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15189,6 +15658,7 @@ export interface ContainerResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise;
     /**
@@ -15197,6 +15667,7 @@ export interface ContainerResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -15207,12 +15678,14 @@ export interface ContainerResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15277,6 +15750,7 @@ export interface ContainerResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15349,6 +15823,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
@@ -15534,6 +16009,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -15552,6 +16028,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     /**
@@ -15572,6 +16049,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -15610,16 +16088,19 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ContainerResourcePromise;
     /**
@@ -15629,12 +16110,14 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
@@ -15804,11 +16287,15 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ContainerResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
@@ -15871,6 +16358,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise;
     /**
@@ -15882,6 +16370,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ContainerResourcePromise;
     /**
@@ -15899,6 +16388,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15916,6 +16406,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15955,6 +16446,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -15990,6 +16482,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -15998,6 +16491,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise;
     /**
@@ -16006,6 +16500,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -16016,12 +16511,14 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -16086,6 +16583,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -16178,6 +16676,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -16647,6 +17146,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
         const stage = options?.stage;
@@ -16681,6 +17181,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise {
         const buildImage = options?.buildImage;
@@ -16731,6 +17232,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -16833,6 +17335,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise {
         const helpLink = options?.helpLink;
@@ -16852,6 +17355,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -16870,6 +17374,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -16893,6 +17398,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -16912,6 +17418,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -17614,7 +18121,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -17666,6 +18176,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
@@ -17820,6 +18331,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise {
         let password = options?.password;
@@ -17845,6 +18357,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -17880,6 +18393,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -17915,6 +18429,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -18045,6 +18560,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -18148,6 +18664,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -18169,6 +18686,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -18190,6 +18708,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -18235,6 +18754,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -18263,6 +18783,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -18470,6 +18991,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -19017,6 +19539,7 @@ export interface CSharpAppResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
@@ -19035,6 +19558,7 @@ export interface CSharpAppResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
@@ -19044,6 +19568,7 @@ export interface CSharpAppResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -19095,16 +19620,19 @@ export interface CSharpAppResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): CSharpAppResourcePromise;
     /**
@@ -19114,12 +19642,14 @@ export interface CSharpAppResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
@@ -19295,11 +19825,15 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
@@ -19362,6 +19896,7 @@ export interface CSharpAppResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise;
     /**
@@ -19373,6 +19908,7 @@ export interface CSharpAppResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise;
     /**
@@ -19390,6 +19926,7 @@ export interface CSharpAppResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -19407,6 +19944,7 @@ export interface CSharpAppResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -19446,6 +19984,7 @@ export interface CSharpAppResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -19481,6 +20020,7 @@ export interface CSharpAppResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -19489,6 +20029,7 @@ export interface CSharpAppResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise;
     /**
@@ -19497,6 +20038,7 @@ export interface CSharpAppResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -19507,12 +20049,14 @@ export interface CSharpAppResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -19578,6 +20122,7 @@ export interface CSharpAppResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -19650,6 +20195,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
@@ -19668,6 +20214,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
@@ -19677,6 +20224,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -19728,16 +20276,19 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): CSharpAppResourcePromise;
     /**
@@ -19747,12 +20298,14 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
@@ -19928,11 +20481,15 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): CSharpAppResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
@@ -19995,6 +20552,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise;
     /**
@@ -20006,6 +20564,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise;
     /**
@@ -20023,6 +20582,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20040,6 +20600,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20079,6 +20640,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -20114,6 +20676,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20122,6 +20685,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise;
     /**
@@ -20130,6 +20694,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -20140,12 +20705,14 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20211,6 +20778,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20302,6 +20870,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -20335,6 +20904,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise {
         const buildImage = options?.buildImage;
@@ -20361,6 +20931,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -20509,6 +21080,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise {
         const helpLink = options?.helpLink;
@@ -20528,6 +21100,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -20546,6 +21119,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -20569,6 +21143,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -20588,6 +21163,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -21310,7 +21886,10 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -21362,6 +21941,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
@@ -21516,6 +22096,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise {
         let password = options?.password;
@@ -21541,6 +22122,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -21576,6 +22158,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -21611,6 +22194,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -21741,6 +22325,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -21844,6 +22429,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -21865,6 +22451,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -21886,6 +22473,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -21931,6 +22519,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -21959,6 +22548,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -22178,6 +22768,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -22709,6 +23300,7 @@ export interface DotnetToolResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
@@ -22727,39 +23319,46 @@ export interface DotnetToolResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
+     * @experimental
      */
     withToolPackage(packageId: string): DotnetToolResourcePromise;
     /**
      * Sets the package version for a tool to use.
      * @param version The package version to use
      * @returns The resource builder.
+     * @experimental
      */
     withToolVersion(version: string): DotnetToolResourcePromise;
     /**
      * Allows prerelease versions of the tool to be used
      * @returns The resource builder.
+     * @experimental
      */
     withToolPrerelease(): DotnetToolResourcePromise;
     /**
      * Adds a NuGet package source for tool acquisition.
      * @param source The source to add.
      * @returns The resource builder.
+     * @experimental
      */
     withToolSource(source: string): DotnetToolResourcePromise;
     /**
      * Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
      * @returns The resource builder.
+     * @experimental
      */
     withToolIgnoreExistingFeeds(): DotnetToolResourcePromise;
     /**
      * Configures the resource to treat package source failures as warnings.
      * @returns The resource builder.
+     * @experimental
      */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise;
     /**
@@ -22791,6 +23390,7 @@ export interface DotnetToolResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -22821,16 +23421,19 @@ export interface DotnetToolResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): DotnetToolResourcePromise;
     /**
@@ -22840,12 +23443,14 @@ export interface DotnetToolResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
@@ -23015,11 +23620,15 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
@@ -23082,6 +23691,7 @@ export interface DotnetToolResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise;
     /**
@@ -23093,6 +23703,7 @@ export interface DotnetToolResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise;
     /**
@@ -23110,6 +23721,7 @@ export interface DotnetToolResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23127,6 +23739,7 @@ export interface DotnetToolResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23166,6 +23779,7 @@ export interface DotnetToolResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -23201,6 +23815,7 @@ export interface DotnetToolResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23209,6 +23824,7 @@ export interface DotnetToolResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise;
     /**
@@ -23217,6 +23833,7 @@ export interface DotnetToolResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -23227,12 +23844,14 @@ export interface DotnetToolResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23292,6 +23911,7 @@ export interface DotnetToolResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23364,6 +23984,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
@@ -23382,39 +24003,46 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
+     * @experimental
      */
     withToolPackage(packageId: string): DotnetToolResourcePromise;
     /**
      * Sets the package version for a tool to use.
      * @param version The package version to use
      * @returns The resource builder.
+     * @experimental
      */
     withToolVersion(version: string): DotnetToolResourcePromise;
     /**
      * Allows prerelease versions of the tool to be used
      * @returns The resource builder.
+     * @experimental
      */
     withToolPrerelease(): DotnetToolResourcePromise;
     /**
      * Adds a NuGet package source for tool acquisition.
      * @param source The source to add.
      * @returns The resource builder.
+     * @experimental
      */
     withToolSource(source: string): DotnetToolResourcePromise;
     /**
      * Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
      * @returns The resource builder.
+     * @experimental
      */
     withToolIgnoreExistingFeeds(): DotnetToolResourcePromise;
     /**
      * Configures the resource to treat package source failures as warnings.
      * @returns The resource builder.
+     * @experimental
      */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise;
     /**
@@ -23446,6 +24074,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -23476,16 +24105,19 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): DotnetToolResourcePromise;
     /**
@@ -23495,12 +24127,14 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
@@ -23670,11 +24304,15 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): DotnetToolResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
@@ -23737,6 +24375,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise;
     /**
@@ -23748,6 +24387,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise;
     /**
@@ -23765,6 +24405,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23782,6 +24423,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23821,6 +24463,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -23856,6 +24499,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23864,6 +24508,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise;
     /**
@@ -23872,6 +24517,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -23882,12 +24528,14 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -23947,6 +24595,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -24038,6 +24687,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -24071,6 +24721,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise {
         const buildImage = options?.buildImage;
@@ -24092,6 +24743,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Sets the package identifier for the tool configuration associated with the resource builder.
      * @param packageId The package identifier to assign to the tool configuration. Cannot be null.
      * @returns The resource builder.
+     * @experimental
      */
     withToolPackage(packageId: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolPackageInternal(packageId), this._client);
@@ -24111,6 +24763,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Sets the package version for a tool to use.
      * @param version The package version to use
      * @returns The resource builder.
+     * @experimental
      */
     withToolVersion(version: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolVersionInternal(version), this._client);
@@ -24129,6 +24782,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Allows prerelease versions of the tool to be used
      * @returns The resource builder.
+     * @experimental
      */
     withToolPrerelease(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolPrereleaseInternal(), this._client);
@@ -24148,6 +24802,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Adds a NuGet package source for tool acquisition.
      * @param source The source to add.
      * @returns The resource builder.
+     * @experimental
      */
     withToolSource(source: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolSourceInternal(source), this._client);
@@ -24166,6 +24821,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
      * @returns The resource builder.
+     * @experimental
      */
     withToolIgnoreExistingFeeds(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolIgnoreExistingFeedsInternal(), this._client);
@@ -24184,6 +24840,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures the resource to treat package source failures as warnings.
      * @returns The resource builder.
+     * @experimental
      */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withToolIgnoreFailedSourcesInternal(), this._client);
@@ -24274,6 +24931,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -24355,6 +25013,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise {
         const helpLink = options?.helpLink;
@@ -24374,6 +25033,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -24392,6 +25052,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -24415,6 +25076,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -24434,6 +25096,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -25136,7 +25799,10 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -25188,6 +25854,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
@@ -25342,6 +26009,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise {
         let password = options?.password;
@@ -25367,6 +26035,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -25402,6 +26071,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -25437,6 +26107,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -25567,6 +26238,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -25670,6 +26342,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -25691,6 +26364,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -25712,6 +26386,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -25757,6 +26432,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -25785,6 +26461,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -25985,6 +26662,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -26527,6 +27205,7 @@ export interface ExecutableResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
@@ -26545,6 +27224,7 @@ export interface ExecutableResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
@@ -26576,6 +27256,7 @@ export interface ExecutableResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -26606,16 +27287,19 @@ export interface ExecutableResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ExecutableResourcePromise;
     /**
@@ -26625,12 +27309,14 @@ export interface ExecutableResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
@@ -26800,11 +27486,15 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
@@ -26867,6 +27557,7 @@ export interface ExecutableResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise;
     /**
@@ -26878,6 +27569,7 @@ export interface ExecutableResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ExecutableResourcePromise;
     /**
@@ -26895,6 +27587,7 @@ export interface ExecutableResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -26912,6 +27605,7 @@ export interface ExecutableResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -26951,6 +27645,7 @@ export interface ExecutableResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -26986,6 +27681,7 @@ export interface ExecutableResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -26994,6 +27690,7 @@ export interface ExecutableResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise;
     /**
@@ -27002,6 +27699,7 @@ export interface ExecutableResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -27012,12 +27710,14 @@ export interface ExecutableResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27077,6 +27777,7 @@ export interface ExecutableResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27149,6 +27850,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
@@ -27167,6 +27869,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
@@ -27198,6 +27901,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -27228,16 +27932,19 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ExecutableResourcePromise;
     /**
@@ -27247,12 +27954,14 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
@@ -27422,11 +28131,15 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExecutableResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
@@ -27489,6 +28202,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise;
     /**
@@ -27500,6 +28214,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ExecutableResourcePromise;
     /**
@@ -27517,6 +28232,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27534,6 +28250,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27573,6 +28290,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -27608,6 +28326,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27616,6 +28335,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise;
     /**
@@ -27624,6 +28344,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -27634,12 +28355,14 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27699,6 +28422,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -27797,6 +28521,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -27830,6 +28555,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise {
         const buildImage = options?.buildImage;
@@ -27922,6 +28648,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -28003,6 +28730,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise {
         const helpLink = options?.helpLink;
@@ -28022,6 +28750,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -28040,6 +28769,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -28063,6 +28793,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -28082,6 +28813,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -28784,7 +29516,10 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -28836,6 +29571,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
@@ -28990,6 +29726,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise {
         let password = options?.password;
@@ -29015,6 +29752,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -29050,6 +29788,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -29085,6 +29824,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -29215,6 +29955,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -29318,6 +30059,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -29339,6 +30081,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -29360,6 +30103,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -29405,6 +30149,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -29433,6 +30178,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -29633,6 +30379,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -30162,6 +30909,7 @@ export interface ExternalServiceResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
@@ -30180,6 +30928,7 @@ export interface ExternalServiceResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
@@ -30210,16 +30959,19 @@ export interface ExternalServiceResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ExternalServiceResourcePromise;
     /**
@@ -30229,12 +30981,14 @@ export interface ExternalServiceResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
     /**
@@ -30284,11 +31038,15 @@ export interface ExternalServiceResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
@@ -30307,6 +31065,7 @@ export interface ExternalServiceResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -30366,12 +31125,14 @@ export interface ExternalServiceResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -30416,6 +31177,7 @@ export interface ExternalServiceResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -30484,6 +31246,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
@@ -30502,6 +31265,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
@@ -30532,16 +31296,19 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ExternalServiceResourcePromise;
     /**
@@ -30551,12 +31318,14 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
     /**
@@ -30606,11 +31375,15 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ExternalServiceResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
@@ -30629,6 +31402,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -30688,12 +31462,14 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -30738,6 +31514,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -30825,6 +31602,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -30858,6 +31636,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise {
         const buildImage = options?.buildImage;
@@ -30943,6 +31722,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise {
         const helpLink = options?.helpLink;
@@ -30962,6 +31742,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -30980,6 +31761,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -31003,6 +31785,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -31022,6 +31805,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -31252,7 +32036,10 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -31304,6 +32091,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
@@ -31340,6 +32128,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -31534,6 +32323,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -31562,6 +32352,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -31714,6 +32505,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -32170,6 +32962,7 @@ export interface ParameterResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
@@ -32188,6 +32981,7 @@ export interface ParameterResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
@@ -32226,16 +33020,19 @@ export interface ParameterResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ParameterResourcePromise;
     /**
@@ -32245,12 +33042,14 @@ export interface ParameterResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
     /**
@@ -32300,11 +33099,15 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
@@ -32323,6 +33126,7 @@ export interface ParameterResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -32382,12 +33186,14 @@ export interface ParameterResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -32432,6 +33238,7 @@ export interface ParameterResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -32500,6 +33307,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
@@ -32518,6 +33326,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
@@ -32556,16 +33365,19 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ParameterResourcePromise;
     /**
@@ -32575,12 +33387,14 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
     /**
@@ -32630,11 +33444,15 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ParameterResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
@@ -32653,6 +33471,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -32712,12 +33531,14 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -32762,6 +33583,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -32850,6 +33672,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -32883,6 +33706,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise {
         const buildImage = options?.buildImage;
@@ -32985,6 +33809,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise {
         const helpLink = options?.helpLink;
@@ -33004,6 +33829,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -33022,6 +33848,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -33045,6 +33872,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -33064,6 +33892,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -33294,7 +34123,10 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ParameterResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -33346,6 +34178,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
@@ -33382,6 +34215,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -33576,6 +34410,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -33604,6 +34439,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -33756,6 +34592,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -34213,6 +35050,7 @@ export interface ProjectResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
@@ -34231,6 +35069,7 @@ export interface ProjectResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
@@ -34240,6 +35079,7 @@ export interface ProjectResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -34291,16 +35131,19 @@ export interface ProjectResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ProjectResourcePromise;
     /**
@@ -34310,12 +35153,14 @@ export interface ProjectResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
@@ -34491,11 +35336,15 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
@@ -34558,6 +35407,7 @@ export interface ProjectResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise;
     /**
@@ -34569,6 +35419,7 @@ export interface ProjectResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ProjectResourcePromise;
     /**
@@ -34586,6 +35437,7 @@ export interface ProjectResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -34603,6 +35455,7 @@ export interface ProjectResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -34642,6 +35495,7 @@ export interface ProjectResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -34677,6 +35531,7 @@ export interface ProjectResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -34685,6 +35540,7 @@ export interface ProjectResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise;
     /**
@@ -34693,6 +35549,7 @@ export interface ProjectResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -34703,12 +35560,14 @@ export interface ProjectResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -34774,6 +35633,7 @@ export interface ProjectResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -34846,6 +35706,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
@@ -34864,6 +35725,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
@@ -34873,6 +35735,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -34924,16 +35787,19 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ProjectResourcePromise;
     /**
@@ -34943,12 +35809,14 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
@@ -35124,11 +35992,15 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ProjectResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
@@ -35191,6 +36063,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise;
     /**
@@ -35202,6 +36075,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ProjectResourcePromise;
     /**
@@ -35219,6 +36093,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -35236,6 +36111,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -35275,6 +36151,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -35310,6 +36187,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -35318,6 +36196,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise;
     /**
@@ -35326,6 +36205,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -35336,12 +36216,14 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -35407,6 +36289,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -35499,6 +36382,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -35532,6 +36416,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise {
         const buildImage = options?.buildImage;
@@ -35558,6 +36443,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -35706,6 +36592,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise {
         const helpLink = options?.helpLink;
@@ -35725,6 +36612,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -35743,6 +36631,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -35766,6 +36655,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -35785,6 +36675,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -36507,7 +37398,10 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -36559,6 +37453,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
@@ -36713,6 +37608,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise {
         let password = options?.password;
@@ -36738,6 +37634,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -36773,6 +37670,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -36808,6 +37706,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -36938,6 +37837,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -37041,6 +37941,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -37062,6 +37963,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -37083,6 +37985,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -37128,6 +38031,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -37156,6 +38060,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -37375,6 +38280,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -37906,6 +38812,7 @@ export interface TestDatabaseResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
@@ -38091,6 +38998,7 @@ export interface TestDatabaseResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     /**
@@ -38109,6 +39017,7 @@ export interface TestDatabaseResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     /**
@@ -38129,6 +39038,7 @@ export interface TestDatabaseResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -38167,16 +39077,19 @@ export interface TestDatabaseResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestDatabaseResourcePromise;
     /**
@@ -38186,12 +39099,14 @@ export interface TestDatabaseResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
@@ -38361,11 +39276,15 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
@@ -38428,6 +39347,7 @@ export interface TestDatabaseResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise;
     /**
@@ -38439,6 +39359,7 @@ export interface TestDatabaseResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise;
     /**
@@ -38456,6 +39377,7 @@ export interface TestDatabaseResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -38473,6 +39395,7 @@ export interface TestDatabaseResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -38512,6 +39435,7 @@ export interface TestDatabaseResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -38547,6 +39471,7 @@ export interface TestDatabaseResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -38555,6 +39480,7 @@ export interface TestDatabaseResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise;
     /**
@@ -38563,6 +39489,7 @@ export interface TestDatabaseResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -38573,12 +39500,14 @@ export interface TestDatabaseResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -38643,6 +39572,7 @@ export interface TestDatabaseResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -38715,6 +39645,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
@@ -38900,6 +39831,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     /**
@@ -38918,6 +39850,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     /**
@@ -38938,6 +39871,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -38976,16 +39910,19 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestDatabaseResourcePromise;
     /**
@@ -38995,12 +39932,14 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
@@ -39170,11 +40109,15 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestDatabaseResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
@@ -39237,6 +40180,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise;
     /**
@@ -39248,6 +40192,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise;
     /**
@@ -39265,6 +40210,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -39282,6 +40228,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -39321,6 +40268,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -39356,6 +40304,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -39364,6 +40313,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise;
     /**
@@ -39372,6 +40322,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -39382,12 +40333,14 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -39452,6 +40405,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -39543,6 +40497,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -40012,6 +40967,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
         const stage = options?.stage;
@@ -40046,6 +41002,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise {
         const buildImage = options?.buildImage;
@@ -40096,6 +41053,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -40198,6 +41156,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise {
         const helpLink = options?.helpLink;
@@ -40217,6 +41176,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -40235,6 +41195,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -40258,6 +41219,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -40277,6 +41239,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -40979,7 +41942,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -41031,6 +41997,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
@@ -41185,6 +42152,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise {
         let password = options?.password;
@@ -41210,6 +42178,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -41245,6 +42214,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -41280,6 +42250,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -41410,6 +42381,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -41513,6 +42485,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -41534,6 +42507,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -41555,6 +42529,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -41600,6 +42575,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -41628,6 +42604,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -41835,6 +42812,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -42382,6 +43360,7 @@ export interface TestRedisResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
@@ -42567,6 +43546,7 @@ export interface TestRedisResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     /**
@@ -42585,6 +43565,7 @@ export interface TestRedisResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     /**
@@ -42605,6 +43586,7 @@ export interface TestRedisResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -42643,16 +43625,19 @@ export interface TestRedisResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestRedisResourcePromise;
     /**
@@ -42662,12 +43647,14 @@ export interface TestRedisResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
@@ -42853,11 +43840,15 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
@@ -42920,6 +43911,7 @@ export interface TestRedisResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise;
     /**
@@ -42931,6 +43923,7 @@ export interface TestRedisResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestRedisResourcePromise;
     /**
@@ -42948,6 +43941,7 @@ export interface TestRedisResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -42965,6 +43959,7 @@ export interface TestRedisResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43004,6 +43999,7 @@ export interface TestRedisResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -43039,6 +44035,7 @@ export interface TestRedisResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43047,6 +44044,7 @@ export interface TestRedisResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise;
     /**
@@ -43055,6 +44053,7 @@ export interface TestRedisResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -43065,12 +44064,14 @@ export interface TestRedisResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43141,6 +44142,7 @@ export interface TestRedisResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43275,6 +44277,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
@@ -43460,6 +44463,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     /**
@@ -43478,6 +44482,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     /**
@@ -43498,6 +44503,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -43536,16 +44542,19 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestRedisResourcePromise;
     /**
@@ -43555,12 +44564,14 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
@@ -43746,11 +44757,15 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestRedisResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
@@ -43813,6 +44828,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise;
     /**
@@ -43824,6 +44840,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestRedisResourcePromise;
     /**
@@ -43841,6 +44858,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43858,6 +44876,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43897,6 +44916,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -43932,6 +44952,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -43940,6 +44961,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise;
     /**
@@ -43948,6 +44970,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -43958,12 +44981,14 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -44034,6 +45059,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -44187,6 +45213,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -44656,6 +45683,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
         const stage = options?.stage;
@@ -44690,6 +45718,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise {
         const buildImage = options?.buildImage;
@@ -44740,6 +45769,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -44842,6 +45872,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise {
         const helpLink = options?.helpLink;
@@ -44861,6 +45892,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -44879,6 +45911,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -44902,6 +45935,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -44921,6 +45955,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -45659,7 +46694,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -45711,6 +46749,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
@@ -45865,6 +46904,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise {
         let password = options?.password;
@@ -45890,6 +46930,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -45925,6 +46966,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -45960,6 +47002,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -46090,6 +47133,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -46193,6 +47237,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -46214,6 +47259,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -46235,6 +47281,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -46280,6 +47327,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -46308,6 +47356,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -46539,6 +47588,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -47355,6 +48405,7 @@ export interface TestVaultResource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
@@ -47540,6 +48591,7 @@ export interface TestVaultResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     /**
@@ -47558,6 +48610,7 @@ export interface TestVaultResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     /**
@@ -47578,6 +48631,7 @@ export interface TestVaultResource {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -47616,16 +48670,19 @@ export interface TestVaultResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestVaultResourcePromise;
     /**
@@ -47635,12 +48692,14 @@ export interface TestVaultResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
@@ -47810,11 +48869,15 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
@@ -47877,6 +48940,7 @@ export interface TestVaultResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise;
     /**
@@ -47888,6 +48952,7 @@ export interface TestVaultResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestVaultResourcePromise;
     /**
@@ -47905,6 +48970,7 @@ export interface TestVaultResource {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -47922,6 +48988,7 @@ export interface TestVaultResource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -47961,6 +49028,7 @@ export interface TestVaultResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -47996,6 +49064,7 @@ export interface TestVaultResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48004,6 +49073,7 @@ export interface TestVaultResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise;
     /**
@@ -48012,6 +49082,7 @@ export interface TestVaultResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -48022,12 +49093,14 @@ export interface TestVaultResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48092,6 +49165,7 @@ export interface TestVaultResource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48166,6 +49240,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
@@ -48351,6 +49426,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     /**
@@ -48369,6 +49445,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     /**
@@ -48389,6 +49466,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -48427,16 +49505,19 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestVaultResourcePromise;
     /**
@@ -48446,12 +49527,14 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
@@ -48621,11 +49704,15 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): TestVaultResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
@@ -48688,6 +49775,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise;
     /**
@@ -48699,6 +49787,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestVaultResourcePromise;
     /**
@@ -48716,6 +49805,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48733,6 +49823,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48772,6 +49863,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -48807,6 +49899,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48815,6 +49908,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise;
     /**
@@ -48823,6 +49917,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
@@ -48833,12 +49928,14 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48903,6 +50000,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -48996,6 +50094,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -49465,6 +50564,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {
         const stage = options?.stage;
@@ -49499,6 +50599,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise {
         const buildImage = options?.buildImage;
@@ -49549,6 +50650,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -49651,6 +50753,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise {
         const helpLink = options?.helpLink;
@@ -49670,6 +50773,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -49688,6 +50792,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -49711,6 +50816,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -49730,6 +50836,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -50432,7 +51539,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -50484,6 +51594,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
@@ -50638,6 +51749,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise {
         let password = options?.password;
@@ -50663,6 +51775,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -50698,6 +51811,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);
@@ -50733,6 +51847,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -50863,6 +51978,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -50966,6 +52082,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -50987,6 +52104,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -51008,6 +52126,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -51053,6 +52172,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -51081,6 +52201,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -51288,6 +52409,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -51881,6 +53003,7 @@ export interface ComputeResource {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise;
     /**
@@ -51889,6 +53012,7 @@ export interface ComputeResource {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ComputeResourcePromise;
     /**
@@ -51897,6 +53021,7 @@ export interface ComputeResource {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise;
 }
@@ -51920,6 +53045,7 @@ export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise;
     /**
@@ -51928,6 +53054,7 @@ export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ComputeResourcePromise;
     /**
@@ -51936,6 +53063,7 @@ export interface ComputeResourcePromise extends PromiseLike<ComputeResource> {
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise;
 }
@@ -51996,6 +53124,7 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
      * Multiple callbacks can be registered on the same resource, and they will be invoked in the order they were added.
      * @param callback The asynchronous callback to configure push options.
      * @returns The resource builder.
+     * @experimental
      */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
@@ -52017,6 +53146,7 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
      * Use this with `withRemoteImageTag` to fully customize the image reference used for container push operations.
      * @param remoteImageName The remote image name (e.g., "myapp" or "myorg/myapp").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageName(remoteImageName: string): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._withRemoteImageNameInternal(remoteImageName), this._client);
@@ -52038,6 +53168,7 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
      * Use this with `withRemoteImageName` to fully customize the image reference used for container push operations.
      * @param remoteImageTag The remote image tag (e.g., "latest", "v1.0.0").
      * @returns The resource builder.
+     * @experimental
      */
     withRemoteImageTag(remoteImageTag: string): ComputeResourcePromise {
         return new ComputeResourcePromiseImpl(this._withRemoteImageTagInternal(remoteImageTag), this._client);
@@ -52126,6 +53257,7 @@ export interface Resource {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
@@ -52144,6 +53276,7 @@ export interface Resource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
@@ -52169,16 +53302,19 @@ export interface Resource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ResourcePromise;
     /**
@@ -52188,12 +53324,14 @@ export interface Resource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
     /**
@@ -52243,11 +53381,15 @@ export interface Resource {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
@@ -52266,6 +53408,7 @@ export interface Resource {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise;
     /**
@@ -52325,12 +53468,14 @@ export interface Resource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     /**
@@ -52375,6 +53520,7 @@ export interface Resource {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise;
     /**
@@ -52443,6 +53589,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
@@ -52461,6 +53608,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
@@ -52486,16 +53634,19 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ResourcePromise;
     /**
@@ -52505,12 +53656,14 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
     /**
@@ -52560,11 +53713,15 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withCommand(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, options?: WithCommandOptions): ResourcePromise;
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
@@ -52583,6 +53740,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise;
     /**
@@ -52642,12 +53800,14 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     /**
@@ -52692,6 +53852,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise;
     /**
@@ -52780,6 +53941,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * indicating that the resource should use the specified container registry for container image operations.
      * @param registry The container registry resource builder.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
@@ -52813,6 +53975,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise {
         const buildImage = options?.buildImage;
@@ -52874,6 +54037,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise {
         const helpLink = options?.helpLink;
@@ -52893,6 +54057,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withSessionLifetime(): ResourcePromise {
         return new ResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -52911,6 +54076,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
+     * @experimental
      */
     withPersistentLifetime(): ResourcePromise {
         return new ResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -52934,6 +54100,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
+     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -52953,6 +54120,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
+     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -53183,7 +54351,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds a command to the resource that starts a local process when invoked. */
+    /**
+     * Adds a command to the resource that starts a local process when invoked.
+     * @experimental
+     */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._withProcessCommandInternal(commandName, displayName, options), this._client);
     }
@@ -53235,6 +54406,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Adds a command to the resource that starts a local process created by a callback when invoked.
      * @param options Additional options.
+     * @experimental
      * @deprecated Use withProcessCommand with createProcessSpec in the options object instead.
      */
     withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
@@ -53271,6 +54443,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * ```
      * @param callback The callback to invoke when HTTPS is enabled. Receives an `HttpsEndpointUpdateCallbackContext` providing access to the service provider, resource, and application model.
      * @returns The updated resource builder.
+     * @experimental
      */
     subscribeHttpsEndpointsUpdate(callback: (obj: HttpsEndpointUpdateCallbackContext) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._subscribeHttpsEndpointsUpdateInternal(callback), this._client);
@@ -53465,6 +54638,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -53493,6 +54667,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
+     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -53645,6 +54820,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Configures container build options for a compute resource using an async callback.
      * @param callback An async callback to configure container build options.
      * @returns A reference to the `IResourceBuilder`1`.
+     * @experimental
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._withContainerBuildOptionsInternal(callback), this._client);
@@ -54459,6 +55635,7 @@ export interface ResourceWithEndpoints {
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -54541,6 +55718,7 @@ export interface ResourceWithEndpoints {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -54559,6 +55737,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -54641,6 +55820,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -54680,6 +55860,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      * to discover and proxy the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise {
         const path = options?.path;
@@ -55043,6 +56224,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
+     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise {
         const path = options?.path;
@@ -55185,6 +56367,7 @@ export interface ResourceWithEnvironment {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ResourceWithEnvironmentPromise;
     /**
@@ -55196,6 +56379,7 @@ export interface ResourceWithEnvironment {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise;
     /**
@@ -55213,6 +56397,7 @@ export interface ResourceWithEnvironment {
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise;
     /** Configures environment with callback (test version) */
@@ -55300,6 +56485,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ResourceWithEnvironmentPromise;
     /**
@@ -55311,6 +56497,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise;
     /**
@@ -55328,6 +56515,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise;
     /** Configures environment with callback (test version) */
@@ -55542,6 +56730,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * ```
      * @param options Additional options.
      * @returns The resource builder.
+     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ResourceWithEnvironmentPromise {
         let password = options?.password;
@@ -55567,6 +56756,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
+     * @experimental
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -55602,6 +56792,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * ```
      * @param callback The callback to configure the resource to use a certificate key pair.
      * @returns The updated resource builder.
+     * @experimental
      */
     withHttpsCertificateConfiguration(callback: (arg: HttpsCertificateConfigurationCallbackAnnotationContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withHttpsCertificateConfigurationInternal(callback), this._client);

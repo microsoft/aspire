@@ -470,6 +470,12 @@ internal sealed class DcpUpstreamAdapter : IHex1bTerminalWorkloadAdapter
         }
     }
 
+    internal void ReportConsumerListenerFailure(Exception error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        Complete(error);
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_disposed)

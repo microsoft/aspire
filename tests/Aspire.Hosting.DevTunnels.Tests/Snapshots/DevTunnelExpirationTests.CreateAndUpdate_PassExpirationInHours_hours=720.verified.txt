@@ -1,0 +1,18 @@
+﻿[
+  [
+    create,
+    mytunnel,
+    --expiration,
+    720h,
+    --json,
+    --nologo
+  ],
+  [
+    update,
+    mytunnel,
+    --expiration,
+    720h,
+    --json,
+    --nologo
+  ]
+]

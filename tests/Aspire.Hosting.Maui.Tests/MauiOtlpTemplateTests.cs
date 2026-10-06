@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Maui;
 using Aspire.Hosting.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
@@ -32,7 +33,7 @@ public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             platformResource.Resource,
             DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.True(envVars.ContainsKey("OTEL_SERVICE_NAME"),
             "Expected OTEL_SERVICE_NAME to be set on MAUI platform resource");
@@ -59,7 +60,7 @@ public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             platformResource.Resource,
             DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         Assert.True(envVars.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"),
             "Expected OTEL_RESOURCE_ATTRIBUTES to be set on MAUI platform resource");
@@ -82,7 +83,7 @@ public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
         var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
             androidDevice.Resource,
             DistributedApplicationOperation.Run,
-            TestServiceProvider.Instance);
+            TestServiceProvider.Instance).DefaultTimeout();
 
         // OTEL_EXPORTER_OTLP_ENDPOINT should be present (set by WithOtlpExporter)
         Assert.True(envVars.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"),

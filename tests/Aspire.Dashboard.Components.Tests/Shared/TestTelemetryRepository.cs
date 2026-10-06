@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Tests.Shared;
 
@@ -13,9 +13,9 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
 
     public bool IsReadOnly => inner.IsReadOnly;
     public bool HasDisplayedMaxLogLimitMessage { get => inner.HasDisplayedMaxLogLimitMessage; set => inner.HasDisplayedMaxLogLimitMessage = value; }
-    public Message? MaxLogLimitMessage { get => inner.MaxLogLimitMessage; set => inner.MaxLogLimitMessage = value; }
+    public DashboardMessageBarReference? MaxLogLimitMessage { get => inner.MaxLogLimitMessage; set => inner.MaxLogLimitMessage = value; }
     public bool HasDisplayedMaxTraceLimitMessage { get => inner.HasDisplayedMaxTraceLimitMessage; set => inner.HasDisplayedMaxTraceLimitMessage = value; }
-    public Message? MaxTraceLimitMessage { get => inner.MaxTraceLimitMessage; set => inner.MaxTraceLimitMessage = value; }
+    public DashboardMessageBarReference? MaxTraceLimitMessage { get => inner.MaxTraceLimitMessage; set => inner.MaxTraceLimitMessage = value; }
 
     public List<OtlpResource> GetResources(bool includeUninstrumentedPeers = false) => inner.GetResources(includeUninstrumentedPeers);
     public List<OtlpResource> GetResourcesByName(string name, bool includeUninstrumentedPeers = false) => inner.GetResourcesByName(name, includeUninstrumentedPeers);

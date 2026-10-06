@@ -29,7 +29,6 @@ public sealed class TerminalCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        await auto.RunCommandAsync("aspire config set features.terminalCommandsEnabled true -g", counter);
         await auto.AspireNewAsync("TerminalSupportApp", counter, template: AspireTemplate.ExpressReact);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TerminalSupportApp", "apphost.mts");

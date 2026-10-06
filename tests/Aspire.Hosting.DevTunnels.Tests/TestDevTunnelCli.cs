@@ -10,6 +10,7 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
 {
     private readonly ConcurrentQueue<TestDevTunnelCliResult> _createResults = new();
     private readonly ConcurrentQueue<TestDevTunnelCliResult> _updateResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _resetAccessResults = new();
 
     public TestDevTunnelCli()
         : base("test-devtunnel")
@@ -24,28 +25,26 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
     public void EnqueueUpdateResult(int exitCode, string? output = null, string? error = null)
         => _updateResults.Enqueue(new(exitCode, output, error));
 
-    public override Task<int> CreateTunnelAsync(
-        string? tunnelId = null,
-        DevTunnelOptions? options = null,
-        TextWriter? outputWriter = null,
-        TextWriter? errorWriter = null,
-        ILogger? logger = null,
-        CancellationToken cancellationToken = default)
-    {
-        Calls.Enqueue(new(nameof(CreateTunnelAsync), tunnelId));
-        return CompleteAsync(_createResults, outputWriter, errorWriter, cancellationToken);
-    }
+    public void EnqueueResetAccessResult(int exitCode, string? output = null, string? error = null)
+        => _resetAccessResults.Enqueue(new(exitCode, output, error));
 
-    public override Task<int> UpdateTunnelAsync(
-        string tunnelId,
-        DevTunnelOptions? options = null,
+    protected override Task<int> RunAsync(
+        string[] args,
         TextWriter? outputWriter = null,
         TextWriter? errorWriter = null,
         ILogger? logger = null,
         CancellationToken cancellationToken = default)
     {
-        Calls.Enqueue(new(nameof(UpdateTunnelAsync), tunnelId));
-        return CompleteAsync(_updateResults, outputWriter, errorWriter, cancellationToken);
+        var (method, tunnelId, results) = args switch
+        {
+            ["create", ..] => (nameof(CreateTunnelAsync), args.Length > 1 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : null, _createResults),
+            ["update", var id, ..] => (nameof(UpdateTunnelAsync), id, _updateResults),
+            ["access", "reset", var id, ..] => (nameof(ResetAccessAsync), id, _resetAccessResults),
+            _ => throw new InvalidOperationException($"Unexpected test devtunnel command: {string.Join(" ", args)}")
+        };
+
+        Calls.Enqueue(new(method, tunnelId, args));
+        return CompleteAsync(results, outputWriter, errorWriter, cancellationToken);
     }
 
     private static Task<int> CompleteAsync(
@@ -75,6 +74,6 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
     }
 }
 
-internal sealed record TestDevTunnelCliCall(string Method, string? TunnelId);
+internal sealed record TestDevTunnelCliCall(string Method, string? TunnelId, string[] Arguments);
 
 internal sealed record TestDevTunnelCliResult(int ExitCode, string? Output, string? Error);

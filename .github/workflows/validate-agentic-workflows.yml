@@ -1,0 +1,83 @@
+name: Validate Agentic Workflows
+
+# Agentic workflow Markdown sources and their generated .lock.yml files are excluded from the
+# top-level CI skip gate (eng/github-ci/ci-skip-entirely-patterns.txt), so a PR touching only those
+# files never triggers the main build/test workflow. This dedicated job gives them their own
+# deterministic, path-triggered validation: recompile the Markdown sources with the repository-pinned
+# gh-aw CLI, prove the committed .lock.yml/agentics-maintenance files are not stale, and run the
+# trait-scoped agentic contracts in Infrastructure.Tests. See
+# https://github.com/microsoft/aspire/issues/20446.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/**/*.md
+      - '!.github/workflows/**/README.md'
+      - .github/workflows/**/*.lock.yml
+      - .github/workflows/agentics-maintenance*.yml
+      - .github/workflows/copilot-setup-steps.yml
+      - .github/aw/actions-lock.json
+      - .github/actionlint.yaml
+      - .github/workflows/validate-agentic-workflows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Compile, lint, and test agentic workflows
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep this pinned to the same gh-aw release as copilot-setup-steps.yml so the recompiled
+      # workflows are byte-for-byte comparable with what a contributor generates locally; see
+      # .github/workflows/README.md.
+      - name: Install gh-aw extension
+        uses: github/gh-aw-actions/setup-cli@f3b81cdb3070066a47faa9bdf440f4f1dc78b1f0 # v0.89.17
+        with:
+          version: v0.89.17
+
+      - name: Compile agentic workflows (schema and action-pin validation)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Purging catches source deletions that leave orphaned generated workflows. Refreshing
+          # action pins ensures a committed edit to actions-lock.json cannot survive validation.
+          gh aw compile --purge --force-refresh-action-pins \
+            --validate --no-check-update
+
+      - name: Verify generated files are up to date
+        run: |
+          set -euo pipefail
+          changes=$(git status --porcelain --untracked-files=all -- \
+            '.github/aw/actions-lock.json' \
+            '.github/workflows/*.lock.yml' \
+            '.github/workflows/agentics-maintenance*.yml')
+          if [[ -n "$changes" ]]; then
+            echo "Generated agentic workflow files are not up to date:"
+            printf '%s\n' "$changes"
+            exit 1
+          fi
+
+      - name: Lint generated agentic workflows
+        run: gh aw lint --shellcheck
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Run Infrastructure.Tests agentic workflow contracts
+        # Class-level traits include generated-workflow, trigger/drift, and process-runner contracts.
+        # Main CI covers selector routing when the trigger map or lint policy changes.
+        run: |
+          dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
+            --no-launch-profile -- \
+            --filter-trait "Category=AgenticWorkflow" \
+            --filter-not-trait "quarantined=true" \
+            --filter-not-trait "outerloop=true"

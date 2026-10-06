@@ -7,7 +7,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class ServiceBusPublicApiTests
+public class ServiceBusPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void CtorAzureServiceBusEmulatorResourceShouldThrowWhenInnerResourceIsNull()
@@ -37,7 +37,7 @@ public class ServiceBusPublicApiTests
     [InlineData(true)]
     public void AddAzureServiceBusShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureServiceBus(name);
@@ -67,7 +67,7 @@ public class ServiceBusPublicApiTests
     [Obsolete($"This method is obsolete because it has the wrong return type and will be removed in a future version. Use AddServiceBusQueue instead to add an Azure Service Bus Queue.")]
     public void AddQueueShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus");
         var name = isNull ? null! : string.Empty;
 
@@ -96,7 +96,7 @@ public class ServiceBusPublicApiTests
     [InlineData(true)]
     public void AddServiceBusQueueShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var testBuilder = TestDistributedApplicationBuilder.Create();
+        var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus");
         var name = isNull ? null! : string.Empty;
 
@@ -123,7 +123,7 @@ public class ServiceBusPublicApiTests
     [Fact]
     public void WithPropertiesShouldThrowWhenConfigureIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus").AddServiceBusQueue("service-queue");
         Action<AzureServiceBusQueueResource> configure = null!;
 
@@ -150,7 +150,7 @@ public class ServiceBusPublicApiTests
     [InlineData(true)]
     public void AddServiceBusTopicShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var testBuilder = TestDistributedApplicationBuilder.Create();
+        var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus");
         var name = isNull ? null! : string.Empty;
 
@@ -177,7 +177,7 @@ public class ServiceBusPublicApiTests
     [Fact]
     public void WithPropertiesTopicShouldThrowWhenConfigureIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus").AddServiceBusTopic("service-topic");
         Action<AzureServiceBusTopicResource> configure = null!;
 
@@ -204,7 +204,7 @@ public class ServiceBusPublicApiTests
     [InlineData(true)]
     public void AddServiceBusSubscriptionShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        var testBuilder = TestDistributedApplicationBuilder.Create();
+        var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus")
             .AddServiceBusTopic("service-topic");
         var name = isNull ? null! : string.Empty;
@@ -232,7 +232,7 @@ public class ServiceBusPublicApiTests
     [Fact]
     public void WithPropertiesSubscriptionShouldThrowWhenConfigureIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus")
             .AddServiceBusTopic("service-topic")
             .AddServiceBusSubscription("service-subscription");
@@ -272,7 +272,7 @@ public class ServiceBusPublicApiTests
     [InlineData(true)]
     public void WithConfigurationFileShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus");
         var path = isNull ? null! : string.Empty;
 
@@ -299,7 +299,7 @@ public class ServiceBusPublicApiTests
     [Fact]
     public void WithConfigurationShouldThrowWhenConfigJsonIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureServiceBus("service-bus");
         Action<JsonNode> configJson = null!;
 

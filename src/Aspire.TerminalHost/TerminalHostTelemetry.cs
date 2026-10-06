@@ -8,17 +8,17 @@ namespace Aspire.TerminalHost;
 
 /// <summary>
 /// Shared <see cref="System.Diagnostics.ActivitySource"/> and <see cref="System.Diagnostics.Metrics.Meter"/>
-/// for the Aspire terminal host. Telemetry is exported via OTLP to the Aspire dashboard so failures
+/// for the Aspire terminal host. Opted-in telemetry is exported via OTLP to the Aspire dashboard so failures
 /// like "DCP never dialed in" or "control socket bound but no clients" are diagnosable without
 /// resorting to attaching a debugger.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The OTLP exporter wiring in <see cref="TerminalHostApp.RunAsync(string[], System.Threading.CancellationToken)"/>
-/// only attaches when <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is set in the environment. The Aspire
-/// AppHost injects that via <c>OtlpConfigurationExtensions.AddOtlpEnvironment</c> on each
-/// <c>TerminalHostResource</c>, so production runs always have it. Standalone debug runs of the
-/// host (<c>dotnet run --project src/Aspire.TerminalHost</c>) drop telemetry silently.
+/// only attaches when <c>ASPIRE_TERMINAL_HOST_TELEMETRY_ENABLED</c> is <c>true</c> and
+/// <c>OTEL_EXPORTER_OTLP_ENDPOINT</c> is set. The Aspire AppHost configures these for each
+/// <c>TerminalHostResource</c> when <c>TerminalOptions.ShowTerminalHost</c> is enabled.
+/// Standalone diagnostic runs must also explicitly enable telemetry and configure an endpoint.
 /// </para>
 /// <para>
 /// Source / meter names follow the assembly name convention

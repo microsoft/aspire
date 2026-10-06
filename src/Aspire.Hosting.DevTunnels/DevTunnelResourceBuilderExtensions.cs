@@ -372,6 +372,36 @@ public static partial class DevTunnelsResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Configures how long the tunnel can remain unused or unmodified before it expires.
+    /// </summary>
+    /// <param name="tunnelBuilder">The resource builder.</param>
+    /// <param name="expirationHours">The idle expiration period, in whole hours from one hour through 30 days, inclusive.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// Applies to both new and existing tunnels. This does not limit hosting duration or access-token lifetime.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">The <paramref name="tunnelBuilder"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The <paramref name="expirationHours"/> is outside the supported range.</exception>
+    /// <example>
+    /// <code lang="csharp">
+    /// var tunnel = builder.AddDevTunnel("mytunnel")
+    ///     .WithExpiration(24)
+    ///     .WithReference(web);
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<DevTunnelResource> WithExpiration(this IResourceBuilder<DevTunnelResource> tunnelBuilder, int expirationHours)
+    {
+        ArgumentNullException.ThrowIfNull(tunnelBuilder);
+        ArgumentOutOfRangeException.ThrowIfLessThan(expirationHours, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(expirationHours, 30 * 24);
+
+        tunnelBuilder.Resource.Options.ExpirationHours = expirationHours;
+
+        return tunnelBuilder;
+    }
+
+    /// <summary>
     /// Gets the tunnel endpoint reference for the specified target resource and endpoint.
     /// </summary>
     /// <remarks>

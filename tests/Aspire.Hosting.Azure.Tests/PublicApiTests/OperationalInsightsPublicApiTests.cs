@@ -5,7 +5,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class OperationalInsightsPublicApiTests
+public class OperationalInsightsPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(false)]
@@ -52,7 +52,7 @@ public class OperationalInsightsPublicApiTests
     [InlineData(true)]
     public void AddAzureLogAnalyticsWorkspaceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureLogAnalyticsWorkspace(name);

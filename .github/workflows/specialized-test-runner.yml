@@ -41,7 +41,7 @@ jobs:
       requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
       requiresGitHubToken: ${{ steps.check_github_token.outputs.requiresGitHubToken }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Identify relevant test projects
         run: ./eng/scripts/generate-specialized-test-projects-list.sh ${{ inputs.attributeName }} ${{ github.workspace }}/artifacts/BeforeBuildProps.props
@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload logs, and test results
         if: ${{ always() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: logs-runsheet
           path: |
@@ -181,7 +181,7 @@ jobs:
     name: Final Results
     needs: [generate_tests_matrix, build_packages, build_cli_archives, build_cli_e2e_image, run_tests]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Check if there were no tests to run
       - name: Check if tests were run

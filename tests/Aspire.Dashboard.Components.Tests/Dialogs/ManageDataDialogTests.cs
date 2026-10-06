@@ -46,7 +46,8 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             resourceChannelProvider: () => resourcesChannel);
         SetupManageDataDialogServices(dashboardClient);
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
+        Assert.Single(cut.FindComponents<FluentDialogBody>());
 
         cut.WaitForAssertion(() =>
         {
@@ -136,9 +137,10 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     public async Task IconCheckbox_DoesNotInvokeClickWhenDisabled()
     {
         var clickCount = 0;
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         SetupIconCheckboxJs();
 
-        var cut = RenderComponent<IconCheckbox>(parameters => parameters
+        var cut = Render<IconCheckbox>(parameters => parameters
             .Add(p => p.CheckState, IconCheckboxState.Checked)
             .Add(p => p.Disabled, true)
             .Add(p => p.AccessibleLabel, "All data")
@@ -194,7 +196,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             }
         });
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
 
         cut.WaitForAssertion(() =>
         {
@@ -206,6 +208,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         await ExpandResourceRowsAsync(cut, expectedCount: 1);
         cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "Structured logs for orphan", "true"));
         await ClickSelectionCheckboxAsync(cut, "Structured logs for orphan", "true");
+        await ExpandResourceRowsAsync(cut, expectedCount: 1);
 
         await repository.ClearTracesAsync(resourceKey);
 
@@ -257,7 +260,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             resourceChannelProvider: () => resourcesChannel);
         SetupManageDataDialogServices(dashboardClient);
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = Render<ManageDataDialog>();
         cut.WaitForAssertion(() => AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false));
 
         cut.Find("fluent-button[aria-label='Remove selected']").Click();

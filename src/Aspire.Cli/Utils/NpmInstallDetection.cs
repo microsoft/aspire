@@ -37,20 +37,20 @@ internal static class NpmInstallDetection
         var env = s_environmentOverride.Value ?? ProcessEnvironmentReader.Instance;
         var packageName = env.GetEnvironmentVariable(PackageEnvironmentVariableName);
 
-        if (string.IsNullOrWhiteSpace(packageName))
-        {
-            return null;
-        }
-
         // The launcher always writes the canonical "@microsoft/aspire-cli" package name.
         // Reject anything else so an unrelated env var collision does not flip the CLI
         // into the npm self-update path.
-        if (!string.Equals(packageName, ExpectedPackageName, StringComparison.Ordinal))
+        if (!IsNpmPackage(packageName))
         {
             return null;
         }
 
         return $"npm install -g {ExpectedPackageName}@latest";
+    }
+
+    internal static bool IsNpmPackage(string? packageName)
+    {
+        return string.Equals(packageName, ExpectedPackageName, StringComparison.Ordinal);
     }
 
     internal static string? GetNpmPackageVersion()

@@ -52,6 +52,11 @@ internal class MauiBuildQueueEventSubscriber(
     /// </summary>
     internal TimeSpan LaunchHandoffTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// Provides time for the launch handoff timeout.
+    /// </summary>
+    internal TimeProvider LaunchHandoffTimeProvider { get; set; } = TimeProvider.System;
+
     /// <inheritdoc/>
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
@@ -322,8 +327,8 @@ internal class MauiBuildQueueEventSubscriber(
 
         try
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(LaunchHandoffTimeout);
+            using var timeoutCts = new CancellationTokenSource(LaunchHandoffTimeout, LaunchHandoffTimeProvider);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
             await notificationService.WaitForResourceAsync(
                 resource.Name,
                 e => ShouldReleaseBuildLockForLaunchState(e.Snapshot.State?.Text, stateAtCallTime, releaseOnRunning),

@@ -4,9 +4,11 @@
     "language": "java"
   },
   "features": {
-    "experimentalPolyglot:java": true
+    "experimentalPolyglotJava": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.Redis": "",
+    "Aspire.Hosting.Azure.Provisioning.RedisEnterprise": "",
     "Aspire.Hosting.Azure.Redis": "",
     "Aspire.Hosting.Azure.KeyVault": ""
   }

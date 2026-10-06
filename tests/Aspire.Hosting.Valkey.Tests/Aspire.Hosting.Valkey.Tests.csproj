@@ -10,8 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\ContainerReplCommandTestBase.cs" Link="ContainerReplCommandTestBase.cs" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
-    <Compile Include="$(RepoRoot)src\Aspire.Hosting.Valkey\ValkeyContainerImageTags.cs" />
   </ItemGroup>
 
 </Project>
