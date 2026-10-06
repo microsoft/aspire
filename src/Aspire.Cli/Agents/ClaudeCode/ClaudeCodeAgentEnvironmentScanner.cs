@@ -66,7 +66,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
         if (hasProjectConfiguration || version is not null)
         {
             _logger.LogDebug("Detected Claude Code with version: {Version}", version);
-            context.AddDetection(new(AgentClientKind.ClaudeCode, version?.ToString(), IsInsiders: false));
+            context.AddDetection(new(AgentClientKind.ClaudeCode, version));
         }
     }
 

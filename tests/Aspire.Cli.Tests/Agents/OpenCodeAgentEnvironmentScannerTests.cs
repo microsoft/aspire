@@ -33,7 +33,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentClientDetection(AgentClientKind.OpenCode, version, false), Assert.Single(context.DetectedClients));
+        Assert.Equal(new AgentClientDetection(AgentClientKind.OpenCode, SemVersion.Parse(version, SemVersionStyles.Strict)), Assert.Single(context.DetectedClients));
         Assert.Equal(["opencode"], runner.Commands);
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
     }

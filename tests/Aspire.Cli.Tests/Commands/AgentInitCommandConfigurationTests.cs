@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -24,7 +25,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(_context.CopilotDirectory, "settings.json"), "{broken").DefaultTimeout();
 
         var result = await _context.ConfigureAsync(
-            _context.Request(AgentConfigurationScope.User, [_context.Copilot], skills: false, detections: [new(AgentClientKind.CopilotCli, null, false)]),
+            _context.Request(AgentConfigurationScope.User, [_context.Copilot], skills: false, detections: [new(AgentClientKind.CopilotCli, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(result.Targets);
@@ -39,7 +40,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
 
         var result = await _context.ConfigureAsync(
             _context.Request(AgentConfigurationScope.User, [], mcp: true, playwright: true, dotnetInspect: true,
-                detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]),
+                detections: [new(AgentClientKind.CopilotCli, null), new(AgentClientKind.ClaudeCode, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Empty(result.Targets);
@@ -56,7 +57,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     {
         var scope = Enum.Parse<AgentConfigurationScope>(scopeName);
         var request = _context.Request(scope, _context.Environments, mcp: true, playwright: true, dotnetInspect: true,
-            detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.CopilotCli, null), new(AgentClientKind.ClaudeCode, null)]);
 
         var result = await AgentInitCommand.ConfigureAsync(request, _context.Writer,
             _context.CreateManagedSkillInstaller(), _context.Hooks, CancellationToken.None).DefaultTimeout();
@@ -75,7 +76,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     public async Task EditorHint_DoesNotCreateCliHooksOrEditorSettings()
     {
         var request = _context.Request(AgentConfigurationScope.User, [_context.Copilot],
-            detections: [new(AgentClientKind.VsCode, "1.120.0", false)]);
+            detections: [new(AgentClientKind.VsCode, null)]);
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
@@ -95,7 +96,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     {
         var request = _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.ClaudeCode],
             skills: false, playwright: playwright, dotnetInspect: dotnetInspect,
-            detections: [new(AgentClientKind.CopilotCli, null, false)]);
+            detections: [new(AgentClientKind.CopilotCli, null)]);
         _context.SkillInstaller.Results =
         [
             new(playwright ? AgentAssetKind.Playwright : AgentAssetKind.DotnetInspect, request.Environments,
@@ -122,7 +123,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     {
         var request = _context.Request(AgentConfigurationScope.User,
             [_context.Copilot, _context.ClaudeCode, _context.OpenCode],
-            detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.CopilotCli, null), new(AgentClientKind.CopilotCli, null), new(AgentClientKind.ClaudeCode, null)]);
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
@@ -146,7 +147,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
 
         var result = await _context.ConfigureAsync(
             _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.OpenCode],
-                detections: [new(AgentClientKind.CopilotCli, null, false)]),
+                detections: [new(AgentClientKind.CopilotCli, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.True(result.HasErrors);
@@ -172,7 +173,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
             """{"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"github","repo":"example/custom-skills"}}}}""").DefaultTimeout();
 
         var result = await _context.ConfigureAsync(
-            _context.Request(AgentConfigurationScope.User, [client], detections: [new(detectedClient, null, false)]),
+            _context.Request(AgentConfigurationScope.User, [client], detections: [new(detectedClient, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.True(result.HasErrors);
@@ -193,7 +194,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
 
         var result = await _context.ConfigureAsync(
             _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.ClaudeCode],
-                detections: [new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false)]),
+                detections: [new(AgentClientKind.CopilotCli, null), new(AgentClientKind.ClaudeCode, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
@@ -220,7 +221,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         var detectedClient = clientName == "copilot" ? AgentClientKind.CopilotCli : AgentClientKind.ClaudeCode;
 
         var result = await _context.ConfigureAsync(
-            _context.Request(AgentConfigurationScope.User, [client], skills: false, mcp: true, detections: [new(detectedClient, null, false)]),
+            _context.Request(AgentConfigurationScope.User, [client], skills: false, mcp: true, detections: [new(detectedClient, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.False(result.HasErrors);
@@ -236,7 +237,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     public async Task AlreadyConfiguredNativeSources_DoNotPreventAMissingDetectedClientHook()
     {
         var request = _context.Request(AgentConfigurationScope.User, [_context.Copilot],
-            detections: [new(AgentClientKind.CopilotCli, null, false)]);
+            detections: [new(AgentClientKind.CopilotCli, null)]);
         await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
@@ -252,7 +253,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
         var path = Path.Combine(_context.ClaudeDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(path, """{"model":"preserved","hooks":{"PreToolUse":[]}}""").DefaultTimeout();
         var request = _context.Request(AgentConfigurationScope.User, [_context.ClaudeCode],
-            detections: [new(AgentClientKind.ClaudeCode, null, false)]);
+            detections: [new(AgentClientKind.ClaudeCode, null)]);
 
         var first = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
         var bytes = await File.ReadAllBytesAsync(path).DefaultTimeout();
@@ -276,7 +277,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
     public async Task DetectedButUnselectedClients_ReceiveOnlyUserHooks()
     {
         var request = _context.Request(AgentConfigurationScope.User, [_context.OpenCode],
-            detections: [new(AgentClientKind.CopilotCli, "1.0.0", false), new(AgentClientKind.ClaudeCode, "2.1.0", false), new(AgentClientKind.VsCode, "1.120.0", false)]);
+            detections: [new(AgentClientKind.CopilotCli, SemVersion.Parse("1.0.0", SemVersionStyles.Strict)), new(AgentClientKind.ClaudeCode, SemVersion.Parse("2.1.0", SemVersionStyles.Strict)), new(AgentClientKind.VsCode, null)]);
 
         var result = await _context.ConfigureAsync(request, CancellationToken.None).DefaultTimeout();
 
@@ -337,7 +338,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             _context.ConfigureAsync(
-                _context.Request(AgentConfigurationScope.User, [_context.Copilot], playwright: true, detections: [new(AgentClientKind.CopilotCli, null, false)]),
+                _context.Request(AgentConfigurationScope.User, [_context.Copilot], playwright: true, detections: [new(AgentClientKind.CopilotCli, null)]),
                 cancellation.Token)).DefaultTimeout();
 
         Assert.Empty(_context.SkillInstaller.Requests);
@@ -350,7 +351,7 @@ public class AgentInitCommandConfigurationTests(ITestOutputHelper output) : IDis
 
         var result = await _context.ConfigureAsync(
             _context.Request(AgentConfigurationScope.User, [_context.Copilot, _context.OpenCode],
-                detections: [new(AgentClientKind.CopilotCli, null, false)]),
+                detections: [new(AgentClientKind.CopilotCli, null)]),
             CancellationToken.None).DefaultTimeout();
 
         Assert.True(result.HasErrors);

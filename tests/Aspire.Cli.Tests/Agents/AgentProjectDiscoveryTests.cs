@@ -169,7 +169,7 @@ public class AgentProjectDiscoveryTests(ITestOutputHelper output) : IDisposable
             "copilot" => AgentClientKind.VsCode,
             "opencode" => AgentClientKind.OpenCode,
             _ => throw new ArgumentOutOfRangeException(nameof(clientId))
-        }, null, false);
+        }, null);
 
     private static Task CreateMarkerAsync(DirectoryInfo root, string marker)
     {

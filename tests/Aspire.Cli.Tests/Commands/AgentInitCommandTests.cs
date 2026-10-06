@@ -13,6 +13,7 @@ using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Semver;
 using Spectre.Console;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
@@ -130,7 +131,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
     {
         using var provider = CreateServices(options =>
         {
-            options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(new AgentClientDetection(AgentClientKind.VsCode, "1.120.0", false));
+            options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(new AgentClientDetection(AgentClientKind.VsCode, null));
         }).BuildServiceProvider();
 
         var exitCode = await provider.GetRequiredService<RootCommand>().Parse("agent init --non-interactive").InvokeAsync().DefaultTimeout();
@@ -184,48 +185,60 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
     [InlineData("=N", false)]
     [InlineData(" FaLsE", false)]
     [InlineData("=false", false)]
-    public void AgentInitCommand_AssetOptions_AcceptBooleanValues(string suffix, bool expected)
+    public async Task AgentInitCommand_AssetOptions_AcceptBooleanValues(string suffix, bool expected)
     {
         using var provider = CreateServices().BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         foreach (var option in AssetOptions)
         {
-            var parseResult = command.Parse($"agent init {option.Name}{suffix}");
+            var requestCount = _hooks.Requests.Count;
+            var parseResult = command.Parse($"agent init --agent copilot --scope project {DisableOtherAssets(option)} {option}{suffix}");
 
             Assert.Empty(parseResult.Errors);
-            var (wasProvided, value) = GetAssetBinding(provider, parseResult, option).Resolve();
-            Assert.True(wasProvided);
-            Assert.Equal(expected, value);
             Assert.All(GlobalBooleanOptions, global => Assert.False(parseResult.GetValue(global)));
+            Assert.Equal(CliExitCodes.Success, await parseResult.InvokeAsync().DefaultTimeout());
+            if (expected)
+            {
+                var request = Assert.Single(_hooks.Requests.Skip(requestCount));
+                Assert.Equal(new AgentAssetSelection(option == "--mcp", option == "--playwright",
+                    option == "--dotnet-inspect", option == "--aspire-skills"), request.Assets);
+            }
+            else
+            {
+                Assert.Equal(requestCount, _hooks.Requests.Count);
+            }
         }
     }
 
     [Fact]
-    public void AgentInitCommand_OmittedAssetOptions_RemainUnspecified()
+    public async Task AgentInitCommand_OmittedAssetOptions_UseDefaults()
     {
         using var provider = CreateServices().BuildServiceProvider();
-        var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init");
+        var parseResult = provider.GetRequiredService<RootCommand>().Parse("agent init --agent copilot --scope project --non-interactive");
 
         Assert.Empty(parseResult.Errors);
-        Assert.All(AssetOptions, option => Assert.False(GetAssetBinding(provider, parseResult, option).Resolve().WasProvided));
+        Assert.Equal(CliExitCodes.Success, await parseResult.InvokeAsync().DefaultTimeout());
+        Assert.Equal(new AgentAssetSelection(false, false, false, true), Assert.Single(_hooks.Requests).Assets);
     }
 
     [Fact]
-    public void AgentInitCommand_BareAssetFlags_DoNotConsumeFollowingGlobalOptions()
+    public async Task AgentInitCommand_BareAssetFlags_DoNotConsumeFollowingGlobalOptions()
     {
         using var provider = CreateServices().BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         foreach (var option in AssetOptions)
         {
-            var parseResult = command.Parse($"agent init {option.Name} --non-interactive");
+            var requestCount = _hooks.Requests.Count;
+            var parseResult = command.Parse($"agent init --agent copilot --scope project {DisableOtherAssets(option)} {option} --non-interactive");
 
             Assert.Empty(parseResult.Errors);
-            var (wasProvided, value) = GetAssetBinding(provider, parseResult, option).Resolve();
-            Assert.True(wasProvided);
-            Assert.True(value);
             Assert.True(parseResult.GetValue(RootCommand.NonInteractiveOption));
+            Assert.Equal(CliExitCodes.Success, await parseResult.InvokeAsync().DefaultTimeout());
+            var request = Assert.Single(_hooks.Requests.Skip(requestCount));
+            Assert.Equal(new AgentAssetSelection(option == "--mcp", option == "--playwright",
+                option == "--dotnet-inspect", option == "--aspire-skills"), request.Assets);
         }
     }
 
@@ -348,7 +361,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
     [InlineData(true, true)]
     [InlineData(false, false)]
     [InlineData(false, true)]
-    public async Task AgentInitCommand_ScopeChoices_ShowSelectedAgentDestinationsWithoutWriting(bool nativeSkills, bool userScope)
+    public async Task AgentInitCommand_ScopeChoices_SelectScopeWithoutWriting(bool nativeSkills, bool userScope)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         context.SetVariable("COPILOT_HOME", Path.Combine(context.Home.FullName, "copilot[work]"));
@@ -369,8 +382,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
             PromptForSelectionCallback = (prompt, choices, formatter, _) =>
             {
                 Assert.Equal(AgentCommandStrings.InitCommand_SelectScopePrompt, prompt);
-                Assert.Equal(new[] { Describe(AgentConfigurationScope.Project), Describe(AgentConfigurationScope.User) },
-                    choices.Cast<AgentConfigurationScope>().Select(scope => formatter(scope)));
+                Assert.Equal([AgentConfigurationScope.Project, AgentConfigurationScope.User], choices.Cast<AgentConfigurationScope>());
+                Assert.All(choices.Cast<AgentConfigurationScope>(), choice => Assert.NotEmpty(formatter(choice)));
                 Assert.Equal(existingEntries, Directory.GetFileSystemEntries(context.Workspace.Path, "*", SearchOption.AllDirectories).Order());
                 return selectedScope;
             }
@@ -408,36 +421,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Equal(selectedScope, Assert.Single(_hooks.Requests).Scope);
         Assert.Equal(untouchedEntries, Directory.GetFileSystemEntries(untouched.FullName, "*", SearchOption.AllDirectories).Order());
-
-        string Describe(AgentConfigurationScope scope)
-        {
-            var user = scope is AgentConfigurationScope.User;
-            var lines = new List<string>
-            {
-                user ? AgentCommandStrings.InitCommand_UserScope : AgentCommandStrings.InitCommand_ProjectScope
-            };
-            foreach (var agent in context.Environments)
-            {
-                var path = nativeSkills
-                    ? agent.Id switch
-                    {
-                        "copilot" => user ? Path.Combine("~", "copilot[work]", "settings.json") : Path.Combine(".github", "copilot", "settings.json"),
-                        "claude" => user ? Path.Combine("~", "claude[work]", "settings.json") : Path.Combine(".claude", "settings.json"),
-                        _ => user ? customOpenCode : "opencode.json"
-                    }
-                    : SkillPaths(agent.Id, user);
-                lines.Add("  " + string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_EnvironmentLocationDescription,
-                    agent.DisplayName, path).EscapeMarkup());
-            }
-            return string.Join(Environment.NewLine, lines);
-        }
-
-        static string SkillPaths(string agent, bool user)
-        {
-            var directory = agent == "claude" ? user ? "claude[work]" : ".claude" : ".agents";
-            var root = user ? Path.Combine("~", directory, "skills") : Path.Combine(directory, "skills");
-            return string.Join(", ", Path.Combine(root, "playwright-cli"), Path.Combine(root, "dotnet-inspect"));
-        }
     }
 
     [Theory]
@@ -448,8 +431,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var targetRequests = new List<string>();
         AgentClientDetection[] detections =
         [
-            new(AgentClientKind.ClaudeCode, "2.1.0", IsInsiders: false),
-            new(AgentClientKind.ClaudeCode, "2.1.0", IsInsiders: false)
+            new(AgentClientKind.ClaudeCode, SemVersion.Parse("2.1.0", SemVersionStyles.Strict)),
+            new(AgentClientKind.ClaudeCode, SemVersion.Parse("2.1.0", SemVersionStyles.Strict))
         ];
         var services = CreateServices(options =>
         {
@@ -476,8 +459,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var request = Assert.Single(_hooks.Requests);
         Assert.Equal(["claude"], request.Environments.Select(client => client.Id));
         Assert.Equal(
-            detections.Distinct().OrderBy(detection => detection.Client).Select(detection => (detection.Client, detection.Version, detection.IsInsiders)),
-            request.Detections.OrderBy(detection => detection.Client).Select(detection => (detection.Client, detection.Version, detection.IsInsiders)));
+            detections.Distinct().OrderBy(detection => detection.Client).Select(detection => (detection.Client, detection.Version)),
+            request.Detections.OrderBy(detection => detection.Client).Select(detection => (detection.Client, detection.Version)));
         Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);
         if (!interactive)
         {
@@ -527,8 +510,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
     {
         AgentClientDetection[] detections =
         [
-            new(AgentClientKind.CopilotCli, "1.0.0", false),
-            new(AgentClientKind.ClaudeCode, "2.1.0", false)
+            new(AgentClientKind.CopilotCli, SemVersion.Parse("1.0.0", SemVersionStyles.Strict)),
+            new(AgentClientKind.ClaudeCode, SemVersion.Parse("2.1.0", SemVersionStyles.Strict))
         ];
         var services = CreateServices(options =>
         {
@@ -543,8 +526,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var request = Assert.Single(_hooks.Requests);
         Assert.Equal(["opencode"], request.Environments.Select(client => client.Id));
         Assert.Equal(
-            detections.Select(detection => (detection.Client, detection.Version, detection.IsInsiders)),
-            request.Detections.Select(detection => (detection.Client, detection.Version, detection.IsInsiders)));
+            detections.Select(detection => (detection.Client, detection.Version)),
+            request.Detections.Select(detection => (detection.Client, detection.Version)));
     }
 
     [Theory]
@@ -578,8 +561,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
             ScanAsyncCallback = (context, _) =>
             {
                 capturedContext = context;
-                context.AddDetection(new(AgentClientKind.CopilotApp, null, false));
-                context.AddDetection(new(AgentClientKind.CopilotCli, "1.0.0", false));
+                context.AddDetection(new(AgentClientKind.CopilotApp, null));
+                context.AddDetection(new(AgentClientKind.CopilotCli, SemVersion.Parse("1.0.0", SemVersionStyles.Strict)));
                 return Task.CompletedTask;
             }
         };
@@ -587,7 +570,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         {
             ScanAsyncCallback = (context, _) =>
             {
-                context.AddDetection(new(AgentClientKind.OpenCode, "2.0.0", false));
+                context.AddDetection(new(AgentClientKind.OpenCode, SemVersion.Parse("2.0.0", SemVersionStyles.Strict)));
                 return Task.CompletedTask;
             }
         };
@@ -609,9 +592,13 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
 
         var request = Assert.Single(_hooks.Requests);
         Assert.Equal([copilot, openCode], request.Environments);
-        Assert.Equal(
-            [(AgentClientKind.CopilotApp, null, false), (AgentClientKind.CopilotCli, "1.0.0", false), (AgentClientKind.OpenCode, "2.0.0", false)],
-            request.Detections.Select(detection => (detection.Client, detection.Version, detection.IsInsiders)));
+        AgentClientDetection[] expectedDetections =
+        [
+            new(AgentClientKind.CopilotApp, null),
+            new(AgentClientKind.CopilotCli, SemVersion.Parse("1.0.0", SemVersionStyles.Strict)),
+            new(AgentClientKind.OpenCode, SemVersion.Parse("2.0.0", SemVersionStyles.Strict))
+        ];
+        Assert.Equal(expectedDetections, request.Detections);
         foreach (var environment in new[] { copilot, openCode })
         {
             var call = Assert.Single(environment.Calls);
@@ -620,11 +607,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
             Assert.Equal(cancellation.Token, call.CancellationToken);
         }
         Assert.NotNull(capturedContext);
-        capturedContext.AddDetection(new(AgentClientKind.ClaudeCode, null, false));
-        Assert.Equal(3, request.Detections.Count);
-        var snapshot = Assert.IsAssignableFrom<IList<AgentClientDetection>>(request.Detections);
-        Assert.True(snapshot.IsReadOnly);
-        Assert.Throws<NotSupportedException>(snapshot.Clear);
+        capturedContext.AddDetection(new(AgentClientKind.ClaudeCode, null));
+        Assert.Equal(expectedDetections, request.Detections);
     }
 
     [Fact]
@@ -857,7 +841,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         {
             options.InteractionServiceFactory = _ => interaction;
             options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(
-                new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.CopilotCli, null, false));
+                new(AgentClientKind.CopilotCli, null), new(AgentClientKind.CopilotCli, null));
             var copilot = options.AgentEnvironments.Single(scanner => scanner.Id == "copilot");
             copilot.GetTargetsCallback = _ =>
                 [copilot.CreateTarget(path, AgentAssetKind.AspireSkills, Enum.Parse<AgentConfigurationStatus>(status), "Native client owns acquisition.")];
@@ -964,7 +948,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
         var services = CreateServices(options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(new AgentClientDetection(AgentClientKind.ClaudeCode, null, false));
+            options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(new AgentClientDetection(AgentClientKind.ClaudeCode, null));
             var claude = options.AgentEnvironments.Single(scanner => scanner.Id == "claude");
             options.AgentSkillInstallerFactory = _ => new TestAgentConfigurationSkillInstaller
             {
@@ -1116,26 +1100,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper) : IDisposable
             configure?.Invoke(options);
         });
 
-    private static PromptBinding<bool> GetAssetBinding(IServiceProvider provider, ParseResult parseResult, Option option)
-    {
-        var bindings = provider.GetRequiredService<AgentInitCommand>().CreateBindings(parseResult, includeMcp: true);
+    private static string DisableOtherAssets(string option)
+        => string.Join(" ", AssetOptions.Where(other => other != option).Select(other => $"{other} n"));
 
-        return option.Name switch
-        {
-            "--mcp" => bindings.Mcp!,
-            "--playwright" => bindings.Playwright,
-            "--dotnet-inspect" => bindings.DotnetInspect,
-            "--aspire-skills" => bindings.AspireSkills,
-            _ => throw new ArgumentOutOfRangeException(nameof(option))
-        };
-    }
-
-    private static IReadOnlyList<Option> AssetOptions =>
+    private static IReadOnlyList<string> AssetOptions =>
     [
-        AgentInitCommand.s_mcpOption,
-        AgentInitCommand.s_playwrightOption,
-        AgentInitCommand.s_dotnetInspectOption,
-        AgentInitCommand.s_aspireSkillsOption
+        "--mcp",
+        "--playwright",
+        "--dotnet-inspect",
+        "--aspire-skills"
     ];
 
     private static IReadOnlyList<Option<bool>> GlobalBooleanOptions =>

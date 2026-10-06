@@ -665,7 +665,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ScaffoldingServiceFactory = _ => new TestScaffoldingService();
             options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(
-                new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false));
+                new(AgentClientKind.CopilotCli, null), new(AgentClientKind.ClaudeCode, null));
             options.TelemetryHookConfiguratorFactory = _ => hooks;
             foreach (var scanner in options.AgentEnvironments.Where(scanner => scanner.Id is "copilot" or "claude"))
             {
@@ -754,7 +754,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.AgentEnvironments = TestAgentEnvironmentScanner.CreateEnvironments(
-                new(AgentClientKind.CopilotCli, null, false), new(AgentClientKind.ClaudeCode, null, false));
+                new(AgentClientKind.CopilotCli, null), new(AgentClientKind.ClaudeCode, null));
             options.TelemetryHookConfiguratorFactory = _ => hooks;
             foreach (var scanner in options.AgentEnvironments.Where(scanner => scanner.Id is "copilot" or "claude"))
             {

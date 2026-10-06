@@ -31,8 +31,7 @@ public class CopilotEditorDetectionTests(ITestOutputHelper outputHelper)
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        AgentClientDetection[] expected = stableInstalled ? [new(AgentClientKind.VsCode, "1.100.0", false)]
-            : insidersInstalled ? [new(AgentClientKind.VsCode, "1.101.0-insider", true)] : [];
+        AgentClientDetection[] expected = stableInstalled || insidersInstalled ? [new(AgentClientKind.VsCode, null)] : [];
         Assert.Equal(expected, context.DetectedClients);
         Assert.Equal(stableInstalled ? ["copilot", "code"] : ["copilot", "code", "code-insiders"], runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
@@ -52,18 +51,12 @@ public class CopilotEditorDetectionTests(ITestOutputHelper outputHelper)
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, null, false), Assert.Single(context.DetectedClients));
+        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, null), Assert.Single(context.DetectedClients));
         Assert.Equal(["copilot"], runner.Commands);
     }
 
-    [Theory]
-    [InlineData(null, null, false)]
-    [InlineData("", null, false)]
-    [InlineData("  ", null, false)]
-    [InlineData("1.100.0", "1.100.0", false)]
-    [InlineData(" 1.100.0 ", "1.100.0", false)]
-    [InlineData("1.101.0-insider", "1.101.0-insider", true)]
-    public async Task ScanAsync_WhenInVsCode_RecordsTerminalEvidenceWithoutProbing(string? terminalVersion, string? expectedVersion, bool isInsiders)
+    [Fact]
+    public async Task ScanAsync_WhenInVsCode_RecordsEditorHintWithoutProbing()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var runner = new TestAgentCliRunner
@@ -75,40 +68,16 @@ public class CopilotEditorDetectionTests(ITestOutputHelper outputHelper)
         };
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
-            ["TERM_PROGRAM"] = "vscode",
-            ["TERM_PROGRAM_VERSION"] = terminalVersion
+            ["TERM_PROGRAM"] = "vscode"
         });
         var agent = CreateAgent(runner, workspace.CreateExecutionContext(), environment);
         var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, expectedVersion, isInsiders), Assert.Single(context.DetectedClients));
+        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, null), Assert.Single(context.DetectedClients));
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
-    }
-
-    [Fact]
-    public async Task ScanAsync_WithProjectConfigurationInInsidersTerminal_PreservesNativeUserEditionWithoutProbing()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        workspace.CreateDirectory(".vscode");
-        var runner = new TestAgentCliRunner
-        {
-            GetVersionAsyncCallback = (_, _) => throw new InvalidOperationException("Project evidence must avoid CLI probes.")
-        };
-        var environment = new TestEnvironment(new Dictionary<string, string?>
-        {
-            ["TERM_PROGRAM"] = "vscode",
-            ["TERM_PROGRAM_VERSION"] = "1.101.0-insider"
-        });
-        var agent = CreateAgent(runner, workspace.CreateExecutionContext(), environment);
-        var context = new AgentEnvironmentScanContext(workspace.WorkspaceRoot, workspace.WorkspaceRoot);
-
-        await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        Assert.Equal(new AgentClientDetection(AgentClientKind.VsCode, "1.101.0-insider", true), Assert.Single(context.DetectedClients));
-        Assert.Empty(runner.Commands);
     }
 
     [Fact]

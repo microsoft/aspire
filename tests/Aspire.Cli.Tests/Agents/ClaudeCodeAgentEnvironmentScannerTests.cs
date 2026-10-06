@@ -30,7 +30,7 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentClientDetection(AgentClientKind.ClaudeCode, "2.1.0", false), Assert.Single(context.DetectedClients));
+        Assert.Equal(new AgentClientDetection(AgentClientKind.ClaudeCode, SemVersion.Parse("2.1.0", SemVersionStyles.Strict)), Assert.Single(context.DetectedClients));
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());
     }
 

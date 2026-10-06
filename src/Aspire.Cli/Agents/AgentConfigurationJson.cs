@@ -25,9 +25,10 @@ internal static class AgentConfigurationJson
                 content = content[3..];
             }
 
-            var root = JsonNode.Parse(content, documentOptions: ConfigurationHelper.ParseOptions) as JsonObject
+            var parseOptions = ConfigurationHelper.ParseOptions;
+            parseOptions.AllowDuplicateProperties = false;
+            var root = JsonNode.Parse(content, documentOptions: parseOptions) as JsonObject
                 ?? throw Shape("$");
-            Materialize(root);
 
             return root;
         }
@@ -98,27 +99,5 @@ internal static class AgentConfigurationJson
         }
 
         return settings;
-    }
-
-    private static void Materialize(JsonNode? node)
-    {
-        // JsonObject materializes its dictionary lazily. Inputs such as
-        // {"enabledPlugins":{"aspire@aspire-skills":true,"aspire@aspire-skills":false}}
-        // must be rejected here, including inside arrays, rather than throw from a
-        // later mutation and prevent independent targets from being configured.
-        if (node is JsonObject obj)
-        {
-            foreach (var property in obj)
-            {
-                Materialize(property.Value);
-            }
-        }
-        else if (node is JsonArray array)
-        {
-            foreach (var item in array)
-            {
-                Materialize(item);
-            }
-        }
     }
 }

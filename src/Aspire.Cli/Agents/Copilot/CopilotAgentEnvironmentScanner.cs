@@ -73,7 +73,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
         if (_copilotAppInstallationDetector.GetInstallationMarker() is { } installationMarker)
         {
             _logger.LogDebug("Detected GitHub Copilot App using installation marker {Marker}", installationMarker);
-            context.AddDetection(new(AgentClientKind.CopilotApp, Version: null, IsInsiders: false));
+            context.AddDetection(new(AgentClientKind.CopilotApp, Version: null));
         }
 
         // VS Code can supply an interactive Copilot installation shim. Do not invoke it during
@@ -88,7 +88,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
             if (version is not null)
             {
                 _logger.LogDebug("Found GitHub Copilot CLI version: {Version}", version);
-                context.AddDetection(new(AgentClientKind.CopilotCli, version.ToString(), IsInsiders: false));
+                context.AddDetection(new(AgentClientKind.CopilotCli, version));
             }
         }
 
@@ -107,9 +107,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
             Directory.Exists(Path.Combine(directory.FullName, ".vscode")));
         if (isVsCodeTerminal || hasProjectConfiguration)
         {
-            var version = isVsCodeTerminal ? _environment.GetEnvironmentVariable("TERM_PROGRAM_VERSION")?.Trim() : null;
-            context.AddDetection(new(AgentClientKind.VsCode, string.IsNullOrEmpty(version) ? null : version,
-                IsInsiders: version?.Contains("-insider", StringComparison.OrdinalIgnoreCase) == true));
+            context.AddDetection(new(AgentClientKind.VsCode, Version: null));
             return;
         }
 
@@ -121,7 +119,7 @@ internal sealed class CopilotAgentEnvironmentScanner : IAgentEnvironmentScanner
             {
                 // VS Code is a selection hint, not evidence that Copilot CLI is installed.
                 // Keep its identity distinct so it cannot acquire CLI/App hook eligibility.
-                context.AddDetection(new(AgentClientKind.VsCode, version.ToString(), IsInsiders: insiders));
+                context.AddDetection(new(AgentClientKind.VsCode, Version: null));
                 return;
             }
         }

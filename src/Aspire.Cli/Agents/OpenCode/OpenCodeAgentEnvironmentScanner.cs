@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Agents.OpenCode;
 
@@ -19,7 +20,7 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     internal const string V2Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/";
     internal const string MinimumV1CatalogVersion = "1.18.31";
 
-    private static readonly Version s_minimumV1CatalogVersion = Version.Parse(MinimumV1CatalogVersion);
+    private static readonly SemVersion s_minimumV1CatalogVersion = SemVersion.Parse(MinimumV1CatalogVersion, SemVersionStyles.Strict);
 
     private readonly IOpenCodeCliRunner _openCodeCliRunner;
     private readonly CliExecutionContext _executionContext;
@@ -73,7 +74,7 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         if (hasProjectConfiguration || version is not null)
         {
             _logger.LogDebug("Detected OpenCode with version: {Version}", version);
-            context.AddDetection(new(AgentClientKind.OpenCode, version?.ToString(), IsInsiders: false));
+            context.AddDetection(new(AgentClientKind.OpenCode, version));
         }
     }
 
@@ -194,20 +195,20 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
                 });
     }
 
-    internal static int ResolveSchema(IReadOnlyList<AgentClientDetection> detections, IEnumerable<JsonObject> configs)
+    private static int ResolveSchema(IReadOnlyList<AgentClientDetection> detections, IEnumerable<JsonObject> configs)
     {
         // Both generations share a $schema URL; use installed versions and configuration shapes.
         var versions = new HashSet<int>();
-        foreach (var detection in detections.Where(detection => detection.Client is AgentClientKind.OpenCode && detection.Version is not null))
+        foreach (var detection in detections.Where(detection => detection.Client is AgentClientKind.OpenCode))
         {
-            if (ParseVersion(detection.Version) is { } version)
+            if (detection.Version is { } version)
             {
-                if (version.Number.Major > 2)
+                if (version.Major > 2)
                 {
                     throw new AgentConfigurationException(AgentCommandStrings.Configuration_OpenCodeSchemaConflict);
                 }
 
-                versions.Add(version.Number.Major < 2 ? 1 : 2);
+                versions.Add(version.Major < 2 ? 1 : 2);
             }
         }
 
@@ -271,35 +272,9 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     {
         foreach (var detection in detections.Where(detection => detection.Client is AgentClientKind.OpenCode))
         {
-            if (ParseVersion(detection.Version) is { } version)
+            if (detection.Version is { } version && SemVersion.ComparePrecedence(version, s_minimumV1CatalogVersion) < 0)
             {
-                var comparison = version.Number.CompareTo(s_minimumV1CatalogVersion);
-                if (comparison < 0 || (comparison == 0 && version.IsPrerelease))
-                {
-                    return detection.Version;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static OpenCodeVersion? ParseVersion(string? text)
-    {
-        if (text is null)
-        {
-            return null;
-        }
-
-        // Ignore build metadata ("1.18.31+build"); prereleases ("1.18.31-preview")
-        // remain below the stable release for the catalog capability check.
-        foreach (var token in text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var withoutMetadata = token.TrimStart('v').Split('+')[0];
-            var parts = withoutMetadata.Split('-', 2);
-            if (Version.TryParse(parts[0], out var version))
-            {
-                return new OpenCodeVersion(version, IsPrerelease: parts.Length > 1);
+                return version.ToString();
             }
         }
 
@@ -432,8 +407,6 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         yield return Path.Combine(directory, "opencode.json");
         yield return Path.Combine(directory, "opencode.jsonc");
     }
-
-    private readonly record struct OpenCodeVersion(Version Number, bool IsPrerelease);
 
     private sealed record OpenCodeLocation(string Path, AgentConfigurationScope Scope, IReadOnlyList<string> Candidates);
 }

@@ -25,11 +25,11 @@ internal sealed class AgentInitCommand : BaseCommand
         Description = AgentCommandStrings.InitCommand_WorkspaceRootOptionDescription
     };
 
-    internal static readonly Option<AgentConfirmation?> s_mcpOption = CreateAssetOption("--mcp", AgentCommandStrings.InitCommand_McpOptionDescription);
-    internal static readonly Option<AgentConfirmation?> s_playwrightOption = CreateAssetOption("--playwright", AgentCommandStrings.InitCommand_PlaywrightOptionDescription);
-    internal static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentCommandStrings.InitCommand_DotnetInspectOptionDescription);
-    internal static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentCommandStrings.InitCommand_AspireSkillsOptionDescription);
-    internal static readonly Option<AgentConfigurationScope> s_scopeOption = CreateScopeOption();
+    private static readonly Option<AgentConfirmation?> s_mcpOption = CreateAssetOption("--mcp", AgentCommandStrings.InitCommand_McpOptionDescription);
+    private static readonly Option<AgentConfirmation?> s_playwrightOption = CreateAssetOption("--playwright", AgentCommandStrings.InitCommand_PlaywrightOptionDescription);
+    private static readonly Option<AgentConfirmation?> s_dotnetInspectOption = CreateAssetOption("--dotnet-inspect", AgentCommandStrings.InitCommand_DotnetInspectOptionDescription);
+    private static readonly Option<AgentConfirmation?> s_aspireSkillsOption = CreateAssetOption("--aspire-skills", AgentCommandStrings.InitCommand_AspireSkillsOptionDescription);
+    private static readonly Option<AgentConfigurationScope> s_scopeOption = CreateScopeOption();
 
     private readonly IReadOnlyList<IAgentEnvironmentScanner> _environmentScanners;
     private readonly AgentConfigurationWriter _configurationWriter;

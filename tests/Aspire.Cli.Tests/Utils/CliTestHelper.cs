@@ -674,7 +674,7 @@ internal sealed class CliServiceCollectionTestOptions
     };
 
     public TestAgentEnvironmentScanner[] AgentEnvironments { get; set; } =
-        TestAgentEnvironmentScanner.CreateEnvironments(new AgentClientDetection(AgentClientKind.CopilotCli, Version: null, IsInsiders: false));
+        TestAgentEnvironmentScanner.CreateEnvironments(new AgentClientDetection(AgentClientKind.CopilotCli, null));
 
     public Func<IServiceProvider, IAgentSkillInstaller> AgentSkillInstallerFactory { get; set; } =
         _ => new TestAgentConfigurationSkillInstaller();

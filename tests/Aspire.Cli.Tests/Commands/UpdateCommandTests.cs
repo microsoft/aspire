@@ -23,6 +23,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1102,7 +1103,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         services.RemoveAll<IMigration>();
         services.AddSingleton<IMigration, LocalAspireSkillsMigration>();
         var copilot = new TestAgentEnvironmentScanner("copilot", AgentCommandStrings.Environment_Copilot,
-            new AgentClientDetection(AgentClientKind.CopilotCli, "1.0.0", false));
+            new AgentClientDetection(AgentClientKind.CopilotCli, SemVersion.Parse("1.0.0", SemVersionStyles.Strict)));
         copilot.GetTargetsCallback = request =>
         {
             Assert.Equal(new AgentAssetSelection(false, false, false, true), request.Assets);

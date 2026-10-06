@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Agents.Hooks;
+using Semver;
 
 namespace Aspire.Cli.Agents;
 
@@ -46,4 +47,4 @@ internal interface IAgentEnvironmentScanner
 /// <summary>
 /// Read-only evidence that a client is present.
 /// </summary>
-internal sealed record AgentClientDetection(AgentClientKind Client, string? Version, bool IsInsiders);
+internal sealed record AgentClientDetection(AgentClientKind Client, SemVersion? Version);

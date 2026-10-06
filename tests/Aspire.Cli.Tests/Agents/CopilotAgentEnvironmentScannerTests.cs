@@ -37,11 +37,11 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var expected = new List<AgentClientDetection>();
         if (appInstalled)
         {
-            expected.Add(new(AgentClientKind.CopilotApp, null, false));
+            expected.Add(new(AgentClientKind.CopilotApp, null));
         }
         if (cliInstalled)
         {
-            expected.Add(new(AgentClientKind.CopilotCli, "1.2.3", false));
+            expected.Add(new(AgentClientKind.CopilotCli, SemVersion.Parse("1.2.3", SemVersionStyles.Strict)));
         }
         Assert.Equal(expected, context.DetectedClients);
         Assert.Equal(appInstalled || cliInstalled ? ["copilot"] : ["copilot", "code", "code-insiders"], runner.Commands);
@@ -73,8 +73,8 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(appInstalled
-            ? [new AgentClientDetection(AgentClientKind.CopilotApp, null, false)]
-            : [new AgentClientDetection(AgentClientKind.VsCode, "1.100.0", false)], context.DetectedClients);
+            ? [new AgentClientDetection(AgentClientKind.CopilotApp, null)]
+            : [new AgentClientDetection(AgentClientKind.VsCode, null)], context.DetectedClients);
         Assert.Empty(runner.Commands);
         Assert.Empty(Directory.EnumerateFileSystemEntries(workspace.WorkspaceRoot.FullName));
     }
@@ -92,7 +92,7 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentClientDetection(AgentClientKind.CopilotCli, "1.2.3-preview.1+build.2", false), Assert.Single(context.DetectedClients));
+        Assert.Equal(new AgentClientDetection(AgentClientKind.CopilotCli, SemVersion.Parse("1.2.3-preview.1+build.2", SemVersionStyles.Strict)), Assert.Single(context.DetectedClients));
     }
 
     [Theory]
@@ -120,7 +120,7 @@ public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         await agent.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(new AgentClientDetection(AgentClientKind.CopilotCli, "1.0.0", false), Assert.Single(context.DetectedClients));
+        Assert.Equal(new AgentClientDetection(AgentClientKind.CopilotCli, SemVersion.Parse("1.0.0", SemVersionStyles.Strict)), Assert.Single(context.DetectedClients));
         Assert.Equal(content, await File.ReadAllTextAsync(configPath));
         Assert.Equal(lastWriteTime, File.GetLastWriteTimeUtc(configPath));
         Assert.Equal(entries, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories).Order());

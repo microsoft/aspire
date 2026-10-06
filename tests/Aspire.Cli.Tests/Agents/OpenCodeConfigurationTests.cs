@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.OpenCode;
 using Microsoft.AspNetCore.InternalTesting;
+using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -36,7 +37,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
     public async Task DetectedV2_UsesArrayCatalogAndNestedMcpServers()
     {
         var request = _context.Request(AgentConfigurationScope.Project, [_context.OpenCode], mcp: true,
-            detections: [new(AgentClientKind.OpenCode, "opencode v2.0.0-preview.1", false)]);
+            detections: [new(AgentClientKind.OpenCode, SemVersion.Parse("2.0.0-preview.1", SemVersionStyles.Strict))]);
 
         var results = await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -92,7 +93,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
         var path = Path.Combine(_context.Project.FullName, "opencode.json");
         await AgentConfigurationTestContext.WriteAsync(path, existing).DefaultTimeout();
         var request = _context.Request(AgentConfigurationScope.Project, [_context.OpenCode], mcp: true,
-            detections: version is null ? [] : [new(AgentClientKind.OpenCode, version, false)]);
+            detections: version is null ? [] : [new(AgentClientKind.OpenCode, SemVersion.Parse(version, SemVersionStyles.Strict))]);
 
         var results = await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -232,7 +233,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
     [Theory]
     [InlineData("0.15.0")]
     [InlineData("1.18.30")]
-    [InlineData("opencode v1.18.31-preview.1")]
+    [InlineData("1.18.31-preview.1")]
     [InlineData("1.18.31-preview.1+build")]
     public async Task OlderV1_BlocksCatalogRegistrationWithoutChangingExistingMcp(string version)
     {
@@ -242,7 +243,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
         await AgentConfigurationTestContext.WriteAsync(project, existing).DefaultTimeout();
         await AgentConfigurationTestContext.WriteAsync(user, existing).DefaultTimeout();
         var request = _context.Request(AgentConfigurationScope.Project, [_context.OpenCode], mcp: true,
-            detections: [new(AgentClientKind.OpenCode, version, false)]);
+            detections: [new(AgentClientKind.OpenCode, SemVersion.Parse(version, SemVersionStyles.Strict))]);
 
         var results = await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -268,7 +269,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
     public async Task SupportedV1_RegistersCatalogAtAndAboveTheCapabilityBoundary(string version)
     {
         var request = _context.Request(AgentConfigurationScope.Project, [_context.OpenCode],
-            detections: [new(AgentClientKind.OpenCode, version, false)]);
+            detections: [new(AgentClientKind.OpenCode, SemVersion.Parse(version, SemVersionStyles.Strict))]);
 
         var results = await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
@@ -296,7 +297,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
             }
             """).DefaultTimeout();
         var request = _context.Request(AgentConfigurationScope.Project, [_context.OpenCode], mcp: true,
-            detections: [new(AgentClientKind.OpenCode, "1.18.30", false)]);
+            detections: [new(AgentClientKind.OpenCode, SemVersion.Parse("1.18.30", SemVersionStyles.Strict))]);
 
         var projectResults = await _context.ConfigureNativeAsync(request).DefaultTimeout();
         Assert.False(File.Exists(user));
@@ -319,7 +320,7 @@ public class OpenCodeConfigurationTests(ITestOutputHelper output) : IDisposable
     public async Task OlderV1_McpOnlyDoesNotFailTheCatalogCapabilityCheck()
     {
         var request = _context.Request(AgentConfigurationScope.Project, [_context.OpenCode], skills: false, mcp: true,
-            detections: [new(AgentClientKind.OpenCode, "1.18.30", false)]);
+            detections: [new(AgentClientKind.OpenCode, SemVersion.Parse("1.18.30", SemVersionStyles.Strict))]);
 
         var results = await _context.ConfigureNativeAsync(request).DefaultTimeout();
 
