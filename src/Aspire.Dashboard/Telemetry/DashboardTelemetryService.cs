@@ -26,14 +26,13 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     /// </summary>
     /// <param name="logger">The logger for local dashboard errors.</param>
     /// <param name="configuration">The resolved product telemetry settings.</param>
-    /// <param name="loggerFactory">The application logger factory for usage events.</param>
-    public DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration, ILoggerFactory loggerFactory)
-        : this(logger, configuration, loggerFactory, ReportedActivitySourceName, DiagnosticsActivitySourceName)
+    public DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration)
+        : this(logger, configuration, ReportedActivitySourceName, DiagnosticsActivitySourceName)
     {
     }
 
-    internal DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration, ILoggerFactory loggerFactory, string reportedSourceName, string diagnosticsSourceName)
-        : base(logger, loggerFactory.CreateLogger(EventLogCategoryName), reportedSourceName, diagnosticsSourceName, TelemetryEventKeys.Error)
+    internal DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration, string reportedSourceName, string diagnosticsSourceName)
+        : base(logger, reportedSourceName, diagnosticsSourceName, TelemetryEventKeys.Error)
     {
         _configuration = configuration;
         _defaultTags =

@@ -4,6 +4,8 @@
 using Aspire.Cli.Utils;
 using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -28,7 +30,7 @@ namespace Aspire.Cli.Telemetry;
 //   OTEL_EXPORTER_OTLP_ENDPOINT is set without profiling enabled.
 
 /// <summary>
-/// Manages OpenTelemetry TracerProvider instances for the CLI.
+/// Manages OpenTelemetry trace and reported-log export for the CLI.
 /// Maintains separate providers for reported telemetry, profiling telemetry, and debug diagnostics.
 /// </summary>
 internal sealed class TelemetryManager : IDisposable
@@ -52,8 +54,10 @@ internal sealed class TelemetryManager : IDisposable
     private readonly TelemetryConfiguration _telemetryConfiguration;
     private readonly TelemetryTagsSource _tagsSource;
     private readonly AspireCliTelemetry _telemetry;
+    private readonly Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> _createReportedProvider;
+    private readonly ILogger<TelemetryManager> _logger;
     private readonly Lock _lifecycleLock = new();
-    private TracerProvider? _azureMonitorProvider;
+    private AzureMonitorTelemetryProvider? _azureMonitorProvider;
     private TracerProvider? _profilingProvider;
     private TracerProvider? _debugDiagnosticProvider;
     private Task<bool>? _shutdownTask;
@@ -82,11 +86,31 @@ internal sealed class TelemetryManager : IDisposable
     /// <param name="telemetryConfiguration">The telemetry configuration.</param>
     /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="telemetry">The telemetry service applying the CLI property policy.</param>
-    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry)
+    /// <param name="logger">The logger for exporter lifecycle failures.</param>
+    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger)
     {
         _telemetryConfiguration = telemetryConfiguration;
         _tagsSource = tagsSource;
         _telemetry = telemetry;
+        _logger = logger;
+        _createReportedProvider = (resource, storageDirectory) => AzureMonitorTelemetryProvider.Create(
+            new ServiceCollection(), resource, AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.EventLogCategoryName, ApplicationInsightsConnectionString, storageDirectory, builder =>
+            {
+                builder.AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
+#if DEBUG
+                if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
+                {
+                    builder.AddConsoleExporter();
+                }
+#endif
+            });
+    }
+
+    internal TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> createReportedProvider)
+        : this(telemetryConfiguration, tagsSource, telemetry, logger)
+    {
+        _createReportedProvider = createReportedProvider;
     }
 
     internal bool IsInitialized
@@ -118,18 +142,25 @@ internal sealed class TelemetryManager : IDisposable
 
             // Provider creation is synchronized so no caller can observe a partially built set.
             // If a later builder fails, shut down providers built earlier before allowing a retry.
-            TracerProvider? azureMonitorProvider = null;
+            AzureMonitorTelemetryProvider? azureMonitorProvider = null;
             TracerProvider? profilingProvider = null;
             TracerProvider? debugDiagnosticProvider = null;
             try
             {
-                CreateProviders(out azureMonitorProvider, out profilingProvider, out debugDiagnosticProvider);
+                var resource = CreateResourceBuilder();
+                CreateProviders(resource, out azureMonitorProvider, out profilingProvider, out debugDiagnosticProvider);
+                if (azureMonitorProvider is not null)
+                {
+                    _telemetry.SetEventLogger(azureMonitorProvider.EventLogger);
+                }
             }
             catch
             {
-                azureMonitorProvider?.Shutdown(0);
+                azureMonitorProvider?.Dispose();
                 profilingProvider?.Shutdown(0);
                 debugDiagnosticProvider?.Shutdown(0);
+                profilingProvider?.Dispose();
+                debugDiagnosticProvider?.Dispose();
                 throw;
             }
 
@@ -140,7 +171,7 @@ internal sealed class TelemetryManager : IDisposable
         }
     }
 
-    private void CreateProviders(out TracerProvider? azureMonitorProvider, out TracerProvider? profilingProvider, out TracerProvider? debugDiagnosticProvider)
+    private void CreateProviders(ResourceBuilder resource, out AzureMonitorTelemetryProvider? azureMonitorProvider, out TracerProvider? profilingProvider, out TracerProvider? debugDiagnosticProvider)
     {
         azureMonitorProvider = null;
         profilingProvider = null;
@@ -163,29 +194,9 @@ internal sealed class TelemetryManager : IDisposable
             return;
         }
 
-        var resource = ResourceBuilder.CreateDefault().AddService(
-            serviceName: "aspire-cli",
-            // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
-            // the OTel service version identifies the actual running binary that produced the
-            // telemetry, so it must NOT be replaced by an emulated ASPIRE_CLI_VERSION identity.
-            // The emulated identity is emitted separately as identity.* tags (AspireCliTelemetry).
-            serviceVersion: VersionHelper.GetDefaultTemplateVersion());
-
-        // Create Azure Monitor provider if connection string is provided.
-        // The Azure Monitor only exports telemetry from the Reported activity source.
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
-            var azureMonitorBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.ReportedActivitySourceName, resource, tagsSource, _telemetry)
-                .AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
-
-#if DEBUG
-            if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
-            {
-                azureMonitorBuilder.AddConsoleExporter();
-            }
-#endif
-
-            azureMonitorProvider = azureMonitorBuilder.Build();
+            azureMonitorProvider = _createReportedProvider(resource, AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
         }
 
         if (telemetryConfiguration.UseProfilingProvider)
@@ -221,15 +232,22 @@ internal sealed class TelemetryManager : IDisposable
             .AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
     }
 
+    internal static ResourceBuilder CreateResourceBuilder() => ResourceBuilder.CreateDefault().AddService(
+        serviceName: "aspire-cli",
+        // The resource identifies the physical binary, not an emulated ASPIRE_CLI_VERSION.
+        // See docs/specs/cli-identity-sidecar.md; emulated identity is reported as identity.* tags.
+        serviceVersion: VersionHelper.GetDefaultTemplateVersion());
+
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="configuration">The configuration to read telemetry settings from.</param>
     /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="telemetry">The telemetry service applying the CLI property policy.</param>
+    /// <param name="logger">The logger for exporter lifecycle failures.</param>
     /// <param name="args">The command-line arguments.</param>
-    internal TelemetryManager(IConfiguration configuration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, string[]? args = null)
-        : this(TelemetryConfiguration.Create(configuration, args), tagsSource, telemetry)
+    internal TelemetryManager(IConfiguration configuration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, string[]? args = null)
+        : this(TelemetryConfiguration.Create(configuration, args), tagsSource, telemetry, logger)
     {
     }
 
@@ -321,20 +339,17 @@ internal sealed class TelemetryManager : IDisposable
     /// Used by <c>aspire agent telemetry</c> to persist pending events before returning to the hook.
     /// The exporter uploads from storage asynchronously, including on subsequent invocations.
     /// </remarks>
-    public Task<bool> ForceFlushReportedAsync()
+    public async Task<bool> ForceFlushReportedAsync()
     {
         // See ForceFlushProfilingAsync for why this runs the synchronous, bounded
         // ForceFlush(int) on the thread pool rather than taking a CancellationToken.
-        TracerProvider? provider;
+        AzureMonitorTelemetryProvider? provider;
         lock (_lifecycleLock)
         {
             EnsureInitialized();
             provider = _azureMonitorProvider;
         }
-        return Task.Run(() =>
-        {
-            return provider?.ForceFlush(ReportedForceFlushTimeoutMilliseconds) ?? true;
-        });
+        return provider is null || await provider.ForceFlushAsync(ReportedForceFlushTimeoutMilliseconds).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -355,16 +370,31 @@ internal sealed class TelemetryManager : IDisposable
 
             _state = LifecycleState.ShuttingDown;
             var azureMonitorProvider = _azureMonitorProvider;
+            _azureMonitorProvider = null;
             var profilingProvider = _profilingProvider;
             var debugDiagnosticProvider = _debugDiagnosticProvider;
-            _shutdownTask = Task.Run(() =>
+            _telemetry.SetEventLogger(null);
+            _shutdownTask = Task.Run(async () =>
             {
-                azureMonitorProvider?.Shutdown(ShutDownTimeoutMilliseconds);
-                profilingProvider?.Shutdown(ShutDownTimeoutMilliseconds);
-                debugDiagnosticProvider?.Shutdown(ShutDownTimeoutMilliseconds);
+                // Flush signals independently so adding log export does not extend the exit budget.
+                await Task.WhenAll(
+                    Task.Run(() => profilingProvider?.Shutdown(ShutDownTimeoutMilliseconds)),
+                    Task.Run(() => debugDiagnosticProvider?.Shutdown(ShutDownTimeoutMilliseconds)),
+                    ShutdownReportedProviderAsync(azureMonitorProvider)).ConfigureAwait(false);
                 return true;
             });
             return _shutdownTask;
+        }
+    }
+
+    private async Task ShutdownReportedProviderAsync(AzureMonitorTelemetryProvider? provider)
+    {
+        using (provider)
+        {
+            if (provider is not null && !await provider.ShutdownAsync(ShutDownTimeoutMilliseconds).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Timed out flushing CLI reported telemetry.");
+            }
         }
     }
 
@@ -379,9 +409,11 @@ internal sealed class TelemetryManager : IDisposable
             }
             _state = LifecycleState.Disposed;
             // Tests may dispose the host without an explicit shutdown. Avoid a blocking flush.
-            _azureMonitorProvider?.Shutdown(0);
+            _azureMonitorProvider?.Dispose();
+            _azureMonitorProvider = null;
             _profilingProvider?.Shutdown(0);
             _debugDiagnosticProvider?.Shutdown(0);
+            _telemetry.SetEventLogger(null);
         }
     }
 

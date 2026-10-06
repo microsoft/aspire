@@ -207,6 +207,7 @@ public class DashboardTelemetryServiceTests
         Assert.Collection(fixture.LocalLogSink.Writes,
             log => Assert.Equal("Ordinary error", log.Message),
             log => Assert.Equal("Framework error", log.Message),
+            log => Assert.Equal("Other event", log.Message),
             log => Assert.Equal("Other category", log.Message));
     }
 
@@ -346,14 +347,13 @@ public class DashboardTelemetryServiceTests
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(new string('x', 1024), log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.CommandName).Value);
-        var values = Assert.IsType<string[]>(log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value);
-        Assert.Equal(100, values.Length);
-        Assert.All(values, value => Assert.Equal(new string('y', 256), value));
+        var joinedValues = Assert.IsType<string>(log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value);
+        Assert.Equal(string.Join(",", Enumerable.Repeat(new string('y', 256), 100)), joinedValues);
         Assert.Empty(activity.Events);
         Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 1024)), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceTypes, values), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceTypes, joinedValues), tag),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
             tag => Assert.Equal(new KeyValuePair<string, object?>("aspire.dashboard.result", "Success"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),

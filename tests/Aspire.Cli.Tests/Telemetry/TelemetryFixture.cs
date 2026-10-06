@@ -49,9 +49,11 @@ internal sealed class TelemetryFixture : IDisposable
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
         executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
         TagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-        Telemetry = telemetryConfiguration is null
-            ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
-            : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
+        Telemetry = new AspireCliTelemetry(logger,
+            machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector,
+            telemetryConfiguration ?? new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
+        Telemetry.SetEventLogger(logger);
 
         // Simulate CliTagEnrichmentProcessor behavior: in production, tags are added
         // in OnEnd before export. Tests assert on live activities before they

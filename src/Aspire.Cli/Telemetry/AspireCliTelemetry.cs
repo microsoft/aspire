@@ -24,6 +24,11 @@ internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
     public const string ReportedActivitySourceName = "Aspire.Cli.Reported";
 
     /// <summary>
+    /// The category for explicitly reported product-event logs.
+    /// </summary>
+    public const string EventLogCategoryName = "Aspire.Cli.Reported.Events";
+
+    /// <summary>
     /// The name of the ActivitySource for diagnostics telemetry. This telemetry is used for internal diagnostics only.
     /// </summary>
     public const string DiagnosticsActivitySourceName = "Aspire.Cli.Diagnostics";
@@ -109,7 +114,7 @@ internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
     /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
     /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext, TelemetryTagsSource tagsSource)
-        : base(logger, logger, reportedSourceName, diagnosticsSourceName, TelemetryConstants.Events.Error)
+        : base(logger, reportedSourceName, diagnosticsSourceName, TelemetryConstants.Events.Error)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;

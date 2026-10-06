@@ -8,7 +8,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+using OpenTelemetry;
 using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Telemetry;
@@ -16,12 +19,16 @@ namespace Aspire.Dashboard.Tests.Telemetry;
 public class DashboardTelemetryLogExportTests
 {
     [Theory]
-    [InlineData("OpenTelemetry")]
-    [InlineData("OpenTelemetry.Logs.OpenTelemetryLoggerProvider")]
-    public void ConfiguredCategoryRules_CannotExportOrdinaryLogsOrVerboseProductLogs(string providerName)
+    [InlineData("OpenTelemetry", false)]
+    [InlineData("OpenTelemetry", true)]
+    [InlineData("OpenTelemetry.Logs.OpenTelemetryLoggerProvider", false)]
+    [InlineData("OpenTelemetry.Logs.OpenTelemetryLoggerProvider", true)]
+    public async Task ApplicationLoggingConfiguration_CannotControlProductExport(string providerName, bool suppressProductCategory)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
+            ["Logging:LogLevel:Default"] = "Trace",
+            [$"Logging:LogLevel:{DashboardTelemetryService.EventLogCategoryName}"] = suppressProductCategory ? "None" : "Trace",
             [$"Logging:{providerName}:LogLevel:Microsoft.AspNetCore"] = "Trace",
             [$"Logging:{providerName}:LogLevel:{DashboardTelemetryService.EventLogCategoryName}"] = "Trace"
         }).Build();
@@ -30,7 +37,6 @@ public class DashboardTelemetryLogExportTests
         services.AddLogging(builder =>
         {
             builder.AddConfiguration(configuration.GetSection("Logging"));
-            DashboardTelemetryManager.ConfigureEventLogging(builder);
             builder.AddProvider(new TestLoggerProvider(sink));
         });
         services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true });
@@ -39,12 +45,19 @@ public class DashboardTelemetryLogExportTests
 
         using (var serviceProvider = services.BuildServiceProvider())
         {
-            var provider = serviceProvider.GetRequiredService<LoggerProvider>();
+            Assert.Null(serviceProvider.GetService<LoggerProvider>());
+            var telemetry = serviceProvider.GetRequiredService<DashboardTelemetryService>();
             var processor = new FilteredBatchLogRecordExportProcessor(exporter,
-                record => DashboardTelemetryManager.IsEventLog(record.CategoryName, record.LogLevel));
-            provider.AddProcessor(processor);
-            Assert.Same(provider, processor.ParentProvider);
-            Assert.Same(provider, exporter.ParentProvider);
+                record => record.CategoryName == DashboardTelemetryService.EventLogCategoryName &&
+                    record.LogLevel is >= LogLevel.Information and < LogLevel.None);
+            using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), ResourceBuilder.CreateEmpty(),
+                DashboardTelemetryService.EventLogCategoryName, () => Sdk.CreateTracerProviderBuilder().Build(), provider =>
+            {
+                provider.AddProcessor(processor);
+                Assert.Same(provider, processor.ParentProvider);
+                Assert.Same(provider, exporter.ParentProvider);
+            });
+            telemetry.SetEventLogger(logProvider.EventLogger);
             var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
             var frameworkLogger = loggerFactory.CreateLogger("Microsoft.AspNetCore.Test");
             Assert.True(frameworkLogger.IsEnabled(LogLevel.Information));
@@ -52,19 +65,20 @@ public class DashboardTelemetryLogExportTests
             frameworkLogger.LogError(new InvalidOperationException("secret exception"), "Raw framework error");
 
             var otherEventLogger = loggerFactory.CreateLogger(DashboardTelemetryService.EventLogCategoryName + ".Other");
-            Assert.True(otherEventLogger.IsEnabled(LogLevel.Information));
+            Assert.Equal(!suppressProductCategory, otherEventLogger.IsEnabled(LogLevel.Information));
             otherEventLogger.LogInformation("Wrong event category");
             var eventLogger = loggerFactory.CreateLogger(DashboardTelemetryService.EventLogCategoryName);
-            Assert.True(eventLogger.IsEnabled(LogLevel.Debug));
+            Assert.Equal(!suppressProductCategory, eventLogger.IsEnabled(LogLevel.Debug));
             eventLogger.LogDebug("Verbose product log");
+            eventLogger.LogInformation("Ordinary product-category log");
 
             using var activity = new Activity("ambient").Start();
             using (eventLogger.BeginScope(new Dictionary<string, object?> { ["secret"] = "workspace path" }))
             {
-                serviceProvider.GetRequiredService<DashboardTelemetryService>().RecordEvent(
+                telemetry.RecordEvent(
                     TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
             }
-            Assert.True(provider.ForceFlush(timeoutMilliseconds: 5000));
+            Assert.True(await logProvider.ForceFlushAsync(timeoutMilliseconds: 5000));
 
             Assert.True(exporter.LogChannel.Reader.TryRead(out var log));
             Assert.Equal(TelemetryEventKeys.ComponentInitialize, log.Message);
@@ -79,13 +93,14 @@ public class DashboardTelemetryLogExportTests
                 tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize), tag),
                 tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize), tag));
             Assert.False(exporter.LogChannel.Reader.TryPeek(out _));
-            Assert.Collection(sink.Writes,
-                local => Assert.Equal("Ordinary framework log", local.Message),
-                local => Assert.Equal("Raw framework error", local.Message));
+            Assert.Equal(suppressProductCategory
+                ? ["Ordinary framework log", "Raw framework error"]
+                : ["Ordinary framework log", "Raw framework error", "Wrong event category", "Verbose product log", "Ordinary product-category log"],
+                sink.Writes.Select(write => write.Message).ToArray());
 
-            serviceProvider.GetRequiredService<DashboardTelemetryService>().RecordEvent(
+            telemetry.RecordEvent(
                 TelemetryEventKeys.ComponentDispose, TelemetryResult.Success);
-            Assert.True(provider.Shutdown(timeoutMilliseconds: 5000));
+            Assert.True(await logProvider.ShutdownAsync(timeoutMilliseconds: 5000));
             Assert.True(exporter.LogChannel.Reader.TryRead(out var shutdownLog));
             Assert.Equal(TelemetryEventKeys.ComponentDispose, shutdownLog.Message);
             Assert.Equal(TelemetryEventKeys.ComponentDispose,
@@ -96,4 +111,5 @@ public class DashboardTelemetryLogExportTests
 
         Assert.True(exporter.IsDisposed);
     }
+
 }

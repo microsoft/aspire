@@ -1,23 +1,116 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared.Telemetry;
 using Aspire.TestUtilities;
 using Azure.Core.Pipeline;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
 public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void SharedExporter_DisablesStandardMetricsAndPerformanceCounters()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var process = RemoteExecutor.Invoke(static async storageDirectory =>
+        {
+            // Isolate cached exporter settings and prevent SDK diagnostics from making real requests.
+            Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            Environment.SetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS", "true");
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false);
+            using var fixture = new TelemetryFixture(initialize: false);
+            fixture.TagsSource.StartCalculation(() => Task.FromResult<IReadOnlyList<KeyValuePair<string, object?>>>(
+            [
+                new(TelemetryConstants.Tags.CliVersion, "1.0.0-test"),
+                new("machine.device_id", "test-device-id")
+            ]));
+            var exportedItems = new ConcurrentQueue<(string BaseType, string Name)>();
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                // The ingestion request contains newline-delimited Application Insights envelopes:
+                // {"data":{"baseType":"RemoteDependencyData","baseData":{...}},...}
+                var lines = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    using var envelope = JsonDocument.Parse(line);
+                    var data = envelope.RootElement.GetProperty("data");
+                    var baseType = data.GetProperty("baseType").GetString()!;
+                    var baseData = data.GetProperty("baseData");
+                    var name = baseType == "MetricData"
+                        ? baseData.GetProperty("metrics")[0].GetProperty("name").GetString()!
+                        : baseData.GetProperty("name").GetString()!;
+                    if (baseType == "RemoteDependencyData")
+                    {
+                        var properties = baseData.GetProperty("properties");
+                        Assert.Equal("1.0.0-test", properties.GetProperty(TelemetryConstants.Tags.CliVersion).GetString());
+                        Assert.Equal("test-device-id", properties.GetProperty("machine.device_id").GetString());
+                    }
+                    exportedItems.Enqueue((baseType, name));
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new { itemsReceived = lines.Length, itemsAccepted = lines.Length, errors = Array.Empty<object>() }))
+                };
+            });
+            using var client = new HttpClient(handler);
+            AzureMonitorExporterOptions? exporterOptions = null;
+            using var provider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(),
+                ResourceBuilder.CreateEmpty().AddService("aspire-cli"), "MetricsDisabledTest", AspireCliTelemetry.EventLogCategoryName,
+                $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/", storageDirectory,
+                builder =>
+                {
+                    builder.AddProcessor(new CliTagEnrichmentProcessor(fixture.TagsSource, fixture.Telemetry));
+                    builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(options =>
+                    {
+                        exporterOptions = options;
+                        options.Transport = new HttpClientTransport(client);
+                    }));
+                });
+
+            Assert.NotNull(exporterOptions);
+            Assert.False(exporterOptions.EnableLiveMetrics);
+            Assert.False(exporterOptions.EnableStandardMetrics);
+            Assert.False(exporterOptions.EnablePerformanceCounters);
+            Assert.Null(exporterOptions.TracesPerSecond);
+            Assert.Equal(1.0f, exporterOptions.SamplingRatio);
+            Assert.Equal("true", Environment.GetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS"));
+            Assert.Equal("aspire-cli", provider.Resource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+            using var diagnosticSource = new ActivitySource(AspireCliTelemetry.DiagnosticsActivitySourceName);
+            Assert.False(diagnosticSource.HasListeners());
+            using var profilingSource = new ActivitySource(ProfilingTelemetry.ActivitySourceName);
+            Assert.False(profilingSource.HasListeners());
+
+            using var source = new ActivitySource("MetricsDisabledTest");
+            using (var activity = source.StartActivity("reported-operation"))
+            {
+                Assert.NotNull(activity);
+                Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.CliVersion));
+            }
+
+            Assert.True(await provider.ForceFlushAsync(10_000));
+            Assert.Equal(
+                [("MetricData", "_OTELRESOURCE_"), ("RemoteDependencyData", "reported-operation")],
+                exportedItems.ToArray());
+        }, workspace.WorkspaceRoot.FullName);
+    }
+
     [Fact]
     public async Task TelemetryManager_RequiresInitializationBeforeUse()
     {
@@ -110,7 +203,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         => new(
             new TelemetryConfiguration { ReportedTelemetryEnabled = false },
             fixture.TagsSource,
-            fixture.Telemetry);
+            fixture.Telemetry,
+            NullLogger<TelemetryManager>.Instance);
 
     [Fact]
     [OuterloopTest("Exercises the exporter's real three-minute lease expiry across processes.")]

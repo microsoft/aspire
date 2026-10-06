@@ -15,6 +15,30 @@ namespace Aspire.Cli.Tests.Telemetry;
 
 public class AspireCliTelemetryTests
 {
+    [Fact]
+    public void RecordEvent_RequiresExplicitEventLoggerAttachment()
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var telemetry = new AspireCliTelemetry(logger,
+            new TelemetryFixture.TestMachineInformationProvider(), new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(), new TelemetryFixture.TestInternalMicrosoftDetector(),
+            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            $"Test.Reported.{Guid.NewGuid():N}", $"Test.Diagnostics.{Guid.NewGuid():N}",
+            TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
+
+        telemetry.RecordEvent("before-attachment");
+        Assert.Empty(logger.Collector.GetSnapshot());
+
+        telemetry.SetEventLogger(logger);
+        telemetry.RecordEvent("after-attachment");
+        Assert.Equal("after-attachment", Assert.Single(logger.Collector.GetSnapshot()).Message);
+
+        telemetry.SetEventLogger(null);
+        telemetry.RecordEvent("after-detachment");
+        Assert.Equal("after-attachment", Assert.Single(logger.Collector.GetSnapshot()).Message);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

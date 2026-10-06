@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -21,6 +22,50 @@ public class DashboardTelemetryManagerTests : IDisposable
 
     public void Dispose() => Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME", _originalCloudRoleName);
 
+    [Fact]
+    public async Task ManagerDisposal_ReleasesProductLoggingWithoutDisposingApplicationLogging()
+    {
+        var sink = new TestSink();
+        using var factory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
+        using var telemetry = new DashboardTelemetryService(factory.CreateLogger<DashboardTelemetryService>(),
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true });
+        var exporter = new TestDashboardTelemetryLogExporter();
+        var configured = 0;
+        using var source = new ActivitySource($"Test.Dashboard.Ownership.{Guid.NewGuid():N}");
+        await using var manager = new DashboardTelemetryManager(
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true },
+            factory.CreateLogger<DashboardTelemetryManager>(), telemetry,
+            (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource,
+                DashboardTelemetryService.EventLogCategoryName,
+                () => Sdk.CreateTracerProviderBuilder().AddSource(source.Name).Build(), provider =>
+                {
+                    configured++;
+                    provider.AddProcessor(new SimpleLogRecordExportProcessor(exporter));
+                }));
+        manager.Initialize();
+        manager.Initialize();
+        Assert.Equal(1, configured);
+        Assert.True(source.HasListeners());
+
+        telemetry.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+        Assert.True(exporter.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(TelemetryEventKeys.ComponentInitialize, log.Message);
+        Assert.Empty(sink.Writes);
+
+        telemetry.Dispose();
+        telemetry.Dispose();
+        Assert.False(exporter.IsDisposed);
+        Assert.True(source.HasListeners());
+        await manager.DisposeAsync();
+        await manager.DisposeAsync();
+
+        Assert.True(exporter.IsDisposed);
+        Assert.False(source.HasListeners());
+        Assert.Throws<ObjectDisposedException>(manager.Initialize);
+        factory.CreateLogger("Microsoft.AspNetCore").LogWarning("Still logging locally");
+        Assert.Equal("Still logging locally", Assert.Single(sink.Writes).Message);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -34,22 +79,23 @@ public class DashboardTelemetryManagerTests : IDisposable
         services.AddSingleton(services => new DashboardTelemetryManager(
             services.GetRequiredService<DashboardTelemetryConfiguration>(),
             services.GetRequiredService<ILogger<DashboardTelemetryManager>>(),
-            services.GetRequiredService<LoggerProvider>(),
-            _ =>
-            {
-                Assert.Equal("ddc-cor-prd-usce-ai-aspiredashboard",
-                    Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
-                traceCreated = true;
-                return Sdk.CreateTracerProviderBuilder().Build();
-            },
-            _ =>
-            {
-                Assert.True(traceCreated);
-                Assert.Equal("ddc-cor-prd-usce-ai-aspiredashboard",
-                    Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
-                logConfigured = true;
-                return services.GetRequiredService<LoggerProvider>();
-            }));
+            services.GetRequiredService<DashboardTelemetryService>(),
+            (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, DashboardTelemetryService.EventLogCategoryName,
+                () =>
+                {
+                    Assert.Equal("ddc-cor-prd-usce-ai-aspiredashboard",
+                        Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
+                    traceCreated = true;
+                    return Sdk.CreateTracerProviderBuilder().SetResourceBuilder(resource).Build();
+                },
+                provider =>
+                {
+                    Assert.True(traceCreated);
+                    Assert.Equal("ddc-cor-prd-usce-ai-aspiredashboard",
+                        Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
+                    logConfigured = true;
+                    Assert.Equal("aspire-dashboard", provider.GetResource().Attributes.Single(attribute => attribute.Key == "service.name").Value);
+                })));
         await using var serviceProvider = services.BuildServiceProvider();
         var manager = serviceProvider.GetRequiredService<DashboardTelemetryManager>();
 
@@ -60,8 +106,7 @@ public class DashboardTelemetryManagerTests : IDisposable
         Assert.Equal(enabled, logConfigured);
         Assert.Equal(enabled ? "ddc-cor-prd-usce-ai-aspiredashboard" : "existing-role",
             Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
-        var resource = serviceProvider.GetRequiredService<LoggerProvider>().GetResource();
-        Assert.Equal("aspire-dashboard", resource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+        Assert.Null(serviceProvider.GetService<LoggerProvider>());
     }
 
     [Theory]
@@ -146,6 +191,7 @@ public class DashboardTelemetryManagerTests : IDisposable
         var sink = new TestSink();
         var failure = new UnauthorizedAccessException("Telemetry storage is not writable.");
         var failInitialization = true;
+        var logExporters = new List<TestDashboardTelemetryLogExporter>();
         using var source = new ActivitySource($"Test.Dashboard.Startup.{Guid.NewGuid():N}");
         using var host = new HostBuilder().ConfigureServices(services =>
         {
@@ -154,25 +200,27 @@ public class DashboardTelemetryManagerTests : IDisposable
             services.AddSingleton(services => new DashboardTelemetryManager(
                 services.GetRequiredService<DashboardTelemetryConfiguration>(),
                 services.GetRequiredService<ILogger<DashboardTelemetryManager>>(),
-                services.GetRequiredService<LoggerProvider>(),
-                _ =>
-                {
-                    if (failTrace && failInitialization)
+                services.GetRequiredService<DashboardTelemetryService>(),
+                (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, DashboardTelemetryService.EventLogCategoryName,
+                    () =>
                     {
-                        throw failure;
-                    }
+                        if (failTrace && failInitialization)
+                        {
+                            throw failure;
+                        }
 
-                    return Sdk.CreateTracerProviderBuilder().AddSource(source.Name).Build();
-                },
-                _ =>
-                {
-                    if (!failTrace && failInitialization)
+                        return Sdk.CreateTracerProviderBuilder().AddSource(source.Name).Build();
+                    },
+                    provider =>
                     {
-                        throw failure;
-                    }
-
-                    return services.GetRequiredService<LoggerProvider>();
-                }));
+                        var exporter = new TestDashboardTelemetryLogExporter();
+                        logExporters.Add(exporter);
+                        provider.AddProcessor(new SimpleLogRecordExportProcessor(exporter));
+                        if (!failTrace && failInitialization)
+                        {
+                            throw failure;
+                        }
+                    })));
         }).Build();
         var manager = host.Services.GetRequiredService<DashboardTelemetryManager>();
 
@@ -181,6 +229,7 @@ public class DashboardTelemetryManagerTests : IDisposable
         Assert.True(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStarted.IsCancellationRequested);
         Assert.False(manager.IsInitialized);
         Assert.False(source.HasListeners());
+        Assert.All(logExporters, exporter => Assert.True(exporter.IsDisposed));
         Assert.True(host.Services.GetRequiredService<DashboardTelemetryService>().IsTelemetryEnabled);
         var warning = Assert.Single(sink.Writes, write => write.LoggerName == typeof(DashboardTelemetryManager).FullName);
         Assert.Equal(LogLevel.Warning, warning.LogLevel);
@@ -213,9 +262,9 @@ public class DashboardTelemetryManagerTests : IDisposable
         services.AddSingleton(services => new DashboardTelemetryManager(
             services.GetRequiredService<DashboardTelemetryConfiguration>(),
             services.GetRequiredService<ILogger<DashboardTelemetryManager>>(),
-            services.GetRequiredService<LoggerProvider>(),
-            _ => Sdk.CreateTracerProviderBuilder().AddSource(DashboardTelemetryService.ReportedActivitySourceName).Build(),
-            _ => services.GetRequiredService<LoggerProvider>()));
+            services.GetRequiredService<DashboardTelemetryService>(),
+            (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, DashboardTelemetryService.EventLogCategoryName,
+                () => Sdk.CreateTracerProviderBuilder().AddSource(DashboardTelemetryService.ReportedActivitySourceName).Build(), _ => { })));
 
         return services.BuildServiceProvider();
     }
@@ -223,7 +272,7 @@ public class DashboardTelemetryManagerTests : IDisposable
     private static void ConfigureServices(IServiceCollection services, bool enabled)
     {
         services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = enabled });
-        services.AddLogging(DashboardTelemetryManager.ConfigureEventLogging);
+        services.AddLogging();
         services.AddSingleton<DashboardTelemetryService>();
         services.AddSingleton<DashboardTelemetryManager>();
         services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());

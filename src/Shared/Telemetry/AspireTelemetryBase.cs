@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Shared.Telemetry;
 
@@ -15,24 +16,37 @@ public abstract class AspireTelemetryBase : IDisposable
     private readonly ActivitySource _reportedActivitySource;
     private readonly ActivitySource _diagnosticsActivitySource;
     private readonly ILogger _logger;
-    private readonly ILogger _eventLogger;
+    private readonly Lock _lifecycleLock = new();
+    private ILogger _eventLogger = NullLogger.Instance;
+    private bool _disposed;
     private readonly string _errorEventName;
 
     /// <summary>
     /// Initializes telemetry with product-specific activity source and error event names.
     /// </summary>
     /// <param name="logger">The logger for local errors.</param>
-    /// <param name="eventLogger">The logger for structured product events.</param>
     /// <param name="reportedSourceName">The externally reported activity source name.</param>
     /// <param name="diagnosticsSourceName">The local diagnostic activity source name.</param>
     /// <param name="errorEventName">The name of reported error events.</param>
-    protected AspireTelemetryBase(ILogger logger, ILogger eventLogger, string reportedSourceName, string diagnosticsSourceName, string errorEventName)
+    protected AspireTelemetryBase(ILogger logger, string reportedSourceName, string diagnosticsSourceName, string errorEventName)
     {
         _logger = logger;
-        _eventLogger = eventLogger;
         _reportedActivitySource = new ActivitySource(reportedSourceName);
         _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
         _errorEventName = errorEventName;
+    }
+
+    internal void SetEventLogger(ILogger? eventLogger)
+    {
+        lock (_lifecycleLock)
+        {
+            // Managers can detach their logger even if the recording service was disposed first.
+            if (eventLogger is not null)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+            }
+            Volatile.Write(ref _eventLogger, eventLogger ?? NullLogger.Instance);
+        }
     }
 
     /// <summary>
@@ -119,14 +133,20 @@ public abstract class AspireTelemetryBase : IDisposable
         var tags = CreateProperties(properties);
         List<KeyValuePair<string, object?>> attributes =
         [
-            .. tags,
+            // Azure Monitor stringifies log attributes with Convert.ToString, which turns a string[]
+            // into "System.String[]". Join collections after privacy filtering; span tags stay typed.
+            // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/LogsHelper.cs
+            .. tags.Select(tag => new KeyValuePair<string, object?>(tag.Key,
+                tag.Value is IEnumerable<string> values
+                    ? string.Join(",", values)
+                    : tag.Value)),
             new("{OriginalFormat}", eventName),
             // Azure Monitor reads OperationName from this attribute, not EventId.Name.
             // https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/LogsHelper.cs
             new("microsoft.operation_name", eventName)
         ];
         // Logging without an exception keeps sanitized errors in Application Insights' traces table.
-        _eventLogger.Log(LogLevel.Information, new EventId(0, eventName), attributes,
+        Volatile.Read(ref _eventLogger).Log(LogLevel.Information, new EventId(0, eventName), attributes,
             exception: null, formatter: (_, _) => eventName);
     }
 
@@ -266,8 +286,17 @@ public abstract class AspireTelemetryBase : IDisposable
     /// </summary>
     public void Dispose()
     {
-        _reportedActivitySource.Dispose();
-        _diagnosticsActivitySource.Dispose();
+        lock (_lifecycleLock)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            _disposed = true;
+            Volatile.Write(ref _eventLogger, NullLogger.Instance);
+            _reportedActivitySource.Dispose();
+            _diagnosticsActivitySource.Dispose();
+        }
         GC.SuppressFinalize(this);
     }
 }

@@ -4,16 +4,21 @@
 using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Shared.Telemetry;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Dashboard.Tests;
 
 public sealed class DashboardTelemetryFixture : IDisposable
 {
     private readonly ActivityListener _listener;
+    private readonly List<AzureMonitorTelemetryProvider> _providers = [];
 
     public string ActivitySourceName { get; } = $"Test.Dashboard.{Guid.NewGuid():N}";
     public string DiagnosticsActivitySourceName => ActivitySourceName + ".Diagnostics";
@@ -30,8 +35,6 @@ public sealed class DashboardTelemetryFixture : IDisposable
         Configuration = new() { ReportedTelemetryEnabled = reportedTelemetryEnabled };
         LoggerFactory = Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
         {
-            DashboardTelemetryManager.ConfigureEventLogging(builder);
-            builder.AddOpenTelemetry(logging => logging.AddProcessor(new EventLogProcessor(LogChannel.Writer)));
             builder.AddProvider(new TestLoggerProvider(LocalLogSink));
         });
         EventLogger = LoggerFactory.CreateLogger(DashboardTelemetryService.EventLogCategoryName);
@@ -43,12 +46,39 @@ public sealed class DashboardTelemetryFixture : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
         Telemetry = new DashboardTelemetryService(logger ?? LoggerFactory.CreateLogger<DashboardTelemetryService>(),
-            Configuration, LoggerFactory, ActivitySourceName, DiagnosticsActivitySourceName);
+            Configuration, ActivitySourceName, DiagnosticsActivitySourceName);
+        ConfigureLogging(Telemetry);
+    }
+
+    public void ConfigureLogging(AspireTelemetryBase telemetry)
+    {
+        if (!Configuration.ReportedTelemetryEnabled)
+        {
+            return;
+        }
+        var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), ResourceBuilder.CreateEmpty(),
+            DashboardTelemetryService.EventLogCategoryName,
+            () => Sdk.CreateTracerProviderBuilder().Build(),
+            provider => provider.AddProcessor(new EventLogProcessor(LogChannel.Writer)));
+        try
+        {
+            telemetry.SetEventLogger(logProvider.EventLogger);
+            _providers.Add(logProvider);
+        }
+        catch
+        {
+            logProvider.Dispose();
+            throw;
+        }
     }
 
     public void Dispose()
     {
         Telemetry.Dispose();
+        foreach (var logProvider in _providers)
+        {
+            logProvider.Dispose();
+        }
         _listener.Dispose();
         LoggerFactory.Dispose();
         ActivityChannel.Writer.TryComplete();

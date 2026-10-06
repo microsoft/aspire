@@ -7,10 +7,15 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Dashboard.Tests.Telemetry;
 
-internal sealed class TestTelemetryService(DashboardTelemetryFixture fixture)
-    : AspireTelemetryBase(fixture.LoggerFactory.CreateLogger<TestTelemetryService>(), fixture.EventLogger,
-        fixture.ActivitySourceName, fixture.DiagnosticsActivitySourceName, "test-error")
+internal sealed class TestTelemetryService : AspireTelemetryBase
 {
+    public TestTelemetryService(DashboardTelemetryFixture fixture)
+        : base(fixture.LoggerFactory.CreateLogger<TestTelemetryService>(),
+            fixture.ActivitySourceName, fixture.DiagnosticsActivitySourceName, "test-error")
+    {
+        fixture.ConfigureLogging(this);
+    }
+
     public Activity? StartOperation(IEnumerable<KeyValuePair<string, object?>> properties)
     {
         var activity = StartReportedActivity("test-operation");

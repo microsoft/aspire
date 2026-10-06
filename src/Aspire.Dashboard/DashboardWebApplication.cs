@@ -348,7 +348,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
         builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
         builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
-        DashboardTelemetryManager.ConfigureEventLogging(builder.Logging);
         if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
         {
             builder.Services.AddOpenTelemetry()
