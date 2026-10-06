@@ -13,6 +13,10 @@ public class InstrumentViewModel
 
     public OtlpInstrumentSummary? Instrument { get; private set; }
     public List<DimensionScope>? MatchedDimensions { get; private set; }
+    public bool HasOverflow { get; private set; }
+
+    // Compatibility depends on the selected dimensions and chart windows, not the persisted instrument.
+    public bool HasIncompatibleHistogramBounds { get; set; }
 
     public string? Theme { get; set; }
     public bool ShowCount { get; set; }
@@ -27,10 +31,11 @@ public class InstrumentViewModel
         ImmutableInterlocked.Update(ref _dataUpdateSubscriptions, static (subscriptions, subscription) => subscriptions.Remove(subscription), subscription);
     }
 
-    public async Task UpdateDataAsync(OtlpInstrumentSummary instrument, List<DimensionScope> matchedDimensions)
+    public async Task UpdateDataAsync(OtlpInstrumentSummary instrument, List<DimensionScope> matchedDimensions, bool hasOverflow)
     {
         Instrument = instrument;
         MatchedDimensions = matchedDimensions;
+        HasOverflow = hasOverflow;
 
         // A chart can be disposed while another subscription is awaiting a render. Invoke the immutable
         // snapshot captured at the start so disposal can't invalidate the active enumeration.

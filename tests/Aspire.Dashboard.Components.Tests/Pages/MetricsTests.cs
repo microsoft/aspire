@@ -47,6 +47,7 @@ public partial class MetricsTests : DashboardTestContext
         MetricsSetupHelpers.SetupMetricsPage(this);
         var timeProvider = new TestTimeProvider { UtcNow = DateTimeOffset.UtcNow };
         Services.AddSingleton<BrowserTimeProvider>(timeProvider);
+        Services.AddSingleton<TimeProvider>(new FakeTimeProvider(timeProvider.UtcNow));
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var time = timeProvider.GetUtcNow().UtcDateTime.AddSeconds(-3);
         var first = HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [3, 0], [10]);
@@ -79,6 +80,12 @@ public partial class MetricsTests : DashboardTestContext
             Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
             cut.Find(".block-warning").TextContent.Trim()));
 
+        var instrumentViewModel = view == MetricViewKind.Graph
+            ? cut.FindComponent<PlotlyChart>().Instance.InstrumentViewModel
+            : cut.FindComponent<MetricTable>().Instance.InstrumentViewModel;
+        Assert.True(instrumentViewModel.HasIncompatibleHistogramBounds);
+        Assert.False(instrumentViewModel.HasOverflow);
+
         var filters = cut.FindComponent<ChartFilters>();
         await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(true));
         cut.WaitForAssertion(() =>
@@ -105,6 +112,28 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(
             Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
             cut.Find(".block-warning").TextContent.Trim()));
+
+        var instrument = instrumentViewModel.Instrument;
+        var dimensions = instrumentViewModel.MatchedDimensions;
+        Assert.NotNull(instrument);
+        Assert.NotNull(dimensions);
+
+        timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(2);
+        await cut.InvokeAsync(() => instrumentViewModel.UpdateDataAsync(instrument, dimensions, hasOverflow: true));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(instrumentViewModel.HasIncompatibleHistogramBounds);
+            Assert.Equal(2, cut.FindAll(".block-warning").Count);
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerOverflowTitle,
+                cut.Find(".block-warning .title").TextContent);
+        });
+
+        timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(2);
+        await cut.InvokeAsync(() => instrumentViewModel.UpdateDataAsync(instrument, dimensions, hasOverflow: false));
+        cut.WaitForAssertion(() => Assert.Equal(
+            Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+            Assert.Single(cut.FindAll(".block-warning")).TextContent.Trim()));
     }
 
     [Theory]

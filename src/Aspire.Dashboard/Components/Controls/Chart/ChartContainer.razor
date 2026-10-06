@@ -15,7 +15,7 @@ else
             <h3>@_instrument.Summary.Name</h3>
             <p>@_instrument.Summary.Description</p>
 
-            @if (_hasIncompatibleHistogramBounds)
+            @if (_instrumentViewModel.HasIncompatibleHistogramBounds)
             {
                 <div class="block-warning" role="status">
                     <div class="block-warning-icon">
@@ -28,7 +28,7 @@ else
                 </div>
             }
 
-            @if (_instrument.HasOverflow)
+            @if (_instrumentViewModel.HasOverflow)
             {
                 <div class="block-warning">
                     <div class="block-warning-icon">
@@ -51,7 +51,7 @@ else
                        Header="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
                        IconStart="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
-                    <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" HistogramCompatibilityChanged="HistogramCompatibilityChanged" />
+                    <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" InstrumentChanged="StateHasChanged" />
                     <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>
@@ -61,7 +61,7 @@ else
                        Header="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
                        IconStart="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
-                    <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" HistogramCompatibilityChanged="HistogramCompatibilityChanged" />
+                    <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" InstrumentChanged="StateHasChanged" />
                     <ChartFilters @key="(MeterName, InstrumentName)" InstrumentType="_instrument.Summary.Type" ShowCount="_instrumentViewModel.ShowCount" ShowCountChanged="ShowCountChangedAsync" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
             </FluentTab>

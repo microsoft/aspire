@@ -82,7 +82,7 @@ public class PlotlyChartTests : DashboardTestContext
             TimeUnixNano = long.MaxValue
         }, context);
 
-        await model.UpdateDataAsync(instrumentSummary, [dimension]);
+        await model.UpdateDataAsync(instrumentSummary, [dimension], hasOverflow: false);
 
         // Act
         var cut = Render<PlotlyChart>(builder =>
@@ -137,7 +137,7 @@ public class PlotlyChartTests : DashboardTestContext
         model.AddDataUpdateSubscription(FirstSubscription);
         model.AddDataUpdateSubscription(SecondSubscription);
 
-        var updateTask = model.UpdateDataAsync(null!, []);
+        var updateTask = model.UpdateDataAsync(null!, [], hasOverflow: false);
         await firstSubscriptionStarted.Task;
 
         model.RemoveDataUpdateSubscription(SecondSubscription);

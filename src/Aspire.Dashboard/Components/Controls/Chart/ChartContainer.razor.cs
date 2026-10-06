@@ -32,12 +32,6 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private long _instrumentUpdateVersion;
     private int _disposed;
     private Pages.Metrics.MetricViewKind _activeView;
-    private bool _hasIncompatibleHistogramBounds;
-
-    private void HistogramCompatibilityChanged(bool incompatibleBounds)
-    {
-        _hasIncompatibleHistogramBounds = incompatibleBounds;
-    }
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
@@ -192,7 +186,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private async Task UpdateInstrumentDataAsync(OtlpInstrumentData instrument)
     {
         // Only update data in plotly
-        await _instrumentViewModel.UpdateDataAsync(instrument.Summary, instrument.Dimensions);
+        await _instrumentViewModel.UpdateDataAsync(instrument.Summary, instrument.Dimensions, instrument.HasOverflow);
     }
 
     private async Task ShowCountChangedAsync(bool showCount)
