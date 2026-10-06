@@ -762,7 +762,8 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     private static string TrayExecutablePath => OperatingSystem.IsWindows()
-        ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath;
+        ? WindowsTrayPayload.ExecutablePath : OperatingSystem.IsLinux()
+            ? LinuxTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath;
 
     /// <summary>
     /// Removes reparse points created during tests to prevent

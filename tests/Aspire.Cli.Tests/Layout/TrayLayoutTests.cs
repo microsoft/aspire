@@ -64,6 +64,7 @@ public sealed class TrayLayoutTests(ITestOutputHelper output)
     [InlineData("linux-arm64")]
     public async Task LinuxTrayPayloadSurvivesProductionExtraction(string rid)
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Linux payload extraction restores Unix file permissions.");
         using var workspace = TemporaryWorkspace.CreateForCli(output);
         var source = Path.Combine(workspace.Path, "publish");
         LinuxTrayTestPayload.Create(source, rid);

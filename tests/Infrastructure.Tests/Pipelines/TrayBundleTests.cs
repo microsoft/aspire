@@ -192,7 +192,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.Contains("anchor apple generic", StringComparison.Ordinal));
 
         var signing = LoadProject("eng/Signing.props");
-        Assert.Equal([@"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe"],
+        Assert.Equal([@"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe",
+            "$(ArtifactsBinDir)Aspire.Tray.Linux/**/publish/aspire-tray"],
             signing.Descendants("ItemsToSign")
                 .Select(element => element.Attribute("Include")!.Value)
                 .Where(include => include.Contains("Aspire.Tray.", StringComparison.Ordinal)));
@@ -386,6 +387,19 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         {
             Assert.Throws<InvalidDataException>(builder.CopyTray);
         }
+    }
+
+    [Fact]
+    public void LinuxSigningIncludesPublishedTray()
+    {
+        var signing = LoadProject("eng/Signing.props");
+        var certificate = Assert.Single(signing.Descendants("FileSignInfo"),
+            element => element.Attribute("Include")?.Value == "aspire-tray");
+        Assert.Equal("Microsoft400", certificate.Attribute("CertificateName")!.Value);
+        Assert.Equal("$([System.OperatingSystem]::IsLinux())", certificate.Attribute("Condition")!.Value);
+        var input = Assert.Single(signing.Descendants("ItemsToSign"),
+            element => element.Attribute("Include")?.Value == "$(ArtifactsBinDir)Aspire.Tray.Linux/**/publish/aspire-tray");
+        Assert.Equal("$([System.OperatingSystem]::IsLinux())", input.Attribute("Condition")!.Value);
     }
 
     [Fact]

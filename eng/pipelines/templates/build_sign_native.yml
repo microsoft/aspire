@@ -276,7 +276,7 @@ jobs:
                 ${{ parameters.extraBuildArgs }}
                 -projects "$(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj"
                 /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              # eng/Signing.props includes the Windows tray publish output.
+              # eng/Signing.props includes the Windows and Linux tray publish outputs.
               displayName: 🟣Sign bundle components
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
@@ -313,6 +313,11 @@ jobs:
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
               displayName: 🟣Restore execute permissions on managed executables
+            # Linux tray signing uses the same Arcade pass and also resets its mode.
+            # Musl has no tray payload; macOS restores its signed app separately above.
+            - ${{ if in(targetRid, 'linux-x64', 'linux-arm64') }}:
+              - script: chmod +x "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Tray.Linux/$(_BuildConfig)/net10.0/${{ targetRid }}/publish/aspire-tray"
+                displayName: 🟣Restore execute permissions on Linux tray
 
           # Repack the already-published/signed Dashboard without republishing it,
           # which would replace the signed executable. Common.projitems recreates
