@@ -121,11 +121,6 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
 
     public async Task ExportIncompatibleHistogramAsync(CancellationToken cancellationToken)
     {
-        var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
-            ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
-        using var channel = GrpcChannel.ForAddress(endpoint);
-        var client = new MetricsService.MetricsServiceClient(channel);
-        var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
         var histogram = new Metric
         {
             Name = "incompatible.histogram.bounds",
@@ -167,13 +162,70 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             }
         }
 
+        await ExportHistogramAsync(histogram, "incompatible-histogram-metrics", cancellationToken);
+    }
+
+    public async Task ExportUnavailableHistogramPercentilesAsync(CancellationToken cancellationToken)
+    {
+        var histogram = new Metric
+        {
+            Name = "histogram.unavailable.percentiles",
+            Description = "Percentiles are available before and after the middle interval. Incompatible bucket bounds make that interval unavailable, so the graph has a gap rather than zero values.",
+            Unit = "ms",
+            Histogram = new Histogram
+            {
+                AggregationTemporality = AggregationTemporality.Delta
+            }
+        };
+
+        double[] compatibleBounds = [10, 50, 100];
+        double[] incompatibleBounds = [20, 60, 200];
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 0; second < durationSeconds; second++)
+        {
+            for (var dimensionIndex = 0; dimensionIndex < 2; dimensionIndex++)
+            {
+                // Delta layouts may change between intervals. Only the middle 80 seconds
+                // have disjoint bounds; observations still exist throughout the gap.
+                var incompatible = dimensionIndex == 1 && second is >= 100 and < 180;
+                histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+                {
+                    StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second)),
+                    TimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second + 1)),
+                    Count = 100,
+                    Sum = 50 * 5 + 40 * 25 + 9 * 75 + (incompatible ? 250 : 150),
+                    BucketCounts = { 50ul, 40ul, 9ul, 1ul },
+                    ExplicitBounds = { incompatible ? incompatibleBounds : compatibleBounds },
+                    Attributes =
+                    {
+                        new KeyValue
+                        {
+                            Key = "stress.layout",
+                            Value = new AnyValue { StringValue = dimensionIndex.ToString(CultureInfo.InvariantCulture) }
+                        }
+                    }
+                });
+            }
+        }
+
+        await ExportHistogramAsync(histogram, "unavailable-histogram-percentiles", cancellationToken);
+    }
+
+    private async Task ExportHistogramAsync(Metric histogram, string resourceName, CancellationToken cancellationToken)
+    {
+        var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+            ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
+        using var channel = GrpcChannel.ForAddress(endpoint);
+        var client = new MetricsService.MetricsServiceClient(channel);
+        var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
         var request = new ExportMetricsServiceRequest
         {
             ResourceMetrics =
             {
                 new ResourceMetrics
                 {
-                    Resource = CreateResource("incompatible-histogram-metrics"),
+                    Resource = CreateResource(resourceName),
                     ScopeMetrics =
                     {
                         new ScopeMetrics
@@ -191,7 +243,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedDataPoints} metric points: {partialSuccess.ErrorMessage}");
         }
 
-        logger.LogInformation("Exported {PointCount} histogram points with incompatible bounds.", histogram.Histogram.DataPoints.Count);
+        logger.LogInformation("Exported {PointCount} points for histogram {InstrumentName}.", histogram.Histogram.DataPoints.Count, histogram.Name);
     }
 
     private async Task ExportTracesAsync(

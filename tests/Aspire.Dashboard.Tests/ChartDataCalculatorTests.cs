@@ -335,6 +335,51 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void CalculateHistogramValues_NoDimensions_AllNullValuesAndDifferences()
+    {
+        var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([], s_startTime, ToLocal, "ms");
+
+        Assert.False(data.HasIncompatibleHistogramBounds);
+        Assert.Equal(3, data.Traces.Count);
+        Assert.All(data.Traces, trace =>
+        {
+            Assert.Equal([null, null, null, null, null, null, null], trace.Values);
+            Assert.Equal(trace.Values, trace.DiffValues);
+        });
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative, false)]
+    [InlineData(OtlpAggregationTemporality.Cumulative, true)]
+    [InlineData(OtlpAggregationTemporality.Delta, false)]
+    [InlineData(OtlpAggregationTemporality.Delta, true)]
+    public void CalculateHistogramValues_StackedDifferences_PreservesMissingIntervals(OtlpAggregationTemporality temporality, bool sameBucket)
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddMilliseconds(-500);
+        dimension.AddHistogramValue(
+            HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), sameBucket ? [100, 0, 0, 0] : [50, 40, 10, 0], [10, 50, 100]),
+            temporality, CreateContext());
+        var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([dimension], s_startTime, ToLocal, "ms");
+
+        Assert.False(data.HasIncompatibleHistogramBounds);
+        Assert.Collection(data.Traces,
+            trace => AssertTrace(trace, percentile: 50, value: 10, difference: 10),
+            trace => AssertTrace(trace, percentile: 90, value: sameBucket ? 10 : 50, difference: sameBucket ? 0 : 40),
+            trace => AssertTrace(trace, percentile: 99, value: sameBucket ? 10 : 100, difference: sameBucket ? 0 : 50));
+
+        void AssertTrace(ChartTrace trace, int percentile, double value, double difference)
+        {
+            var hasLastValue = temporality == OtlpAggregationTemporality.Cumulative;
+            Assert.Equal(percentile, trace.Percentile);
+            Assert.Equal([null, null, null, null, null, value, hasLastValue ? value : null], trace.Values);
+            Assert.Equal([null, null, null, null, null, difference, hasLastValue ? difference : null], trace.DiffValues);
+        }
+    }
+
+    [Fact]
     public void TryCalculateHistogramPoints_StaggeredDimensionChanges_CombinesObservationDeltas()
     {
         var context = CreateContext();
@@ -597,7 +642,11 @@ public class ChartDataCalculatorTests
         var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
         var data = calculator.CalculateHistogramValues([first, second], s_startTime, ToLocal, "ms");
         Assert.True(data.HasIncompatibleHistogramBounds);
-        Assert.All(data.Traces, trace => Assert.All(trace.Values, Assert.Null));
+        Assert.All(data.Traces, trace =>
+        {
+            Assert.Equal([null, null, null, null, null, null, null], trace.Values);
+            Assert.Equal(trace.Values, trace.DiffValues);
+        });
         Assert.True(ChartDataCalculator.TryCalculatePoint([first, second], time, time.AddSeconds(1), out var count));
         Assert.Equal(8, count);
         var countData = calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count");

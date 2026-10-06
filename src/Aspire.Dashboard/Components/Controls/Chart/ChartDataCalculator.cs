@@ -122,10 +122,11 @@ internal sealed class ChartDataCalculator
         {
             var currentTrace = trace.Value;
 
+            // Stacked percentile bands must keep gaps when either percentile is unavailable.
             for (var i = 0; i < currentTrace.Values.Count; i++)
             {
-                double? diffValue = (previousValues != null)
-                    ? currentTrace.Values[i] - previousValues.Values[i] ?? 0
+                var diffValue = previousValues is not null
+                    ? currentTrace.Values[i] - previousValues.Values[i]
                     : currentTrace.Values[i];
 
                 currentTrace.DiffValues.Add(diffValue);

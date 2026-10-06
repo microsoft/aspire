@@ -76,9 +76,16 @@ public partial class MetricsTests : DashboardTestContext
             builder.Add(component => component.Resources, [resource]);
         });
 
-        cut.WaitForAssertion(() => Assert.Equal(
-            Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
-            cut.Find(".block-warning").TextContent.Trim()));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+                cut.Find(".block-warning").TextContent.Trim());
+            if (view == MetricViewKind.Graph)
+            {
+                AssertUnavailablePercentiles();
+            }
+        });
 
         var instrumentViewModel = view == MetricViewKind.Graph
             ? cut.FindComponent<PlotlyChart>().Instance.InstrumentViewModel
@@ -109,9 +116,16 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(false));
-        cut.WaitForAssertion(() => Assert.Equal(
-            Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
-            cut.Find(".block-warning").TextContent.Trim()));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+                cut.Find(".block-warning").TextContent.Trim());
+            if (view == MetricViewKind.Graph)
+            {
+                AssertUnavailablePercentiles();
+            }
+        });
 
         var instrument = instrumentViewModel.Instrument;
         var dimensions = instrumentViewModel.MatchedDimensions;
@@ -134,6 +148,19 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(
             Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
             Assert.Single(cut.FindAll(".block-warning")).TextContent.Trim()));
+
+        void AssertUnavailablePercentiles()
+        {
+            var invocation = JSInterop.Invocations.Last(i => i.Identifier is "initializeChart" or "updateChart");
+            var traces = Assert.IsAssignableFrom<IEnumerable<PlotlyTrace>>(invocation.Arguments[1]).ToArray();
+            Assert.Equal(3, traces.Length);
+            Assert.All(traces, trace =>
+            {
+                Assert.Equal(32, trace.Y.Count);
+                Assert.Equal(trace.X.Count, trace.Y.Count);
+                Assert.All(trace.Y, Assert.Null);
+            });
+        }
     }
 
     [Theory]

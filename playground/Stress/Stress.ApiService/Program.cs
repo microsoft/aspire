@@ -65,6 +65,14 @@ app.MapPost("/incompatible-histogram-bounds", async (LargeTelemetryGenerator gen
 })
     .WithSummary("Generate a histogram with incompatible bucket bounds across dimensions.");
 
+app.MapPost("/unavailable-histogram-percentiles", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportUnavailableHistogramPercentilesAsync(cancellationToken);
+
+    return TypedResults.Text("Generated histogram.unavailable.percentiles on unavailable-histogram-percentiles. Select both stress.layout dimensions and a five-minute duration on the Metrics graph, with Show count off, to see available data on both sides of an unavailable interval.");
+})
+    .WithSummary("Generate histogram percentile data with an unavailable interval in the middle.");
+
 app.MapGet("/write-console", () =>
 {
     for (var i = 0; i < 5000; i++)
