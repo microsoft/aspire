@@ -10,6 +10,17 @@ namespace Aspire.Shared.Telemetry;
 
 internal static class AspireTelemetryExporter
 {
+    /// <summary>
+    /// Gets the product's telemetry storage path under the current user's profile.
+    /// </summary>
+    public static string GetTelemetryStoragePath(string productName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(productName);
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire", productName, "telemetrystorage");
+    }
+
     public static TracerProviderBuilder AddAspireAzureMonitorExporter(this TracerProviderBuilder builder, string connectionString, string storageDirectory)
     {
         return builder.AddAzureMonitorTraceExporter(options =>

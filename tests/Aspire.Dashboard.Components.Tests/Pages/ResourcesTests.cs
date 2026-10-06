@@ -66,8 +66,7 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
         Assert.Equal(new[] { "custom-resource-type", "custom-resource-type" },
             Assert.IsType<string[]>(log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value));
-        Assert.Equal(new[] { "custom-resource-type", "custom-resource-type" },
-            Assert.IsType<string[]>(Assert.Single(activity.Events).Tags.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value));
+        Assert.Empty(activity.Events);
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         cut.Dispose();
     }

@@ -100,10 +100,11 @@ public abstract class AspireTelemetryBase : IDisposable
     }
 
     /// <summary>
-    /// Records a structured event immediately and adds it to the nearest active reported activity, if present.
+    /// Records a structured event immediately.
     /// </summary>
     /// <remarks>
-    /// Applies the product's property privacy policy to both the log and activity event, including default metadata.
+    /// Applies the product's property privacy policy to the log, including default metadata.
+    /// Sets the log's Azure Monitor operation name to the event name.
     /// </remarks>
     /// <param name="eventName">The event name.</param>
     /// <param name="properties">The product-specific event properties.</param>
@@ -116,14 +117,17 @@ public abstract class AspireTelemetryBase : IDisposable
         }
 
         var tags = CreateProperties(properties);
-        var activity = FindReportedActivity(Activity.Current);
-        List<KeyValuePair<string, object?>> attributes = [.. tags, new("{OriginalFormat}", eventName)];
+        List<KeyValuePair<string, object?>> attributes =
+        [
+            .. tags,
+            new("{OriginalFormat}", eventName),
+            // Azure Monitor reads OperationName from this attribute, not EventId.Name.
+            // https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Internals/LogsHelper.cs
+            new("microsoft.operation_name", eventName)
+        ];
+        // Logging without an exception keeps sanitized errors in Application Insights' traces table.
         _eventLogger.Log(LogLevel.Information, new EventId(0, eventName), attributes,
             exception: null, formatter: (_, _) => eventName);
-
-        // Keep custom events in Application Insights' traces table rather than using
-        // Activity.AddException, which would route errors to the exceptions table.
-        activity?.AddEvent(new ActivityEvent(eventName, tags: tags));
     }
 
     /// <summary>
@@ -181,23 +185,22 @@ public abstract class AspireTelemetryBase : IDisposable
     }
 
     /// <summary>
-    /// Logs an error locally and records a structured event, also using the nearest active reported activity.
+    /// Logs an error locally and records a structured event.
     /// </summary>
     /// <param name="message">The local log message.</param>
     /// <param name="exception">The exception to record.</param>
     public virtual void RecordError(string message, Exception exception)
     {
-        RecordErrorCore(message, exception, writeToLogging: true, createActivity: false);
+        RecordErrorCore(message, exception, writeToLogging: true);
     }
 
     /// <summary>
-    /// Records an error, optionally creating a bounded reported activity when none exists.
+    /// Records an error as a structured log, optionally logging the exception locally.
     /// </summary>
     /// <param name="message">The local log message.</param>
     /// <param name="exception">The exception to record.</param>
     /// <param name="writeToLogging">Whether to also log the error locally.</param>
-    /// <param name="createActivity">Whether to create an activity for standalone errors.</param>
-    protected void RecordErrorCore(string message, Exception exception, bool writeToLogging, bool createActivity)
+    protected void RecordErrorCore(string message, Exception exception, bool writeToLogging)
     {
         if (writeToLogging)
         {
@@ -207,13 +210,6 @@ public abstract class AspireTelemetryBase : IDisposable
         if (!IsReportedTelemetryEnabled)
         {
             return;
-        }
-
-        using var errorActivity = createActivity && FindReportedActivity(Activity.Current) is null ? StartReportedActivity(_errorEventName) : null;
-        if (errorActivity is not null)
-        {
-            AddReportedActivityProperties(errorActivity, properties: null);
-            errorActivity.SetStatus(ActivityStatusCode.Error);
         }
 
         RecordEventCore(_errorEventName, CreateErrorTags(exception));
@@ -263,21 +259,6 @@ public abstract class AspireTelemetryBase : IDisposable
         }
 
         return tags;
-    }
-
-    private Activity? FindReportedActivity(Activity? activity)
-    {
-        while (activity is not null)
-        {
-            if (activity.Source == _reportedActivitySource && !activity.IsStopped)
-            {
-                return activity;
-            }
-
-            activity = activity.Parent;
-        }
-
-        return null;
     }
 
     /// <summary>

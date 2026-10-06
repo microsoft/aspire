@@ -100,7 +100,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     }
 
     /// <summary>
-    /// Records a sanitized dashboard event as a structured log and on an active reported activity, if present.
+    /// Records a sanitized dashboard event as a structured log.
     /// </summary>
     /// <param name="eventName">The event name.</param>
     /// <param name="result">The event result.</param>
@@ -117,14 +117,14 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     }
 
     /// <summary>
-    /// Records a dashboard fault even when Blazor has already stopped its activity.
+    /// Records a dashboard fault as a sanitized structured log.
     /// </summary>
     /// <param name="message">The local log message.</param>
     /// <param name="exception">The exception to record.</param>
     /// <param name="writeToLogging">Whether to also log the exception locally.</param>
     public void RecordError(string message, Exception exception, bool writeToLogging)
     {
-        RecordErrorCore(message, exception, writeToLogging, createActivity: true);
+        RecordErrorCore(message, exception, writeToLogging);
     }
 
     /// <inheritdoc />

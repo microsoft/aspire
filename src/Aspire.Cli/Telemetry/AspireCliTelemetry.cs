@@ -145,7 +145,7 @@ internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
     }
 
     /// <summary>
-    /// Records a CLI product event immediately and on the nearest active reported activity, if present.
+    /// Records a CLI product event immediately as a structured log.
     /// </summary>
     /// <param name="eventName">The event name.</param>
     /// <param name="properties">The CLI-specific event properties.</param>

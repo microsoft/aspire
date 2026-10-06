@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using Aspire.Dashboard.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,16 +31,21 @@ public class TelemetryLoggerProviderTests
         logger.Log(LogLevel.Error, TelemetryLoggerProvider.CircuitUnhandledExceptionEventId,
             new AggregateException(exception, exception), "Unhandled exception in circuit");
 
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         TelemetryErrorRecorderTests.AssertError(log, exception);
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 
-    [Fact]
-    public void Log_DifferentCategoryAndEventIds_WriteTelemetryForBlazorUnhandedErrorAsync()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Log_DifferentCategoryAndEventIds_WriteTelemetryForBlazorUnhandedErrorAsync(bool withActivity)
     {
         // Arrange
         using var fixture = new DashboardTelemetryFixture();
+        using var frameworkActivity = withActivity ? new Activity("Blazor").Start() : null;
+        var current = Activity.Current;
 
         using var serviceProvider = new ServiceCollection()
             .AddSingleton(fixture.Telemetry)
@@ -66,8 +72,12 @@ public class TelemetryLoggerProviderTests
 
         // Act & assert 4
         circuitHostLogger.Log(LogLevel.Error, TelemetryLoggerProvider.CircuitUnhandledExceptionEventId, new InvalidOperationException("Exception message"), "Test message");
-        Assert.True(fixture.ActivityChannel.Reader.TryPeek(out var context));
-        Assert.Equal(TelemetryEventKeys.Error, context.OperationName);
-        Assert.Equal(TelemetryEventKeys.Error, Assert.Single(context.Events).Name);
+        Assert.Same(current, Activity.Current);
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(TelemetryEventKeys.Error, log.Message);
+        Assert.Equal(current?.TraceId ?? default, log.TraceId);
+        Assert.Equal(current?.SpanId ?? default, log.SpanId);
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 }

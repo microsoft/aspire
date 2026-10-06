@@ -80,59 +80,48 @@ public class AspireTelemetryBaseTests
         Assert.Collection(activity.TagObjects.OrderBy(t => t.Key, StringComparer.Ordinal),
             tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.default", "DEFAULT"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.property", "VALUE"), tag));
-        var activityEvent = Assert.Single(activity.Events);
-        Assert.Equal("test-event", activityEvent.Name);
-        Assert.Equal(activity.TagObjects, activityEvent.Tags);
+        Assert.Empty(activity.Events);
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Collection(log.Attributes,
             tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.default", "DEFAULT"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.property", "VALUE"), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", "test-event"), tag));
+            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", "test-event"), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", "test-event"), tag));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void RecordError_AppliesPolicyToDefaultsAndExceptionProperties(bool standalone)
+    public void RecordError_AppliesPolicyToDefaultsAndExceptionPropertiesWithoutCreatingActivity(bool withActivity)
     {
         using var fixture = new DashboardTelemetryFixture();
         using var telemetry = new TestTelemetryService(fixture);
-        using var operation = standalone ? null : telemetry.StartOperation([]);
+        using var operation = withActivity ? telemetry.StartOperation([]) : null;
+        var current = Activity.Current;
         var exception = new InvalidOperationException("private exception message");
 
-        if (standalone)
+        telemetry.RecordError("Local error", exception);
+
+        Assert.Same(current, Activity.Current);
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
+        if (withActivity)
         {
-            telemetry.RecordStandaloneError(exception);
-        }
-        else
-        {
-            telemetry.RecordError("Local error", exception);
+            Assert.NotNull(operation);
+            Assert.Collection(operation.TagObjects,
+                tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.default", "DEFAULT"), tag));
+            Assert.Equal(ActivityStatusCode.Unset, operation.Status);
+            Assert.Empty(operation.Events);
         }
 
-        Activity activity;
-        if (standalone)
-        {
-            Assert.True(fixture.ActivityChannel.Reader.TryRead(out var recorded));
-            activity = recorded;
-            Assert.Equal("test-error", activity.OperationName);
-            Assert.Equal(ActivityStatusCode.Error, activity.Status);
-            Assert.True(activity.IsStopped);
-        }
-        else
-        {
-            activity = Assert.IsType<Activity>(operation);
-        }
-
-        Assert.Collection(activity.TagObjects,
-            tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.default", "DEFAULT"), tag));
-        var activityEvent = Assert.Single(activity.Events);
-        Assert.Equal("test-error", activityEvent.Name);
-        Assert.Collection(activityEvent.Tags,
-            tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.default", "DEFAULT"), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("exception.type", typeof(InvalidOperationException).FullName!.ToUpperInvariant()), tag));
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
-        Assert.Equal(activityEvent.Tags, log.Attributes.Where(t => t.Key != "{OriginalFormat}"));
+        Assert.Equal(current?.TraceId ?? default, log.TraceId);
+        Assert.Equal(current?.SpanId ?? default, log.SpanId);
+        Assert.Collection(log.Attributes,
+            tag => Assert.Equal(new KeyValuePair<string, object?>("allowed.default", "DEFAULT"), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("exception.type", typeof(InvalidOperationException).FullName!.ToUpperInvariant()), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", "test-error"), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", "test-error"), tag));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 }

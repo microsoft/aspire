@@ -24,8 +24,6 @@ internal sealed class TestTelemetryService(DashboardTelemetryFixture fixture)
 
     public void RecordEvent(IEnumerable<KeyValuePair<string, object?>> properties) => RecordEventCore("test-event", properties);
 
-    public void RecordStandaloneError(Exception exception) => RecordErrorCore("Local error", exception, writeToLogging: false, createActivity: true);
-
     protected override IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags() =>
     [
         new("allowed.default", "default"),

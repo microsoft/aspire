@@ -156,6 +156,8 @@ public class AspireCliTelemetryTests
                 Assert.Equal(TelemetryConstants.Events.Error, reported.Id.Name);
                 Assert.Null(reported.Exception);
                 Assert.NotNull(reported.StructuredState);
+                Assert.Equal(TelemetryConstants.Events.Error,
+                    reported.StructuredState.Single(t => t.Key == "microsoft.operation_name").Value);
                 Assert.Equal(typeof(InvalidOperationException).FullName,
                     reported.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionType).Value);
                 Assert.Equal("Test exception",
@@ -166,7 +168,7 @@ public class AspireCliTelemetryTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task RecordEvent_LogsWithDefaultTagsAndUsesReportedActivityWhenPresent(bool withActivity)
+    public async Task RecordEvent_LogsWithDefaultTagsWithoutAddingActivityEvents(bool withActivity)
     {
         var logger = new FakeLogger<AspireCliTelemetry>();
         using var fixture = new TelemetryFixture(logger: logger);
@@ -182,6 +184,7 @@ public class AspireCliTelemetryTests
         Assert.Equal("test-event", log.Id.Name);
         Assert.Null(log.Exception);
         Assert.NotNull(log.StructuredState);
+        Assert.Equal("test-event", log.StructuredState.Single(t => t.Key == "microsoft.operation_name").Value);
         Assert.Equal("42", log.StructuredState.Single(t => t.Key == "test.property").Value);
         var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
         Assert.NotEmpty(defaultTags);
@@ -192,14 +195,7 @@ public class AspireCliTelemetryTests
         if (withActivity)
         {
             Assert.NotNull(activity);
-            var activityEvent = Assert.Single(activity.Events);
-            Assert.Equal("test-event", activityEvent.Name);
-            Assert.Equal(42, activityEvent.Tags.Single(t => t.Key == "test.property").Value);
-            Assert.Equal(defaultTags.Count + 1, activityEvent.Tags.Count());
-            foreach (var tag in defaultTags)
-            {
-                Assert.Equal(tag.Value, activityEvent.Tags.Single(t => t.Key == tag.Key).Value);
-            }
+            Assert.Empty(activity.Events);
         }
     }
 
@@ -238,9 +234,10 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public async Task RecordError_AddsActivityEventWithDefaultTags_WhenReportedActivityIsActive()
+    public async Task RecordError_LogsWithDefaultTagsWithoutActivityEvents_WhenReportedActivityIsActive()
     {
-        using var fixture = new TelemetryFixture();
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
         var exception = new InvalidOperationException("Test exception");
 
         using var activity = fixture.Telemetry.StartReportedActivity("test-activity", ActivityKind.Internal);
@@ -248,23 +245,23 @@ public class AspireCliTelemetryTests
 
         fixture.Telemetry.RecordError("Error occurred", exception);
 
-        var events = activity.Events.ToList();
-        var exceptionEvent = Assert.Single(events);
-        Assert.Equal(TelemetryConstants.Events.Error, exceptionEvent.Name);
-
-        var eventTags = exceptionEvent.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal(typeof(InvalidOperationException).FullName, eventTags[TelemetryConstants.Tags.ExceptionType]);
-        Assert.Equal("Test exception", eventTags[TelemetryConstants.Tags.ExceptionMessage]);
-        // Note: exception.stacktrace may not be present if the exception was never thrown
-
-        // RecordError adds default tags directly to the error event at creation time
-        // so they are available even if the enrichment processor has not run yet.
+        Assert.Same(activity, Activity.Current);
+        Assert.Empty(activity.Events);
+        var log = Assert.Single(logger.Collector.GetSnapshot(), record => record.Level == LogLevel.Information);
+        Assert.Equal(TelemetryConstants.Events.Error, log.Message);
+        Assert.Null(log.Exception);
+        Assert.NotNull(log.StructuredState);
+        Assert.Equal(typeof(InvalidOperationException).FullName,
+            log.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionType).Value);
+        Assert.Equal("Test exception",
+            log.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionMessage).Value);
+        Assert.Equal(TelemetryConstants.Events.Error,
+            log.StructuredState.Single(t => t.Key == "microsoft.operation_name").Value);
         var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
         Assert.NotEmpty(defaultTags);
         foreach (var tag in defaultTags)
         {
-            Assert.True(eventTags.ContainsKey(tag.Key), $"Error event is missing default tag '{tag.Key}'");
-            Assert.Equal(tag.Value?.ToString(), eventTags[tag.Key]?.ToString());
+            Assert.Equal(tag.Value?.ToString(), log.StructuredState.Single(t => t.Key == tag.Key).Value);
         }
     }
 
@@ -289,9 +286,10 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_FindsReportedActivity_InHierarchy()
+    public void RecordError_LogsWithoutActivityEvents_WhenReportedAncestorIsActive()
     {
-        using var fixture = new TelemetryFixture();
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
         var otherSourceName = $"Test.{Path.GetRandomFileName()}";
 
         using var otherListener = new ActivityListener
@@ -303,24 +301,26 @@ public class AspireCliTelemetryTests
 
         var exception = new InvalidOperationException("Test exception");
 
-        // Start a reported activity (parent)
         using var reportedActivity = fixture.Telemetry.StartReportedActivity("parent-activity", ActivityKind.Internal);
         Assert.NotNull(reportedActivity);
 
-        // Start a child activity from a different source
         using var otherSource = new ActivitySource(otherSourceName);
         using var childActivity = otherSource.StartActivity("child-activity");
         Assert.NotNull(childActivity);
 
-        // RecordError should find the reported activity in the hierarchy
         fixture.Telemetry.RecordError("Error in child", exception);
 
-        // The error should be recorded on the reported activity, not the child
-        var events = reportedActivity.Events.ToList();
-        Assert.Single(events);
-
-        // Child activity should not have the error event
+        Assert.Same(childActivity, Activity.Current);
+        Assert.Empty(reportedActivity.Events);
         Assert.Empty(childActivity.Events);
+        Assert.Collection(logger.Collector.GetSnapshot(),
+            local => Assert.Equal(LogLevel.Error, local.Level),
+            reported =>
+            {
+                Assert.Equal(LogLevel.Information, reported.Level);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Message);
+                Assert.Null(reported.Exception);
+            });
     }
 
     [Fact]

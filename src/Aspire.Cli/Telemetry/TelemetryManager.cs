@@ -176,7 +176,7 @@ internal sealed class TelemetryManager : IDisposable
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
             var azureMonitorBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.ReportedActivitySourceName, resource, tagsSource, _telemetry)
-                .AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, GetTelemetryStoragePath());
+                .AddAspireAzureMonitorExporter(ApplicationInsightsConnectionString, AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
 
 #if DEBUG
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
@@ -366,12 +366,6 @@ internal sealed class TelemetryManager : IDisposable
             });
             return _shutdownTask;
         }
-    }
-
-    internal static string GetTelemetryStoragePath()
-    {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(homeDirectory, ".aspire", "cli", "telemetrystorage");
     }
 
     public void Dispose()

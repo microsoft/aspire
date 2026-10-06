@@ -138,7 +138,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
                     _telemetryManager.Initialize();
                     if (_telemetryManager.HasAzureMonitor)
                     {
-                        await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
+                        await AgentTelemetryUploader.DrainAsync(AspireTelemetryExporter.GetTelemetryStoragePath("cli"),
                             AgentTelemetryUploader.LockPath, cancellationToken).ConfigureAwait(false);
                     }
                 }

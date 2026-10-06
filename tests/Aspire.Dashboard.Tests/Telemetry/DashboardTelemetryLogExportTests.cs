@@ -76,6 +76,7 @@ public class DashboardTelemetryLogExportTests
                 tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
                 tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
                 tag => Assert.Equal(new KeyValuePair<string, object?>("aspire.dashboard.result", "Success"), tag),
+                tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize), tag),
                 tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize), tag));
             Assert.False(exporter.LogChannel.Reader.TryPeek(out _));
             Assert.Collection(sink.Writes,
@@ -87,6 +88,8 @@ public class DashboardTelemetryLogExportTests
             Assert.True(provider.Shutdown(timeoutMilliseconds: 5000));
             Assert.True(exporter.LogChannel.Reader.TryRead(out var shutdownLog));
             Assert.Equal(TelemetryEventKeys.ComponentDispose, shutdownLog.Message);
+            Assert.Equal(TelemetryEventKeys.ComponentDispose,
+                shutdownLog.Attributes.Single(t => t.Key == "microsoft.operation_name").Value);
             Assert.False(exporter.LogChannel.Reader.TryPeek(out _));
             Assert.False(exporter.IsDisposed);
         }

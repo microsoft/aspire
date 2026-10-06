@@ -15,8 +15,8 @@ namespace Aspire.Dashboard.Telemetry;
 /// </summary>
 internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposable
 {
-    // TODO: Replace this placeholder with the dashboard's Application Insights connection string.
-    private const string ApplicationInsightsConnectionString = "InstrumentationKey=00000000-0000-0000-0000-000000000000;IngestionEndpoint=https://dashboard-telemetry.invalid/";
+    private const string ApplicationInsightsConnectionString = "InstrumentationKey=3be364e3-d9eb-436a-983e-0a681d5af691;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=83cb9aa6-6ebc-4c33-b434-8d348004bde1";
+    private const string ApplicationInsightsCloudRoleName = "ddc-cor-prd-usce-ai-aspiredashboard";
 
     private readonly Lock _lock = new();
     private readonly DashboardTelemetryConfiguration _configuration;
@@ -85,8 +85,15 @@ internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposab
 
             try
             {
-                var storageDirectory = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dashboard", "telemetrystorage");
+                // Override only Azure Monitor's cloud role, leaving the OpenTelemetry resource
+                // identity unchanged for other exporters. This override is process-wide and the
+                // Azure exporter caches it on first export, so set it before either provider can
+                // export telemetry and keep it unchanged for the dashboard's lifetime.
+                // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/src/Customizations/Models/TelemetryItem.cs
+                Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME",
+                    ApplicationInsightsCloudRoleName, EnvironmentVariableTarget.Process);
+
+                var storageDirectory = AspireTelemetryExporter.GetTelemetryStoragePath("dashboard");
                 var provider = _createTraceProvider(storageDirectory);
 
                 try

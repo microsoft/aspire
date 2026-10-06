@@ -14,8 +14,56 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Telemetry;
 
-public class DashboardTelemetryManagerTests
+[Collection(DashboardTelemetryEnvironmentCollection.Name)]
+public class DashboardTelemetryManagerTests : IDisposable
 {
+    private readonly string? _originalCloudRoleName = Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME");
+
+    public void Dispose() => Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME", _originalCloudRoleName);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Initialize_SetsAzureCloudRoleBeforeCreatingExportersOnlyWhenEnabled(bool enabled)
+    {
+        Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME", "existing-role");
+        var traceCreated = false;
+        var logConfigured = false;
+        var services = new ServiceCollection();
+        ConfigureServices(services, enabled);
+        services.AddSingleton(services => new DashboardTelemetryManager(
+            services.GetRequiredService<DashboardTelemetryConfiguration>(),
+            services.GetRequiredService<ILogger<DashboardTelemetryManager>>(),
+            services.GetRequiredService<LoggerProvider>(),
+            _ =>
+            {
+                Assert.Equal("ddc-cor-prd-usce-ai-aspiredashboard",
+                    Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
+                traceCreated = true;
+                return Sdk.CreateTracerProviderBuilder().Build();
+            },
+            _ =>
+            {
+                Assert.True(traceCreated);
+                Assert.Equal("ddc-cor-prd-usce-ai-aspiredashboard",
+                    Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
+                logConfigured = true;
+                return services.GetRequiredService<LoggerProvider>();
+            }));
+        await using var serviceProvider = services.BuildServiceProvider();
+        var manager = serviceProvider.GetRequiredService<DashboardTelemetryManager>();
+
+        manager.Initialize();
+
+        Assert.True(manager.IsInitialized);
+        Assert.Equal(enabled, traceCreated);
+        Assert.Equal(enabled, logConfigured);
+        Assert.Equal(enabled ? "ddc-cor-prd-usce-ai-aspiredashboard" : "existing-role",
+            Environment.GetEnvironmentVariable("APPLICATIONINSIGHTS_CLOUD_ROLE_NAME"));
+        var resource = serviceProvider.GetRequiredService<LoggerProvider>().GetResource();
+        Assert.Equal("aspire-dashboard", resource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -181,4 +229,10 @@ public class DashboardTelemetryManagerTests
         services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
 
     }
+}
+
+[CollectionDefinition(Name, DisableParallelization = true)]
+public class DashboardTelemetryEnvironmentCollection
+{
+    public const string Name = "Dashboard telemetry environment";
 }
