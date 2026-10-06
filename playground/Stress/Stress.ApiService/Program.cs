@@ -73,6 +73,14 @@ app.MapPost("/unavailable-histogram-percentiles", async (LargeTelemetryGenerator
 })
     .WithSummary("Generate histogram percentile data with an unavailable interval in the middle.");
 
+app.MapPost("/unavailable-histogram-exemplars", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+    await generator.ExportUnavailableHistogramExemplarsAsync(cancellationToken);
+
+    return TypedResults.Text("Generated histogram.unavailable.exemplars on unavailable-histogram-exemplars. Select both stress.layout dimensions, a five-minute duration, and Show count off. The graph has exemplar markers before, during, and after the gap; the table's blank-percentile row has two exemplars linked to traces.");
+})
+    .WithSummary("Generate unavailable histogram percentiles with exemplars and matching traces.");
+
 app.MapGet("/write-console", () =>
 {
     for (var i = 0; i < 5000; i++)

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Globalization;
 using Google.Protobuf;
 using Grpc.Core;
@@ -165,12 +166,25 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
         await ExportHistogramAsync(histogram, "incompatible-histogram-metrics", cancellationToken);
     }
 
-    public async Task ExportUnavailableHistogramPercentilesAsync(CancellationToken cancellationToken)
+    public Task ExportUnavailableHistogramPercentilesAsync(CancellationToken cancellationToken)
     {
+        return ExportUnavailableHistogramPercentilesAsync(includeExemplars: false, cancellationToken);
+    }
+
+    public Task ExportUnavailableHistogramExemplarsAsync(CancellationToken cancellationToken)
+    {
+        return ExportUnavailableHistogramPercentilesAsync(includeExemplars: true, cancellationToken);
+    }
+
+    private async Task ExportUnavailableHistogramPercentilesAsync(bool includeExemplars, CancellationToken cancellationToken)
+    {
+        var resourceName = includeExemplars ? "unavailable-histogram-exemplars" : "unavailable-histogram-percentiles";
         var histogram = new Metric
         {
-            Name = "histogram.unavailable.percentiles",
-            Description = "Percentiles are available before and after the middle interval. Incompatible bucket bounds make that interval unavailable, so the graph has a gap rather than zero values.",
+            Name = includeExemplars ? "histogram.unavailable.exemplars" : "histogram.unavailable.percentiles",
+            Description = includeExemplars
+                ? "Exemplars remain available before, during, and after the percentile gap. The table retains the unavailable interval with no-data dashes in the percentile cells and an exemplar button."
+                : "Percentiles are available before and after the middle interval. Incompatible bucket bounds make that interval unavailable, so the graph has a gap rather than zero values.",
             Unit = "ms",
             Histogram = new Histogram
             {
@@ -180,6 +194,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
 
         double[] compatibleBounds = [10, 50, 100];
         double[] incompatibleBounds = [20, 60, 200];
+        var scopeSpans = CreateScopeSpans("Stress.Histograms");
         const int durationSeconds = 300;
         var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
         for (var second = 0; second < durationSeconds; second++)
@@ -189,10 +204,12 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                 // Delta layouts may change between intervals. Only the middle 80 seconds
                 // have disjoint bounds; observations still exist throughout the gap.
                 var incompatible = dimensionIndex == 1 && second is >= 100 and < 180;
-                histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+                var pointStart = startTime.AddSeconds(second);
+                var pointEnd = pointStart.AddSeconds(1);
+                var point = new HistogramDataPoint
                 {
-                    StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second)),
-                    TimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second + 1)),
+                    StartTimeUnixNano = DateTimeToUnixNanoseconds(pointStart),
+                    TimeUnixNano = DateTimeToUnixNanoseconds(pointEnd),
                     Count = 100,
                     Sum = 50 * 5 + 40 * 25 + 9 * 75 + (incompatible ? 250 : 150),
                     BucketCounts = { 50ul, 40ul, 9ul, 1ul },
@@ -205,11 +222,37 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                             Value = new AnyValue { StringValue = dimensionIndex.ToString(CultureInfo.InvariantCulture) }
                         }
                     }
-                });
+                };
+                // Sample both layouts inside the gap and one sample on each available side.
+                if (includeExemplars && (second == 140 || (dimensionIndex == 0 && second is 50 or 250)))
+                {
+                    var traceId = ByteString.CopyFrom(Convert.FromHexString(ActivityTraceId.CreateRandom().ToHexString()));
+                    var spanId = CreateSpanId(1);
+                    point.Exemplars.Add(new Exemplar
+                    {
+                        TimeUnixNano = DateTimeToUnixNanoseconds(pointStart.AddMilliseconds(500)),
+                        AsDouble = s_histogramValues[dimensionIndex],
+                        TraceId = traceId,
+                        SpanId = spanId
+                    });
+                    var phase = second < 100 ? "before gap" : second < 180 ? "unavailable percentiles" : "after gap";
+                    var span = CreateSpan(traceId, spanId, ByteString.Empty, $"Histogram exemplar: {phase}", pointStart, pointEnd);
+                    span.Attributes.AddRange(point.Attributes);
+                    scopeSpans.Spans.Add(span);
+                }
+                histogram.Histogram.DataPoints.Add(point);
             }
         }
 
-        await ExportHistogramAsync(histogram, "unavailable-histogram-percentiles", cancellationToken);
+        if (includeExemplars)
+        {
+            var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+                ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
+            using var channel = GrpcChannel.ForAddress(endpoint);
+            var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
+            await ExportTraceBatchAsync(new TraceService.TraceServiceClient(channel), metadata, scopeSpans, resourceName, cancellationToken);
+        }
+        await ExportHistogramAsync(histogram, resourceName, cancellationToken);
     }
 
     private async Task ExportHistogramAsync(Metric histogram, string resourceName, CancellationToken cancellationToken)
@@ -277,7 +320,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                 }
             }
 
-            await ExportTraceBatchAsync(client, metadata, scopeSpans, cancellationToken);
+            await ExportTraceBatchAsync(client, metadata, scopeSpans, "large-telemetry-traces", cancellationToken);
             LogProgress(firstTraceIndex + traceCount, ref nextProgressCount, "traces");
         }
     }
@@ -308,7 +351,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                         isRoot ? traceStart.AddTicks(totalSpanCount * 10L) : traceStart.AddTicks((spanIndex + 1L) * 10L)));
             }
 
-            await ExportTraceBatchAsync(client, metadata, scopeSpans, cancellationToken);
+            await ExportTraceBatchAsync(client, metadata, scopeSpans, "large-telemetry-traces", cancellationToken);
             LogProgress(firstSpanIndex + spanCount, ref nextProgressCount, "large trace spans");
         }
     }
@@ -317,6 +360,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
         TraceService.TraceServiceClient client,
         Metadata metadata,
         ScopeSpans scopeSpans,
+        string resourceName,
         CancellationToken cancellationToken)
     {
         // Export requests use the OTLP shape ResourceSpans -> ScopeSpans -> Span. Keeping each request
@@ -327,7 +371,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             {
                 new ResourceSpans
                 {
-                    Resource = CreateResource("large-telemetry-traces"),
+                    Resource = CreateResource(resourceName),
                     ScopeSpans = { scopeSpans }
                 }
             }

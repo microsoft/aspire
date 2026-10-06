@@ -933,6 +933,17 @@ internal static class CommandResources
                 ResultMode = HttpCommandResultMode.Text,
                 Description = "Send five minutes of histogram data with an unavailable middle interval. View histogram.unavailable.percentiles on unavailable-histogram-percentiles with both stress.layout dimensions selected, a five-minute duration, and Show count off to see the gap."
             });
+        serviceBuilder.WithHttpCommand(
+            "/unavailable-histogram-exemplars",
+            "Generate unavailable histogram exemplars",
+            endpointSelector: () => serviceBuilder.GetEndpoint("http"),
+            commandOptions: new()
+            {
+                Method = HttpMethod.Post,
+                IconName = "ContentViewGalleryLightning",
+                ResultMode = HttpCommandResultMode.Text,
+                Description = "Send five minutes of histogram data with exemplars and matching traces, including two samples in the percentile gap. View histogram.unavailable.exemplars on unavailable-histogram-exemplars with both stress.layout dimensions selected, a five-minute duration, and Show count off."
+            });
         serviceBuilder.WithHttpCommand("/genai-trace", "Gen AI trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-langchain-trace", "Gen AI LangChain trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/genai-trace-display-error", "Gen AI trace display error", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });

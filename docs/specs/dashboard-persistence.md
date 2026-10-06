@@ -239,9 +239,13 @@ Cumulative bucket layouts must remain unchanged within an aggregation. A changed
 
 Histogram compatibility is calculated for the selected dimensions and chart windows and held on the instrument view model, alongside cardinality overflow state. Graph and table updates notify the chart container when either warning changes.
 
+The table retains unavailable-percentile intervals that contain exemplars, keeping those samples accessible and displaying the standard no-data dash instead of percentile values, without change indicators. Empty intervals without exemplars remain hidden.
+
 To exercise this warning, run the [Stress playground](../../playground/Stress/Stress.AppHost/AppHost.cs) and execute **Generate incompatible histogram bounds** on `stress-apiservice`. The command sends a raw OTLP request containing five minutes of cumulative data for `incompatible-histogram-metrics` / `incompatible.histogram.bounds`. Its two `stress.layout` dimensions use disjoint bounds `[10, 50, 100]` and `[20, 60, 200]`. Select both dimensions to see the warning in graph and table views; count mode remains available, and selecting a single layout restores percentiles.
 
 To see how an unavailable interval looks alongside available percentiles, execute **Generate unavailable histogram percentiles** on `stress-apiservice`. Select `unavailable-histogram-percentiles` / `histogram.unavailable.percentiles` in the Metrics graph, set a five-minute duration, and leave **Show count** off. The command sends 600 delta points across two dimensions. Both use `[10, 50, 100]` except during the middle 80 seconds, when one uses `[20, 60, 200]`. That interval has observations but unavailable percentiles and appears as a gap between the valid percentile bands. Count mode still shows observations throughout the gap.
+
+To exercise exemplars during an unavailable interval, execute **Generate unavailable histogram exemplars** on `stress-apiservice`. Select `unavailable-histogram-exemplars` / `histogram.unavailable.exemplars`, both `stress.layout` dimensions, a five-minute duration, and **Show count** off. This scenario adds four exemplars with matching traces: one before the gap, two in the unavailable interval, and one after it. The graph retains their markers; the table retains the unavailable row with no-data dashes in the percentile cells and a button for its two exemplars. Open that button and use **View** to navigate to a sample's trace. Run the command again to refresh the live five-minute window.
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 
