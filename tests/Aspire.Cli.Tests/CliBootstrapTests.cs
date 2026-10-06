@@ -91,6 +91,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
             ["copilot", "claude", "opencode"],
             environments.Select(environment => environment.Id));
         Assert.Equal(environments, host.Services.GetServices<IAgentEnvironmentScanner>());
+        Assert.Contains(host.Services.GetServices<Aspire.Cli.Migrations.IMigration>(),
+            migration => migration is Aspire.Cli.Migrations.LocalAspireSkillsMigration);
     }
 
     [Fact]
