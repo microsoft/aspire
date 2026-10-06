@@ -3,7 +3,9 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -512,7 +514,9 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
 
         var result = RunProcess("bash", [scripts.ShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
 
-        return new HookRun(result, ReadCapturedArgs(capturePath));
+        var captured = ReadCapturedArgs(capturePath);
+        AssertNativeParity(payload, extraEnv, captured);
+        return new HookRun(result, captured);
     }
 
     private async Task<HookRun> RunPwshHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)
@@ -525,7 +529,27 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         // -ExecutionPolicy Bypass so the locally created hook and recorder run on Windows agents.
         var result = RunProcess("pwsh", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scripts.PowerShellScriptPath], payload, BuildEnvironment(recorderPath, capturePath, extraEnv));
 
-        return new HookRun(result, ReadCapturedArgs(capturePath));
+        var captured = ReadCapturedArgs(capturePath);
+        AssertNativeParity(payload, extraEnv, captured);
+        return new HookRun(result, captured);
+    }
+
+    private static void AssertNativeParity(string payload, Dictionary<string, string?>? environment, string[]? scriptArgs)
+    {
+        var nativeEnvironment = new TestEnvironment(environment);
+        var nativeArgs = nativeEnvironment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey)
+            ? null : AgentTelemetryHook.Classify(payload, nativeEnvironment.IsFlagEnabled("COPILOT_CLI"), AgentTelemetryHook.DefaultMaxPayloadCharacters);
+        if (scriptArgs is null)
+        {
+            Assert.Null(nativeArgs);
+            return;
+        }
+        Assert.NotNull(nativeArgs);
+        // Timestamps are generated separately; compare all other emitted dimensions and their values.
+        static KeyValuePair<string, string>[] Tags(string[] args) => args.Skip(2).Chunk(2)
+            .Where(pair => pair[0] != "--timestamp")
+            .Select(pair => new KeyValuePair<string, string>(pair[0], pair[1])).OrderBy(pair => pair.Key).ToArray();
+        Assert.Equal(Tags(scriptArgs), Tags(nativeArgs));
     }
 
     private static async Task<TelemetryHookScripts> MaterializeScriptsAsync(TemporaryWorkspace workspace)
