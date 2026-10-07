@@ -66,7 +66,11 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
                             builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(
                                 options => options.Transport = new HttpClientTransport(client)));
                         },
-                        options => options.Transport = new HttpClientTransport(client));
+                        options =>
+                        {
+                            Assert.Equal(Path.Combine(directory, "storage"), options.StorageDirectory);
+                            options.Transport = new HttpClientTransport(client);
+                        });
                 });
 
             telemetry.RecordEvent("before-initialization");

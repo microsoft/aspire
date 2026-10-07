@@ -71,9 +71,10 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
             },
             logging =>
             {
+                // The Azure SDK shares a transmitter by connection string, so both signals use the same storage.
                 logging.AddAspireAzureMonitorExporter(
                     connectionString,
-                    Path.Combine(storageDirectory, "logs"),
+                    storageDirectory,
                     configureLogExporter);
                 configureLogging(logging);
             },

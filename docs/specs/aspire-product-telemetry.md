@@ -121,10 +121,12 @@ CLI profiling requires an explicit profiling setting and an OTLP endpoint. `ASPI
 
 Exporter storage is rooted in the current user's profile, not `ASPIRE_HOME`:
 
-| Application | Trace storage | Log storage |
-| --- | --- | --- |
-| CLI | `.aspire/cli/telemetrystorage` | `.aspire/cli/telemetrystorage/logs` |
-| Dashboard | `.aspire/dashboard/telemetrystorage` | `.aspire/dashboard/telemetrystorage/logs` |
+| Application | Shared trace/log storage root |
+| --- | --- |
+| CLI | `.aspire/cli/telemetrystorage` |
+| Dashboard | `.aspire/dashboard/telemetrystorage` |
+
+Azure Monitor exporter 1.9 caches its transmitter by connection string. Each product uses the same connection string for its trace and log exporters, so both signals share a transmitter and storage. `AzureMonitorTelemetryProvider` configures both exporters with the same per-product storage directory.
 
 The Azure exporter owns batching, disk storage, retries, retention, and cross-process leases. Buffering and storage are best effort: abrupt termination, storage limits, filesystem failures, and ingestion errors can prevent delivery.
 
