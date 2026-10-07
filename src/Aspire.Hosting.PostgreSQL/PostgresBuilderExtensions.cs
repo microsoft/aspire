@@ -103,6 +103,17 @@ public static class PostgresBuilderExtensions
             failureStatus: null,
             tags: null));
 
+        // The health check instance outlives the container, but health monitoring only runs while the
+        // resource is Running, so no failed probe is observed while the container is stopped. Without an
+        // explicit reset, a restart (e.g. from the dashboard) would keep the latch from the previous
+        // container and accept a single probe that can land before the new container's initdb restart.
+        // BeforeResourceStartedEvent is published on every start, including restarts.
+        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(postgresServer, (@event, ct) =>
+        {
+            serverHealthCheck.ResetStability();
+            return Task.CompletedTask;
+        });
+
         return builder.AddResource(postgresServer)
                       .WithEndpoint(port: port, targetPort: 5432, name: PostgresServerResource.PrimaryEndpointName) // Internal port is always 5432.
                       .WithImage(PostgresContainerImageTags.Image, PostgresContainerImageTags.Tag)
@@ -816,22 +827,69 @@ public static class PostgresBuilderExtensions
         // Non-database scoped connection string, pinned to the always-present 'postgres' database.
         var serverConnectionString = connectionString + ";Database=postgres;";
 
+        await CreateDatabasesWithRetryAsync(
+            databases,
+            openConnectionAsync: async ct =>
+            {
+                var npgsqlConnection = new NpgsqlConnection(serverConnectionString);
+                try
+                {
+                    await npgsqlConnection.OpenAsync(ct).ConfigureAwait(false);
+                    return npgsqlConnection;
+                }
+                catch
+                {
+                    npgsqlConnection.Dispose();
+                    throw;
+                }
+            },
+            createDatabaseAsync: (npgsqlConnection, database, ct) => CreateDatabaseAsync(npgsqlConnection, database, serviceProvider, ct),
+            databaseExistsAsync: DatabaseExistsAsync,
+            logger,
+            postgresServer.Name,
+            initialRetryDelay: TimeSpan.FromMilliseconds(200),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates the databases, retrying the whole open + create-all sequence across transient connection
+    /// failures. The connection and database operations are supplied as delegates so unit tests can
+    /// inject connection resets without a live server.
+    /// </summary>
+    internal static async Task CreateDatabasesWithRetryAsync<TConnection>(
+        IReadOnlyList<PostgresDatabaseResource> databases,
+        Func<CancellationToken, Task<TConnection>> openConnectionAsync,
+        Func<TConnection, PostgresDatabaseResource, CancellationToken, Task> createDatabaseAsync,
+        Func<TConnection, string, CancellationToken, Task<bool>> databaseExistsAsync,
+        ILogger logger,
+        string resourceName,
+        TimeSpan initialRetryDelay,
+        CancellationToken cancellationToken)
+        where TConnection : IDisposable
+    {
         // On a fresh data volume the Postgres image runs initdb against a temporary server and then
         // restarts to the real listener. Creation can land inside that restart window, where the
         // connection is reset mid-flight. Retry the whole open + create-all sequence across such
-        // transient failures, tracking which databases are already handled so a non-idempotent custom
-        // creation script runs at most once per database.
+        // transient failures, tracking which databases are already handled so each one is attempted
+        // only until it succeeds or fails permanently.
         const int maxAttempts = 10;
-        var delay = TimeSpan.FromMilliseconds(200);
+        var delay = initialRetryDelay;
         var maxDelay = TimeSpan.FromSeconds(3);
         var handled = new HashSet<string>(StringComparers.ResourceName);
+
+        // Custom creation scripts that were interrupted by a connection failure. The outcome is
+        // ambiguous: the reset can happen before the script reached the server, or after PostgreSQL
+        // committed it but before the client saw the result. The database health check only passes
+        // once the database exists, so on retry the existence of the database decides: if it exists,
+        // the script ran and must not be repeated; if not, the script must run again or the database
+        // resource would never become healthy.
+        var interruptedScripts = new HashSet<string>(StringComparers.ResourceName);
 
         for (var attempt = 1; ; attempt++)
         {
             try
             {
-                using var npgsqlConnection = new NpgsqlConnection(serverConnectionString);
-                await npgsqlConnection.OpenAsync(cancellationToken).ConfigureAwait(false);
+                using var connection = await openConnectionAsync(cancellationToken).ConfigureAwait(false);
 
                 foreach (var database in databases)
                 {
@@ -840,29 +898,41 @@ public static class PostgresBuilderExtensions
                         continue;
                     }
 
-                    var hasCustomCreationScript = database.Annotations.OfType<PostgresCreateDatabaseScriptAnnotation>().Any();
-                    if (hasCustomCreationScript)
+                    if (interruptedScripts.Contains(database.Name))
                     {
-                        // A connection reset makes the outcome ambiguous: PostgreSQL may have committed
-                        // the script before the client observed the failure. Mark custom scripts before
-                        // execution so the retry loop never repeats potentially non-idempotent SQL.
-                        handled.Add(database.Name);
+                        if (await databaseExistsAsync(connection, database.DatabaseName, cancellationToken).ConfigureAwait(false))
+                        {
+                            logger.LogInformation("Database '{DatabaseName}' exists after its custom creation script was interrupted; the script will not run again.", database.DatabaseName);
+                            handled.Add(database.Name);
+                            continue;
+                        }
+
+                        logger.LogInformation("Database '{DatabaseName}' does not exist after its custom creation script was interrupted; running the script again.", database.DatabaseName);
                     }
 
                     try
                     {
-                        await CreateDatabaseAsync(npgsqlConnection, database, serviceProvider, cancellationToken).ConfigureAwait(false);
+                        await createDatabaseAsync(connection, database, cancellationToken).ConfigureAwait(false);
                     }
-                    catch (Exception ex) when (hasCustomCreationScript && IsTransientConnectionFailure(ex))
+                    catch (Exception ex) when (IsTransientConnectionFailure(ex))
                     {
-                        logger.LogError(ex, "The custom creation script for database '{DatabaseName}' had an unknown outcome and will not be retried.", database.DatabaseName);
+                        if (database.Annotations.OfType<PostgresCreateDatabaseScriptAnnotation>().Any())
+                        {
+                            interruptedScripts.Add(database.Name);
+                        }
+
+                        // Let the outer loop retry on a fresh connection; this connection is unusable.
                         throw;
                     }
-
-                    if (!hasCustomCreationScript)
+                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                     {
-                        handled.Add(database.Name);
+                        // A non-transient failure specific to this database. Retrying will not help, so
+                        // log it and continue with the remaining databases. One bad database must not
+                        // stop the others from being created.
+                        logger.LogError(ex, "Failed to create database '{DatabaseName}'", database.DatabaseName);
                     }
+
+                    handled.Add(database.Name);
                 }
 
                 return;
@@ -873,7 +943,7 @@ public static class PostgresBuilderExtensions
             }
             catch (Exception ex) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested && IsTransientConnectionFailure(ex))
             {
-                logger.LogDebug(ex, "Transient failure while creating databases for '{ResourceName}' (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", postgresServer.Name, attempt, maxAttempts, delay);
+                logger.LogDebug(ex, "Transient failure while creating databases for '{ResourceName}' (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", resourceName, attempt, maxAttempts, delay);
 
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
 
@@ -883,10 +953,19 @@ public static class PostgresBuilderExtensions
             {
                 // Either retries are exhausted or the failure is not a transient connection reset. Log
                 // once and stop, preserving the previous non-throwing behavior of the ready handler.
-                logger.LogError(ex, "Failed to create one or more databases for '{ResourceName}'.", postgresServer.Name);
+                logger.LogError(ex, "Failed to create one or more databases for '{ResourceName}'.", resourceName);
                 return;
             }
         }
+    }
+
+    private static async Task<bool> DatabaseExistsAsync(NpgsqlConnection npgsqlConnection, string databaseName, CancellationToken cancellationToken)
+    {
+        using var command = npgsqlConnection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM pg_database WHERE datname = @name";
+        command.Parameters.AddWithValue("name", databaseName);
+
+        return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null;
     }
 
     /// <summary>

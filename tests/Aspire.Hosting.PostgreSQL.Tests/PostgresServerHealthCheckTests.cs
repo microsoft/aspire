@@ -114,6 +114,30 @@ public class PostgresServerHealthCheckTests
     }
 
     [Fact]
+    public async Task ResetStability_AfterLatch_RequiresFullWindowAgain()
+    {
+        var counts = new List<int>();
+        var check = new PostgresServerHealthCheck(() => "Host=localhost", (count, ct) =>
+        {
+            counts.Add(count);
+            return Task.CompletedTask;
+        });
+
+        Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+        Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        // A container restart is never observed as a probe failure, because health checks are not
+        // polled while the container is stopped. The reset on start must re-arm the full window.
+        check.ResetStability();
+        Assert.Equal(HealthStatus.Healthy, (await check.CheckHealthAsync(new HealthCheckContext())).Status);
+
+        Assert.Equal(3, counts.Count);
+        Assert.True(counts[0] > 1);
+        Assert.Equal(1, counts[1]);
+        Assert.True(counts[2] > 1, "The first check after a reset should run the full stability window.");
+    }
+
+    [Fact]
     public async Task ConcurrentSingleProbeSuccess_DoesNotRestoreLatchAfterFailure()
     {
         var singleProbeCount = 0;

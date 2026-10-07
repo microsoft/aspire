@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
+using System.Collections.Concurrent;
 using System.Data;
 using System.Net;
 using Aspire.TestUtilities;
@@ -80,9 +81,6 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         // Native database creation must survive that restart window (no "Failed to create database"),
         // and the server must not release WaitFor dependents until it is durably past the restart.
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-        var pipeline = new ResiliencePipelineBuilder()
-            .AddRetry(new() { MaxRetryAttempts = 10, Delay = TimeSpan.FromSeconds(1), ShouldHandle = new PredicateBuilder().Handle<NpgsqlException>() })
-            .Build();
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
 
@@ -97,6 +95,27 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
+        // Collect the server's resource log so database creation errors fail the test directly instead
+        // of only surfacing as a database that never becomes healthy.
+        var serverLogLines = new ConcurrentQueue<LogLine>();
+        using var logWatchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        var logWatchTask = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var batch in app.Services.GetRequiredService<ResourceLoggerService>().WatchAsync(postgres.Resource.Name).WithCancellation(logWatchCts.Token))
+                {
+                    foreach (var line in batch)
+                    {
+                        serverLogLines.Enqueue(line);
+                    }
+                }
+            }
+            catch (OperationCanceledException) when (logWatchCts.IsCancellationRequested)
+            {
+            }
+        });
+
         await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         // Every declared database must be created and become healthy: proof creation survived the restart.
@@ -104,20 +123,23 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         await app.ResourceNotifications.WaitForResourceHealthyAsync(db2.Resource.Name, cts.Token);
         await app.ResourceNotifications.WaitForResourceHealthyAsync(db3.Resource.Name, cts.Token);
 
-        // The WaitFor dependent is released only after db1 is healthy.
         await app.ResourceNotifications.WaitForResourceAsync(dependent.Resource.Name, KnownResourceStates.Running).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-        // Sanity check: each database is actually reachable.
+        logWatchCts.Cancel();
+        await logWatchTask.DefaultTimeout();
+
+        var creationErrors = serverLogLines.Where(l => l.Content.Contains("Failed to create", StringComparison.Ordinal)).Select(l => l.Content).ToList();
+        Assert.Empty(creationErrors);
+
+        // Once dependents are released the server must be past the initdb restart, so each database
+        // must accept a connection on the first attempt. No retry here: a retry would hide a restart.
         foreach (var db in new[] { db1, db2, db3 })
         {
             var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
 
-            await pipeline.ExecuteAsync(async token =>
-            {
-                using var connection = new NpgsqlConnection(connectionString);
-                await connection.OpenAsync(token);
-                Assert.Equal(ConnectionState.Open, connection.State);
-            }, cts.Token);
+            using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync(cts.Token);
+            Assert.Equal(ConnectionState.Open, connection.State);
         }
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);

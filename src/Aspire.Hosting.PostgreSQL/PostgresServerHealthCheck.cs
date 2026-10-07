@@ -81,9 +81,7 @@ internal sealed class PostgresServerHealthCheck : IHealthCheck
         {
             // A probe failure can indicate that the resource restarted. Reset the latch so the next
             // successful poll must prove the new server instance is stable before releasing dependents.
-            // Increment the generation so an overlapping single-probe success cannot restore the latch.
-            _stable = false;
-            Interlocked.Increment(ref _stabilityGeneration);
+            ResetStability();
             return HealthCheckResult.Unhealthy(ex.Message, ex);
         }
 
@@ -93,6 +91,19 @@ internal sealed class PostgresServerHealthCheck : IHealthCheck
         }
 
         return HealthCheckResult.Healthy();
+    }
+
+    /// <summary>
+    /// Clears the latch so the next check must run the full stability window again. Called when the
+    /// server container (re)starts, because health checks are not polled while the container is stopped
+    /// and so a restart would otherwise never be observed as a probe failure.
+    /// </summary>
+    internal void ResetStability()
+    {
+        _stable = false;
+
+        // Increment the generation so an overlapping single-probe success cannot restore the latch.
+        Interlocked.Increment(ref _stabilityGeneration);
     }
 
     private async Task RunProbesAsync(int count, CancellationToken cancellationToken)
