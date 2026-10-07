@@ -121,10 +121,11 @@ public sealed class TestTriggerMapTests
         Assert.Contains("job:deployment-e2e", targets);
     }
 
-    [Fact]
-    public void ExtensionUnitWorkflowChangesSelectUnitAndE2eJobs()
+    [Theory]
+    [InlineData(".github/workflows/extension-unit-tests.yml")]
+    [InlineData(".github/workflows/extension-e2e-tests.yml")]
+    public void ExtensionWorkflowChangesSelectUnitAndE2eJobs(string workflow)
     {
-        const string workflow = ".github/workflows/extension-unit-tests.yml";
         var targets = s_map.PathRules
             .Where(rule => rule.Paths.Any(path => TestTriggerMap.GlobMatches(path, workflow)))
             .SelectMany(rule => rule.Targets)

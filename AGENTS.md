@@ -130,6 +130,16 @@ When reviewing a pull request, do not request automated tests solely for visual-
 
 ### API Files and Public API Surface
 
+`Aspire.Dashboard` and `Aspire.Cli` are applications, not reusable libraries.
+Their public C# types and members are implementation details, not supported
+public APIs. Do not flag breaking changes to those types or members, require
+compatibility overloads or deprecation shims, or flag missing XML documentation.
+XML documentation is optional for application code regardless of accessibility.
+Continue reviewing compatibility of user-visible behavior and external contracts,
+such as CLI commands, options, exit codes, machine-readable output, and dashboard
+endpoints and protocols. The library API guidance below does not apply to these
+application implementation details.
+
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.
 
 When reviewing pull requests:
@@ -643,7 +653,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
-- **azdo-internal**: Triggers, monitors, and validates changes to the Aspire internal Azure DevOps pipeline (`microsoft-aspire`, definition 1602) on `dnceng/internal`. Use when asked to trigger an internal/AzDO build, check build status, push to the internal mirror, or validate `eng/` pipeline changes.
+- **azdo-internal**: Use when asked to trigger or inspect Aspire internal Azure DevOps builds, source indexing (`microsoft-aspire-source-index`, definition 1693), or release validation on `dnceng/internal`; push to the internal mirror; download logs or artifacts; or validate `eng/` pipeline changes.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
@@ -659,6 +669,7 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
 | `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
 | `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Aspire.Cli/**/*.cs` | `.github/instructions/cli.instructions.md` - CLI application review guidance |
 | `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |

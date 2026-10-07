@@ -19,6 +19,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
     private int _disposeCallCount;
 
+    public string Hash { get; set; } = "test-hash";
+
     private IAppHostSocket _socket = new TestAppHostSocket("/tmp/test.sock");
 
     public IAppHostSocket Socket
@@ -325,6 +327,9 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public WaitForResourceResponse WaitForResourceResult { get; set; } = new WaitForResourceResponse { Success = true, State = "Running" };
 
+    /// <summary>
+    /// Gets or sets the function invoked by WaitForResourceAsync.
+    /// </summary>
     public Func<string, string, int, CancellationToken, Task<WaitForResourceResponse>>? WaitForResourceHandler { get; set; }
 
     public Task<WaitForResourceResponse> WaitForResourceAsync(

@@ -964,7 +964,8 @@ public class Program
                 return false;
             }
 
-            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--format=mermaid", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -982,7 +983,8 @@ public class Program
 
             if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length
-                && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+                && (args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase) ||
+                    args[i + 1].Equals("mermaid", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
             }

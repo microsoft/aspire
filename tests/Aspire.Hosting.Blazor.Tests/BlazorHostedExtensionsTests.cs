@@ -5,6 +5,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.JavaScript;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,14 @@ namespace Aspire.Hosting.Blazor.Tests;
 
 public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(null, "dotnet")]
+    [InlineData("/custom/dotnet", "/custom/dotnet")]
+    public void GetExecutablePathUsesDotnetHostPath(string? dotnetHostPath, string expectedPath)
+    {
+        Assert.Equal(expectedPath, BlazorDotNetCliRunner.GetExecutablePath(dotnetHostPath));
+    }
+
     [Fact]
     public async Task ProxyService_EmitsYarpRoutes()
     {
@@ -218,6 +227,8 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         ConfigureBrowserDebugging(builder);
+        var sdkVersionProvider = new TestDotnetSdkVersionProvider("11.0.100-rc.1");
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(sdkVersionProvider);
 
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
         var host = builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
@@ -236,6 +247,49 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(clientProjectPath, launchConfiguration.WebRoot);
         Assert.Equal(ResourceCommandState.Enabled, debugCommand.UpdateState(CreateRunningCommandStateContext()));
+        Assert.Equal(1, sdkVersionProvider.CallCount);
+        Assert.Equal(BlazorDotNetCliRunner.GetExecutablePath(), Assert.Single(sdkVersionProvider.ExecutablePaths));
+    }
+
+    [Theory]
+    [InlineData("10.0.401", "10.0.401")]
+    [InlineData(null, "unknown")]
+    public async Task ProxyService_WhenSdkDoesNotSupportWasmClientDiscovery_SkipsDiscovery(
+        string? sdkVersion,
+        string expectedVersion)
+    {
+        using var fileSystemService = new TestFileSystemService();
+        using var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("blazor-hosted");
+        var serverProjectPath = Path.Combine(tempDirectory.Path, "Server.csproj");
+        File.WriteAllText(serverProjectPath, "<Project");
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        ConfigureBrowserDebugging(builder);
+        var sdkVersionProvider = new TestDotnetSdkVersionProvider(sdkVersion);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(sdkVersionProvider);
+        var sink = new TestSink();
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(sink)));
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+        var host = builder.AddProject("blazorapp", serverProjectPath, options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .ProxyBlazorService(weatherApi);
+
+        using var app = builder.Build();
+        await PublishBeforeStartEventAsync(builder, app);
+
+        var debugCommand = Assert.Single(
+            host.Resource.Annotations.OfType<ResourceCommandAnnotation>(),
+            annotation => annotation.Name == "debug-in-browser");
+
+        Assert.Equal(ResourceCommandState.Hidden, debugCommand.UpdateState(CreateRunningCommandStateContext()));
+        Assert.Equal(1, sdkVersionProvider.CallCount);
+        Assert.Equal(BlazorDotNetCliRunner.GetExecutablePath(), Assert.Single(sdkVersionProvider.ExecutablePaths));
+        Assert.Contains(sink.Writes, message =>
+            message.LogLevel == LogLevel.Warning &&
+            message.Message is { } logMessage &&
+            logMessage.Contains("Skipped Blazor WebAssembly client discovery") &&
+            logMessage.Contains(expectedVersion));
     }
 
     [Fact]

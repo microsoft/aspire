@@ -18,6 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Pomelo 9 requires EF Core 9, including its health-check dependency. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.20" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" />

@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.GenAPI.Task" PrivateAssets="All" />
+    <!-- This major release drops these TFMs; retain validation for the supported baseline assets. -->
+    <PackageValidationBaselineFrameworkToIgnore Include="net8.0;net9.0" />
   </ItemGroup>
 
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />

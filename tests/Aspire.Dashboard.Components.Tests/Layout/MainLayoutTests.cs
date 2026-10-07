@@ -1283,6 +1283,8 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupAspireMenuButtonModule(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
+        themeModule.Setup<string>("updateTheme", _ => true).SetResult(ThemeManager.ThemeSettingSystem);
+        JSInterop.SetupVoid("Blazor.theme.setThemeMode", _ => true).SetVoidResult();
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);

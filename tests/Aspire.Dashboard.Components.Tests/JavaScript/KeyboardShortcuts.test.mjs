@@ -10,7 +10,7 @@ const source = await readFile(new URL("../../../src/Aspire.Dashboard/wwwroot/js/
 
 const backquote = { key: "`", code: "Backquote", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
 const dashboardKeys = [
-    ...["c", "r", "s", "t", "m", "?", "S", "+", "-"].map(key => ({ key })),
+    ...["c", "r", "s", "t", "m", "e", "?", "S", "+", "-"].map(key => ({ key })),
     backquote,
     { ...backquote, key: "~", shiftKey: true },
 ];
@@ -90,7 +90,20 @@ test("Fluent dropdown controls and options suppress dashboard shortcuts", () => 
 
 test("dashboard shortcuts remain available outside inputs", () => {
     for (const target of [element("BODY"), element("BUTTON"), element("DIV", element("BUTTON"))]) {
-        assert.deepEqual(shortcutsFor(target), [210, 200, 220, 230, 240, 100, 110, 330, 340, 400]);
+        assert.deepEqual(shortcutsFor(target), [210, 200, 220, 230, 240, 250, 100, 110, 330, 340, 400]);
+    }
+});
+
+test("only unmodified e navigates to the terminals page", () => {
+    const terminalsKey = { key: "e", shiftKey: false, altKey: false, ctrlKey: false, metaKey: false };
+    assert.deepEqual(shortcutsFor(element("BUTTON"), [terminalsKey]), [250]);
+    for (const event of [
+        { ...terminalsKey, key: "E", shiftKey: true },
+        { ...terminalsKey, altKey: true },
+        { ...terminalsKey, ctrlKey: true },
+        { ...terminalsKey, metaKey: true },
+    ]) {
+        assert.deepEqual(shortcutsFor(element("BUTTON"), [event]), []);
     }
 });
 
