@@ -102,6 +102,12 @@ public class DashboardTelemetryManagerTests
             var expectedVersion = AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly);
             Assert.NotEmpty(expectedVersion);
             Assert.Collection(traceResource.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal),
+                attribute =>
+                {
+                    Assert.Equal("service.instance.id", attribute.Key);
+                    Assert.True(Guid.TryParse(Assert.IsType<string>(attribute.Value), out var instanceId));
+                    Assert.NotEqual(Guid.Empty, instanceId);
+                },
                 attribute => Assert.Equal(new KeyValuePair<string, object>("service.name", "aspire-dashboard"), attribute),
                 attribute => Assert.Equal(new KeyValuePair<string, object>("service.version", expectedVersion), attribute));
         }

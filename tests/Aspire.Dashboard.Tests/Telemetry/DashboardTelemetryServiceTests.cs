@@ -132,6 +132,7 @@ public class DashboardTelemetryServiceTests
     [InlineData(TelemetryResult.UserFault)]
     [InlineData(TelemetryResult.None)]
     [InlineData(TelemetryResult.UserCancel)]
+    [InlineData((TelemetryResult)int.MaxValue)]
     public void RecordEvent_RecordsStructuredLogWithoutActivity(TelemetryResult result)
     {
         using var fixture = new DashboardTelemetryFixture();
@@ -209,18 +210,6 @@ public class DashboardTelemetryServiceTests
             log => Assert.Equal("Framework error", log.Message),
             log => Assert.Equal("Other event", log.Message),
             log => Assert.Equal("Other category", log.Message));
-    }
-
-    [Fact]
-    public void RecordEvent_InvalidResult_ThrowsWithoutLogging()
-    {
-        using var fixture = new DashboardTelemetryFixture();
-        var service = fixture.Telemetry;
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => service.RecordEvent(TelemetryEventKeys.ComponentInitialize, (TelemetryResult)int.MaxValue));
-
-        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
-        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
 
     [Fact]
