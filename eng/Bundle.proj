@@ -5,7 +5,7 @@
     Usage: dotnet msbuild eng/Bundle.proj /p:TargetRid=linux-x64 /p:Configuration=Release
 
     This project:
-    1. Publishes Aspire.Managed as self-contained and the Dashboard with Native AOT
+    1. Publishes Aspire.Managed as self-contained and Dashboard/TerminalHost with Native AOT
     2. Publishes the native Windows/macOS tray (even with SkipNativeBuild=true)
     3. Restores DCP package
     4. Runs CreateLayout to assemble the bundle
@@ -44,6 +44,7 @@
     <CliProjectPath>$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj</CliProjectPath>
     <ManagedProjectPath>$(RepoRoot)src\Aspire.Managed\Aspire.Managed.csproj</ManagedProjectPath>
     <DashboardProjectPath>$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj</DashboardProjectPath>
+    <TerminalHostProjectPath>$(RepoRoot)src\Aspire.TerminalHost\Aspire.TerminalHost.csproj</TerminalHostProjectPath>
     <AppHostProjectPath>$(RepoRoot)src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj</AppHostProjectPath>
     <CreateLayoutProjectPath>$(RepoRoot)tools\CreateLayout\CreateLayout.csproj</CreateLayoutProjectPath>
     <TrayProjectPath>$(RepoRoot)src\Aspire.Tray\Mac\Aspire.Tray.Mac.csproj</TrayProjectPath>
@@ -113,12 +114,15 @@
     <PropertyGroup>
       <_ManagedBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishManaged.binlog</_ManagedBinlog>
       <_DashboardBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishDashboard.binlog</_DashboardBinlog>
+      <_TerminalHostBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishTerminalHost.binlog</_TerminalHostBinlog>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
     <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
     <Message Importance="high" Text="Publishing Aspire Dashboard (Native AOT)..." />
     <Exec Command="dotnet publish &quot;$(DashboardProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:PlatformName=$(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_DashboardBinlog)" />
+    <Message Importance="high" Text="Publishing Aspire TerminalHost (Native AOT)..." />
+    <Exec Command="dotnet publish &quot;$(TerminalHostProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_TerminalHostBinlog)" />
   </Target>
 
   <!-- SkipNativeBuild skips the outer CLI publish, not native payload components.

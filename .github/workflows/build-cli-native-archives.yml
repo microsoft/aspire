@@ -120,6 +120,13 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
 
+      - name: Smoke test bundled Native AOT TerminalHost
+        if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
+        shell: pwsh
+        run: >
+          ./eng/scripts/test-native-terminalhost.ps1
+          -TerminalHostPath "${{ github.workspace }}/artifacts/bundle/${{ matrix.targets.rids }}/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
+
       - name: Build CLI packages
         run: >
           ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}

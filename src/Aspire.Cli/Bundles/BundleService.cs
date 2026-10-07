@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.IO.Hashing;
+using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Layout;
@@ -621,6 +622,12 @@ internal sealed class BundleService(
             return false;
         }
 
+        if (!TerminalHostPayload.IsValid(Path.Combine(versionDir, BundleDiscovery.TerminalHostDirectoryName),
+            RuntimeInformation.RuntimeIdentifier))
+        {
+            return false;
+        }
+
         return true;
 
         static bool IsNonEmptyFile(string path)
@@ -731,6 +738,7 @@ internal sealed class BundleService(
                 Dcp = BundleDiscovery.DcpDirectoryName,
                 Dashboard = BundleDiscovery.DashboardDirectoryName,
                 Managed = BundleDiscovery.ManagedDirectoryName,
+                TerminalHost = BundleDiscovery.TerminalHostDirectoryName,
                 Tray = LayoutDiscovery.FindTrayRelativePath(versionDirectory, ""),
             }
         };

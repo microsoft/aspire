@@ -26,15 +26,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public DotNetAppHostProjectTests UseFakeRepoRoot()
     {
         // Tests that build their own fake bundle layout under a temp directory must opt out
-        // of the in-repo aspire-managed discovery; otherwise the repo's real built artifact
+        // of the in-repo terminal-host discovery; otherwise the repo's real built artifact
         // shadows the fake bundle path the test pre-stamped into the layout.
-        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => null;
+        DotNetAppHostProject.RepoLocalTerminalHostPathProviderOverride = () => null;
         return this;
     }
 
     public void Dispose()
     {
-        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = null;
+        DotNetAppHostProject.RepoLocalTerminalHostPathProviderOverride = null;
 
         foreach (var serviceProvider in _serviceProviders)
         {
@@ -885,18 +885,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task RunAsync_ProjectAppHostNotUsingCliBundleUsesRepoLocalManagedWhenAvailable()
+    public async Task RunAsync_ProjectAppHostNotUsingCliBundleUsesRepoLocalTerminalHostWhenAvailable()
     {
         // When running `dotnet run --project src/Aspire.Cli` from inside the Aspire repo,
-        // the just-built aspire-managed under artifacts/ should be preferred over the bundle
-        // layout aspire-managed. The bundle layout points at the user's installed CLI cache
-        // (e.g. ~/.aspire/bundle/) whose aspire-managed predates the `terminalhost`
-        // subcommand and fails the AppHost launch.
+        // Prefer the just-built standalone host over installed bundle code for rapid iteration.
         var appHostFile = CreateProjectAppHost();
         var bundleRoot = CreateCliBundle(out var layout);
-        var repoLocalManaged = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo-local-aspire-managed");
-        File.WriteAllText(repoLocalManaged, "fake");
-        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => repoLocalManaged;
+        var repoLocalTerminalHost = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo-local-terminalhost");
+        File.WriteAllText(repoLocalTerminalHost, "fake");
+        DotNetAppHostProject.RepoLocalTerminalHostPathProviderOverride = () => repoLocalTerminalHost;
 
         var runner = new TestDotNetCliRunner
         {
@@ -920,13 +917,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
         {
-            // Repo-local managed path wins over the bundle layout path.
-            Assert.Equal(repoLocalManaged, env![BundleDiscovery.TerminalHostPathEnvVar]);
+            // Repo-local standalone host wins over the bundle layout path.
+            Assert.Equal(repoLocalTerminalHost, env![BundleDiscovery.TerminalHostPathEnvVar]);
             Assert.NotEqual(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
                 env[BundleDiscovery.TerminalHostPathEnvVar]);
-            // Args still synthesized — repo-local aspire-managed is the same dispatcher binary.
-            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            Assert.Equal(string.Empty, env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 

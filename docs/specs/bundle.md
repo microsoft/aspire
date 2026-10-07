@@ -28,7 +28,8 @@ The Aspire Bundle distributes the CLI with its runtime components:
 | Component | Deployment | Purpose |
 |-----------|------------|---------|
 | `aspire[.exe]` | Native AOT | CLI, including native development-certificate management and in-process NuGet operations |
-| `managed/aspire-managed[.exe]` | Self-contained single-file executable | AppHost Server, terminal hosting, and a Dashboard compatibility forwarder |
+| `managed/aspire-managed[.exe]` | Self-contained single-file executable | AppHost Server and Dashboard/terminal-host compatibility forwarders |
+| `terminalhost/Aspire.TerminalHost[.exe]` and native dependencies | Native AOT | Per-replica terminal relay |
 | `dashboard/Aspire.Dashboard[.exe]` | Native AOT | Dashboard web application |
 | `dashboard/wwwroot/` and native dependencies | Publish assets | Dashboard scripts, styles, fonts, images, and SQLite native library |
 | `dcp/` | Platform-specific native binaries | Developer Control Plane |
@@ -38,7 +39,7 @@ The bundle removes the need to acquire DCP and Dashboard separately when using t
 
 This does **not** mean every application can run without other prerequisites. .NET application development still requires the appropriate SDK, guest languages require their own toolchains, and container resources require a container runtime. Integration packages and application dependencies must be available locally or restored from their configured sources. Offline operation requires those dependencies to have been acquired already.
 
-The managed helper contains its own runtime. The CLI and Dashboard are Native AOT executables; there is no separate `runtime/` directory or `ASPIRE_RUNTIME_PATH` contract for the current bundle.
+The managed helper contains its own runtime. The CLI, Dashboard, and terminal host are Native AOT executables; there is no separate `runtime/` directory or `ASPIRE_RUNTIME_PATH` contract for the current bundle.
 
 ## Architecture
 
@@ -49,11 +50,14 @@ aspire (Native AOT CLI)
   |
   +-- managed/aspire-managed
   |     +-- server: AppHost Server and integration loading
-  |     +-- terminalhost: terminal hosting
+  |     +-- terminalhost: compatibility forwarder to native terminal host
   |     +-- dashboard: compatibility forwarder to native Dashboard
   |
   +-- dashboard/Aspire.Dashboard (Native AOT)
   |     +-- wwwroot/ and native dependencies
+  |
+  +-- terminalhost/Aspire.TerminalHost (Native AOT)
+  |     +-- Hex1b native dependencies
   |
   +-- dcp/ (Developer Control Plane)
   +-- tray/ (optional native desktop companion on macOS and Windows)
@@ -223,7 +227,7 @@ The resolver handles install roots, component roots, versioned layouts, and comp
 2. `ASPIRE_DCP_PATH` or `ASPIRE_DASHBOARD_PATH` through configuration.
 3. AppHost assembly metadata populated during the build.
 
-Terminal-host resolution checks its environment/configuration keys and build metadata separately. The path and invocation arguments form a pair: the bundled `aspire-managed` requires the `terminalhost` argument.
+Terminal-host resolution checks its environment/configuration keys and build metadata separately. The path and invocation arguments form a pair: `terminalhost/Aspire.TerminalHost` runs with no dispatcher arguments, whereas `managed/aspire-managed` requires `terminalhost`. An explicitly empty invocation-argument override clears legacy build metadata.
 
 Hosting does not discover a separate Dashboard runtime beside the application. Native Dashboard executables run directly. A framework-dependent Dashboard supplied for development uses `dotnet exec` with the Dashboard's own runtime configuration, not one rewritten to use the AppHost's framework versions.
 
@@ -233,6 +237,8 @@ The CLI and AppHost can use different versions, but compatibility is determined 
 
 - The CLI's `DashboardLaunchHelper` checks the AppHost Hosting version before choosing the native Dashboard. Older or unknown versions use `aspire-managed` as the compatibility entry point. Explicit user-supplied Dashboard paths remain overrides.
 - The current managed helper's `dashboard` subcommand starts the sibling native Dashboard and forwards its arguments. It fails clearly if that executable is missing.
+- The CLI launches the standalone terminal host directly for Hosting 17.0.0 prereleases and later. Older or unknown Hosting versions use `aspire-managed terminalhost`, because those versions do not honor an empty invocation-argument override. This shim forwards arguments, exit status, signals, and parent-process lifetime to the sibling native executable; it does not contain the terminal implementation.
+- Both direct and forwarded terminal processes hold a bundle-version lease while running. Terminal native dependencies live beside the standalone executable, not in `managed/`.
 - The SDK resolver also understands transitional layouts that put `Aspire.Dashboard` under `managed/`, and older layouts that use the managed dispatcher. An existing but incomplete `dashboard/` directory is rejected instead of being mistaken for a legacy layout.
 - Direct `dotnet run` uses the paths resolved into AppHost metadata or explicit configuration. It is not guaranteed to fall back to downloading Dashboard NuGet packages when the bundle is missing.
 - .NET AppHost projects still use the .NET SDK to build and run. A pre-built guest AppHost Server does not replace the .NET project toolchain.
@@ -293,7 +299,7 @@ PR acquisition scripts also populate channel-specific NuGet hives. Hives, integr
 | `ASPIRE_DASHBOARD_PATH` | Dashboard executable override |
 | `ASPIRE_MANAGED_PATH` | Managed component override for CLI consumers; accepted path shape depends on the consumer |
 | `ASPIRE_TERMINAL_HOST_PATH` | Terminal-host executable |
-| `ASPIRE_TERMINAL_HOST_INVOCATION_ARGS` | Arguments needed by the terminal-host entry point, normally `terminalhost` |
+| `ASPIRE_TERMINAL_HOST_INVOCATION_ARGS` | Empty for standalone terminal hosts; `terminalhost` for the managed compatibility entry point |
 | `ASPIRE_BUNDLE_VERSION_DIR` | Selected version directory passed to bundle-owned child processes for leases |
 | `ASPIRE_USE_GLOBAL_DOTNET` | Force the SDK-based server path instead of bundle mode |
 | `ASPIRE_REPO_ROOT` | Repository-development override used by CLI project and artifact resolution |

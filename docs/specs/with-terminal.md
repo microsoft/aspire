@@ -679,10 +679,31 @@ demo from the attached shell avoids losing its initial capability queries. Press
 | DCP wire-up                          | `src/Aspire.Hosting/Dcp/ExecutableCreator.cs`                       |
 | Backchannel `GetTerminalInfoAsync`   | `src/Aspire.Hosting/Backchannel/AuxiliaryBackchannelRpcTarget.cs`   |
 | Snapshot stamping                    | `src/Aspire.Hosting/Dashboard/DashboardServiceData.cs`              |
-| TerminalHost process                 | `src/Aspire.TerminalHost/`                                          |
+| TerminalHost process                 | `src/Aspire.TerminalHost/` (standalone Native AOT executable in CLI bundles) |
 | CLI command                          | `src/Aspire.Cli/Commands/TerminalCommand.cs`                        |
 | Dashboard WebSocket proxy            | `src/Aspire.Dashboard/Terminal/TerminalWebSocketProxy.cs`           |
 | Dashboard resolver                   | `src/Aspire.Dashboard/Terminal/DefaultTerminalConnectionResolver.cs`|
 | `TerminalView` (Hex1b web host)      | `src/Aspire.Dashboard/Components/Controls/TerminalView.razor.*`     |
 | Property keys                        | `src/Shared/Model/KnownProperties.cs` (`Terminal.*`)                |
 | Playground sample                    | `playground/Terminals/Terminals.AppHost/AppHost.cs`                 |
+
+### Repository development
+
+Ordinary builds remain framework-dependent: `PublishAot` applies to publishing, not
+the inner-loop build. After `./restore.sh`, rebuild just the relay with:
+
+```sh
+./dotnet.sh build src/Aspire.TerminalHost/Aspire.TerminalHost.csproj -c Debug
+```
+
+Repository CLI launches with `ASPIRE_REPO_ROOT` set select
+`artifacts/bin/Aspire.TerminalHost/Debug/net10.0/Aspire.TerminalHost[.exe]`
+and no dispatcher arguments. Run `playground/Terminals/Terminals.AppHost` to
+exercise resource terminals in the dashboard. For a custom configuration, supply
+`ASPIRE_TERMINAL_HOST_PATH` and an empty `ASPIRE_TERMINAL_HOST_INVOCATION_ARGS`
+explicitly. The local executable uses its own runtime configuration; no native
+publish or bundle rebuild is needed.
+
+Native publishing and bundle assembly include the executable and all RID-specific
+Hex1b dependencies under `terminalhost/`. The compatibility command
+`aspire-managed terminalhost` only forwards to this sibling executable.

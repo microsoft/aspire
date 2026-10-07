@@ -84,16 +84,21 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var publish = Path.Combine(artifacts, "bin", "Aspire.Managed", "Release", "net10.0", rid, "publish");
         var executable = rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-managed.exe" : "aspire-managed";
         var files = new List<string> { executable };
-        if (rid.StartsWith("win-", StringComparison.Ordinal))
-        {
-            files.AddRange(GetNativePaths(rid));
-        }
-
         foreach (var file in files.Append("Aspire.TerminalHost.exe"))
         {
             if (file != missingSidecar)
             {
                 WriteFile(Path.Combine(publish, file), file);
+            }
+        }
+
+        var terminalPublish = Path.Combine(artifacts, "bin", "Aspire.TerminalHost", "Release", "net10.0", rid, "publish");
+        var terminalFiles = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
+        foreach (var file in terminalFiles)
+        {
+            if (file != missingSidecar)
+            {
+                WriteFile(Path.Combine(terminalPublish, file), file);
             }
         }
 
@@ -165,6 +170,14 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             Assert.True(File.ReadAllBytes(Path.Combine(publish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(managed, file))), file);
         }
 
+        var terminal = Path.Combine(layout, "terminalhost");
+        Assert.Equal(terminalFiles.Order(StringComparer.Ordinal), Directory.GetFiles(terminal, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(terminal, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in terminalFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(terminal, file)));
+        }
+
         var dashboard = Path.Combine(layout, "dashboard");
         Assert.Equal(dashboardFiles.Order(StringComparer.Ordinal), Directory.GetFiles(dashboard, "*", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(dashboard, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
@@ -223,7 +236,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     }
 
     [Fact]
-    public void WindowsManagedSigningIncludesPtyHelperAndPreservesMicrosoftSidecars()
+    public void WindowsTerminalSigningIncludesPtyHelperAndPreservesMicrosoftSidecars()
     {
         var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
         var helperCertificate = Assert.Single(signingProps.Descendants("FileSignInfo"),
@@ -233,13 +246,13 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var windowsManagedFiles = signingProps.Descendants("ItemsToSign")
             .Where(item => (string?)item.Attribute("Condition") == "$([System.OperatingSystem]::IsWindows())")
             .Select(item => (string?)item.Attribute("Include"))
-            .Where(path => path?.StartsWith("$(ArtifactsBinDir)Aspire.Managed", StringComparison.Ordinal) is true)
+            .Where(path => path?.StartsWith("$(ArtifactsBinDir)Aspire.TerminalHost", StringComparison.Ordinal) is true)
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
             [
-                @"$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe",
-                @"$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe"
+                @"$(ArtifactsBinDir)Aspire.TerminalHost\**\publish\Aspire.TerminalHost.exe",
+                @"$(ArtifactsBinDir)Aspire.TerminalHost\**\publish\hex1bpty.exe"
             ],
             windowsManagedFiles);
     }

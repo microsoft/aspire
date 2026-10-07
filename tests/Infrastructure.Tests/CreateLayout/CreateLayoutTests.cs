@@ -9,6 +9,36 @@ namespace Infrastructure.Tests.CreateLayout;
 public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
+    [InlineData("win-x64")]
+    [InlineData("win-arm64")]
+    [InlineData("linux-x64")]
+    [InlineData("linux-arm64")]
+    [InlineData("linux-musl-x64")]
+    [InlineData("osx-x64")]
+    [InlineData("osx-arm64")]
+    public void CopyTerminalHostRequiresNativeDependenciesAndExcludesSymbols(string rid)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var publish = Path.Combine(workspace.Path, "bin", "Aspire.TerminalHost", "Debug", "net10.0", rid, "publish");
+        var files = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
+        foreach (var file in files)
+        {
+            var path = Path.Combine(publish, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, file);
+        }
+        File.WriteAllText(Path.Combine(publish, "Aspire.TerminalHost.pdb"), "symbols");
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, rid, "Debug", "1.0", false, null, null);
+        builder.CopyTerminalHost();
+        var target = Path.Combine(workspace.Path, "layout", "terminalhost");
+        Assert.Equal(files.Order(StringComparer.Ordinal), Directory.GetFiles(target, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(target, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+
+        File.Delete(Path.Combine(publish, files[^1]));
+        Assert.Throws<InvalidOperationException>(builder.CopyTerminalHost);
+    }
+
+    [Theory]
     [InlineData("Debug", "Release")]
     [InlineData("Release", "Debug")]
     [InlineData("Custom", "Release")]

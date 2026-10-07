@@ -14,10 +14,23 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.TerminalHost\Aspire.TerminalHost.csproj" ReferenceOutputAssembly="false" />
 
     <!-- Preview package warning suppressions do not flow through the Aspire.Managed project reference. -->
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
   </ItemGroup>
+
+  <Target Name="CopyTerminalHostProcessFixtures" AfterTargets="Build">
+    <!-- Keep each executable's own runtime/dependency files; the test project's
+         resolved dependency versions can differ from the standalone host's. -->
+    <ItemGroup>
+      <_ProcessFixtureFiles Include="$(ArtifactsBinDir)Aspire.TerminalHost/$(Configuration)/$(TargetFramework)/**/*" FixtureDirectory="terminalhost" />
+      <_ProcessFixtureFiles Include="$(ArtifactsBinDir)Aspire.Managed/$(Configuration)/$(TargetFramework)/**/*" FixtureDirectory="managed" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_ProcessFixtureFiles)"
+          DestinationFiles="@(_ProcessFixtureFiles->'$(OutDir)ProcessFixtures/%(FixtureDirectory)/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>
