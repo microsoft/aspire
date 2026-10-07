@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
 using Xunit;
@@ -52,7 +53,16 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
             }
         };
 
-        process.Start();
+        try
+        {
+            process.Start();
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == 2 && Directory.Exists(workingDirectory))
+        {
+            outputHelper.WriteLine($"Failed to start git: {ex}");
+            Assert.Skip("git is required for this test but was not found on PATH.");
+        }
+
         outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' started with PID {process.Id} after {stopwatch.Elapsed}");
 
         var stdout = new StringBuilder();
@@ -71,13 +81,23 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         {
             outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {(timeout.IsCancellationRequested ? "timed out" : "was canceled")} after {stopwatch.Elapsed}");
 
-            // Disposing Process does not stop it. Reap the child before workspace disposal
-            // so a timed-out Git command cannot keep writing into a deleted directory.
-            if (!process.HasExited)
+            // Disposing Process does not stop it. Request tree termination and reap the root
+            // before workspace disposal. HasExited can change between the check and Kill.
+            try
             {
-                process.Kill(entireProcessTree: true);
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (Exception ex) when ((ex is InvalidOperationException or Win32Exception) && process.HasExited)
+            {
+                outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) exited during termination: {ex.Message}");
             }
 
+            // WaitForExitAsync observes only the root, not every descendant. Tree cleanup is
+            // best-effort; strict containment would require process groups or Windows jobs.
+            // https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill#remarks
             await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
             if (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !TestContext.Current.CancellationToken.IsCancellationRequested)
             {
