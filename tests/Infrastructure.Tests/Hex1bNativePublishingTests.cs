@@ -106,7 +106,11 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("osx-x64", null)]
     [InlineData("osx-arm64", null)]
     [InlineData("win-x64", "arm64/OpenConsole.exe")]
+    [InlineData("win-x64", "conpty.dll")]
+    [InlineData("win-x64", "x64/OpenConsole.exe")]
     [InlineData("win-arm64", "hex1bpty.exe")]
+    [InlineData("win-arm64", "conpty.dll")]
+    [InlineData("win-arm64", "arm64/OpenConsole.exe")]
     public async Task BundlePreservesPtyLayoutAndRejectsMissingSidecars(string rid, string? missingSidecar)
     {
         var artifacts = Path.Combine(_workspace.Path, "artifacts");
@@ -191,12 +195,22 @@ public sealed class Hex1bNativePublishingTests : IDisposable
 
         Assert.True(result.ExitCode == 0, result.Output);
 
+        string[] conPtyFiles = rid switch
+        {
+            "win-x64" => ["conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"],
+            "win-arm64" => ["conpty.dll", "arm64/OpenConsole.exe"],
+            _ => []
+        };
         var managed = Path.Combine(layout, "managed");
-        Assert.Equal(files.Order(StringComparer.Ordinal), Directory.GetFiles(managed, "*", SearchOption.AllDirectories)
+        Assert.Equal(files.Concat(conPtyFiles).Order(StringComparer.Ordinal), Directory.GetFiles(managed, "*", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(managed, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
         foreach (var file in files)
         {
             Assert.True(File.ReadAllBytes(Path.Combine(publish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(managed, file))), file);
+        }
+        foreach (var file in conPtyFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(managed, file)));
         }
 
         var terminal = Path.Combine(layout, "terminalhost");

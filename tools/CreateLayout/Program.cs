@@ -276,6 +276,17 @@ internal sealed class LayoutBuilder : IDisposable
         }
 
         CopyDirectory(publishPath, Path.Combine(_outputPath, "terminalhost"), excludeSymbols: true);
+
+        // Existing Hosting versions discover DCP's ConPTY provider beside the configured terminal
+        // executable. Compatibility launches point at managed/aspire-managed.exe, so retain the
+        // provider there as well; otherwise DCP falls back to inbox ConPTY and loses Kitty graphics.
+        foreach (var file in TerminalHostPayload.GetConPtyFiles(_rid))
+        {
+            var destination = Path.Combine(_outputPath, "managed", file);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(Path.Combine(publishPath, file), destination, overwrite: true);
+        }
+
         Log("  Copied Native AOT terminal host to terminalhost/");
     }
 

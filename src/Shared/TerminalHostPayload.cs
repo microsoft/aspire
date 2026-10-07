@@ -10,12 +10,18 @@ internal static class TerminalHostPayload
 {
     public static string[] GetRequiredFiles(string rid) => rid switch
     {
-        // ConPTY selects OpenConsole by OS architecture, including x64 processes on ARM64 Windows.
-        "win-x64" => ["Aspire.TerminalHost.exe", "hex1bpty.exe", "conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"],
-        "win-arm64" => ["Aspire.TerminalHost.exe", "hex1bpty.exe", "conpty.dll", "arm64/OpenConsole.exe"],
+        "win-x64" or "win-arm64" => ["Aspire.TerminalHost.exe", "hex1bpty.exe", .. GetConPtyFiles(rid)],
         "osx-x64" or "osx-arm64" => ["Aspire.TerminalHost", "libhex1binterop.dylib"],
         "linux-x64" or "linux-arm64" or "linux-musl-x64" => ["Aspire.TerminalHost", "libhex1binterop.so"],
         _ => throw new ArgumentException($"Unsupported terminal host runtime '{rid}'.", nameof(rid))
+    };
+
+    public static string[] GetConPtyFiles(string rid) => rid switch
+    {
+        // ConPTY selects OpenConsole by OS architecture, including x64 processes on ARM64 Windows.
+        "win-x64" => ["conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"],
+        "win-arm64" => ["conpty.dll", "arm64/OpenConsole.exe"],
+        _ => []
     };
 
     public static bool IsValid(string directory, string rid)

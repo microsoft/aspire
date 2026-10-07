@@ -707,6 +707,12 @@ publish or bundle rebuild is needed.
 Native publishing and bundle assembly include the executable and all RID-specific
 Hex1b dependencies under `terminalhost/`. The compatibility command
 `aspire-managed terminalhost` only forwards to this sibling executable.
+Windows bundles also retain `conpty.dll` and the architecture-specific
+`OpenConsole.exe` files under `managed/`. Existing Hosting versions discover
+DCP's ConPTY provider beside the configured terminal executable, which remains
+the managed shim for compatibility launches. These copies preserve the bundled
+OpenConsole provider and Kitty graphics support without embedding the terminal
+implementation in the managed executable.
 TerminalHost and Dashboard native publishes enable optimization even for Debug
 bundles: Native AOT cannot later JIT-optimize the relay, dashboard terminal mirror,
 or their dependencies. Both stages need sufficient throughput to prevent a slow
