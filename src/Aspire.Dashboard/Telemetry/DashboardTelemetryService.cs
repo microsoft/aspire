@@ -182,7 +182,6 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         sanitizedValue = value switch
         {
             string text => text.Length <= 1024 ? text : text[..1024],
-            IEnumerable<string> values => values.Take(100).Select(text => text.Length <= 256 ? text : text[..256]).ToArray(),
             bool or int or double => value,
             _ => null
         };
@@ -205,8 +204,7 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         TelemetryPropertyKeys.DashboardComponentId or TelemetryPropertyKeys.DashboardComponentType or
         TelemetryPropertyKeys.ConsoleLogsShowTimestamp or TelemetryPropertyKeys.MetricsResourceIsReplica or
         TelemetryPropertyKeys.MetricsInstrumentsCount or TelemetryPropertyKeys.MetricsSelectedDuration or
-        TelemetryPropertyKeys.MetricsSelectedView or TelemetryPropertyKeys.ResourceTypes or
-        TelemetryPropertyKeys.ResourceType or TelemetryPropertyKeys.ResourceView or
+        TelemetryPropertyKeys.MetricsSelectedView or TelemetryPropertyKeys.ResourceType or TelemetryPropertyKeys.ResourceView or
         TelemetryPropertyKeys.ErrorRequestId or TelemetryPropertyKeys.StructuredLogsSelectedLogLevel or
         TelemetryPropertyKeys.StructuredLogsFilterCount or TelemetryPropertyKeys.CommandName or
         TelemetryPropertyKeys.TerminalDockTrigger;

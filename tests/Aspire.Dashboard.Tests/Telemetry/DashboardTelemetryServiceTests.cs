@@ -298,40 +298,25 @@ public class DashboardTelemetryServiceTests
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
 
-    [Theory]
-    [InlineData("Array")]
-    [InlineData("List")]
-    [InlineData("Enumerable")]
-    public void RecordEvent_BoundsStringsAndCollections(string collectionType)
+    [Fact]
+    public void RecordEvent_BoundsStrings()
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
         using var activity = service.StartReportedActivity("dashboard-operation");
         Assert.NotNull(activity);
-        var resourceTypes = Enumerable.Repeat(new string('y', 300), 105);
-        IEnumerable<string> valuesToRecord = collectionType switch
-        {
-            "Array" => resourceTypes.ToArray(),
-            "List" => resourceTypes.ToList(),
-            "Enumerable" => resourceTypes,
-            _ => throw new ArgumentOutOfRangeException(nameof(collectionType))
-        };
 
         service.RecordEvent(TelemetryEventKeys.ParametersSet, new()
         {
-            [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100)),
-            [TelemetryPropertyKeys.ResourceTypes] = new(valuesToRecord)
+            [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100))
         });
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(new string('x', 1024), log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.CommandName).Value);
-        var joinedValues = Assert.IsType<string>(log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value);
-        Assert.Equal(string.Join(",", Enumerable.Repeat(new string('y', 256), 100)), joinedValues);
         Assert.Empty(activity.Events);
         Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 1024)), tag),
-            tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceTypes, joinedValues), tag),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
             tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), tag));
