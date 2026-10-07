@@ -74,7 +74,7 @@ public sealed class DashboardCommandExecutorTests
             // Allow timer granularity while ensuring the one-second UI delay isn't part of the activity.
             Assert.True(stopwatch.Elapsed - activity.Duration >= TimeSpan.FromMilliseconds(900));
             Assert.Equal(commandThrows ? ActivityStatusCode.Error : ActivityStatusCode.Ok, activity.Status);
-            Assert.Equal((commandThrows ? TelemetryResult.Failure : TelemetryResult.Success).ToString(), activity.GetTagItem("aspire.dashboard.result"));
+            Assert.Equal(commandThrows ? "Failure" : "Success", activity.GetTagItem("aspire.dashboard.result"));
             Assert.Null(activity.StatusDescription);
         }
         else

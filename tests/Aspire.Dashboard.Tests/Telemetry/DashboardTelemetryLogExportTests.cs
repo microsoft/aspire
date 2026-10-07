@@ -76,7 +76,7 @@ public class DashboardTelemetryLogExportTests
             using (eventLogger.BeginScope(new Dictionary<string, object?> { ["secret"] = "workspace path" }))
             {
                 telemetry.RecordEvent(
-                    TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+                    TelemetryEventKeys.ComponentInitialize);
             }
             Assert.True(await logProvider.ForceFlushAsync(timeoutMilliseconds: 5000));
 
@@ -89,7 +89,6 @@ public class DashboardTelemetryLogExportTests
             Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
                 tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
                 tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-                tag => Assert.Equal(new KeyValuePair<string, object?>("aspire.dashboard.result", "Success"), tag),
                 tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize), tag),
                 tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize), tag));
             Assert.False(exporter.LogChannel.Reader.TryPeek(out _));
@@ -99,7 +98,7 @@ public class DashboardTelemetryLogExportTests
                 sink.Writes.Select(write => write.Message).ToArray());
 
             telemetry.RecordEvent(
-                TelemetryEventKeys.ComponentDispose, TelemetryResult.Success);
+                TelemetryEventKeys.ComponentDispose);
             Assert.True(await logProvider.ShutdownAsync(timeoutMilliseconds: 5000));
             Assert.True(exporter.LogChannel.Reader.TryRead(out var shutdownLog));
             Assert.Equal(TelemetryEventKeys.ComponentDispose, shutdownLog.Message);

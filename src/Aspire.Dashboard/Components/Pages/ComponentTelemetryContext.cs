@@ -64,7 +64,6 @@ public sealed class ComponentTelemetryContext : IDisposable
         // disposal could otherwise lose this usage data.
         telemetryService.RecordEvent(
             TelemetryEventKeys.ComponentInitialize,
-            TelemetryResult.Success,
             properties: CreateInitializeAndDisposeProperties());
     }
 
@@ -105,7 +104,6 @@ public sealed class ComponentTelemetryContext : IDisposable
 
         _telemetryService.RecordEvent(
             TelemetryEventKeys.ParametersSet,
-            TelemetryResult.Success,
             properties: Properties);
     }
 
@@ -125,7 +123,6 @@ public sealed class ComponentTelemetryContext : IDisposable
         {
             _telemetryService?.RecordEvent(
                 TelemetryEventKeys.ComponentDispose,
-                TelemetryResult.Success,
                 properties: CreateInitializeAndDisposeProperties());
 
             _disposed = true;

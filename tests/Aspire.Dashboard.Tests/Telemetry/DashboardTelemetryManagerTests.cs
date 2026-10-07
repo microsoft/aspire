@@ -44,7 +44,7 @@ public class DashboardTelemetryManagerTests
         Assert.Equal(1, configured);
         Assert.True(source.HasListeners());
 
-        telemetry.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+        telemetry.RecordEvent(TelemetryEventKeys.ComponentInitialize);
         Assert.True(exporter.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.ComponentInitialize, log.Message);
         Assert.Empty(sink.Writes);

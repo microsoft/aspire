@@ -12,12 +12,10 @@ namespace Aspire.Dashboard.Tests.Telemetry;
 public class DashboardTelemetryServiceTests
 {
     [Theory]
-    [InlineData(TelemetryResult.Success, ActivityStatusCode.Ok)]
-    [InlineData(TelemetryResult.Failure, ActivityStatusCode.Error)]
-    [InlineData(TelemetryResult.UserFault, ActivityStatusCode.Error)]
-    [InlineData(TelemetryResult.None, ActivityStatusCode.Unset)]
-    [InlineData(TelemetryResult.UserCancel, ActivityStatusCode.Unset)]
-    public void Operation_RecordsResultAndCompletesActivity(TelemetryResult result, ActivityStatusCode status)
+    [InlineData(ActivityStatusCode.Ok, "Success")]
+    [InlineData(ActivityStatusCode.Error, "Failure")]
+    [InlineData(ActivityStatusCode.Unset, "None")]
+    public void Operation_RecordsStatusAndCompletesActivity(ActivityStatusCode status, string expectedResult)
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
@@ -34,7 +32,7 @@ public class DashboardTelemetryServiceTests
             Assert.Same(activity, Activity.Current);
             Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
 
-            service.SetOperationResult(activity, result);
+            service.SetOperationStatus(activity, status);
             Assert.False(activity.IsStopped);
             Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
         }
@@ -45,7 +43,7 @@ public class DashboardTelemetryServiceTests
         Assert.True(activity.IsStopped);
         Assert.Equal(status, activity.Status);
         Assert.Null(activity.StatusDescription);
-        Assert.Equal(result.ToString(), activity.GetTagItem("aspire.dashboard.result"));
+        Assert.Equal(expectedResult, activity.GetTagItem("aspire.dashboard.result"));
         Assert.Equal("resource-stop", activity.GetTagItem(TelemetryPropertyKeys.CommandName));
     }
 
@@ -106,8 +104,8 @@ public class DashboardTelemetryServiceTests
         var service = fixture.Telemetry;
 
         using var parent = new Activity("parent").Start();
-        service.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
-        service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success);
+        service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
+        service.RecordEvent(TelemetryEventKeys.ParametersSet);
 
         Assert.Same(parent, Activity.Current);
         Assert.True(fixture.LogChannel.Reader.TryRead(out var initializeEvent));
@@ -126,14 +124,8 @@ public class DashboardTelemetryServiceTests
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
     }
 
-    [Theory]
-    [InlineData(TelemetryResult.Success)]
-    [InlineData(TelemetryResult.Failure)]
-    [InlineData(TelemetryResult.UserFault)]
-    [InlineData(TelemetryResult.None)]
-    [InlineData(TelemetryResult.UserCancel)]
-    [InlineData((TelemetryResult)int.MaxValue)]
-    public void RecordEvent_RecordsStructuredLogWithoutActivity(TelemetryResult result)
+    [Fact]
+    public void RecordEvent_RecordsStructuredLogWithoutActivity()
     {
         using var fixture = new DashboardTelemetryFixture();
         var service = fixture.Telemetry;
@@ -142,7 +134,7 @@ public class DashboardTelemetryServiceTests
         Activity.Current = null;
         try
         {
-            service.RecordEvent(TelemetryEventKeys.ComponentInitialize, result);
+            service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
 
             Assert.Null(Activity.Current);
             Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
@@ -154,7 +146,6 @@ public class DashboardTelemetryServiceTests
             Assert.Equal(default, log.SpanId);
             Assert.Equal(TelemetryEventKeys.ComponentInitialize,
                 log.Attributes.Single(p => p.Key == "microsoft.operation_name").Value);
-            Assert.Equal(result.ToString(), log.Attributes.Single(p => p.Key == "aspire.dashboard.result").Value);
             Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         }
         finally
@@ -172,8 +163,8 @@ public class DashboardTelemetryServiceTests
 
         var activity = service.StartOperation(TelemetryEventKeys.ExecuteCommand, []);
         Assert.Null(activity);
-        service.SetOperationResult(activity, TelemetryResult.Success);
-        service.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+        service.SetOperationStatus(activity, ActivityStatusCode.Ok);
+        service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.ComponentInitialize, log.Message);
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
@@ -192,7 +183,7 @@ public class DashboardTelemetryServiceTests
         loggerFactory.CreateLogger("Aspire.Dashboard.Other").LogInformation("Other category");
         using (fixture.EventLogger.BeginScope(new Dictionary<string, object?> { ["secret"] = "workspace path" }))
         {
-            service.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+            service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
         }
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
@@ -200,7 +191,6 @@ public class DashboardTelemetryServiceTests
         Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("aspire.dashboard.result", "Success"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ComponentInitialize), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ComponentInitialize), tag));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
@@ -236,7 +226,7 @@ public class DashboardTelemetryServiceTests
                 tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.Error), tag),
                 tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.Error), tag));
 
-            service.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+            service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
 
             Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
             Assert.Equal(TelemetryEventKeys.ComponentInitialize, log.Message);
@@ -269,7 +259,7 @@ public class DashboardTelemetryServiceTests
         using var child = service.StartDiagnosticActivity("diagnostic-operation");
         Assert.NotNull(child);
 
-        service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success, new()
+        service.RecordEvent(TelemetryEventKeys.ParametersSet, new()
         {
             [TelemetryPropertyKeys.DashboardComponentId] = new("Metrics")
         });
@@ -284,7 +274,6 @@ public class DashboardTelemetryServiceTests
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, tag.Key),
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentId, "Metrics"), tag),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("aspire.dashboard.result", "Success"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), tag));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
@@ -300,7 +289,7 @@ public class DashboardTelemetryServiceTests
         activity.Stop();
         Assert.True(fixture.ActivityChannel.Reader.TryRead(out _));
 
-        fixture.Telemetry.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+        fixture.Telemetry.RecordEvent(TelemetryEventKeys.ComponentInitialize);
 
         Assert.Empty(activity.Events);
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
@@ -328,7 +317,7 @@ public class DashboardTelemetryServiceTests
             _ => throw new ArgumentOutOfRangeException(nameof(collectionType))
         };
 
-        service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success, new()
+        service.RecordEvent(TelemetryEventKeys.ParametersSet, new()
         {
             [TelemetryPropertyKeys.CommandName] = new(new string('x', 1100)),
             [TelemetryPropertyKeys.ResourceTypes] = new(valuesToRecord)
@@ -344,7 +333,6 @@ public class DashboardTelemetryServiceTests
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.CommandName, new string('x', 1024)), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceTypes, joinedValues), tag),
             tag => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, tag.Key),
-            tag => Assert.Equal(new KeyValuePair<string, object?>("aspire.dashboard.result", "Success"), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), tag));
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
@@ -498,8 +486,8 @@ public class DashboardTelemetryServiceTests
 
         var activity = service.StartOperation(TelemetryEventKeys.ExecuteCommand, []);
         Assert.Null(activity);
-        service.SetOperationResult(activity, TelemetryResult.Success);
-        service.RecordEvent(TelemetryEventKeys.ComponentInitialize, TelemetryResult.Success);
+        service.SetOperationStatus(activity, ActivityStatusCode.Ok);
+        service.RecordEvent(TelemetryEventKeys.ComponentInitialize);
         service.RecordError("Local error", new InvalidOperationException("secret"), writeToLogging: true);
 
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
@@ -535,12 +523,12 @@ public class DashboardTelemetryServiceTests
         var defaultBuildId = activity.GetTagItem(TelemetryPropertyKeys.DashboardBuildId);
         Assert.Equal(Aspire.Shared.AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly), defaultVersion);
         Assert.Equal(Aspire.Shared.AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly), defaultBuildId);
-        service.SetOperationResult(activity, TelemetryResult.Success);
+        service.SetOperationStatus(activity, ActivityStatusCode.Ok);
 
-        service.RecordEvent(TelemetryEventKeys.ParametersSet, TelemetryResult.Success, properties);
+        service.RecordEvent(TelemetryEventKeys.ParametersSet, properties);
 
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
-        Assert.Equal(activity.TagObjects.Append(new("microsoft.operation_name", TelemetryEventKeys.ParametersSet)).OrderBy(t => t.Key),
+        Assert.Equal(activity.TagObjects.Where(t => t.Key != "aspire.dashboard.result").Append(new("microsoft.operation_name", TelemetryEventKeys.ParametersSet)).OrderBy(t => t.Key),
             log.Attributes.Where(t => t.Key != "{OriginalFormat}").OrderBy(t => t.Key));
         Assert.Empty(activity.Events);
         Assert.Collection(log.Attributes.OrderBy(t => t.Key, StringComparer.Ordinal),
@@ -556,11 +544,6 @@ public class DashboardTelemetryServiceTests
                 Assert.Equal(12d, tag.Value);
             },
             tag => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardVersion, defaultVersion), tag),
-            tag =>
-            {
-                Assert.Equal("aspire.dashboard.result", tag.Key);
-                Assert.Equal("Success", tag.Value);
-            },
             tag => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), tag),
             tag => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), tag));
         Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));

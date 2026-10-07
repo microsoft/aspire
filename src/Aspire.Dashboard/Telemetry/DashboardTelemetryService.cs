@@ -84,16 +84,24 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     }
 
     /// <summary>
-    /// Sets an operation's result without ending its activity.
+    /// Sets an operation's status without ending its activity.
     /// </summary>
     /// <param name="activity">The operation activity, or <see langword="null"/> when not recorded.</param>
-    /// <param name="result">The operation result.</param>
-    public void SetOperationResult(Activity? activity, TelemetryResult result)
+    /// <param name="status">The operation status.</param>
+    public void SetOperationStatus(Activity? activity, ActivityStatusCode status)
     {
         if (activity is not null)
         {
-            var status = GetResultStatus(result);
-            SetActivityProperty(activity, "aspire.dashboard.result", result.ToString());
+            // Keep the legacy result values for existing telemetry queries while using
+            // OpenTelemetry's standard status code as the API and activity status.
+            var result = status switch
+            {
+                ActivityStatusCode.Ok => "Success",
+                ActivityStatusCode.Error => "Failure",
+                ActivityStatusCode.Unset => "None",
+                _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown activity status.")
+            };
+            SetActivityProperty(activity, "aspire.dashboard.result", result);
             activity.SetStatus(status);
         }
     }
@@ -102,16 +110,15 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
     /// Records a sanitized dashboard event as a structured log.
     /// </summary>
     /// <param name="eventName">The event name.</param>
-    /// <param name="result">The event result.</param>
     /// <param name="properties">The event properties.</param>
-    public void RecordEvent(string eventName, TelemetryResult result, Dictionary<string, AspireTelemetryProperty>? properties = null)
+    public void RecordEvent(string eventName, Dictionary<string, AspireTelemetryProperty>? properties = null)
     {
         if (!IsTelemetryEnabled)
         {
             return;
         }
 
-        RecordEventCore(eventName, GetProperties(properties).Append(new("aspire.dashboard.result", result.ToString())));
+        RecordEventCore(eventName, GetProperties(properties));
     }
 
     /// <summary>
@@ -204,11 +211,4 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
         TelemetryPropertyKeys.StructuredLogsFilterCount or TelemetryPropertyKeys.CommandName or
         TelemetryPropertyKeys.TerminalDockTrigger;
 
-    private static ActivityStatusCode GetResultStatus(TelemetryResult result) => result switch
-    {
-        TelemetryResult.Success => ActivityStatusCode.Ok,
-        TelemetryResult.Failure or TelemetryResult.UserFault => ActivityStatusCode.Error,
-        TelemetryResult.None or TelemetryResult.UserCancel => ActivityStatusCode.Unset,
-        _ => throw new ArgumentOutOfRangeException(nameof(result), result, "Unknown telemetry result.")
-    };
 }
