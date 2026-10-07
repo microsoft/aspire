@@ -1,0 +1,16 @@
+{
+  "id": "infrastructure-tests-hex1bnativepublishingtests-json-parse-error-winx64-nosinglefile",
+  "type": "flaky-test",
+  "title": "Flaky: Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(win-x64, singleFile:False) fails parsing truncated/corrupted MSBuild JSON item output",
+  "test_name": "Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(rid: \"win-x64\", singleFile: False)",
+  "error_pattern": "System.Text.Json.JsonReaderException : 'M' is invalid after a single JSON value. Expected end of data. LineNumber: 209 | BytePositionInLine: 0.\n   at System.Text.Json.JsonDocument.Parse(ReadOnlyMemory`1 json, JsonDocumentOptions options)\n   at Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(String rid, Boolean singleFile) in /home/runner/work/aspire/aspire/tests/Infrastructure.Tests/Hex1bNativePublishingTests.cs:line 38",
+  "occurrences": [
+    {
+      "run_id": 37668103720,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37668103720",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-07T20:11:36Z"
+    }
+  ]
+}

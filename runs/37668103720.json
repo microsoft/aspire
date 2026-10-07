@@ -1,0 +1,120 @@
+{
+  "run_id": 37668103720,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37668103720",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-07T20:11:36Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20793,
+    "title": "Prepare VS Code extension release v1.24.0",
+    "author": "aspire-repo-bot[bot]",
+    "state": "closed",
+    "head_branch": "extension-release/v1.24.0",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20793",
+    "merged_at": "2026-10-07T18:36:13Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "5fe0414b35947a218afd2017f24053d4cc5bc9cf",
+    "failed_sha": "e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "d2b0c75dd0648beecb6d5f51e25b57930f370ac4",
+        "message": "ci: enforce actionlint for handwritten workflows (#20610) ## Description **Handwritten GitHub Actions workflow errors can currently merge without a blocking schema and expression check.** ### What the Actionlint gate does This adds Actionlint v1.7.12 directly to the main CI workflow. The job: - Runs on `ubuntu-latest` on every normal CI invocation, not only when workflow files change. - Lints all 59 handwritten top-level workflow files under `.github/workflows` through `lint-handwritten-workflow",
+        "html_url": "https://github.com/microsoft/aspire/commit/d2b0c75dd0648beecb6d5f51e25b57930f370ac4",
+        "pull_request": {
+          "number": 20610,
+          "title": "ci: enforce actionlint for handwritten workflows",
+          "url": "https://github.com/microsoft/aspire/pull/20610",
+          "merged_at": "2026-10-07T15:53:06Z"
+        }
+      },
+      {
+        "sha": "1bb4bd4a9180ad8c3da011a38a484778e993403a",
+        "message": "Update PackageValidationBaselineVersion to 13.6.1 (#20785) This PR updates the stable release baseline and first-party Nix flake manifest to Aspire CLI `13.6.1` after the release assets were uploaded to GitHub. ## Changes - Updated `src/Directory.Build.props` with the new package validation baseline version. - Updated `eng/nix/versions.json` to point at the versioned GitHub release archives. - Pinned the official `.sha512` checksum assets as Nix SRI hashes. --- *Created automatically by the rele",
+        "html_url": "https://github.com/microsoft/aspire/commit/1bb4bd4a9180ad8c3da011a38a484778e993403a",
+        "pull_request": {
+          "number": 20785,
+          "title": "Update PackageValidationBaselineVersion to 13.6.1",
+          "url": "https://github.com/microsoft/aspire/pull/20785",
+          "merged_at": "2026-10-07T17:52:20Z"
+        }
+      },
+      {
+        "sha": "6a47a8c7a1a3925cc3e6881226364ef7d02ed5d6",
+        "message": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension (#20789) Bumps [source-map-js](https://github.com/7rulnik/source-map-js) from 1.2.1 to 1.2.2. <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/7rulnik/source-map-js/releases\">source-map-js's releases</a>.</em></p> <blockquote> <h2>v1.2.2</h2> <ul> <li> <p>Fix crash when executing in browser with CSP script-src that don't permit unsafe-eval (<a href=\"https://redirect.github.com/7rulnik/source-map-js/pul",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a47a8c7a1a3925cc3e6881226364ef7d02ed5d6",
+        "pull_request": {
+          "number": 20789,
+          "title": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension",
+          "url": "https://github.com/microsoft/aspire/pull/20789",
+          "merged_at": "2026-10-07T18:05:14Z"
+        }
+      },
+      {
+        "sha": "e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+        "message": "Prepare VS Code extension release v1.24.0 (#20793) ## VS Code Extension Release v1.24.0 **Version bump:** 1.23.0 → 1.24.0 **Commit range:** [`41d7fa2`](https://github.com/microsoft/aspire/commit/41d7fa2c42761b63a694099fdca7eab49718ffd5)..[`d2b0c75`](https://github.com/microsoft/aspire/commit/d2b0c75dd0648beecb6d5f51e25b57930f370ac4) **Baseline:** VS Code Marketplace v1.23.0 (from the shipped VSIX `extension/.version`) ### Proposed release notes (deterministic fallback) The `extension-changelog` ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+        "pull_request": {
+          "number": 20793,
+          "title": "Prepare VS Code extension release v1.24.0",
+          "url": "https://github.com/microsoft/aspire/pull/20793",
+          "merged_at": "2026-10-07T18:36:13Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "id": 112958377951,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37668103720/job/112958377951",
+      "classification": "flaky-test",
+      "reason": "Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(win-x64, singleFile:False) failed parsing truncated MSBuild JSON item output, a known intermittent JSON-truncation defect unrelated to the merged VS Code extension release commits.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "id": 112958395326,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37668103720/job/112958395326",
+      "classification": "flaky-test",
+      "reason": "AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration failed with IOException deleting a Windows temp directory still locked by another process, a known recurring file-lock race unrelated to the merged commits.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(rid: \"win-x64\", singleFile: False)",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "error": "System.Text.Json.JsonReaderException : 'M' is invalid after a single JSON value. Expected end of data. LineNumber: 209 | BytePositionInLine: 0.",
+      "stack_trace": "at System.Text.Json.ThrowHelper.ThrowJsonReaderException(Utf8JsonReader& json, ExceptionResource resource, Byte nextByte, ReadOnlySpan`1 bytes)\n   at System.Text.Json.Utf8JsonReader.ConsumeNextToken(Byte marker)\n   at System.Text.Json.Utf8JsonReader.ReadSingleSegment()\n   at System.Text.Json.JsonDocument.Parse(ReadOnlySpan`1 utf8JsonSpan, JsonReaderOptions readerOptions, MetadataDb& database, StackRowStack& stack)\n   at System.Text.Json.JsonDocument.Parse(ReadOnlyMemory`1 utf8Json, JsonReaderOptions readerOptions, Byte[] extraRentedArrayPoolBytes, PooledByteBufferWriter extraPooledByteBufferWriter, Boolean allowDuplicateProperties)\n   at System.Text.Json.JsonDocument.Parse(ReadOnlyMemory`1 json, JsonDocumentOptions options)\n   at Infrastructure.Tests.Hex1bNativePublishingTests.NativeAssetsKeepTheirLayoutAndContents(String rid, Boolean singleFile) in /home/runner/work/aspire/aspire/tests/Infrastructure.Tests/Hex1bNativePublishingTests.cs:line 38\n--- End of stack trace from previous location ---",
+      "standard_output": "{\n  \"Items\": {\n    \"NativeCopyLocalItems\": [\n      {\n        \"Identity\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/arm64/OpenConsole.exe\",\n        \"DestinationSubPath\": \"arm64/OpenConsole.exe\",\n        \"NuGetPackageId\": \"Hex1b\",\n        \"DestinationSubDirectory\": \"arm64/\",\n        \"PathInPackage\": \"runtimes/win-x64/native/arm64/OpenConsole.exe\",\n        \"FullPath\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/arm64/OpenConsole.exe\",\n        \"RootDir\": \"/\",\n        \"Filename\": \"OpenConsole\",\n        \"Extension\": \".exe\",\n        \"RelativeDir\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/arm64/\",\n        \"Directory\": \"home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/arm64/\",\n        \"RecursiveDir\": \"\",\n        \"ModifiedTime\": \"2026-10-07 18:52:05.9993705\",\n        \"CreatedTime\": \"2026-10-07 18:52:05.9993705\",\n        \"AccessedTime\": \"2026-10-07 18:52:06.7883638\",\n        \"DefiningProjectFullPath\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/Publish.proj\",\n        \"DefiningProjectDirectory\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/\",\n        \"DefiningProjectName\": \"Publish\",\n        \"DefiningProjectExtension\": \".proj\"\n      },\n      {\n        \"Identity\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/conpty.dll\",\n        \"DestinationSubPath\": \"conpty.dll\",\n        \"NuGetPackageId\": \"Hex1b\",\n        \"DestinationSubDirectory\": \"\",\n        \"PathInPackage\": \"runtimes/win-x64/native/conpty.dll\",\n        \"FullPath\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/conpty.dll\",\n        \"RootDir\": \"/\",\n        \"Filename\": \"conpty\",\n        \"Extension\": \".dll\",\n        \"RelativeDir\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/\",\n        \"Directory\": \"home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/\",\n        \"RecursiveDir\": \"\",\n        \"ModifiedTime\": \"2026-10-07 18:52:06.0002938\",\n        \"CreatedTime\": \"2026-10-07 18:52:06.0002938\",\n        \"AccessedTime\": \"2026-10-07 18:52:06.7893638\",\n        \"DefiningProjectFullPath\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/Publish.proj\",\n        \"DefiningProjectDirectory\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/\",\n        \"DefiningProjectName\": \"Publish\",\n        \"DefiningProjectExtension\": \".proj\"\n      },\n      {\n        \"Identity\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/hex1bpty.exe\",\n        \"DestinationSubPath\": \"hex1bpty.exe\",\n        \"NuGetPackageId\": \"Hex1b\",\n        \"DestinationSubDirectory\": \"\",\n        \"PathInPackage\": \"runtimes/win-x64/native/hex1bpty.exe\",\n        \"FullPath\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/hex1bpty.exe\",\n        \"RootDir\": \"/\",\n        \"Filename\": \"hex1bpty\",\n        \"Extension\": \".exe\",\n        \"RelativeDir\": \"/home/runner/work/aspire/aspire/artifacts/tests/Hex1bNativePublishingTests/73008a90ac48492c90c66516c2bea4ac/package/runtimes/win-x64/native/\",\n ",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches a previously identified recurring pattern of JSON truncation parsing MSBuild item output in this same test method, with a different rid/singleFile parameterization and line number; unrelated to the merged VS Code extension release commits."
+    },
+    {
+      "name": "Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "error": "System.IO.IOException : The process cannot access the file '\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Temp\\cuziiafx.tpx' because it is being used by another process.",
+      "stack_trace": "at System.IO.FileSystem.RemoveDirectoryInternal(String fullPath, Boolean topLevel, Boolean allowDirectoryNotEmpty)\n   at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA& findData, Boolean topLevel)\n   at System.IO.FileSystem.RemoveDirectory(String fullPath, Boolean recursive)\n   at System.IO.DirectoryInfo.Delete(Boolean recursive)\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Blazor.Tests\\AddBlazorGatewayTests.cs:line 405\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration()\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Exactly matches a previously tracked recurring Windows temp-directory file-lock race in this same test method; unrelated to the merged VS Code extension release commits."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-blazor-addblazorgatewaytests-publishproperties-filebusy",
+    "infrastructure-tests-hex1bnativepublishingtests-json-parse-error-winx64-nosinglefile"
+  ]
+}
