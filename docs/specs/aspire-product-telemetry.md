@@ -80,7 +80,7 @@ The Dashboard uses the following events and operation:
 | `aspire/dashboard/error` | Structured log |
 | `aspire/dashboard/command` | Internal activity, exported as an Application Insights dependency |
 
-Component lifecycle events are recorded when they occur, with any available ambient trace correlation. [DashboardCommandExecutor](../../src/Aspire.Dashboard/Model/DashboardCommandExecutor.cs) calls `StartOperation`, sets the result through `SetOperationResult`, and disposes the activity after command execution, before the UI recovery delay.
+Component lifecycle events are recorded when they occur, with any available ambient trace correlation. [DashboardCommandExecutor](../../src/Aspire.Dashboard/Model/DashboardCommandExecutor.cs) calls `StartOperation`, sets the result through `SetOperationStatus`, and disposes the activity after command execution, before the UI recovery delay.
 
 Dashboard recording APIs accept classified properties. Activity property setters also apply the shared property policy, but direct mutation of a returned `Activity` bypasses that policy. Instrumentation must use the recording service's property APIs.
 

@@ -45,11 +45,12 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
         IServiceCollection services, ResourceBuilder resourceBuilder, string activitySourceName, string eventLogCategoryName,
         string connectionString, string storageDirectory, Action<TracerProviderBuilder> configureTracing) =>
         Create(services, resourceBuilder, activitySourceName, eventLogCategoryName, connectionString, storageDirectory,
-            configureTracing, new AzureMonitorExporterOptions());
+            configureTracing, static _ => { });
 
     internal static AzureMonitorTelemetryProvider Create(
         IServiceCollection services, ResourceBuilder resourceBuilder, string activitySourceName, string eventLogCategoryName,
-        string connectionString, string storageDirectory, Action<TracerProviderBuilder> configureTracing, AzureMonitorExporterOptions logOptions) =>
+        string connectionString, string storageDirectory, Action<TracerProviderBuilder> configureTracing,
+        Action<AzureMonitorExporterOptions> configureLogging) =>
         Create(services, resourceBuilder, eventLogCategoryName,
             () =>
             {
@@ -61,16 +62,21 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
                 configureTracing(builder);
                 return builder.AddAspireAzureMonitorExporter(connectionString, storageDirectory).Build();
             },
-            provider =>
-            {
-                AspireTelemetryExporter.ConfigureExporter(logOptions, connectionString, Path.Combine(storageDirectory, "logs"));
-                provider.AddProcessor(new FilteredBatchLogRecordExportProcessor(new AzureMonitorLogExporter(logOptions),
-                    record => IsEventLog(record.CategoryName, record.LogLevel, eventLogCategoryName)));
-            });
+            logging => logging.AddAspireAzureMonitorExporter(
+                connectionString,
+                Path.Combine(storageDirectory, "logs"),
+                configureLogging),
+            static _ => { });
 
     internal static AzureMonitorTelemetryProvider Create(
         IServiceCollection services, ResourceBuilder resourceBuilder, string eventLogCategoryName,
         Func<TracerProvider> createTraceProvider, Action<LoggerProvider> configureLogProvider)
+        => Create(services, resourceBuilder, eventLogCategoryName, createTraceProvider, static _ => { }, configureLogProvider);
+
+    private static AzureMonitorTelemetryProvider Create(
+        IServiceCollection services, ResourceBuilder resourceBuilder, string eventLogCategoryName,
+        Func<TracerProvider> createTraceProvider, Action<OpenTelemetryLoggerOptions> configureLogging,
+        Action<LoggerProvider> configureLogProvider)
     {
         var traceProvider = createTraceProvider();
         ServiceProvider? loggingServices = null;
@@ -81,12 +87,12 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
             // application providers, filters, or scopes into the product export pipeline.
             services.AddLogging(builder =>
             {
-                builder.AddFilter<OpenTelemetryLoggerProvider>((category, level) => IsEventLog(category, level, eventLogCategoryName));
                 builder.AddOpenTelemetry(logging =>
                 {
                     logging.IncludeFormattedMessage = true;
                     logging.IncludeScopes = false;
                     logging.SetResourceBuilder(resourceBuilder);
+                    configureLogging(logging);
                 });
             });
             loggingServices = services.BuildServiceProvider();
@@ -197,6 +203,4 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
         }
     }
 
-    private static bool IsEventLog(string? category, LogLevel level, string eventLogCategoryName) =>
-        category == eventLogCategoryName && level is >= LogLevel.Information and < LogLevel.None;
 }

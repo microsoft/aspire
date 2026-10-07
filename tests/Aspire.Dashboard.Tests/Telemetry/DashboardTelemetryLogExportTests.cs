@@ -47,9 +47,7 @@ public class DashboardTelemetryLogExportTests
         {
             Assert.Null(serviceProvider.GetService<LoggerProvider>());
             var telemetry = serviceProvider.GetRequiredService<DashboardTelemetryService>();
-            var processor = new FilteredBatchLogRecordExportProcessor(exporter,
-                record => record.CategoryName == DashboardTelemetryService.EventLogCategoryName &&
-                    record.LogLevel is >= LogLevel.Information and < LogLevel.None);
+            var processor = new BatchLogRecordExportProcessor(exporter);
             using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), ResourceBuilder.CreateEmpty(),
                 DashboardTelemetryService.EventLogCategoryName, () => Sdk.CreateTracerProviderBuilder().Build(), provider =>
             {

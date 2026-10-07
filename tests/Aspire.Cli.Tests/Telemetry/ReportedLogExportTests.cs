@@ -66,7 +66,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
                             builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(
                                 options => options.Transport = new HttpClientTransport(client)));
                         },
-                        new AzureMonitorExporterOptions { Transport = new HttpClientTransport(client) });
+                        options => options.Transport = new HttpClientTransport(client));
                 });
 
             telemetry.RecordEvent("before-initialization");
@@ -150,7 +150,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
                     builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(
                         options => options.Transport = new HttpClientTransport(client)));
                 },
-                new AzureMonitorExporterOptions { Transport = new HttpClientTransport(client) });
+                options => options.Transport = new HttpClientTransport(client));
             telemetry.SetEventLogger(logProvider.EventLogger);
             string[] expected = ["container", "project", "quote\"and\\slash", "line\nbreak", "comma,value", ""];
             IEnumerable<string> values = shape switch
