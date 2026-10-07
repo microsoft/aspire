@@ -2,8 +2,11 @@
 
 ## v1.24.0
 
-<!-- aspire-ext-changelog from=41d7fa2c42761b63a694099fdca7eab49718ffd5 to=d2b0c75dd0648beecb6d5f51e25b57930f370ac4 base=1.23.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=41d7fa2c42761b63a694099fdca7eab49718ffd5 to=d2b0c75dd0648beecb6d5f51e25b57930f370ac4 base=1.23.0 -->
+
+### Features
+
+- Add Aspire editor assistance tools for GitHub Copilot Chat, including inspecting AppHost and resource debug status, explaining launch failures, opening the Dashboard and Output panel, listing active debug sessions, and checking Hot Reload applicability ([#19460](https://github.com/microsoft/aspire/issues/19460), [#19414](https://github.com/microsoft/aspire/pull/19414)).
 
 ## v1.23.0
 
