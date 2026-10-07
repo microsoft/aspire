@@ -111,7 +111,6 @@ public sealed class DashboardTelemetryService : AspireTelemetryBase
             return;
         }
 
-        _ = GetResultStatus(result);
         RecordEventCore(eventName, GetProperties(properties).Append(new("aspire.dashboard.result", result.ToString())));
     }
 
