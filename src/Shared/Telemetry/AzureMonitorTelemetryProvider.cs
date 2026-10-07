@@ -51,6 +51,13 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
         IServiceCollection services, ResourceBuilder resourceBuilder, string activitySourceName, string eventLogCategoryName,
         string connectionString, string storageDirectory, Action<TracerProviderBuilder> configureTracing,
         Action<AzureMonitorExporterOptions> configureLogging) =>
+        Create(services, resourceBuilder, activitySourceName, eventLogCategoryName, connectionString, storageDirectory,
+            configureTracing, static _ => { }, configureLogging);
+
+    internal static AzureMonitorTelemetryProvider Create(
+        IServiceCollection services, ResourceBuilder resourceBuilder, string activitySourceName, string eventLogCategoryName,
+        string connectionString, string storageDirectory, Action<TracerProviderBuilder> configureTracing,
+        Action<OpenTelemetryLoggerOptions> configureLogging, Action<AzureMonitorExporterOptions> configureLogExporter) =>
         Create(services, resourceBuilder, eventLogCategoryName,
             () =>
             {
@@ -62,10 +69,14 @@ internal sealed class AzureMonitorTelemetryProvider : IDisposable
                 configureTracing(builder);
                 return builder.AddAspireAzureMonitorExporter(connectionString, storageDirectory).Build();
             },
-            logging => logging.AddAspireAzureMonitorExporter(
-                connectionString,
-                Path.Combine(storageDirectory, "logs"),
-                configureLogging),
+            logging =>
+            {
+                logging.AddAspireAzureMonitorExporter(
+                    connectionString,
+                    Path.Combine(storageDirectory, "logs"),
+                    configureLogExporter);
+                configureLogging(logging);
+            },
             static _ => { });
 
     internal static AzureMonitorTelemetryProvider Create(

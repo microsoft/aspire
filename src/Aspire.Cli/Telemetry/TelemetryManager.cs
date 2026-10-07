@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -104,7 +105,17 @@ internal sealed class TelemetryManager : IDisposable
                     builder.AddConsoleExporter();
                 }
 #endif
-            });
+            },
+            logging =>
+            {
+#if DEBUG
+                if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
+                {
+                    logging.AddConsoleExporter();
+                }
+#endif
+            },
+            static _ => { });
     }
 
     internal TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry, ILogger<TelemetryManager> logger, Func<ResourceBuilder, string, AzureMonitorTelemetryProvider> createReportedProvider)
