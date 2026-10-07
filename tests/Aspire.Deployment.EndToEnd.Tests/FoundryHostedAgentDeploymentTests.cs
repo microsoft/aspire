@@ -763,8 +763,9 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             // The package set and explicit versions below must stay in sync with
             // playground/FoundryAgents/DotNetHostedAgent/DotNetHostedAgent.csproj.
             // This project is materialized at test runtime outside the repo, so it does not
-            // participate in central package management; the playground's `VersionOverride`
-            // values become explicit `Version` values here. Update both files together.
+            // participate in central package management; the playground's central versions
+            // and `VersionOverride` values become explicit `Version` values here.
+            // Keep Azure.AI.Projects and OpenAI aligned with Directory.Packages.props.
             File.WriteAllText(Path.Combine(hostedAgentDir, "DotNetHostedAgent.csproj"), """
                 <Project Sdk="Microsoft.NET.Sdk.Web">
                   <PropertyGroup>
@@ -775,7 +776,8 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <NoWarn>$(NoWarn);OPENAI001;MAIF001;MAAI001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
-                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.3" />
+                    <PackageReference Include="Azure.AI.Projects" Version="3.0.0-beta.1" />
+                    <PackageReference Include="OpenAI" Version="2.14.0" />
                     <PackageReference Include="Azure.Identity" Version="1.21.0" />
                     <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.12.0-preview.260629.1" />
                     <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001
 
+using System.ClientModel.Primitives;
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -12,6 +13,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -749,6 +751,28 @@ public class HostedAgentExtensionTests
                 ["ConnectionStrings__my_db"] = "Host=portable"
             },
             envVars);
+    }
+
+    [Fact]
+    public async Task CreateAgentVersionAsync_RejectsUnsupportedProtocolBeforeSendingRequests()
+    {
+        var resource = new AzureHostedAgentResource("agent", new ContainerResource("target"));
+        var configuration = new HostedAgentConfiguration("test-image")
+        {
+            ProtocolVersions = [new ProtocolVersionRecord(new ProjectsAgentProtocol("unknown"), "1.0.0")]
+        };
+        using var handler = new SequenceHttpMessageHandler();
+        using var httpClient = new HttpClient(handler);
+        var client = new AIProjectClient(
+            new Uri("https://example.invalid/api/projects/my-project"),
+            new TestTokenCredential(),
+            new AIProjectClientOptions { Transport = new HttpClientPipelineTransport(httpClient) });
+
+        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => resource.CreateAgentVersionAsync(
+            client.AgentAdministrationClient, configuration, TestContext.Current.CancellationToken));
+
+        Assert.Equal("Foundry hosted agent endpoint protocol 'unknown' is not supported.", exception.Message);
+        Assert.Empty(handler.Requests);
     }
 
     [Fact]

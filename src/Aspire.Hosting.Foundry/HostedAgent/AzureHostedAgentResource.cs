@@ -165,34 +165,29 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
-        var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
-
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
-        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
-            Name,
-            options,
-            cancellationToken: context.CancellationToken
-        ).ConfigureAwait(false);
-
-        await UpdateAgentEndpointProtocolsAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
+        var version = await CreateAgentVersionAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
 
         // Foundry should do this automatically in the future.
-        await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
+        await AssignFoundryRoleToAgentIdentityAsync(context, project, version, provisioningContext).ConfigureAwait(false);
 
-        return result.Value;
+        return version;
     }
 
-    private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
+    internal async Task<ProjectsAgentVersion> CreateAgentVersionAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        if (configuration.ProtocolVersions.Count == 0)
-        {
-            return;
-        }
-
+        var options = configuration.ToProjectsAgentVersionCreationOptions(Target.Name);
+        // Validate endpoint protocols before persisting a version, so invalid local configuration
+        // cannot leave a remote version behind after the deployment reports failure.
         var endpoint = new AgentEndpointConfiguration
         {
             ProtocolConfiguration = GetAgentEndpointProtocolConfiguration(configuration.ProtocolVersions)
         };
+
+        var result = await agentsClient.CreateAgentVersionAsync(
+            Name,
+            options,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Creating a hosted-agent version does not update the endpoint's advertised protocols;
         // keep routing in sync so endpoint-scoped invocations can reach the selected version.
@@ -203,6 +198,8 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
                 AgentEndpoint = endpoint
             },
             cancellationToken).ConfigureAwait(false);
+
+        return result.Value;
     }
 
     internal static ProtocolConfiguration GetAgentEndpointProtocolConfiguration(IEnumerable<ProtocolVersionRecord> protocolVersions)
