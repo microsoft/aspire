@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Dashboard page title wording tweak; no matching product changelog entry",
+  "mergedAt": "2026-10-06T17:56:01Z",
+  "number": 1826,
+  "runDate": "2026-10-07T00:09:33Z",
+  "status": "excluded",
+  "title": "Clarify standalone dashboard page title"
+}
