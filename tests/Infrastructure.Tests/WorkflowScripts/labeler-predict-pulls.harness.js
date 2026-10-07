@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const updateCopilotAssigneeLabel = require('../../../.github/workflows/labeler-predict-pulls.js');
 
 async function main() {
     const inputPath = process.argv[2];
@@ -48,10 +49,7 @@ async function main() {
         payload: { pull_request: { number: 19893 } },
     };
 
-    // github-script wraps this block in an async function and provides github/context as arguments.
-    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
-    const run = new AsyncFunction('github', 'context', request.script);
-    await run(github, context);
+    await updateCopilotAssigneeLabel({ github, context });
 
     await fs.writeFile(outputPath, JSON.stringify({
         result: {

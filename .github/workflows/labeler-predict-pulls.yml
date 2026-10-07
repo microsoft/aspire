@@ -55,60 +55,23 @@ jobs:
       group: copilot-assignee-label-${{ github.repository }}-${{ github.event.pull_request.number || github.run_id }}
       cancel-in-progress: false
     permissions:
+      contents: read
       pull-requests: write
     steps:
+      - name: "Checkout label script"
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This pull_request_target job has write permissions, so never check out the pull request head.
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: .github/workflows/labeler-predict-pulls.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: "Update Copilot PR assignee label"
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const label = 'needs-assignee';
-            const copilotAuthors = new Set([
-              'copilot',
-              'copilot[bot]',
-              'copilot-swe-agent',
-              'copilot-swe-agent[bot]',
-              'github-copilot[bot]',
-            ]);
-            const { owner, repo } = context.repo;
-            const number = context.payload.pull_request.number;
-            const { data: pullRequest } = await github.rest.pulls.get({
-              owner,
-              repo,
-              pull_number: number,
-            });
-
-            if (!copilotAuthors.has(pullRequest.user?.login?.toLowerCase())) {
-              return;
-            }
-
-            const hasHumanAssignee = pullRequest.assignees.some((assignee) => assignee.type !== 'Bot');
-            const hasLabel = pullRequest.labels.some((existing) => existing.name.toLowerCase() === label);
-            const needsAssignee = pullRequest.state === 'open' && !hasHumanAssignee;
-
-            if (needsAssignee && !hasLabel) {
-              // This label is pre-created as repository configuration so the job can retain
-              // pull-request-only permissions.
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number: number,
-                labels: [label],
-              });
-            } else if (!needsAssignee && hasLabel) {
-              try {
-                await github.rest.issues.removeLabel({
-                  owner,
-                  repo,
-                  issue_number: number,
-                  name: label,
-                });
-              } catch (error) {
-                // An assignment or manual label update can remove the label after the refetch.
-                if (error.status !== 404) {
-                  throw error;
-                }
-              }
-            }
+            await require('./.github/workflows/labeler-predict-pulls.js')({ github, context });
 
   poll-pull-requests:
     # Run on schedule trigger or workflow_dispatch without PR numbers, within the 'dotnet' org
