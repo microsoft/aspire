@@ -24,21 +24,36 @@ public static class ResourcesSelectHelpers
         }
         else if (instanceIdMatches.Count == 0)
         {
-            // Fallback to matching on resource name. This is commonly used when there is only one instance of the resource.
-            var replicaSetMatches = allowedMatches.Where(e => e.Id?.Type != OtlpResourceType.Instance && string.Equals(name, e.Id?.ReplicaSetName, StringComparisons.ResourceName)).ToList();
+            // The displayed resource name is persisted in the URL. For replicated resources with GUID instance IDs,
+            // this contains the shortened instance ID produced by OtlpHelpers.GetResourceName.
+            var displayNameMatches = allowedMatches.Where(e => string.Equals(name, e.Name, StringComparisons.ResourceName)).ToList();
 
-            if (replicaSetMatches.Count == 1)
+            if (displayNameMatches.Count == 1)
             {
-                return SingleMatch(resources, logger, name, replicaSetMatches[0]);
+                return SingleMatch(resources, logger, name, displayNameMatches[0]);
             }
-            else if (replicaSetMatches.Count == 0)
+            else if (displayNameMatches.Count == 0)
             {
-                // No matches found so return the passed in fallback.
-                return SingleMatch(resources, logger, name, fallbackViewModel, fallback: true);
+                // Fallback to matching on resource name. This is commonly used when there is only one instance of the resource.
+                var replicaSetMatches = allowedMatches.Where(e => e.Id?.Type != OtlpResourceType.Instance && string.Equals(name, e.Id?.ReplicaSetName, StringComparisons.ResourceName)).ToList();
+
+                if (replicaSetMatches.Count == 1)
+                {
+                    return SingleMatch(resources, logger, name, replicaSetMatches[0]);
+                }
+                else if (replicaSetMatches.Count == 0)
+                {
+                    // No matches found so return the passed in fallback.
+                    return SingleMatch(resources, logger, name, fallbackViewModel, fallback: true);
+                }
+                else
+                {
+                    return MultipleMatches(allowedMatches, logger, name, replicaSetMatches);
+                }
             }
             else
             {
-                return MultipleMatches(allowedMatches, logger, name, replicaSetMatches);
+                return MultipleMatches(allowedMatches, logger, name, displayNameMatches);
             }
         }
         else
