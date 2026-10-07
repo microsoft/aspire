@@ -11,6 +11,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>Major</RollForward>
     <PublishAot>true</PublishAot>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <!-- PR bundles use Debug configuration. Native AOT must still optimize the terminal
+         parser and its dependencies; unlike managed libraries, they cannot be JIT-optimized.
+         Leave ordinary managed Debug builds unoptimized for the repository development loop. -->
+    <Optimize Condition="'$(_IsPublishing)' == 'true' and '$(PublishAot)' == 'true'">true</Optimize>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <!--
       CS1591: Missing XML comment for publicly visible type or member - this assembly is

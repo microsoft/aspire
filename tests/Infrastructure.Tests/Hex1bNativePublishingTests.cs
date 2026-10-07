@@ -23,6 +23,29 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     public void Dispose() => _workspace.Dispose();
 
     [Theory]
+    [InlineData("Debug", false, false, false)]
+    [InlineData("Debug", false, true, false)]
+    [InlineData("Debug", true, false, false)]
+    [InlineData("Debug", true, true, true)]
+    [InlineData("Release", false, true, true)]
+    [InlineData("Release", true, true, true)]
+    public async Task TerminalHostPreservesManagedBuildsAndOptimizesNativePublishing(
+        string configuration, bool publishing, bool native, bool optimized)
+    {
+        var project = Path.Combine(RepoRoot.Path, "src", "Aspire.TerminalHost", "Aspire.TerminalHost.csproj");
+        var result = await RunDotNetAsync(
+            ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
+             $"-p:_IsPublishing={publishing}", $"-p:PublishAot={native}",
+             "-getProperty:Optimize,ServerGarbageCollection"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.Output);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(optimized ? "true" : "false", properties.GetProperty("Optimize").GetString());
+        Assert.Equal("true", properties.GetProperty("ServerGarbageCollection").GetString());
+    }
+
+    [Theory]
     [InlineData("win-x64", false)]
     [InlineData("win-x64", true)]
     [InlineData("win-arm64", false)]

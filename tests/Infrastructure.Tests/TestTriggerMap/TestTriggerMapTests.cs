@@ -972,6 +972,17 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void TerminalHostPublishSettingsRunTheirInfrastructureCoverage()
+    {
+        var result = SelectWithRealMap(
+            "src/Aspire.TerminalHost/Aspire.TerminalHost.csproj", "Aspire.TerminalHost");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+    }
+
+    [Fact]
     public void DashboardChangesRunTemplatesTestsThatStartAppHosts()
     {
         var result = SelectWithRealMap(
