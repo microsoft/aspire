@@ -13,7 +13,6 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting.Postgres;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 
@@ -81,37 +80,35 @@ public static class PostgresBuilderExtensions
                 throw new DistributedApplicationException($"ResourceReadyEvent was published for the '{postgresServer.Name}' resource but the connection string was null.");
             }
 
-            await CreateDatabasesAsync(connectionString, builder, postgresServer, @event.Services, ct).ConfigureAwait(false);
+            // Non-database scoped connection string
+            using var npgsqlConnection = new NpgsqlConnection(connectionString + ";Database=postgres;");
+
+            await npgsqlConnection.OpenAsync(ct).ConfigureAwait(false);
+
+            if (npgsqlConnection.State != System.Data.ConnectionState.Open)
+            {
+                throw new InvalidOperationException($"Could not open connection to '{postgresServer.Name}'");
+            }
+
+            foreach (var name in postgresServer.Databases.Keys)
+            {
+                if (builder.Resources.FirstOrDefault(n => string.Equals(n.Name, name, StringComparisons.ResourceName)) is PostgresDatabaseResource postgreDatabase)
+                {
+                    await CreateDatabaseAsync(npgsqlConnection, postgreDatabase, @event.Services, ct).ConfigureAwait(false);
+                }
+            }
         });
 
         var healthCheckKey = $"{name}_check";
-
-        // Gate the server's Healthy state behind a short stability window rather than a single SELECT 1.
-        // On a fresh data volume the official Postgres image runs initdb against a temporary server and
-        // then restarts to the real listener; a single probe can pass before that restart, releasing
-        // WaitFor dependents (and triggering database creation) straight into the restart's connection
-        // reset. PostgresServerHealthCheck only reports Healthy once a connection survives several
-        // consecutive probes, proving the restart is over. See PostgresServerHealthCheck for details.
-        //
-        // Register a single instance (not a factory): the health check is stateful — it latches once the
-        // server is durably ready — and the default health check service invokes the registration factory
-        // on every poll, which would otherwise reset the latch and run the full probe window forever.
-        var serverHealthCheck = new PostgresServerHealthCheck(() => connectionString);
-        builder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
-            healthCheckKey,
-            serverHealthCheck,
-            failureStatus: null,
-            tags: null));
-
-        // The health check instance outlives the container, but health monitoring only runs while the
-        // resource is Running, so no failed probe is observed while the container is stopped. Without an
-        // explicit reset, a restart (e.g. from the dashboard) would keep the latch from the previous
-        // container and accept a single probe that can land before the new container's initdb restart.
-        // BeforeResourceStartedEvent is published on every start, including restarts.
-        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(postgresServer, (@event, ct) =>
+        builder.Services.AddHealthChecks().AddNpgSql(sp => connectionString ?? throw new InvalidOperationException("Connection string is unavailable"), name: healthCheckKey, configure: (connection) =>
         {
-            serverHealthCheck.ResetStability();
-            return Task.CompletedTask;
+            // HACK: The Npgsql client defaults to using the username in the connection string if the database is not specified. Here
+            //       we override this default behavior because we are working with a non-database scoped connection string. The Aspirified
+            //       package doesn't have to deal with this because it uses a datasource from DI which doesn't have this issue:
+            //
+            //       https://github.com/npgsql/npgsql/blob/c3b31c393de66a4b03fba0d45708d46a2acb06d2/src/Npgsql/NpgsqlConnection.cs#L445
+            //
+            connection.ConnectionString += ";Database=postgres;";
         });
 
         return builder.AddResource(postgresServer)
@@ -805,188 +802,6 @@ public static class PostgresBuilderExtensions
         return parts.Length > 0 && int.TryParse(parts[0], out majorVersion) && majorVersion > 0;
     }
 
-    private static async Task CreateDatabasesAsync(string connectionString, IDistributedApplicationBuilder builder, PostgresServerResource postgresServer, IServiceProvider serviceProvider, CancellationToken cancellationToken)
-    {
-        var logger = serviceProvider.GetRequiredService<ResourceLoggerService>().GetLogger(postgresServer);
-
-        // Resolve the database resources declared on the server.
-        var databases = new List<PostgresDatabaseResource>();
-        foreach (var databaseName in postgresServer.Databases.Keys)
-        {
-            if (builder.Resources.TryGetByName(databaseName, out var resource) && resource is PostgresDatabaseResource postgresDatabase)
-            {
-                databases.Add(postgresDatabase);
-            }
-        }
-
-        if (databases.Count == 0)
-        {
-            return;
-        }
-
-        // Non-database scoped connection string, pinned to the always-present 'postgres' database.
-        var serverConnectionString = connectionString + ";Database=postgres;";
-
-        await CreateDatabasesWithRetryAsync(
-            databases,
-            openConnectionAsync: async ct =>
-            {
-                var npgsqlConnection = new NpgsqlConnection(serverConnectionString);
-                try
-                {
-                    await npgsqlConnection.OpenAsync(ct).ConfigureAwait(false);
-                    return npgsqlConnection;
-                }
-                catch
-                {
-                    npgsqlConnection.Dispose();
-                    throw;
-                }
-            },
-            createDatabaseAsync: (npgsqlConnection, database, ct) => CreateDatabaseAsync(npgsqlConnection, database, serviceProvider, ct),
-            databaseExistsAsync: DatabaseExistsAsync,
-            logger,
-            postgresServer.Name,
-            initialRetryDelay: TimeSpan.FromMilliseconds(200),
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Creates the databases, retrying the whole open + create-all sequence across transient connection
-    /// failures. The connection and database operations are supplied as delegates so unit tests can
-    /// inject connection resets without a live server.
-    /// </summary>
-    internal static async Task CreateDatabasesWithRetryAsync<TConnection>(
-        IReadOnlyList<PostgresDatabaseResource> databases,
-        Func<CancellationToken, Task<TConnection>> openConnectionAsync,
-        Func<TConnection, PostgresDatabaseResource, CancellationToken, Task> createDatabaseAsync,
-        Func<TConnection, string, CancellationToken, Task<bool>> databaseExistsAsync,
-        ILogger logger,
-        string resourceName,
-        TimeSpan initialRetryDelay,
-        CancellationToken cancellationToken)
-        where TConnection : IDisposable
-    {
-        // On a fresh data volume the Postgres image runs initdb against a temporary server and then
-        // restarts to the real listener. Creation can land inside that restart window, where the
-        // connection is reset mid-flight. Retry the whole open + create-all sequence across such
-        // transient failures, tracking which databases are already handled so each one is attempted
-        // only until it succeeds or fails permanently.
-        const int maxAttempts = 10;
-        var delay = initialRetryDelay;
-        var maxDelay = TimeSpan.FromSeconds(3);
-        var handled = new HashSet<string>(StringComparers.ResourceName);
-
-        // Custom creation scripts that were interrupted by a connection failure. The outcome is
-        // ambiguous: the reset can happen before the script reached the server, or after PostgreSQL
-        // committed it but before the client saw the result. The database health check only passes
-        // once the database exists, so on retry the existence of the database decides: if it exists,
-        // the script ran and must not be repeated; if not, the script must run again or the database
-        // resource would never become healthy.
-        var interruptedScripts = new HashSet<string>(StringComparers.ResourceName);
-
-        for (var attempt = 1; ; attempt++)
-        {
-            try
-            {
-                using var connection = await openConnectionAsync(cancellationToken).ConfigureAwait(false);
-
-                foreach (var database in databases)
-                {
-                    if (handled.Contains(database.Name))
-                    {
-                        continue;
-                    }
-
-                    if (interruptedScripts.Contains(database.Name))
-                    {
-                        if (await databaseExistsAsync(connection, database.DatabaseName, cancellationToken).ConfigureAwait(false))
-                        {
-                            logger.LogInformation("Database '{DatabaseName}' exists after its custom creation script was interrupted; the script will not run again.", database.DatabaseName);
-                            handled.Add(database.Name);
-                            continue;
-                        }
-
-                        logger.LogInformation("Database '{DatabaseName}' does not exist after its custom creation script was interrupted; running the script again.", database.DatabaseName);
-                    }
-
-                    try
-                    {
-                        await createDatabaseAsync(connection, database, cancellationToken).ConfigureAwait(false);
-                    }
-                    catch (Exception ex) when (IsTransientConnectionFailure(ex))
-                    {
-                        if (database.Annotations.OfType<PostgresCreateDatabaseScriptAnnotation>().Any())
-                        {
-                            interruptedScripts.Add(database.Name);
-                        }
-
-                        // Let the outer loop retry on a fresh connection; this connection is unusable.
-                        throw;
-                    }
-                    catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-                    {
-                        // A non-transient failure specific to this database. Retrying will not help, so
-                        // log it and continue with the remaining databases. One bad database must not
-                        // stop the others from being created.
-                        logger.LogError(ex, "Failed to create database '{DatabaseName}'", database.DatabaseName);
-                    }
-
-                    handled.Add(database.Name);
-                }
-
-                return;
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex) when (attempt < maxAttempts && !cancellationToken.IsCancellationRequested && IsTransientConnectionFailure(ex))
-            {
-                logger.LogDebug(ex, "Transient failure while creating databases for '{ResourceName}' (attempt {Attempt}/{MaxAttempts}); retrying in {Delay}.", resourceName, attempt, maxAttempts, delay);
-
-                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-
-                delay = TimeSpan.FromMilliseconds(Math.Min(delay.TotalMilliseconds * 2, maxDelay.TotalMilliseconds));
-            }
-            catch (Exception ex)
-            {
-                // Either retries are exhausted or the failure is not a transient connection reset. Log
-                // once and stop, preserving the previous non-throwing behavior of the ready handler.
-                logger.LogError(ex, "Failed to create one or more databases for '{ResourceName}'.", resourceName);
-                return;
-            }
-        }
-    }
-
-    private static async Task<bool> DatabaseExistsAsync(NpgsqlConnection npgsqlConnection, string databaseName, CancellationToken cancellationToken)
-    {
-        using var command = npgsqlConnection.CreateCommand();
-        command.CommandText = "SELECT 1 FROM pg_database WHERE datname = @name";
-        command.Parameters.AddWithValue("name", databaseName);
-
-        return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) is not null;
-    }
-
-    /// <summary>
-    /// Determines whether the exception represents a transient connection-level failure (such as the
-    /// connection reset that occurs during the initdb restart window) that is worth retrying. Permanent
-    /// server-side errors (<see cref="PostgresException"/>) are handled inside <see cref="CreateDatabaseAsync"/>
-    /// and never reach the retry wrapper.
-    /// </summary>
-    private static bool IsTransientConnectionFailure(Exception ex)
-    {
-        // A directly transient exception: Npgsql flagged it, or it is a raw I/O / socket / timeout failure.
-        if (ex is NpgsqlException { IsTransient: true } or System.IO.IOException or System.Net.Sockets.SocketException or TimeoutException or System.IO.EndOfStreamException)
-        {
-            return true;
-        }
-
-        // A non-transient NpgsqlException that wraps a connection-level I/O failure (e.g. a reset mid-handshake).
-        return ex is NpgsqlException npgsqlException
-            && npgsqlException.InnerException is System.IO.IOException or System.Net.Sockets.SocketException or System.IO.EndOfStreamException;
-    }
-
     private static async Task CreateDatabaseAsync(NpgsqlConnection npgsqlConnection, PostgresDatabaseResource npgsqlDatabase, IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
         var scriptAnnotation = npgsqlDatabase.Annotations.OfType<PostgresCreateDatabaseScriptAnnotation>().LastOrDefault();
@@ -1026,22 +841,21 @@ public static class PostgresBuilderExtensions
         }
         catch (PostgresException p) when (IsDatabaseAlreadyExists(p))
         {
-            // Treat an already-existing database as success: 42P04 (duplicate_database) for a plain
-            // CREATE DATABASE, or 23505 (unique_violation on pg_database_datname_index) when a creation
-            // attempt that was reset during the initdb restart actually committed and a retry races it.
+            // Ignore the error if the database already exists.
             logger.LogDebug("Database '{DatabaseName}' already exists", npgsqlDatabase.DatabaseName);
         }
-        catch (PostgresException p) when (!p.IsTransient)
+        catch (Exception e)
         {
-            // A permanent server-side error (e.g. insufficient privilege or an invalid creation script).
-            // Retrying will not help, so log and move on rather than surfacing it to the retry wrapper.
-            logger.LogError(p, "Failed to create database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
+            logger.LogError(e, "Failed to create database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
         }
-        // Transient server errors (e.g. 57P03 cannot_connect_now while the server is restarting) and
-        // connection-level failures (resets during the initdb restart window) intentionally propagate to
-        // CreateDatabasesAsync, which retries the whole open + create-all sequence on a fresh connection.
     }
 
+    // PostgreSQL reports an existing database in two ways:
+    // - 42P04 (duplicate_database) when CREATE DATABASE finds the name already in pg_database.
+    // - 23505 (unique_violation) on pg_database_datname_index when another session creates the same
+    //   database concurrently: both pass the duplicate check, and the second insert into pg_database
+    //   then fails on the unique index.
+    // See https://www.postgresql.org/docs/current/errcodes-appendix.html
     internal static bool IsDatabaseAlreadyExists(PostgresException exception) =>
         exception.SqlState == PostgresErrorCodes.DuplicateDatabase ||
         exception is

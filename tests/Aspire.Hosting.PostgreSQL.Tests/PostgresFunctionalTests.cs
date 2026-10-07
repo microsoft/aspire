@@ -74,12 +74,13 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
-    public async Task FreshVolume_CreatesAllDatabasesAndGatesWaitForPastInitdbRestart()
+    public async Task FreshVolume_CreatesAllDatabasesWithoutErrors()
     {
-        // Regression test for https://github.com/microsoft/aspire/issues/18540.
-        // On a fresh data volume the Postgres image runs initdb and then restarts to the real listener.
-        // Native database creation must survive that restart window (no "Failed to create database"),
-        // and the server must not release WaitFor dependents until it is durably past the restart.
+        // Covers https://github.com/microsoft/aspire/issues/18540.
+        // On a fresh data volume the Postgres image runs initdb on a temporary server and then restarts
+        // to the real listener. The temporary server has TCP disabled (listen_addresses=''), so the
+        // server health check, and with it native database creation, can only succeed against the
+        // final server. Creation must not log errors, and WaitFor dependents must be released.
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
@@ -90,7 +91,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         var db2 = postgres.AddDatabase("db2");
         var db3 = postgres.AddDatabase("db3");
 
-        // A dependent that must only be released once db1 is durably healthy (i.e. past the restart).
+        // A dependent that must be released once db1 is healthy.
         var dependent = builder.AddPostgres("dependent").WaitFor(db1);
 
         using var app = builder.Build();
@@ -131,8 +132,8 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         var creationErrors = serverLogLines.Where(l => l.Content.Contains("Failed to create", StringComparison.Ordinal)).Select(l => l.Content).ToList();
         Assert.Empty(creationErrors);
 
-        // Once dependents are released the server must be past the initdb restart, so each database
-        // must accept a connection on the first attempt. No retry here: a retry would hide a restart.
+        // Once dependents are released the server is past the initdb restart, so each database must
+        // accept a connection on the first attempt. No retry here: a retry would hide a restart.
         foreach (var db in new[] { db1, db2, db3 })
         {
             var connectionString = await db.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
