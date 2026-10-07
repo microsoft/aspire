@@ -1,0 +1,65 @@
+{
+  "run_id": 37551022617,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37551022617",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-07T01:03:30Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20571,
+    "title": "Use a direct connection for Mongo Express with single-member replica sets",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/mongo-express-replicaset-direct-connecti",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20571",
+    "merged_at": "2026-10-07T00:15:38Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "0b622d65e77afce9c1d810b3965ded9038294f59",
+    "failed_sha": "765317c1c565d5a735c00f962695c41e087d388f",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "765317c1c565d5a735c00f962695c41e087d388f",
+        "message": "Use a direct connection for Mongo Express with single-member replica sets (#20571) ## Description `AddMongoDB(\"mongo\").WithReplicaSet().WithMongoExpress()` gives a healthy MongoDB server, but its Mongo Express companion exits with code 1 after about 30 seconds: ```text MongoServerSelectionError: connect ECONNREFUSED ::1:27017 ``` `WithReplicaSet()` sets up the replica set with a `localhost:<port>` member address, which assumes clients will use `directConnection=true`. The connection strings Aspi",
+        "html_url": "https://github.com/microsoft/aspire/commit/765317c1c565d5a735c00f962695c41e087d388f",
+        "pull_request": {
+          "number": 20571,
+          "title": "Use a direct connection for Mongo Express with single-member replica sets",
+          "url": "https://github.com/microsoft/aspire/pull/20571",
+          "merged_at": "2026-10-07T00:15:38Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "id": 112570021914,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37551022617/job/112570021914",
+      "classification": "flaky-test",
+      "reason": "Single test failure (ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput) with a build-count off-by-one assertion; matches a known recurring flaky race on Windows unrelated to the merged PR.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 3\nActual:   4",
+      "stack_trace": "at Aspire.Hosting.Tests.ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\ResourceCommandServiceTests.cs:line 1770\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Hosting.TestUtilities\\Workspace\\fpkckaw2.aqi\n| [2026-10-07T00:34:07] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-07T00:34:07] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-07T00:34:07] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.TestUtilities\n| [2026-10-07T00:34:07] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-07T00:34:07] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-07T00:34:07] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-07T00:34:07] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAldWVRoNG.7604\n| [2026-10-07T00:34:07] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAldWVRoNG.7604\n| [2026-10-07T00:34:08] Aspire.Hosting.Dcp.DcpHost Warning: No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.\n| [2026-10-07T00:34:08] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpjqyaainm.qzx\n| [2026-10-07T00:34:08] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 7604 --detach --kubeconfig \"C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpjqyaainm.qzx\\kubeconfig\"\n| [2026-10-07T00:34:08] Aspire.Hosting.Dcp.DcpHost Debug: A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.\n| [2026-10-07T00:34:08] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-10-07T00:34:08] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource myProject/myProject-txhasdgz update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-07T00:34:08] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource myProject-rebuilder/myProject-rebuilder-wawfaktp update published: ResourceType = Executable, CreationTimeStamp = (null), State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.parentName = myProject-txhasdgz }, HealthReports = {  }, Commands = {  }\n| [2026-10-07T00:34:08] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Converting relative endpoint URLs to absolute URLs for resource 'myProject-rebuilder'.\n| [2026-10-07T00:34:08] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Added total of 0 URLs to resource 'myProject-rebuilder'\n| [2026-10-07T00:34:08] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Resource myProject-rebuilder/myProject-rebuilder-wawfaktp update skipped because the snapshot is unchanged.\n| [2026-10-07T00:34:08] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Converting relative endpoint URLs to absolute URLs for resource 'myProject'.\n| [2026-10-07T00:34:08] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Added total of 0 URLs to resource 'myProject'\n| [2026-10-07T00:34:08] Aspire.Hosting.ApplicationModel.ResourceNotificationSe",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Off-by-one build-count assertion in a test asserting on a shared mutable build counter under concurrent rebuild commands; matches a previously tracked recurring flaky race on Windows at the same source line, not caused by the merged Mongo Express PR."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-resourcecommandservice-rebuild-buildcount-race"
+  ]
+}
