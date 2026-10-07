@@ -25,7 +25,7 @@ The recording services derive from `AspireTelemetryBase`. They supply activity s
 
 After checking enablement, a manager supplies a dedicated `ServiceCollection` to `AzureMonitorTelemetryProvider`. The shared owner creates the reported tracer provider and a private logger factory containing the Azure Monitor product log provider. Application logger providers, filters, and scopes are not imported into that factory.
 
-Only the product's reported activity source is listened to by its Azure Monitor tracer provider. Log filtering is enforced both by the OpenTelemetry logger-provider filter and by the batch processor: the category must exactly match the product event category, and the level must be Information through Critical. Formatted messages are included; scopes are excluded.
+Only the product's reported activity source is listened to by its Azure Monitor tracer provider. Usage and error logs are written at Information level through the private event logger in the product event category. Ordinary application and framework logs are excluded by logger-factory isolation, not by product-specific category or level filters on the OpenTelemetry logger provider or batch processor. Formatted messages are included; scopes are excluded.
 
 | Application | Reported activity source | Product event log category |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ Product opt-out does not disable separately configured diagnostic or profiling O
 
 Events and errors do not create activities or add activity events. Logs use only the trace/span correlation supplied by an ambient activity. When there is no activity, the recorder does not generate correlation IDs. Recording an error does not change an ambient activity's status.
 
-Default metadata and event properties pass through the application's property policy before logging. Sanitized string collections are serialized with `string.Join(",")`; individual values are not escaped. Activity tags retain their typed values.
+Default metadata and event properties pass through the application's property policy before logging. String collections admitted by that policy are serialized with `string.Join(",")`; individual values are not escaped. The Dashboard policy excludes collection values. Activity tags retain their typed values.
 
 ### Operations
 
@@ -88,14 +88,14 @@ Dashboard recording APIs accept classified properties. Activity property setters
 
 ### Dashboard
 
-The Dashboard admits known property keys and excludes PII-classified values, resource names, raw browser user agents, exception messages, and stack traces. It reports bounded component, command, resource-type, and UI metadata, plus Dashboard version/build information and exception type/runtime version.
+The Dashboard admits known property keys and excludes PII-classified values, resource names, raw browser user agents, exception messages, and stack traces. It reports bounded component, command, and UI metadata, plus Dashboard version/build information and exception type/runtime version.
 
 The property policy enforces:
 
 - Scalar strings: at most 1,024 characters.
-- String collections: at most 100 items, with at most 256 characters per item.
+- Other supported scalar values: booleans, integers, and doubles.
 - Classified numeric properties: values must parse to finite doubles.
-- Unsupported value types and unknown property keys: excluded.
+- Collections, other unsupported value types, and unknown property keys: excluded.
 
 [TelemetryErrorRecorder](../../src/Aspire.Dashboard/Telemetry/TelemetryErrorRecorder.cs) handles explicitly recorded errors and the unhandled Blazor circuit errors observed by [TelemetryLoggerProvider](../../src/Aspire.Dashboard/Telemetry/TelemetryLoggerProvider.cs). Aggregate exceptions are flattened and distinct leaves are reported once per call, using type, message, and stack trace for deduplication. Messages and stacks are not exported. Empty aggregates still produce an error log; separate recording calls remain separate occurrences. Optional local logging writes the original exception once.
 
