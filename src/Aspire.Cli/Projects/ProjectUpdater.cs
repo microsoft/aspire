@@ -115,7 +115,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
                 // CS8846 error if we don't put this rule here even though we do "when"
                 // above - this is corner case in C# evalutation of switch statements.
-                _ => throw new InvalidOperationException(UpdateCommandStrings.UnxpectedCodePath)
+                _ => throw new InvalidOperationException(UpdateCommandStrings.UnexpectedCodePath)
             };
 
             if (!channel.ShouldCreateNuGetConfig())

@@ -684,9 +684,9 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Unexpected code path..
         /// </summary>
-        internal static string UnxpectedCodePath {
+        internal static string UnexpectedCodePath {
             get {
-                return ResourceManager.GetString("UnxpectedCodePath", resourceCulture);
+                return ResourceManager.GetString("UnexpectedCodePath", resourceCulture);
             }
         }
 
