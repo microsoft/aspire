@@ -223,7 +223,7 @@ When dev tunnel ports are successfully allocated, they log detailed information 
 
 ### Connection status and compatibility
 
-Aspire observes the `devtunnel host` console output to make public endpoints available as soon as the local host reports that it is ready. Connection loss updates the tunnel and port resources without waiting for the next health check. A running CLI process does not necessarily mean its tunnel connection is active.
+Aspire observes the `devtunnel host` console output to make public endpoints available as soon as the local host reports that it is ready. Connection loss updates the tunnel and port resources without waiting for the next health check. Links remain inactive if delayed URL callbacks complete after the tunnel stops. A running CLI process does not necessarily mean its tunnel connection is active.
 
 Health checks also reconcile tunnel ports and access settings with the dev tunnels service. If port or readiness output is unrecognized, Aspire logs a warning and uses service-based reconciliation to discover the endpoints once this local host has reported a connection. A remote host count alone cannot establish local readiness: another machine might be hosting the same tunnel. If no local connection message is recognized, the tunnel remains unready rather than exposing another host's endpoints. Minor whitespace, line wrapping, and separator differences are supported. The warning is limited to once per resource start; the original console output remains available in the tunnel resource's logs.
 

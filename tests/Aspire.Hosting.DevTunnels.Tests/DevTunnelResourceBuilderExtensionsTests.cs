@@ -690,9 +690,11 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task DcpStartupPublishesDevTunnelUrls(bool useConsoleOutput)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task DcpStartupPublishesDevTunnelUrls(bool useConsoleOutput, bool stopDuringUrlCallback, bool restartBeforeUrlCallbackCompletes)
     {
         const int targetPort = 3000;
         const string tunnelUrl = "https://n4skq32k-3000.use.devtunnels.ms";
@@ -727,6 +729,17 @@ public class DevTunnelResourceBuilderExtensionsTests
         var tunnel = builder.AddDevTunnel("tunnel", "mytunnel")
             .WithReference(target);
         var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        var urlCallbackStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseUrlCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (stopDuringUrlCallback)
+        {
+            builder.CreateResourceBuilder(tunnelPort).WithUrls(async context =>
+            {
+                urlCallbackStarted.TrySetResult();
+                await releaseUrlCallback.Task.WaitAsync(context.CancellationToken);
+                context.Urls.Add(new() { Url = "https://example.com/diagnostics", DisplayText = "Custom diagnostics" });
+            });
+        }
         foreach (var annotation in tunnel.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().ToArray())
         {
             tunnel.Resource.Annotations.Remove(annotation);
@@ -746,6 +759,45 @@ public class DevTunnelResourceBuilderExtensionsTests
         using var app = builder.Build();
 
         var startTask = app.StartAsync(cts.Token);
+        if (stopDuringUrlCallback)
+        {
+            try
+            {
+                await urlCallbackStarted.Task.DefaultTimeout();
+                await startTask;
+                var stopped = await app.ResourceCommands.ExecuteCommandAsync(tunnel.Resource, "stop", cts.Token).DefaultTimeout();
+                Assert.True(stopped.Success);
+                await app.ResourceNotifications.WaitForResourceAsync(tunnelPort.Name, KnownResourceStates.Finished, cts.Token);
+                if (restartBeforeUrlCallbackCompletes)
+                {
+                    var restarted = await app.ResourceCommands.ExecuteCommandAsync(tunnel.Resource, "start", cts.Token).DefaultTimeout();
+                    Assert.True(restarted.Success);
+                }
+
+                releaseUrlCallback.TrySetResult();
+                var expectedInactive = !restartBeforeUrlCallbackCompletes;
+                var completed = await app.ResourceNotifications.WaitForResourceAsync(tunnelPort.Name,
+                    e => e.Snapshot.Urls.Any(u => u.Url == inspectUrl)
+                        && e.Snapshot.Urls.Any(u => u.Url == "https://example.com/diagnostics")
+                        && e.Snapshot.Urls.All(u => u.IsInactive == expectedInactive), cts.Token);
+                Assert.Equal(restartBeforeUrlCallbackCompletes ? KnownResourceStates.Running : KnownResourceStates.Finished, completed.Snapshot.State?.Text);
+                Assert.True(completed.Snapshot.Urls.Length >= 3);
+                if (restartBeforeUrlCallbackCompletes)
+                {
+                    await app.ResourceNotifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, cts.Token);
+                }
+                else
+                {
+                    Assert.NotNull(completed.Snapshot.StopTimeStamp);
+                }
+            }
+            finally
+            {
+                releaseUrlCallback.TrySetResult();
+                await app.StopAsync(cts.Token);
+            }
+            return;
+        }
         var resourceEvent = await app.ResourceNotifications.WaitForResourceAsync(
             tunnelPort.Name,
             e => e.Snapshot.State?.Text == KnownResourceStates.Running &&

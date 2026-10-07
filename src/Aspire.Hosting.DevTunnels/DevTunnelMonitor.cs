@@ -639,6 +639,10 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                 {
                     await PublishAsync(current).ConfigureAwait(false);
                 }
+                else
+                {
+                    await DeactivatePortUrlsAsync(port).ConfigureAwait(false);
+                }
                 return true;
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -658,6 +662,10 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
                         current.Ready.TrySetException(ex);
                         await PublishAsync(current).ConfigureAwait(false);
                     }
+                    else
+                    {
+                        await DeactivatePortUrlsAsync(port).ConfigureAwait(false);
+                    }
                     return true;
                 }, cancellationToken).ConfigureAwait(false);
             }
@@ -665,6 +673,17 @@ internal sealed class DevTunnelMonitor : IDisposable, IAsyncDisposable
             {
             }
         }
+    }
+
+    private Task DeactivatePortUrlsAsync(DevTunnelPortResource port)
+    {
+        // Endpoint callbacks outlive individual host runs. The orchestrator can publish
+        // endpoint-independent links (such as Inspect) as active after the port has stopped.
+        // Preserve its terminal snapshot and correct only the late URL publication.
+        return _notifications.PublishUpdateAsync(port, snapshot => snapshot with
+        {
+            Urls = [.. snapshot.Urls.Select(url => url with { IsInactive = true })]
+        });
     }
 
     internal static CustomResourceSnapshot WithConnectionHealth(CustomResourceSnapshot snapshot, string name, bool healthy, string description)
