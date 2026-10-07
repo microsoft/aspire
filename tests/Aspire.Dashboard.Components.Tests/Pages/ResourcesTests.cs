@@ -41,8 +41,10 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
-    [Fact]
-    public async Task Resources_TelemetryRecordsResourceTypeList()
+    [Theory]
+    [InlineData(Components.Pages.Resources.ResourceViewKind.Graph)]
+    [InlineData(Components.Pages.Resources.ResourceViewKind.Parameters)]
+    public async Task Resources_TelemetryRecordsSelectedView(Components.Pages.Resources.ResourceViewKind viewKind)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources:
@@ -59,14 +61,32 @@ public partial class ResourcesTests : DashboardTestContext
 
         using var activity = fixture.Telemetry.StartReportedActivity("resources");
         Assert.NotNull(activity);
-        await cut.InvokeAsync(cut.Instance.UpdateTelemetryProperties);
+        await cut.InvokeAsync(() =>
+        {
+            cut.Instance.PageViewModel.SelectedViewKind = viewKind;
+            cut.Instance.UpdateTelemetryProperties();
+        });
 
-        Assert.IsType<List<string>>(cut.Instance.TelemetryContext.Properties[TelemetryPropertyKeys.ResourceTypes].Value);
+        var expectedView = viewKind.ToString();
+        Assert.Collection(cut.Instance.TelemetryContext.Properties.OrderBy(p => p.Key, StringComparer.Ordinal),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardComponentId, property.Key),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardComponentType, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, AspireTelemetryProperty>(TelemetryPropertyKeys.ResourceView,
+                new AspireTelemetryProperty(expectedView, AspireTelemetryPropertyType.UserSetting)), property));
         Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
         Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
-        Assert.Equal("custom-resource-type,custom-resource-type",
-            Assert.IsType<string>(log.Attributes.Single(p => p.Key == TelemetryPropertyKeys.ResourceTypes).Value));
+        Assert.Collection(log.Attributes.OrderBy(p => p.Key, StringComparer.Ordinal),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentId, TelemetryComponentIds.Resources), property),
+            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.Pages.ComponentType.Page)), property),
+            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceView, expectedView), property),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), property),
+            property => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), property));
+        Assert.Equal(activity.TraceId, log.TraceId);
+        Assert.Equal(activity.SpanId, log.SpanId);
         Assert.Empty(activity.Events);
+        await cut.InvokeAsync(cut.Instance.UpdateTelemetryProperties);
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
         cut.Dispose();
     }
