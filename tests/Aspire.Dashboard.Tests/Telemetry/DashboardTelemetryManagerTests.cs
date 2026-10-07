@@ -102,7 +102,7 @@ public class DashboardTelemetryManagerTests
             var expectedVersion = AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly);
             Assert.NotEmpty(expectedVersion);
             Assert.Collection(traceResource.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal),
-                attribute => Assert.Equal(new KeyValuePair<string, object>("service.name", "ddc-cor-prd-usce-ai-aspiredashboard"), attribute),
+                attribute => Assert.Equal(new KeyValuePair<string, object>("service.name", "aspire-dashboard"), attribute),
                 attribute => Assert.Equal(new KeyValuePair<string, object>("service.version", expectedVersion), attribute));
         }
         else

@@ -13,7 +13,6 @@ namespace Aspire.Dashboard.Telemetry;
 internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposable
 {
     private const string ApplicationInsightsConnectionString = "InstrumentationKey=3be364e3-d9eb-436a-983e-0a681d5af691;IngestionEndpoint=https://centralus-2.in.applicationinsights.azure.com/;LiveEndpoint=https://centralus.livediagnostics.monitor.azure.com/;ApplicationId=83cb9aa6-6ebc-4c33-b434-8d348004bde1";
-    private const string ApplicationInsightsServiceName = "ddc-cor-prd-usce-ai-aspiredashboard";
 
     private readonly Lock _lock = new();
     private readonly DashboardTelemetryConfiguration _configuration;
@@ -141,7 +140,6 @@ internal sealed class DashboardTelemetryManager : IHostedService, IAsyncDisposab
     }
 
     private static ResourceBuilder CreateResourceBuilder() => ResourceBuilder.CreateEmpty().AddService(
-        serviceName: ApplicationInsightsServiceName,
-        serviceVersion: AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly),
-        autoGenerateServiceInstanceId: false);
+        serviceName: "aspire-dashboard",
+        serviceVersion: AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly));
 }

@@ -142,7 +142,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 #if DEBUG
     [InlineData(false)]
 #endif
-    public void TelemetryManager_UsesSeparateAzureMonitorAndOtlpResources(bool profilingEnabled)
+    public void TelemetryManager_UsesCliResourceForAllProviders(bool profilingEnabled)
     {
         using var process = RemoteExecutor.Invoke(static profilingValue =>
         {
@@ -176,7 +176,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             Assert.NotNull(azureTraceResource);
             Assert.NotNull(azureLogResource);
             Assert.Equal(azureTraceResource.Attributes.ToArray(), azureLogResource.Attributes.ToArray());
-            Assert.Equal("ddc-cor-prd-usce-ai-aspirecli", azureTraceResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+            Assert.Equal("aspire-cli", azureTraceResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
 
             // Inspect the actual OTLP provider without exposing manager-owned providers to callers.
             var field = typeof(TelemetryManager).GetField(profilingEnabled ? "_profilingProvider" : "_debugDiagnosticProvider",
@@ -184,7 +184,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             Assert.NotNull(field);
             var otlpProvider = Assert.IsAssignableFrom<TracerProvider>(field.GetValue(manager));
             var otlpResource = otlpProvider.GetResource();
-            Assert.NotSame(azureTraceResource, otlpResource);
+            Assert.Equal(azureTraceResource.Attributes.ToArray(), otlpResource.Attributes.ToArray());
             Assert.Equal("aspire-cli", otlpResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
             var expectedVersion = AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
             Assert.NotEmpty(expectedVersion);
