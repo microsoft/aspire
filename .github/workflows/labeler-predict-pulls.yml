@@ -13,6 +13,7 @@ on:
   #
   # Only automatically predict area labels when pull requests are first opened
   pull_request_target:
+    # zizmor: ignore[dangerous-triggers] - the workflow uses base-controlled actions and never executes pull request code
     types: opened
 
     # Configure the branches that need to have PRs labeled
@@ -96,13 +97,18 @@ jobs:
     steps:
       - name: "Determine pull requests to process"
         id: determine-pulls
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PULLS: ${{ inputs.pulls }}
+          POLLED_PULLS: ${{ needs.poll-pull-requests.outputs.pulls }}
+          EVENT_NUMBER: ${{ github.event.number }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.pulls }}" ]; then
-            pulls="${{ inputs.pulls }}"
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ "${{ github.event_name }}" == "schedule" ]; then
-            pulls="${{ needs.poll-pull-requests.outputs.pulls }}"
+          if [ "$EVENT_NAME" == "workflow_dispatch" ] && [ -n "$INPUT_PULLS" ]; then
+            pulls="$INPUT_PULLS"
+          elif [ "$EVENT_NAME" == "workflow_dispatch" ] || [ "$EVENT_NAME" == "schedule" ]; then
+            pulls="$POLLED_PULLS"
           else
-            pulls="${{ github.event.number }}"
+            pulls="$EVENT_NUMBER"
           fi
           echo "pulls=$pulls" >> $GITHUB_OUTPUT
           echo "Processing pull requests: $pulls"

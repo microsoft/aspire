@@ -142,6 +142,11 @@ internal sealed class DcpOptions
     /// Enables Aspire container tunnel for container-to-host connectivity across all container orchestrators.
     /// </summary>
     public bool EnableAspireContainerTunnel { get; set; } = true;
+
+    /// <summary>
+    /// The base container image used to build the Aspire container tunnel client proxy image.
+    /// </summary>
+    public string? ContainerTunnelBaseImage { get; set; }
 }
 
 internal class ValidateDcpOptions(DistributedApplicationExecutionContext executionContext) : IValidateOptions<DcpOptions>
@@ -348,6 +353,15 @@ internal class ConfigureDefaultDcpOptions(
         options.DiagnosticsLogLevel = dcpPublisherConfiguration[nameof(options.DiagnosticsLogLevel)];
         options.PreserveExecutableLogs = dcpPublisherConfiguration.GetValue<bool?>(nameof(options.PreserveExecutableLogs), options.PreserveExecutableLogs);
         options.EnableAspireContainerTunnel = configuration.GetValue(KnownConfigNames.EnableContainerTunnel, options.EnableAspireContainerTunnel);
+
+        if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ContainerTunnelBaseImage)]))
+        {
+            options.ContainerTunnelBaseImage = dcpPublisherConfiguration[nameof(options.ContainerTunnelBaseImage)];
+        }
+        else if (!string.IsNullOrEmpty(configuration[KnownConfigNames.ContainerTunnelBaseImage]))
+        {
+            options.ContainerTunnelBaseImage = configuration[KnownConfigNames.ContainerTunnelBaseImage];
+        }
     }
 
     private static void ApplyProxylessEndpointPortRangeOverride(DcpOptions options, IConfiguration configuration)

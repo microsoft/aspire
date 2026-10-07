@@ -47,8 +47,13 @@ jobs:
       - name: Post starting comment
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
         run: |
-          PR_NUMBER="${{ inputs.pr_number }}"
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid pull request number: $PR_NUMBER"
+            exit 1
+          fi
+
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           gh pr comment "${PR_NUMBER}" --repo "${{ github.repository }}" --body \

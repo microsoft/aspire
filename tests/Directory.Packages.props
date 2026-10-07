@@ -1,7 +1,7 @@
 <Project>
   <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))" />
   <PropertyGroup>
-    <TestcontainersPackageVersion>4.8.1</TestcontainersPackageVersion>
+    <TestcontainersPackageVersion>4.15.0</TestcontainersPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <!-- unit test dependencies -->

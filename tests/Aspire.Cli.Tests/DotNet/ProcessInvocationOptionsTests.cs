@@ -33,7 +33,6 @@ public sealed class ProcessInvocationOptionsTests
             KillOnParentExit = true,
             Detached = true,
             // Internal properties are included below, so they need non-default values too.
-            DetachedUnixLauncherPathOverride = "detached-launcher-override",
             AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
             EnvironmentVariables = new Dictionary<string, string>

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.Build.NoTargets" DefaultTargets="SignTray">
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GenerateAssemblyVersionInfo>false</GenerateAssemblyVersionInfo>
+    <EnableDefaultSignFiles>false</EnableDefaultSignFiles>
+    <MicroBuild_DoNotStrongNameSign>true</MicroBuild_DoNotStrongNameSign>
+    <IsPackable>false</IsPackable>
+    <TraySigningArchive Condition="'$(TraySigningArchive)' == ''">$(ArtifactsBinDir)Aspire.Tray.Mac/$(Configuration)/net10.0/$(RuntimeIdentifier)/signing/AspireTray.zip</TraySigningArchive>
+    <OutDir>$([MSBuild]::EnsureTrailingSlash($([System.IO.Path]::GetDirectoryName('$(TraySigningArchive)'))))</OutDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudioEng.MicroBuild.Core" Version="1.0.0" />
+    <_TrayToSign Include="$(TraySigningArchive)">
+      <Authenticode>MacDeveloperHarden</Authenticode>
+    </_TrayToSign>
+    <_TrayToNotarize Include="$(TraySigningArchive)">
+      <!-- MicroBuild requires the numeric notarization operation rather than a
+           friendly certificate name, matching Arcade's notarization requests.
+           https://github.com/dotnet/arcade/blob/main/src/Microsoft.DotNet.SignTool/src/SignToolConstants.cs -->
+      <Authenticode>8020</Authenticode>
+      <MacAppName>dotnet</MacAppName>
+    </_TrayToNotarize>
+  </ItemGroup>
+
+  <Target Name="ValidateTraySigning">
+    <Error Condition="!$([MSBuild]::IsOSPlatform('OSX'))" Text="Signing the tray app requires macOS." />
+    <Error Condition="'$(RuntimeIdentifier)' != 'osx-arm64' and '$(RuntimeIdentifier)' != 'osx-x64'" Text="Specify a supported macOS RuntimeIdentifier for tray signing." />
+    <Error Condition="'$(SignType)' != 'real'" Text="Tray signing requires SignType=real." />
+    <Error Condition="'$(MicroBuild_SigningEnabled)' != 'true'" Text="The official MicroBuild signing plugin must be enabled for tray signing." />
+    <Error Condition="!Exists('$(TraySigningArchive)')" Text="Prepare the tray app signing input before signing: $(TraySigningArchive)" />
+  </Target>
+
+  <!-- Use MicroBuild directly: Arcade's Mach-O file transport would wrap this
+       already-prepared app ZIP a second time. Both operations replace the ZIP
+       in place, so notarization always consumes the whole signed app. -->
+  <Target Name="SignTray" DependsOnTargets="ValidateTraySigning">
+    <SignFiles Files="@(_TrayToSign)" Type="$(SignType)" BinariesDirectory="$(OutDir)" IntermediatesDirectory="$(IntermediateOutputPath)" ESRPSigning="$(ESRPSigning)" UseBearerToken="$(UseBearerToken)" />
+    <SignFiles Files="@(_TrayToNotarize)" Type="$(SignType)" BinariesDirectory="$(OutDir)" IntermediatesDirectory="$(IntermediateOutputPath)" ESRPSigning="$(ESRPSigning)" UseBearerToken="$(UseBearerToken)" />
+  </Target>
+</Project>

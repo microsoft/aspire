@@ -23,6 +23,11 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the backmerge branch; workflows permits merged workflow-file changes;
+          # pull-requests queries and creates the merge pull request and applies its labels and assignees.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

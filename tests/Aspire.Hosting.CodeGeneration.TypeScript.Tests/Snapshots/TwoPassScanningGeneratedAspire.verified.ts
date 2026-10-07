@@ -1313,6 +1313,8 @@ export interface ResourceUrlAnnotation {
     displayText?: string | null;
     /** The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint. */
     endpoint?: EndpointReference;
+    /** Gets or sets the display order of the URL. Higher values mean sort higher in the list. */
+    displayOrder?: number | null;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
     displayLocation?: UrlDisplayLocation;
 }

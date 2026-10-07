@@ -1,0 +1,53 @@
+@namespace Aspire.Dashboard.Components.Controls
+
+<div class="terminal-metadata" data-directory="@State?.WorkingDirectory" @ref="_metadataElement">
+    <div class="terminal-icon" data-state="@(HasProgress ? State!.ProgressState : "none")" title="@(HasProgress ? ProgressTooltip : null)">
+        @if (HasProgress)
+        {
+            <AspireProgressRing Width="16px" Value="@ProgressValue" AriaLabel="@ProgressLabel" />
+        }
+        else
+        {
+            <FluentIcon Class="terminal-idle-icon" Value="@(IdleIcon ?? s_terminalIcon)" Width="16px" Color="Color.Primary" aria-hidden="true" />
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(DisplayTitle))
+    {
+        <div class="terminal-title-container">
+            <FluentButton Id="@_titleButtonId"
+                          Class="terminal-title-button aspire-button"
+                          Appearance="ButtonAppearance.Transparent"
+                          AdditionalAttributes="@TitleCopyAttributes">
+                <span class="terminal-title-content">
+                    <span class="terminal-title">@DisplayTitle</span>
+                    <span class="terminal-title-copy-icons" aria-hidden="true">
+                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                        <FluentIcon Class="checkmark-icon" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" Style="display:none" />
+                    </span>
+                </span>
+            </FluentButton>
+            <span class="terminal-copy-status" role="status" aria-live="polite"></span>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(State?.WorkingDirectory))
+    {
+        <div class="terminal-directory-container">
+            <FluentButton Id="@_directoryButtonId"
+                          Class="terminal-directory aspire-button"
+                          Appearance="ButtonAppearance.Transparent"
+                          AdditionalAttributes="@DirectoryCopyAttributes">
+                <span class="terminal-directory-content">
+                    <span class="terminal-directory-text">
+                        <span class="terminal-directory-measure" aria-hidden="true">@State.WorkingDirectory</span>
+                        <span class="terminal-directory-display" aria-hidden="true"></span>
+                    </span>
+                    <span class="terminal-directory-copy-icons" aria-hidden="true">
+                        <FluentIcon Class="copy-icon" Icon="Icons.Regular.Size16.Copy" Color="Color.Primary" />
+                        <FluentIcon Class="checkmark-icon" Icon="Icons.Regular.Size16.Checkmark" Color="Color.Primary" Style="display:none" />
+                    </span>
+                </span>
+            </FluentButton>
+            <span class="terminal-copy-status" role="status" aria-live="polite"></span>
+        </div>
+    }
+</div>

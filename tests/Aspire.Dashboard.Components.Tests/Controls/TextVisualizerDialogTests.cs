@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -341,6 +342,44 @@ public class TextVisualizerDialogTests : DashboardTestContext
             """,
             instance.TextVisualizerViewModel.FormattedText);
         Assert.True(instance.HasFixedFormat);
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_MermaidSource_CanCopyAndDownloadAsync()
+    {
+        const string mermaid = "flowchart LR\n    resource0[\"api\"]\n    resource1[\"cache\"]\n    resource0 --> resource1\n";
+        var getCut = SetUpDialog(out var dialogService);
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = dialogService,
+            ValueDescription = "Export as Mermaid",
+            Value = mermaid,
+            DownloadFileName = "resources.mmd",
+            FixedFormat = DashboardUIHelpers.PlaintextFormat
+        });
+        var cut = getCut();
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        Assert.Equal(mermaid, cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText);
+        Assert.Empty(cut.FindComponents<FluentSelect<SelectViewModel<string>, SelectViewModel<string>>>());
+        Assert.Equal(mermaid, cut.Find("[data-copybutton='true']").GetAttribute("data-text"));
+
+        string? downloadedText = null;
+        var download = JSInterop.SetupVoid("downloadStreamAsFile", invocation =>
+        {
+            var stream = Assert.IsType<DotNetStreamReference>(invocation.Arguments[1]);
+            using var reader = new StreamReader(stream.Stream, leaveOpen: true);
+            downloadedText = reader.ReadToEnd();
+            return true;
+        });
+        download.SetVoidResult();
+
+        var downloadButton = Assert.Single(cut.FindComponents<FluentButton>(),
+            button => button.Instance.Title == Aspire.Dashboard.Resources.ControlsStrings.Download);
+        await downloadButton.InvokeAsync(downloadButton.Instance.OnClick.InvokeAsync);
+
+        Assert.Equal("resources.mmd", Assert.Single(download.Invocations).Arguments[0]);
+        Assert.Equal(mermaid, downloadedText);
     }
 
     private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)

@@ -1,0 +1,88 @@
+@page "/terminals"
+@page "/terminals/resource/{resourceName}"
+
+@using Aspire.Dashboard.Resources
+
+<PageTitle>
+    <ApplicationName AdditionalText="@PageViewModel.SelectedResource?.Id?.ReplicaSetName"
+                     ResourceName="@nameof(TerminalStrings.TerminalsPageTitle)" Loc="@Loc"/>
+</PageTitle>
+
+<div class="page-content-container">
+    <AspirePageContentLayout @ref="_contentLayout" AddNewlineOnToolbar="true"
+                             MainContentStyle="margin-top: 10px;"
+                             MobileToolbarButtonText="@Loc[nameof(TerminalStrings.TerminalsSelectResourceToolbar)]">
+        <PageTitleSection>
+            <h1 class="page-header">@Loc[nameof(TerminalStrings.TerminalsHeader)]</h1>
+        </PageTitleSection>
+        <ToolbarSection>
+            <ResourceSelect Resources="@_resources"
+                            AriaLabel="@ControlsLoc[nameof(ControlsStrings.ResourceLabel)]"
+                            @bind-SelectedResource="PageViewModel.SelectedResource"
+                            @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
+                            LabelClass="toolbar-left" />
+            @if (GetSelectedResource() is { } selectedResource)
+            {
+                if (ViewportInformation.IsDesktop)
+                {
+                    <span style="margin-left: 10px;">@ControlsLoc[nameof(ControlsStrings.ResourceActions)]</span>
+                }
+                @foreach (var command in _highlightedCommands)
+                {
+                    <FluentButton Appearance="ButtonAppearance.Default" Class="highlighted-command toolbar-button"
+                                  Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
+                                  Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
+                                  OnClick="@(() => ExecuteResourceCommandAsync(command))">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" Color="Color.Primary" />
+                    </FluentButton>
+                }
+                <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                                  ButtonClass="@(ViewportInformation.IsDesktop ? "toolbar-button" : null)"
+                                  Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
+                                  ItemsProvider="@(() => _resourceMenuItems)"
+                                  Title="@ControlsLoc[nameof(ControlsStrings.ResourceActions)]"
+                                  Text="@(ViewportInformation.IsDesktop ? null : ControlsLoc[nameof(ControlsStrings.ResourceActions)].Value)" />
+            }
+            @if (ViewportInformation.IsDesktop)
+            {
+                <div class="toolbar-end">
+                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                                      ButtonClass="toolbar-button"
+                                      Icon="@(new Icons.Regular.Size20.Options())"
+                                      ItemsProvider="@(() => _optionsMenuItems)"
+                                      Title="@Loc[nameof(TerminalStrings.TerminalsSettings)]" />
+                </div>
+            }
+            else
+            {
+                <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                                  Icon="@(new Icons.Regular.Size20.Options())"
+                                  ItemsProvider="@(() => _optionsMenuItems)"
+                                  Title="@Loc[nameof(TerminalStrings.TerminalsSettings)]"
+                                  Text="@Loc[nameof(TerminalStrings.TerminalsSettings)].Value" />
+            }
+        </ToolbarSection>
+        <MainSection>
+            @if (GetSelectedResource() is { } resource && resource.HasTerminal())
+            {
+                <TerminalView ResourceName="@resource.Name" ShowOpenInWindow="true"
+                              WindowResourceName="@GetResourceName(PageViewModel.SelectedResource)"
+                              ResourceIcon="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size16)" />
+            }
+            else if (_resources is not null && !_redirected)
+            {
+                <div class="aspire-empty-content" role="status">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Primary" />&nbsp;
+                    @if (ViewportInformation.IsDesktop)
+                    {
+                        @Loc[nameof(TerminalStrings.TerminalsSelectAResource)]
+                    }
+                    else
+                    {
+                        <a href="#" @onclick="@(async () => await _contentLayout!.OpenMobileToolbarAsync())" @onclick:preventDefault="true">@Loc[nameof(TerminalStrings.TerminalsSelectAResource)]</a>
+                    }
+                </div>
+            }
+        </MainSection>
+    </AspirePageContentLayout>
+</div>

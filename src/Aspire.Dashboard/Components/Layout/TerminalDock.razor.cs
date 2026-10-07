@@ -186,7 +186,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             if (!_disposed)
             {
                 _tabNavigationRegistrationStarted = true;
-                await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement).ConfigureAwait(true);
+                await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement, _selfRef).ConfigureAwait(true);
             }
         }
         catch (JSDisconnectedException)
@@ -241,6 +241,36 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     }
 
     private bool IsPanelVisible => _terminals.Count == 0;
+
+    /// <summary>
+    /// Moves a dock tab relative to another tab without changing the active terminal or its viewer.
+    /// </summary>
+    /// <param name="terminalId">The terminal being moved.</param>
+    /// <param name="targetId">The terminal that anchors the new position.</param>
+    /// <param name="after">Whether to insert after the target instead of before it.</param>
+    /// <returns>A task that completes when the tab order is updated.</returns>
+    [JSInvokable]
+    public Task ReorderTerminalAsync(string terminalId, string targetId, bool after) => InvokeAsync(() =>
+    {
+        if (_disposed || terminalId == targetId)
+        {
+            return;
+        }
+
+        var sourceIndex = _terminals.FindIndex(t => t.TerminalId == terminalId);
+        var targetIndex = _terminals.FindIndex(t => t.TerminalId == targetId);
+        if (sourceIndex < 0 || targetIndex < 0)
+        {
+            Logger.LogDebug("Ignored reordering removed dock terminal {TerminalId} relative to {TargetId}.", terminalId, targetId);
+            return;
+        }
+
+        var terminal = _terminals[sourceIndex];
+        _terminals.RemoveAt(sourceIndex);
+        targetIndex = _terminals.FindIndex(t => t.TerminalId == targetId);
+        _terminals.Insert(targetIndex + (after ? 1 : 0), terminal);
+        StateHasChanged();
+    });
 
     private bool IsPaneActive(string terminalId) => terminalId == _activeTerminalId;
 
@@ -399,8 +429,14 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
                     {
                         var previousActiveIndex = _terminals.FindIndex(t => t.TerminalId == _activeTerminalId);
+                        // Keep this browser's tab order across recovery snapshots; append newly discovered terminals.
+                        var snapshotById = update.Snapshot.Terminals.ToDictionary(t => t.TerminalId, StringComparer.Ordinal);
+                        var ordered = _terminals.Where(t => snapshotById.ContainsKey(t.TerminalId))
+                            .Select(t => snapshotById[t.TerminalId]).ToList();
+                        var existingIds = ordered.Select(t => t.TerminalId).ToHashSet(StringComparer.Ordinal);
+                        ordered.AddRange(update.Snapshot.Terminals.Where(t => !existingIds.Contains(t.TerminalId)));
                         _terminals.Clear();
-                        _terminals.AddRange(update.Snapshot.Terminals);
+                        _terminals.AddRange(ordered);
                         if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
                         {
                             // Snapshots can also remove the active tab; use the same adjacent fallback as removal.

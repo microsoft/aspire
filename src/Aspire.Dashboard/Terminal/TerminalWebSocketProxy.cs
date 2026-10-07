@@ -112,27 +112,10 @@ internal static class TerminalWebSocketProxy
         }
 
         var resourceName = context.Request.Query["resource"].ToString();
-        var replicaText = context.Request.Query["replica"].ToString();
         if (string.IsNullOrWhiteSpace(resourceName))
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsync("Missing 'resource' query parameter.").ConfigureAwait(false);
-            return;
-        }
-
-        var replicaIndex = 0;
-        if (!string.IsNullOrWhiteSpace(replicaText) &&
-            !int.TryParse(replicaText, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out replicaIndex))
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("Invalid 'replica' query parameter.").ConfigureAwait(false);
-            return;
-        }
-
-        if (replicaIndex < 0)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-            await context.Response.WriteAsync("'replica' must be non-negative.").ConfigureAwait(false);
             return;
         }
 
@@ -148,7 +131,7 @@ internal static class TerminalWebSocketProxy
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
             timeout.CancelAfter(s_handshakeTimeout);
-            upstream = await resolver.ConnectAsync(resourceName, replicaIndex, timeout.Token).ConfigureAwait(false);
+            upstream = await resolver.ConnectAsync(resourceName, timeout.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
@@ -163,7 +146,7 @@ internal static class TerminalWebSocketProxy
         if (upstream is null)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
-            await context.Response.WriteAsync("Terminal is not available for the requested resource and replica.").ConfigureAwait(false);
+            await context.Response.WriteAsync("Terminal is not available for the requested resource instance.").ConfigureAwait(false);
             return;
         }
 

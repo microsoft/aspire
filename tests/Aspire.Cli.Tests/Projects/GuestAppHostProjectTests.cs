@@ -1666,6 +1666,8 @@ public class GuestAppHostProjectTests : IDisposable
     [Fact]
     public async Task RunAsync_PassesWorkloadIdToAppHostServerEnvironment()
     {
+        const string image = "example.com/aspire-tunnel:configured";
+
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
         var appHostFile = new FileInfo(appHostPath);
@@ -1688,7 +1690,13 @@ public class GuestAppHostProjectTests : IDisposable
         };
         var project = CreateGuestAppHostProject(
             appHostServerProjectFactory: projectFactory,
-            serverSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory,
+            configuration: new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [AspireConfigContainerTunnel.BaseImageConfigPath] = image
+                })
+                .Build());
 
         var context = new AppHostProjectContext
         {
@@ -1703,6 +1711,7 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.True(serverSession.StartAsyncCalled);
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
+        Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
     }
 
     [Fact]
@@ -2084,6 +2093,7 @@ public class GuestAppHostProjectTests : IDisposable
         string? identityVersion = null)
     {
         var effectiveConfiguration = configuration ?? _configuration;
+        var effectiveEnvironment = environment ?? new TestEnvironment();
 
         var language = new LanguageInfo(
             LanguageId: languageId,
@@ -2121,7 +2131,13 @@ public class GuestAppHostProjectTests : IDisposable
             features: new Features(effectiveConfiguration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             executionContext: executionContext,
-            environment: environment ?? new TestEnvironment(),
+            environment: effectiveEnvironment,
+            appHostConfigurationProjector: new AppHostConfigurationProjector(
+                new TestConfigurationService
+                {
+                    OnGetConfigurationFromDirectory = (key, _) => effectiveConfiguration[key.Replace('.', ':')]
+                },
+                effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,

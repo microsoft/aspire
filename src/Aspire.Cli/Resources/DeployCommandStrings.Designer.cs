@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class DeployCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal DeployCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,16 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clear the deployment cache associated with the current environment and do not save deployment state.
+        /// </summary>
+        public static string ClearCacheOptionDescription {
+            get {
+                return ResourceManager.GetString("ClearCacheOptionDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to The deployment was canceled..
         /// </summary>
@@ -68,25 +77,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeploymentCanceled", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Deploy an Aspire apphost project to its supported deployment targets.
+        ///   Looks up a localized string similar to Deploy an AppHost to its deployment targets.
         /// </summary>
         public static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to The output path for deployment artifacts..
-        /// </summary>
-        public static string OutputPathArgumentDescription {
-            get {
-                return ResourceManager.GetString("OutputPathArgumentDescription", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to DEPLOYMENT COMPLETED.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OperationCompletedPrefix", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to DEPLOYMENT FAILED.
         /// </summary>
@@ -104,10 +104,13 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OperationFailedPrefix", resourceCulture);
             }
         }
-        
-        public static string ClearCacheOptionDescription {
+
+        /// <summary>
+        ///   Looks up a localized string similar to The optional output path for deployment artifacts.
+        /// </summary>
+        public static string OutputPathArgumentDescription {
             get {
-                return ResourceManager.GetString("ClearCacheOptionDescription", resourceCulture);
+                return ResourceManager.GetString("OutputPathArgumentDescription", resourceCulture);
             }
         }
     }

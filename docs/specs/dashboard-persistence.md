@@ -295,6 +295,8 @@ The Dashboard applies these default ingestion limits:
 
 The oldest logs, traces, and metric points are removed when their limits are exceeded. Fixed limits of 10,000 also apply to resource views per resource, scopes per database, instruments per resource, and dimensions per instrument; additional identities are rejected.
 
+The `AddHistogramMetricsAtCapacity` benchmark in [TelemetryRepositoryMetricsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricsBenchmarks.cs) measures steady-state ingestion with one or five dimensions already at the default retention limit. Each invocation adds one cumulative histogram point per dimension with four replayed exemplars, exercising eviction and cascading exemplar deletes. Payload construction and history population are outside the measured operation.
+
 Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 100,000. The same limit applies across all console logs in the database, with the oldest entries removed when the limit is exceeded. Historical runs can therefore omit uncaptured logs.
 
 ### Database file size

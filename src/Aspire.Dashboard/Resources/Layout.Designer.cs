@@ -10,7 +10,7 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
+
 
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
@@ -23,11 +23,11 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Layout {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Layout() {
         }
@@ -61,15 +61,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Select dashboard run.
-        /// </summary>
-        public static string DashboardRunSelectTitle {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Select run: {0}.
         /// </summary>
         public static string DashboardRunSelectAccessibleLabel {
@@ -84,33 +75,6 @@ namespace Aspire.Dashboard.Resources {
         public static string DashboardRunSelectCurrent {
             get {
                 return ResourceManager.GetString("DashboardRunSelectCurrent", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Pin run.
-        /// </summary>
-        public static string DashboardRunSelectPin {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Unpin run.
-        /// </summary>
-        public static string DashboardRunSelectUnpin {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to This run can't be viewed because it was created by an incompatible version of the dashboard..
-        /// </summary>
-        public static string DashboardRunSelectIncompatibleTooltip {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectIncompatibleTooltip", resourceCulture);
             }
         }
 
@@ -133,6 +97,42 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to This run can&apos;t be viewed because it was created by an incompatible version of the dashboard..
+        /// </summary>
+        public static string DashboardRunSelectIncompatibleTooltip {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectIncompatibleTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Pin run.
+        /// </summary>
+        public static string DashboardRunSelectPin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select dashboard run.
+        /// </summary>
+        public static string DashboardRunSelectTitle {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unpin run.
+        /// </summary>
+        public static string DashboardRunSelectUnpin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
         public static string MainLayoutAspire {
@@ -140,7 +140,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspire", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Help.
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspireDashboardHelpLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire repo.
         /// </summary>
@@ -158,16 +158,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspireRepoLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Settings.
+        ///   Looks up a localized string similar to AI agents.
         /// </summary>
-        public static string MainLayoutLaunchSettings {
+        public static string MainLayoutLaunchAIAgents {
             get {
-                return ResourceManager.GetString("MainLayoutLaunchSettings", resourceCulture);
+                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Notifications.
         /// </summary>
@@ -176,7 +176,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutLaunchNotifications", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Settings.
+        /// </summary>
+        public static string MainLayoutLaunchSettings {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchSettings", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Notifications.
         /// </summary>
@@ -185,7 +194,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutNotificationCenterTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
@@ -194,7 +203,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutSettingsDialogClose", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Settings.
         /// </summary>
@@ -203,7 +212,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutSettingsDialogTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to An unhandled error has occurred..
         /// </summary>
@@ -212,7 +221,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutUnhandledErrorMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Reload.
         /// </summary>
@@ -221,16 +230,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutUnhandledErrorReload", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to More information.
-        /// </summary>
-        public static string MessageUnsecuredEndpointLink {
-            get {
-                return ResourceManager.GetString("MessageUnsecuredEndpointLink", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Untrusted apps can access telemetry data via the API..
         /// </summary>
@@ -239,7 +239,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageUnsecuredEndpointApiBody", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to More information.
+        /// </summary>
+        public static string MessageUnsecuredEndpointLink {
+            get {
+                return ResourceManager.GetString("MessageUnsecuredEndpointLink", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Untrusted apps can send telemetry to the dashboard..
         /// </summary>
@@ -248,7 +257,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageUnsecuredEndpointTelemetryBody", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Endpoint is unsecured.
         /// </summary>
@@ -257,16 +266,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageUnsecuredEndpointTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Console.
+        ///   Looks up a localized string similar to Console logs.
         /// </summary>
         public static string NavMenuConsoleLogsTab {
             get {
                 return ResourceManager.GetString("NavMenuConsoleLogsTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Metrics.
         /// </summary>
@@ -275,13 +284,31 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuMetricsTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Expand navigation labels.
+        ///   Looks up a localized string similar to Resources.
         /// </summary>
-        public static string NavMenuToggleExpand {
+        public static string NavMenuResourcesTab {
             get {
-                return ResourceManager.GetString("NavMenuToggleExpand", resourceCulture);
+                return ResourceManager.GetString("NavMenuResourcesTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Structured logs.
+        /// </summary>
+        public static string NavMenuStructuredLogsTab {
+            get {
+                return ResourceManager.GetString("NavMenuStructuredLogsTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Terminals.
+        /// </summary>
+        public static string NavMenuTerminalsTab {
+            get {
+                return ResourceManager.GetString("NavMenuTerminalsTab", resourceCulture);
             }
         }
 
@@ -295,23 +322,14 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Resources.
+        ///   Looks up a localized string similar to Expand navigation labels.
         /// </summary>
-        public static string NavMenuResourcesTab {
+        public static string NavMenuToggleExpand {
             get {
-                return ResourceManager.GetString("NavMenuResourcesTab", resourceCulture);
+                return ResourceManager.GetString("NavMenuToggleExpand", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Structured.
-        /// </summary>
-        public static string NavMenuStructuredLogsTab {
-            get {
-                return ResourceManager.GetString("NavMenuStructuredLogsTab", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Traces.
         /// </summary>
@@ -320,22 +338,13 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuTracesTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to View filters.
         /// </summary>
         public static string PageLayoutViewFilters {
             get {
                 return ResourceManager.GetString("PageLayoutViewFilters", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to AI agents.
-        /// </summary>
-        public static string MainLayoutLaunchAIAgents {
-            get {
-                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
             }
         }
     }

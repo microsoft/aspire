@@ -21,6 +21,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
+    private bool _hasResourceTerminals;
     // Fluent v5 has no API to notify the provider after mutating an existing toast's options. This value is
     // rendered as an additional provider attribute so changing it forces FluentToastProvider to read them again.
     private int _toastProviderUpdateVersion;
@@ -291,6 +292,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
 
         _isSwitchingRuns = true;
+        _hasResourceTerminals = false;
         await InvokeAsync(StateHasChanged);
 
         try
@@ -470,8 +472,19 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         AspireKeyboardShortcut.GoToConsoleLogs
     };
 
+    private static readonly IReadOnlySet<AspireKeyboardShortcut> s_resourceTerminalsSubscribedShortcuts = new HashSet<AspireKeyboardShortcut>(
+        s_resourceServiceSubscribedShortcuts)
+    {
+        AspireKeyboardShortcut.GoToTerminals
+    };
+
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts =>
-        DashboardClient.IsEnabled ? s_resourceServiceSubscribedShortcuts : s_subscribedShortcuts;
+        (DashboardClient.IsEnabled, _hasResourceTerminals) switch
+        {
+            (true, true) => s_resourceTerminalsSubscribedShortcuts,
+            (true, false) => s_resourceServiceSubscribedShortcuts,
+            _ => s_subscribedShortcuts
+        };
 
     public async Task OnPageKeyDownAsync(AspireKeyboardShortcut shortcut)
     {
@@ -497,6 +510,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 break;
             case AspireKeyboardShortcut.GoToMetrics:
                 NavigationManager.NavigateTo(DashboardUrls.MetricsUrl());
+                break;
+            case AspireKeyboardShortcut.GoToTerminals when DashboardClient.IsEnabled && _hasResourceTerminals:
+                NavigationManager.NavigateTo(DashboardUrls.TerminalsUrl());
                 break;
         }
     }

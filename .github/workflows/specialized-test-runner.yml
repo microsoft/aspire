@@ -22,7 +22,6 @@ on:
       enablePlaywrightInstall:
         required: true
         type: boolean
-        default: false
       # When true, ignores test failures and checks if .trx files have nonzero test count
       ignoreTestFailures:
         required: false
@@ -39,7 +38,6 @@ jobs:
       runsheet: ${{ steps.inject_properties.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
       requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
-      requiresGitHubToken: ${{ steps.check_github_token.outputs.requiresGitHubToken }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

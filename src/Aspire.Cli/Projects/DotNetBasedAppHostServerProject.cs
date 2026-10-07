@@ -258,7 +258,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Handle NuGet config and channel resolution
         string? channelName = null;
 
-        var userNugetConfig = _restoreRootConfigDirectory is null ? FindNuGetConfig(_appPath) : null;
+        var userNugetConfig = _restoreRootConfigDirectory is null ? await FindNuGetConfigAsync(_appPath, cancellationToken) : null;
         var nugetConfigContent = userNugetConfig is not null
             ? File.ReadAllText(userNugetConfig)
             : null;
@@ -549,9 +549,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
         var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
-        // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
-        // only if the isolated path is requested. Sharing the env/arg construction avoids drift
-        // between the two branches — every env var and argument lives in exactly one place.
+        // Only the command line, working directory and environment of this ProcessStartInfo reach the
+        // child; ProcessExecutionFactory derives the launch mode (stdio, console, job) from the
+        // ProcessInvocationOptions below so every child is spawned the same way.
         var startInfo = new ProcessStartInfo(dotnetExe)
         {
             WorkingDirectory = _projectModelPath,
@@ -670,35 +670,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
-    private static string? FindNuGetConfig(string workingDirectory)
+    private async Task<string?> FindNuGetConfigAsync(string workingDirectory, CancellationToken cancellationToken)
     {
         try
         {
-            var startInfo = new ProcessStartInfo("dotnet")
-            {
-                Arguments = "nuget config paths",
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+            var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
+                new DirectoryInfo(workingDirectory),
+                new ProcessInvocationOptions(),
+                cancellationToken);
 
-            using var process = Process.Start(startInfo);
-            if (process is null)
+            if (exitCode != 0)
             {
                 return null;
             }
 
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                return null;
-            }
-
-            var configPaths = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             var workingDirFullPath = Path.GetFullPath(workingDirectory);
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var globalNuGetPath = Path.Combine(userProfile, ".nuget");
@@ -722,7 +707,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
             return null;
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
         }

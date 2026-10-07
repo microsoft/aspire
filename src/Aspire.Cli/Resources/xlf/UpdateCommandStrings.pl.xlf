@@ -357,14 +357,14 @@
         <target state="new">The tool manifest '{0}' changed during update. Run 'aspire update' again.</target>
         <note />
       </trans-unit>
+      <trans-unit id="UnexpectedCodePath">
+        <source>Unexpected code path.</source>
+        <target state="new">Unexpected code path.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnsupportedToolVersionFormat">
         <source>Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</source>
         <target state="new">Skipping the Aspire CLI reference in '{0}': '{1}' is not an exact version or a simple ^/~ version range.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="UnxpectedCodePath">
-        <source>Unexpected code path.</source>
-        <target state="translated">Nieoczekiwana ścieżka w kodzie.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateCandidateFileChangedFormat">

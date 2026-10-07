@@ -15,6 +15,7 @@ internal static class BrowserStorageKeys
     public const string StructuredLogsPageState = "Aspire_PageState_StructuredLogs";
     public const string MetricsPageState = "Aspire_PageState_Metrics";
     public const string ConsoleLogsPageState = "Aspire_PageState_ConsoleLogs";
+    public const string TerminalsPageState = "Aspire_PageState_Terminals";
     public const string ResourcesPageState = "Resources_PageState";
     public const string ConsoleLogConsoleSettings = "Aspire_ConsoleLog_ConsoleSettings";
     public const string ConsoleLogFilters = "Aspire_ConsoleLog_Filters";

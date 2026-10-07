@@ -10165,6 +10165,32 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ContainerTunnelUsesConfiguredBaseImage()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("container", "image")
+            .WithEnvironment("EXECUTABLE_PORT", executable.GetEndpoint("http").Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+            ContainerTunnelBaseImage = "example.com/tunnel-base:custom",
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelProxy = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.Equal("example.com/tunnel-base:custom", tunnelProxy.Spec.BaseImage);
+    }
+
+    [Fact]
     public async Task ExecutableCanResolveExplicitContainerNetworkSelfReference()
     {
         var builder = DistributedApplication.CreateBuilder();

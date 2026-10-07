@@ -17,7 +17,7 @@ public sealed class NuGetConfigTests
         Assert.NotNull(root);
         var sources = root.Element("packageSources")!.Elements("add")
             .ToDictionary(element => element.Attribute("key")!.Value, element => element.Attribute("value")!.Value, StringComparer.Ordinal);
-        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet9"];
+        string[] expectedSources = ["built-local", "dotnet-eng", "dotnet-public", "dotnet10", "dotnet11", "dotnet9"];
         Assert.Equal(expectedSources, sources.Keys.Order(StringComparer.Ordinal));
         Assert.Equal("%BUILT_NUGETS_PATH%", sources["built-local"]);
         Assert.All(sources.Where(source => source.Key != "built-local"), source => AssertApprovedSource(source.Value));

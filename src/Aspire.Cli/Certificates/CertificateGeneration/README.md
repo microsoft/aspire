@@ -16,7 +16,7 @@ This directory contains code vendored from the ASP.NET Core repository's shared 
 - Changed `GetDescription` and `ToCertificateDescription` from `static` to instance methods
 - Removed `catch when (Log.IsEnabled())` filter pattern (incompatible with ILogger)
 - Replaced `new X509Certificate2(...)` with `X509CertificateLoader.LoadPkcs12FromFile(...)` (fixes SYSLIB0057)
-- Adapted .NET 11 `Process.Run` and `StandardOutputHandle` usage to `CertificateProcessRunner`, which concurrently drains redirected output on .NET 10
+- Kept `UnixCertificateManager` NSS database trust checks cancelable. Canceling kills the whole `certutil` process tree, which the .NET 11 `Process.Run*` helpers do not do.
 - Retained support for both the HRESULT and raw Win32 error-code forms of Windows trust cancellation
 - Added Aspire CLI configuration for NSS database overrides. `certificates.nssDbPaths` takes precedence over the upstream `DOTNET_DEV_CERTS_NSSDB_PATHS` environment variable.
 

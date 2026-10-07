@@ -300,6 +300,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             CommandSelected,
             IsCommandExecuting,
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: true,
             showUrls: true);
     }

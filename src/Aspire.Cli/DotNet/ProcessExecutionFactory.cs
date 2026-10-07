@@ -1,9 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Processes;
-using Aspire.Cli.Bundles;
-using Aspire.Cli.Layout;
+using System.Diagnostics;
+using System.Text;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -21,29 +20,31 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         KnownConfigNames.CliAppHostSelectionOrigin
     ];
 
+    // Strip ASPIRE_CLI_* identity overrides from every spawned process — both the isolated AppHost
+    // run path and every non-isolated subprocess. These env vars are an in-process, parent-only test
+    // affordance: a developer or test bench uses them to coerce the *current* CLI into pretending it
+    // is a different channel/version/commit or to retarget its emitted nuget.config at a local proxy.
+    // Letting them leak into child processes (apphost, dotnet, restore, peer probes) means any nested
+    // `aspire` invocation inherits the parent's lie about its identity, which silently corrupts
+    // `aspire doctor`, breaks peer probing, and undermines the "what is this binary actually" answer
+    // we want callers to see on disk. See docs/specs/cli-identity-sidecar.md.
+    //
+    // Invocation-scoped values are stripped too so AppHost and build children cannot inherit them.
+    // In both cases callers can still deliberately provide a value (e.g. to a detached child CLI).
+    //
+    // Case-insensitive because ProcessStartInfo.Environment is case-sensitive on Unix, while the child
+    // CLI reads these through case-insensitive configuration, so no differently-cased copy may survive.
+    private static readonly HashSet<string> s_strippedEnvVarNames = new(
+        [.. Acquisition.IdentityResolver.IdentityEnvVarNames, .. InvocationScopedEnvVarNames],
+        StringComparer.OrdinalIgnoreCase);
+
     private readonly IEnvironment _environment;
     private readonly ILogger<ProcessExecutionFactory> _logger;
-    private readonly ILayoutDiscovery? _layoutDiscovery;
-    private readonly IBundleService? _bundleService;
-    private readonly CliExecutionContext? _executionContext;
 
     public ProcessExecutionFactory(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
-        : this(environment, logger, layoutDiscovery: null, bundleService: null, executionContext: null)
-    {
-    }
-
-    public ProcessExecutionFactory(
-        IEnvironment environment,
-        ILogger<ProcessExecutionFactory> logger,
-        ILayoutDiscovery? layoutDiscovery,
-        IBundleService? bundleService,
-        CliExecutionContext? executionContext)
     {
         _environment = environment;
         _logger = logger;
-        _layoutDiscovery = layoutDiscovery;
-        _bundleService = bundleService;
-        _executionContext = executionContext;
     }
 
     public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
@@ -67,27 +68,11 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             }
         }
 
-        var startInfo = new IsolatedProcessStartInfo
-        {
-            FileName = fileName,
-            WorkingDirectory = workingDirectory.FullName,
-            IsolateConsole = options.IsolateConsole,
-            KillOnParentExit = options.KillOnParentExit,
-            Detached = options.Detached,
-            DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
-        };
+        var startInfo = CreateProcessStartInfo(fileName, args, workingDirectory.FullName, options);
 
-        foreach (var a in args)
-        {
-            startInfo.ArgumentList.Add(a);
-        }
-
-        // Touching Environment here snapshots the parent env on first access. Strip invocation-scoped
-        // values before overlaying explicit values so AppHost and build children cannot inherit them;
-        // callers can still deliberately provide a value to a detached child CLI when required.
-        StripIdentityEnvVars(startInfo);
-        StripInvocationScopedEnvVars(startInfo);
-        ApplyEnvironmentVariableFilter(startInfo, options.EnvironmentVariableFilter);
+        // Touching Environment snapshots the parent env. Strip before overlaying explicit values so
+        // callers can still deliberately provide a stripped value (e.g. to a detached child CLI).
+        RemoveInheritedEnvironmentVariables(startInfo.Environment, options.EnvironmentVariableFilter);
 
         if (env is not null)
         {
@@ -97,10 +82,10 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             }
         }
 
-        return Build(startInfo, fileName, effectiveLogger, options, _environment, _layoutDiscovery, _bundleService, _executionContext);
+        return new ProcessExecution(startInfo, effectiveLogger, options, _environment);
     }
 
-    public IProcessExecution CreateExecution(System.Diagnostics.ProcessStartInfo startInfo, ProcessInvocationOptions options)
+    public IProcessExecution CreateExecution(ProcessStartInfo startInfo, ProcessInvocationOptions options)
     {
         var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : _logger;
 
@@ -108,114 +93,93 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         // "--" is application input forwarded to the AppHost and must not be logged verbatim.
         effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", startInfo.FileName, startInfo.WorkingDirectory, AppHostArgumentRedactor.RedactToString(startInfo.ArgumentList));
 
-        var isolatedStartInfo = new IsolatedProcessStartInfo
-        {
-            FileName = startInfo.FileName,
-            WorkingDirectory = startInfo.WorkingDirectory,
-            IsolateConsole = options.IsolateConsole,
-            KillOnParentExit = options.KillOnParentExit,
-            Detached = options.Detached,
-            DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
-        };
-
-        foreach (var arg in startInfo.ArgumentList)
-        {
-            isolatedStartInfo.ArgumentList.Add(arg);
-        }
+        // Only the caller's command line and environment are used; the launch mode (stdio, console,
+        // job, detach) always comes from the options so every child is spawned the same way.
+        var childStartInfo = CreateProcessStartInfo(startInfo.FileName, startInfo.ArgumentList, startInfo.WorkingDirectory, options);
 
         // Replace (not overlay) the env block so callers that did startInfo.Environment.Remove(key)
         // see that removal honored — e.g. PrebuiltAppHostServer.CreateStartInfo explicitly removes
         // KnownConfigNames.IntegrationLibsPath / IntegrationProbeManifestPath when they aren't
         // configured, to suppress any value the parent CLI happens to have set in its own env.
-        // ProcessStartInfo.Environment is eagerly snapshotted from the parent, so iterating it gives
-        // the authoritative "what the child should see" view; a missing key really means "do not pass
-        // this to the child". Start from an empty block (UseEmptyEnvironment skips the parent snapshot
-        // we would otherwise allocate and immediately discard) so HasCustomEnvironment is set and the
-        // spawn uses our explicit block rather than re-inheriting the parent.
-        var childEnvironment = isolatedStartInfo.UseEmptyEnvironment();
+        // The caller's ProcessStartInfo.Environment is seeded from the parent, so it already is the
+        // authoritative "what the child should see" view; a missing key means "do not pass it".
+        childStartInfo.Environment.Clear();
         foreach (var (key, value) in startInfo.Environment)
         {
-            // Match ProcessStartInfo.Environment semantics: a null value means "do not set this
-            // variable in the child" — we get there by simply not adding it.
+            // A null value means "do not set this variable in the child".
             if (value is not null)
             {
-                childEnvironment[key] = value;
+                childStartInfo.Environment[key] = value;
             }
         }
 
         // Strip after the copy so an ASPIRE_CLI_* var the parent happens to hold is not re-introduced
-        // into the child via startInfo.Environment (which is parent-seeded). Same rationale as the
-        // other overload — see StripIdentityEnvVars.
-        StripIdentityEnvVars(isolatedStartInfo);
-        StripInvocationScopedEnvVars(isolatedStartInfo);
-        ApplyEnvironmentVariableFilter(isolatedStartInfo, options.EnvironmentVariableFilter);
+        // through the caller's parent-seeded environment.
+        RemoveInheritedEnvironmentVariables(childStartInfo.Environment, options.EnvironmentVariableFilter);
 
-        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, _environment, _layoutDiscovery, _bundleService, _executionContext);
+        return new ProcessExecution(childStartInfo, effectiveLogger, options, _environment);
     }
 
-    // Strip ASPIRE_CLI_* identity overrides from every spawned process — both the isolated AppHost
-    // run path and every non-isolated subprocess. These env vars are an in-process, parent-only test
-    // affordance: a developer or test bench uses them to coerce the *current* CLI into pretending it
-    // is a different channel/version/commit or to retarget its emitted nuget.config at a local proxy.
-    // Letting them leak into child processes (apphost, dotnet, restore, peer probes) means any nested
-    // `aspire` invocation inherits the parent's lie about its identity, which silently corrupts
-    // `aspire doctor`, breaks peer probing, and undermines the "what is this binary actually" answer
-    // we want callers to see on disk. We strip before merging caller env so a caller can still re-add
-    // an ASPIRE_CLI_* var deliberately if a future test needs to. See docs/specs/cli-identity-sidecar.md.
-    private static void StripIdentityEnvVars(IsolatedProcessStartInfo startInfo)
+    /// <summary>
+    /// Maps the launch options onto a <see cref="ProcessStartInfo"/>. Standard handles are assigned by
+    /// <see cref="ProcessExecution.StartAsync"/> so an execution that is never started holds no handles.
+    /// </summary>
+    internal static ProcessStartInfo CreateProcessStartInfo(string fileName, IEnumerable<string> arguments, string workingDirectory, ProcessInvocationOptions options)
     {
-        foreach (var envVarName in Acquisition.IdentityResolver.IdentityEnvVarNames)
+        var startInfo = new ProcessStartInfo(fileName, arguments)
         {
-            startInfo.Environment.Remove(envVarName);
+            WorkingDirectory = workingDirectory,
+            CreateNoWindow = true,
+        };
+
+        if (!options.Detached)
+        {
+            startInfo.RedirectStandardOutput = true;
+            startInfo.RedirectStandardError = true;
+            // Pin encodings so process output decoding is stable regardless of the ambient
+            // Console.OutputEncoding (e.g. on container hosts that leave it set to ASCII).
+            startInfo.StandardOutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
+            startInfo.StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
         }
+        else if (!OperatingSystem.IsWindows())
+        {
+            // setsid(): a new session and process group, so the child outlives cleanup of the
+            // launcher's process group/session and terminal hangup (#18484). It stays a direct child,
+            // so its exit code is observable while the CLI is alive. Not used on Windows, where it
+            // means DETACHED_PROCESS: without a console, `aspire stop` could not deliver CTRL+C.
+            startInfo.StartDetached = true;
+        }
+
+        if (OperatingSystem.IsWindows() && (options.IsolateConsole || options.KillOnParentExit || options.Detached))
+        {
+            // CreateNoWindow (CREATE_NO_WINDOW) still allocates a new console for the child, just
+            // without a visible window; unlike DETACHED_PROCESS, the child is attached to a console.
+            // That lets DCP stop-process-tree AttachConsole to it and send CTRL_C_EVENT without also
+            // signalling the CLI (covered by ProcessExecutionTests). Children that only need
+            // parent-exit protection or detachment keep sharing the CLI's console.
+            startInfo.CreateNoWindow = options.IsolateConsole;
+            // KillOnParentExit assigns the child to a kill-on-close job atomically at creation. The
+            // runtime's job also sets JOB_OBJECT_LIMIT_BREAKAWAY_OK, so DCP can outlive the CLI to
+            // finish cleanup by spawning itself with CREATE_BREAKAWAY_FROM_JOB, provided no nested
+            // job forbids breakaway (dotnet run's does, so DotNetAppHostProject opts out for it).
+            // Unix children rely on the cooperative parent-liveness watchdog instead (see LayoutProcessRunner).
+            startInfo.KillOnParentExit = options.KillOnParentExit;
+            // Long-lived children must not keep unrelated inheritable CLI handles (sockets, other
+            // children's pipes) open, so inherit only the standard handles.
+            startInfo.InheritedHandles = [];
+        }
+
+        return startInfo;
     }
 
-    private static void StripInvocationScopedEnvVars(IsolatedProcessStartInfo startInfo)
+    private static void RemoveInheritedEnvironmentVariables(IDictionary<string, string?> environment, Func<string, bool>? environmentVariableFilter)
     {
-        foreach (var envVarName in InvocationScopedEnvVarNames)
+        foreach (var key in environment.Keys.ToArray())
         {
-            startInfo.Environment.Remove(envVarName);
-        }
-    }
-
-    private static void ApplyEnvironmentVariableFilter(IsolatedProcessStartInfo startInfo, Func<string, bool>? environmentVariableFilter)
-    {
-        if (environmentVariableFilter is null)
-        {
-            return;
-        }
-
-        var keysToRemove = new List<string>();
-        foreach (var key in startInfo.Environment.Keys)
-        {
-            if (environmentVariableFilter(key))
+            if (s_strippedEnvVarNames.Contains(key) || environmentVariableFilter?.Invoke(key) == true)
             {
-                keysToRemove.Add(key);
+                environment.Remove(key);
             }
         }
-
-        foreach (var key in keysToRemove)
-        {
-            startInfo.Environment.Remove(key);
-        }
-    }
-
-    private static IProcessExecution Build(
-        IsolatedProcessStartInfo startInfo,
-        string fileName,
-        ILogger logger,
-        ProcessInvocationOptions options,
-        IEnvironment environment,
-        ILayoutDiscovery? layoutDiscovery,
-        IBundleService? bundleService,
-        CliExecutionContext? executionContext)
-    {
-        // Snapshot args + env now so the IProcessExecution surfaces them before StartAsync() spawns the
-        // child. The extension-host launch path reads Arguments / EnvironmentVariables and returns
-        // without ever calling StartAsync (DotNetCliRunner), so these must be valid pre-spawn.
-        var argsSnapshot = startInfo.ArgumentList.ToArray();
-        var envSnapshot = new Dictionary<string, string?>(startInfo.Environment, StringComparer.OrdinalIgnoreCase);
-
-        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment, layoutDiscovery, bundleService, executionContext);
     }
 }

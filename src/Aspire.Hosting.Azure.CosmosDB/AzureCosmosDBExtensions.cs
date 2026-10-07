@@ -506,9 +506,7 @@ public static class AzureCosmosExtensions
             .WithUrlForEndpoint(dataExplorerEndpointName, c =>
             {
                 c.DisplayText = "Manage";
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 c.DisplayOrder = 1;
-#pragma warning restore CS0618
             });
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)

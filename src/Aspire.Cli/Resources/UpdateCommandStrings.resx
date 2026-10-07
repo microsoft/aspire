@@ -84,7 +84,7 @@
   <data name="FailedUpdatePackageReferenceFormat" xml:space="preserve">
     <value>Failed to update package reference for {0} in project {1}.</value>
   </data>
-  <data name="UnxpectedCodePath" xml:space="preserve">
+  <data name="UnexpectedCodePath" xml:space="preserve">
     <value>Unexpected code path.</value>
   </data>
   <data name="CentralPackageManagementNotSupported" xml:space="preserve">

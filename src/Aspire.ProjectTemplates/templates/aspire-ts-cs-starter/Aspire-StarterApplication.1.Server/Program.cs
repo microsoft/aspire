@@ -10,23 +10,19 @@ builder.AddRedisClientBuilder("cache")
 // Add services to the container.
 builder.Services.AddProblemDetails();
 
-#if (Framework != 'net8.0')
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-#endif
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
 
-#if (Framework != 'net8.0')
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-#endif
 #if (UseRedisCache)
 app.UseOutputCache();
 #endif

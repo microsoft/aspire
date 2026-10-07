@@ -35,6 +35,17 @@
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
     },
+    "containerTunnel": {
+      "description": "Container network tunnel configuration.",
+      "type": "object",
+      "properties": {
+        "baseImage": {
+          "description": "Base image used by the container network tunnel that routes traffic to host services.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "docs": {
       "description": "Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.",
       "type": "object",

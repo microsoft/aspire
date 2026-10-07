@@ -118,13 +118,13 @@ internal sealed class ProcessInvocationOptions
 
     /// <summary>
     /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
+    /// Standard streams are connected to the null device and inherited handles are not passed to it.
     /// </summary>
+    /// <remarks>
+    /// On Unix the child starts in a new session (<see cref="System.Diagnostics.ProcessStartInfo.StartDetached"/>).
+    /// On Windows it keeps a console (hidden when <see cref="IsolateConsole"/> is set) so it can still receive CTRL+C.
+    /// </remarks>
     public bool Detached { get; set; }
-
-    /// <summary>
-    /// Test hook for overriding the DCP executable used to launch detached Unix processes.
-    /// </summary>
-    internal string? DetachedUnixLauncherPathOverride { get; set; }
 
     /// <summary>
     /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
@@ -189,7 +189,6 @@ internal sealed class ProcessInvocationOptions
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
         Detached = Detached,
-        DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
         EnvironmentVariables = EnvironmentVariables,
         AppHostArgumentStartIndex = AppHostArgumentStartIndex,
@@ -437,7 +436,6 @@ internal sealed class DotNetCliRunner(
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
             Detached = options.Detached,
-            DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             EnvironmentVariables = options.EnvironmentVariables,
             // Without this the redaction boundary is lost between the runner and the process

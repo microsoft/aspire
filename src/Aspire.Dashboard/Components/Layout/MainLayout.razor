@@ -67,7 +67,7 @@
            toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
            still lives in MainLayout. *@
         <div class="desktop-nav-rail">
-            <DesktopNavMenu/>
+            <DesktopNavMenu HasResourceTerminals="@_hasResourceTerminals"/>
             <FluentButton Class="nav-toggle-button nav-toggle-bottom"
                           Appearance="ButtonAppearance.Default" OnClick="@ToggleNavMenuExpandedAsync"
                           Title="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])"
@@ -119,6 +119,7 @@
         </header>
 
         <MobileNavMenu
+            HasResourceTerminals="@_hasResourceTerminals"
             IsNavMenuOpen="_isNavMenuOpen"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
@@ -154,6 +155,11 @@
         <TerminalDock @key="RunSelection.SelectedRun.RunId" />
     }
     <ResourceServiceConnectionProvider />
+    @if (IsTerminalDockEnabled)
+    {
+        <ResourceTerminalsAvailabilityProvider @key="(typeof(ResourceTerminalsAvailabilityProvider), RunSelection.SelectedRun.RunId)"
+                                               AvailabilityChanged="@(available => _hasResourceTerminals = available)" />
+    }
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>
