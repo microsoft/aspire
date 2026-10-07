@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
+    <None Update="TestServices\NuGetTestSettings.config" CopyToOutputDirectory="PreserveNewest" TargetPath="NuGetTestSettings.config" />
   </ItemGroup>
 
   <!-- The CLI bootstrap reads AspireCliChannel from typeof(Aspire.Cli.Program).Assembly — the

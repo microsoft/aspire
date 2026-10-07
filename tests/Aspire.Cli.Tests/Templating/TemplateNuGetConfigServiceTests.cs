@@ -53,14 +53,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             """);
 
         var service = CreateService();
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var sourceOverride = workspace.CreateDirectory("aspire-pr-hive/packages").FullName;
 
         Assert.True(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: null, outputDirectory.FullName, CancellationToken.None));
 
         Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Aspire.Hosting"));
         Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Contoso.Package"));
         Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
-        var settings = global::NuGet.Configuration.Settings.LoadDefaultSettings(outputDirectory.FullName);
+        var settings = NuGetTestHelper.LoadSettings(outputDirectory.FullName);
         var privateSource = new global::NuGet.Configuration.PackageSourceProvider(settings).LoadPackageSources()
             .Single(static source => source.Name == "ambient-private");
         Assert.False(privateSource.IsEnabled);
@@ -73,7 +73,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
-        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var sourceOverride = workspace.CreateDirectory("aspire-pr-hive/packages").FullName;
         const string channelAspireSource = "https://example.invalid/aspire";
         const string communitySource = "https://example.invalid/community";
         const string fallbackSource = "https://example.invalid/fallback";

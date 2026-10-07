@@ -2156,7 +2156,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     Assert.NotNull(nugetConfigFile);
 
                     var document = XDocument.Load(nugetConfigFile.FullName);
-                    var settings = Settings.LoadDefaultSettings(nugetConfigFile.Directory!.FullName);
+                    var settings = NuGetTestHelper.LoadSettings(nugetConfigFile.Directory!.FullName);
                     var installPackageSources = new PackageSourceProvider(settings)
                         .LoadPackageSources()
                         .Where(source => source.IsEnabled)

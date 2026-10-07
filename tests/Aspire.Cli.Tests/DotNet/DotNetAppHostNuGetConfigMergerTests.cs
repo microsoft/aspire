@@ -715,8 +715,8 @@ public class DotNetAppHostNuGetConfigMergerTests
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
-        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
-        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+        var oldHive = workspace.CreateDirectory(".aspire/hives/pr-17182/packages").FullName;
+        var newHive = workspace.CreateDirectory(".aspire/hives/pr-17192/packages").FullName;
 
         await WriteConfigAsync(root,
             $"""

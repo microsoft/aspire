@@ -110,7 +110,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             return Task.FromResult(GetProjectItemsAndPropertiesAsyncCallbackWithTargets(projectFile, items, properties, targets, options, cancellationToken));
         }
 
-        if (targets.SequenceEqual(["_GetRestoreProjectStyle", "_GetRestoreSettings"]))
+        if (properties.Contains("RestoreConfigFile", StringComparer.Ordinal))
         {
             return Task.FromResult<(int, JsonDocument?)>((0, CreateRestoreSettingsOutput(projectFile, properties)));
         }
@@ -169,8 +169,6 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : projectFile.FullName;
         values["MSBuildToolsPath"] = AppContext.BaseDirectory;
         values["NuGetRestoreTargets"] = Path.Combine(AppContext.BaseDirectory, "NuGet.targets");
-        values["_OutputConfigFilePaths"] = string.Join(';', GetGlobalNuGetPaths());
-        values["_OutputPackagesPath"] = Path.Combine(projectFile.DirectoryName!, ".nugetpackages");
         return JsonDocument.Parse(new JsonObject { ["Properties"] = values }.ToJsonString());
     }
 

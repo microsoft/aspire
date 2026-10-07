@@ -185,10 +185,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
         var machineSettings = new Settings(machineDirectory.FullName, "NuGet.Config", isMachineWide: true);
-        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
-        {
-            MachineWideSettingsFactory = () => new TestMachineWideSettings(machineSettings)
-        };
+        var client = NuGetTestHelper.CreateClient(new TestMachineWideSettings(machineSettings));
 
         var snapshot = client.GetSettings(workspace.WorkspaceRoot.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
         using var restoredPackageScope = new RestoredPackageScope(

@@ -6,7 +6,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
-using NativeSettings = global::NuGet.Configuration.Settings;
 using NativeSourceProvider = global::NuGet.Configuration.PackageSourceProvider;
 using NativeSettingsUtility = global::NuGet.Configuration.SettingsUtility;
 
@@ -67,7 +66,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(original, await File.ReadAllTextAsync(configPath));
         Assert.StartsWith(Path.Combine(appHostDirectory.FullName, ".aspire") + Path.DirectorySeparatorChar, preview.EffectiveWorkingDirectory.FullName);
         Assert.Empty(workspace.WorkspaceRoot.EnumerateFiles(".aspire-nuget-preview-*.config"));
-        var previewSettings = NativeSettings.LoadDefaultSettings(preview.EffectiveWorkingDirectory.FullName);
+        var previewSettings = NuGetTestHelper.LoadSettings(preview.EffectiveWorkingDirectory.FullName);
         var privateSource = new NativeSourceProvider(previewSettings).LoadPackageSources().Single(source => source.Name == "private");
         Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "private-feed"), privateSource.Source);
         Assert.Equal("test-user", privateSource.Credentials!.Username);
@@ -84,7 +83,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             persistedSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"),
             previewSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"));
         Assert.Equal(persistedSnapshot.DisabledPackageSourceKeys, previewSnapshot.DisabledPackageSourceKeys);
-        var persistedSettings = NativeSettings.LoadDefaultSettings(appHostDirectory.FullName);
+        var persistedSettings = NuGetTestHelper.LoadSettings(appHostDirectory.FullName);
         Assert.Equal(
             NativeSettingsUtility.GetGlobalPackagesFolder(persistedSettings),
             NativeSettingsUtility.GetGlobalPackagesFolder(previewSettings));

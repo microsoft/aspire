@@ -63,12 +63,13 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, targets, options, _) =>
         {
             Assert.Equal(projectFile.FullName, file.FullName);
-            if (targets.Length == 0)
+            if (!properties.Contains("RestoreConfigFile", StringComparer.Ordinal))
             {
                 return CreatePackageEvaluation();
             }
 
             inspectionInvoked = true;
+            Assert.Empty(targets);
             Assert.True(options.NoRestore);
             Assert.True(options.ExcludeRestorePackageImports);
             Assert.True(options.SuppressLogging);

@@ -19,7 +19,7 @@ public class DotNetAppHostRestorePreviewTests(ITestOutputHelper outputHelper)
         var candidate = new DotNetAppHostNuGetConfigMergerCandidate(
             new FileInfo(Path.Combine(unrelated.FullName, "NuGet.Config")), null,
             Encoding.UTF8.GetBytes("<configuration />"));
-        var settings = new DotNetRestoreSettings(project.FullName, [], "", "NuGet.targets", []);
+        var settings = new DotNetRestoreSettings(project.FullName, "NuGet.targets", []);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => DotNetAppHostRestorePreview.CreateAsync(
             NuGetTestHelper.CreateService(), candidate, settings, project,

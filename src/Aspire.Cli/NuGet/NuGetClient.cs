@@ -139,6 +139,13 @@ internal sealed class NuGetClient(
     internal Func<IMachineWideSettings> MachineWideSettingsFactory { get; init; }
         = static () => new XPlatMachineWideSetting();
 
+    /// <summary>
+    /// Loads the ambient hierarchy, allowing tests to supply isolated configuration.
+    /// </summary>
+    internal Func<string, IMachineWideSettings, ISettings> AmbientSettingsLoader { get; init; }
+        = static (workingDirectory, machineWideSettings) =>
+            Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
+
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
         string framework,
@@ -708,8 +715,8 @@ internal sealed class NuGetClient(
             : LoadAmbientSettings(workingDirectory, MachineWideSettingsFactory());
     }
 
-    private static ISettings LoadAmbientSettings(string workingDirectory, IMachineWideSettings machineWideSettings)
-        => Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
+    private ISettings LoadAmbientSettings(string workingDirectory, IMachineWideSettings machineWideSettings)
+        => AmbientSettingsLoader(workingDirectory, machineWideSettings);
 
     private static string[] GetSensitiveSourceValues(IEnumerable<PackageSource> sources)
         => sources

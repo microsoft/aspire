@@ -6,11 +6,14 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
+using global::NuGet.Configuration;
 
 namespace Aspire.Cli.Tests.TestServices;
 
 internal static class NuGetTestHelper
 {
+    private static readonly IMachineWideSettings s_emptyMachineWideSettings = new TestMachineWideSettings(NullSettings.Instance);
+
     internal static void CreatePackage(
         DirectoryInfo feed, string id, string version, IReadOnlyDictionary<string, string> files)
     {
@@ -35,18 +38,44 @@ internal static class NuGetTestHelper
         }
     }
 
-    public static BundleNuGetService CreateService()
-        => new(NullLogger<BundleNuGetService>.Instance, CreateClient());
+    public static BundleNuGetService CreateService(IMachineWideSettings? machineWideSettings = null)
+        => new(NullLogger<BundleNuGetService>.Instance, CreateClient(machineWideSettings));
 
-    public static NuGetClient CreateClient()
-        => new(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance);
+    public static NuGetClient CreateClient(IMachineWideSettings? machineWideSettings = null)
+        => new(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
+        {
+            AmbientSettingsLoader = LoadSettings,
+            MachineWideSettingsFactory = () => machineWideSettings ?? s_emptyMachineWideSettings
+        };
 
-    public static string[] GetEligiblePackageSources(string workingDirectory, string packageId)
+    public static ISettings LoadSettings(string workingDirectory, IMachineWideSettings? machineWideSettings = null)
     {
-        var settings = global::NuGet.Configuration.Settings.LoadDefaultSettings(workingDirectory);
-        var mapping = global::NuGet.Configuration.PackageSourceMapping.GetPackageSourceMapping(settings);
+        // Preserve directory-level inheritance and NuGet's filename precedence, but supply
+        // test-owned user/machine defaults without changing environment variables in parallel tests.
+        var configPaths = new List<string>();
+        for (var directory = new DirectoryInfo(workingDirectory); directory is not null; directory = directory.Parent)
+        {
+            var configPath = Settings.OrderedSettingsFileNames
+                .Select(name => Path.Combine(directory.FullName, name))
+                .FirstOrDefault(File.Exists);
+            if (configPath is not null)
+            {
+                configPaths.AddRange(Settings.LoadSpecificSettings(directory.FullName, Path.GetFileName(configPath)).GetConfigFilePaths());
+            }
+        }
+
+        configPaths.Add(Path.Combine(AppContext.BaseDirectory, "NuGetTestSettings.config"));
+        configPaths.AddRange((machineWideSettings ?? s_emptyMachineWideSettings).Settings.GetConfigFilePaths());
+
+        return Settings.LoadSettingsGivenConfigPaths(configPaths);
+    }
+
+    public static string[] GetEligiblePackageSources(string workingDirectory, string packageId, IMachineWideSettings? machineWideSettings = null)
+    {
+        var settings = LoadSettings(workingDirectory, machineWideSettings);
+        var mapping = PackageSourceMapping.GetPackageSourceMapping(settings);
         var keys = mapping.GetConfiguredPackageSources(packageId);
-        return new global::NuGet.Configuration.PackageSourceProvider(settings).LoadPackageSources()
+        return new PackageSourceProvider(settings).LoadPackageSources()
             .Where(source => source.IsEnabled && (!mapping.IsEnabled || keys.Contains(source.Name, StringComparer.OrdinalIgnoreCase)))
             .Select(static source => source.Source)
             .Order(StringComparer.Ordinal)

@@ -54,6 +54,76 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ReadRestoreConfiguration_DoesNotRunLegacyValidationBeforeCandidateRestore(
+        bool fileBased, bool hasConfiguredSources)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var root = workspace.WorkspaceRoot;
+        var validationTargets = Path.Combine(root.FullName, "LegacySdk.targets");
+        // Older Aspire SDKs validate the AppHost reference before CollectPackageReferences.
+        // An update must be able to inspect policy before repairing that reference.
+        await File.WriteAllTextAsync(validationTargets, """
+            <Project>
+              <Target Name="LegacyAppHostValidation" BeforeTargets="CollectPackageReferences">
+                <Error Text="Legacy SDK validation requires an AppHost package reference." />
+              </Target>
+            </Project>
+            """);
+        var projectFile = new FileInfo(Path.Combine(root.FullName, fileBased ? "apphost.cs" : "AppHost.csproj"));
+        var sources = hasConfiguredSources ? "https://custom.example/v3/index.json" : string.Empty;
+        await File.WriteAllTextAsync(projectFile.FullName, fileBased
+            ? $$"""
+                #:property CustomAfterMicrosoftCommonTargets={{MSBuildEscaping.Escape(validationTargets)}}
+                #:property RestoreSources={{sources}}
+                #:property DisableImplicitFrameworkReferences=true
+                #:property PublishAot=false
+                #:property PublishTrimmed=false
+                #:property SelfContained=false
+                #:property UseAppHost=false
+                Console.WriteLine("Candidate");
+                """
+            : $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                    <RestoreSources>{{sources}}</RestoreSources>
+                    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                  </PropertyGroup>
+                  <Import Project="{{MSBuildEscaping.Escape(validationTargets)}}" />
+                </Project>
+                """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ =>
+                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        }).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+
+        var settings = await DotNetRestoreConfiguration.ReadAsync(
+            runner, projectFile, TestContext.Current.CancellationToken);
+
+        Assert.Equal(fileBased ? projectFile.FullName + ".csproj" : projectFile.FullName, settings.ProjectIdentity);
+        Assert.Equal(!hasConfiguredSources, settings.UsesAmbientConfiguration);
+        Assert.Equal(hasConfiguredSources ? ["RestoreSources"] : [], settings.ConfigurationOverrides);
+        Assert.Equal("NuGet.targets", Path.GetFileName(settings.RestoreTargets));
+
+        var output = new ConcurrentQueue<string>();
+        var restoreExitCode = await runner.RestoreAsync(projectFile, new ProcessInvocationOptions
+        {
+            StandardOutputCallback = output.Enqueue,
+            StandardErrorCallback = output.Enqueue
+        }, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(0, restoreExitCode);
+        Assert.Contains(output, line => line.Contains(
+            "Legacy SDK validation requires an AppHost package reference.", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData(false, true, false, false)]
     [InlineData(true, true, false, false)]
     [InlineData(false, false, false, false)]
@@ -159,7 +229,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.NotNull(candidate);
         var settings = new DotNetRestoreSettings(
             fileBased ? projectFile.FullName + ".csproj" : projectFile.FullName,
-            [configFile.FullName], rootCache.FullName, Path.Combine(sdkDirectory, "NuGet.targets"), []);
+            Path.Combine(sdkDirectory, "NuGet.targets"), []);
         var sdkCache = nuGetService.GetGlobalPackagesFolder(root);
         var sdkPackageDirectory = Path.Combine(sdkCache, "aspire.apphost.sdk", sdkVersion);
         Assert.False(Directory.Exists(sdkPackageDirectory));
@@ -2239,19 +2309,18 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             CreateExecutionContext(workspace.WorkspaceRoot),
             (args, _, _, options) =>
             {
-                Assert.Equal(isSingleFile ? "build" : "msbuild", args[0]);
-                Assert.Equal(isSingleFile, args.Contains("--no-restore"));
-                Assert.Contains("-property:ExcludeRestorePackageImports=true", args);
-                Assert.Contains("-t:_GetRestoreProjectStyle;_GetRestoreSettings", args);
-                options.StandardOutputCallback?.Invoke("""{"Properties":{"MSBuildVersion":"17.0.0","_OutputConfigFilePaths":""},"Items":{}}""");
+                Assert.Equal(isSingleFile
+                    ? ["build", "--no-restore", "-property:ExcludeRestorePackageImports=true", "-getProperty:MSBuildVersion,RestoreSources", projectFile.FullName]
+                    : ["msbuild", "-property:ExcludeRestorePackageImports=true", "-getProperty:MSBuildVersion,RestoreSources", projectFile.FullName], args);
+                options.StandardOutputCallback?.Invoke("""{"Properties":{"MSBuildVersion":"17.0.0","RestoreSources":""},"Items":{}}""");
             },
             0);
 
         var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
             items: [],
-            properties: ["_OutputConfigFilePaths"],
-            targets: ["_GetRestoreProjectStyle", "_GetRestoreSettings"],
+            properties: ["RestoreSources"],
+            targets: [],
             new ProcessInvocationOptions { NoRestore = true, ExcludeRestorePackageImports = true },
             TestContext.Current.CancellationToken);
 

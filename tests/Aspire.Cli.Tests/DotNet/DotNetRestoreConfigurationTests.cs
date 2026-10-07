@@ -21,7 +21,6 @@ public class DotNetRestoreConfigurationTests(ITestOutputHelper outputHelper)
         var identity = fileName.EndsWith(".cs", StringComparison.Ordinal)
             ? projectFile.FullName + ".csproj"
             : projectFile.FullName;
-        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
         var toolsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "sdk");
         var runner = new TestDotNetCliRunner
         {
@@ -29,7 +28,7 @@ public class DotNetRestoreConfigurationTests(ITestOutputHelper outputHelper)
             {
                 Assert.Equal(projectFile.FullName, file.FullName);
                 Assert.Empty(items);
-                Assert.Equal(["_GetRestoreProjectStyle", "_GetRestoreSettings"], targets);
+                Assert.Empty(targets);
                 Assert.True(options.NoRestore);
                 Assert.True(options.ExcludeRestorePackageImports);
                 Assert.True(options.SuppressLogging);
@@ -37,8 +36,6 @@ public class DotNetRestoreConfigurationTests(ITestOutputHelper outputHelper)
                 values["MSBuildProjectFullPath"] = identity;
                 values["MSBuildToolsPath"] = toolsPath;
                 values["NuGetRestoreTargets"] = Path.Combine(toolsPath, "NuGet.targets");
-                values["_OutputConfigFilePaths"] = configPath;
-                values["_OutputPackagesPath"] = Path.Combine(workspace.WorkspaceRoot.FullName, "packages");
                 return (0, JsonDocument.Parse(new JsonObject { ["Properties"] = values }.ToJsonString()));
             },
             RestoreAsyncCallback = (_, _, _) => throw new InvalidOperationException("Inspection must not restore.")
@@ -48,7 +45,7 @@ public class DotNetRestoreConfigurationTests(ITestOutputHelper outputHelper)
 
         Assert.True(settings.UsesAmbientConfiguration);
         Assert.Equal(identity, settings.ProjectIdentity);
-        Assert.Equal([configPath], settings.ConfigPaths);
+        Assert.Equal(Path.Combine(toolsPath, "NuGet.targets"), settings.RestoreTargets);
     }
 
     [Theory]

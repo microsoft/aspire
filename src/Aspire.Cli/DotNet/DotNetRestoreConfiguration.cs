@@ -9,7 +9,7 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Inspects the current C# AppHost's MSBuild restore configuration without restoring its project graph.
+/// Inspects the current C# AppHost's evaluated MSBuild restore policy without executing targets.
 /// </summary>
 internal static class DotNetRestoreConfiguration
 {
@@ -35,15 +35,15 @@ internal static class DotNetRestoreConfiguration
                 .. s_configurationProperties,
                 "MSBuildProjectFullPath",
                 "MSBuildToolsPath",
-                "NuGetRestoreTargets",
-                "_OutputConfigFilePaths",
-                "_OutputPackagesPath"
+                "NuGetRestoreTargets"
             ],
-            targets: ["_GetRestoreProjectStyle", "_GetRestoreSettings"],
+            // Restore targets collect package references and can run legacy SDK validation
+            // before the updater has repaired the project. Inspect policy through evaluation only.
+            targets: [],
             new ProcessInvocationOptions
             {
-                // File-based build otherwise performs implicit restore before the requested
-                // targets. A global property prevents project imports from overriding NuGet's
+                // File-based build otherwise performs implicit restore before property evaluation.
+                // A global property prevents project imports from overriding NuGet's
                 // restore-graph evaluation mode and loading stale generated package imports.
                 NoRestore = true,
                 ExcludeRestorePackageImports = true,
@@ -58,9 +58,8 @@ internal static class DotNetRestoreConfiguration
 
         using (output)
         {
-            // MSBuild emits {"Properties":{"MSBuildProjectFullPath":".../apphost.cs.csproj",
-            // "_OutputConfigFilePaths":".../NuGet.Config;..."}}. Keep the synthetic identity for
-            // file-based apps; it is the identity used by later MSBuild restore targets.
+            // MSBuild emits {"Properties":{"MSBuildProjectFullPath":".../apphost.cs.csproj"}}.
+            // Keep the synthetic identity for file-based apps; later MSBuild restore targets use it.
             var properties = output.RootElement.GetProperty("Properties");
             var overrides = s_configurationProperties
                 .Where(name => !string.IsNullOrEmpty(GetProperty(properties, name)))
@@ -76,8 +75,6 @@ internal static class DotNetRestoreConfiguration
 
             return new DotNetRestoreSettings(
                 GetProperty(properties, "MSBuildProjectFullPath"),
-                GetProperty(properties, "_OutputConfigFilePaths").Split(';', StringSplitOptions.RemoveEmptyEntries),
-                GetProperty(properties, "_OutputPackagesPath"),
                 string.IsNullOrEmpty(restoreTargets) ? defaultTargets : restoreTargets,
                 overrides);
         }
@@ -88,12 +85,10 @@ internal static class DotNetRestoreConfiguration
 }
 
 /// <summary>
-/// Holds the current project's resolved restore inputs and configuration override names.
+/// Holds the current project's evaluated identity, restore targets, and configuration override names.
 /// </summary>
 internal sealed record DotNetRestoreSettings(
     string ProjectIdentity,
-    IReadOnlyList<string> ConfigPaths,
-    string PackagesPath,
     string RestoreTargets,
     IReadOnlyList<string> ConfigurationOverrides)
 {

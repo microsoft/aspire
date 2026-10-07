@@ -1451,22 +1451,13 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("13.2.0", selectedPackageVersion);
         Assert.NotNull(exactVersionNuGetConfig);
         var config = XDocument.Parse(exactVersionNuGetConfig);
-        Assert.Equal(
-            source,
-            config.Root?
-                .Element("packageSources")?
-                .Elements("add")
-                .Single()
-                .Attribute("value")?
-                .Value);
-        Assert.Equal(
-            "Aspire*",
-            config.Root?
-                .Element("packageSourceMapping")?
-                .Element("packageSource")?
-                .Element("package")?
-                .Attribute("pattern")?
-                .Value);
+        var selectedSource = Assert.Single(config.Descendants("packageSources").Elements("add"),
+            element => element.Attribute("value")?.Value == source);
+        var sourceKey = selectedSource.Attribute("key")?.Value;
+        Assert.NotNull(sourceKey);
+        var selectedMapping = Assert.Single(config.Descendants("packageSourceMapping").Elements("packageSource"),
+            element => element.Attribute("key")?.Value == sourceKey);
+        Assert.Equal(["Aspire*"], selectedMapping.Elements("package").Select(element => element.Attribute("pattern")?.Value));
     }
 
     [Fact]
@@ -2113,7 +2104,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     Assert.Null(nugetConfigFile);
                     Assert.True(File.Exists(Path.Combine(dir.FullName, "NuGet.Config")));
-                    var settings = Settings.LoadDefaultSettings(dir.FullName);
+                    var settings = NuGetTestHelper.LoadSettings(dir.FullName);
                     searchSources.Add(new PackageSourceProvider(settings)
                         .LoadPackageSources()
                         .Where(source => source.IsEnabled)
@@ -2898,22 +2889,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommand_WithPrHive_PrefersCurrentCliVersion()
     {
-        // PR-hive packages are discovered through the package-search code path: the
-        // explicit channel maps to a separate NuGet source through an invocation overlay
-        // that returns a package pinned to the current CLI version.
+        // PR hive discovery enumerates on-disk packages; feed search only offers a stale version.
         var cliVersion = VersionHelper.GetDefaultSdkVersion();
 
         var (exitCode, selectedVersion, prompted) = await RunAddRedisWithHiveScenarioAsync(
             configureHives: workspace =>
             {
-                var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
-                hivesDir.Create();
-                hivesDir.CreateSubdirectory("pr-12345");
+                var packagesDir = workspace.CreateDirectory(Path.Combine(".aspire", "hives", "pr-12345", "packages"));
+                File.WriteAllText(Path.Combine(packagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
+                File.WriteAllText(Path.Combine(packagesDir.FullName, $"Aspire.Hosting.Redis.{cliVersion}.nupkg"), string.Empty);
             },
-            searchCallback: (workingDirectory, nugetSource) =>
-                nugetSource is not null || File.Exists(Path.Combine(workingDirectory.FullName, "NuGet.Config"))
-                    ? [new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "pr-hive", Version = cliVersion }]
-                    : [new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" }],
+            searchCallback: (_, _) => [new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" }],
             promptFailureMessage: "Should not prompt when the current CLI version is available in a PR hive.");
 
         Assert.Equal(0, exitCode);
