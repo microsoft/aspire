@@ -43,7 +43,7 @@ npm registrations come from existing template lockfiles, including transitive, d
 
 - `artifacts/cg/templates/cgmanifest.json`: generated external dependency manifest.
 - CI publishes only this file as `template-component-manifest`. GitHub retention is five days; Azure Pipelines artifacts follow the build's retention policy. The Azure artifact is diagnostic/non-production and does not request an SBOM of its own; SBOM generation for existing shipping artifacts is unchanged.
-- The independently restored graphs, assets files, generated NuGet configuration, and private package cache exist temporarily under `artifacts/obj/Aspire.ProjectTemplates/<Configuration>/net8.0/template-cg-restore/` and are deleted by the MSBuild target. They are never part of the manifest artifact.
+- The independently restored graphs, assets files, generated NuGet configuration, and private package cache exist temporarily under `artifacts/obj/Aspire.ProjectTemplates/<Configuration>/net10.0/template-cg-restore/` and are deleted by the MSBuild target. They are never part of the manifest artifact.
 
 Treat the manifest artifact as public: it contains only component type, name, and version, but future template dependencies must not introduce confidential package identities into public CI artifacts.
 

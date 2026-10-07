@@ -142,12 +142,13 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 Content = [new TextContentBlock { Text = consoleLogsData }]
             };
         }
-        catch (Exception ex) when (ex is not McpProtocolException)
+        catch (Exception ex) when (ex is not McpProtocolException and not OperationCanceledException)
         {
-            logger.LogError(ex, "Error retrieving console logs for resource '{ResourceName}'", resourceName);
+            logger.LogError("Error retrieving console logs for resource '{ResourceName}'", resourceName);
             return new CallToolResult
             {
-                Content = [new TextContentBlock { Text = $"Error retrieving console logs for resource '{resourceName}': {ex.Message}" }]
+                Content = [new TextContentBlock { Text = $"Error retrieving console logs for resource '{resourceName}'." }],
+                IsError = true
             };
         }
     }

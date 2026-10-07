@@ -217,6 +217,9 @@
   <data name="HelpDialogGoToMetrics" xml:space="preserve">
     <value>Go to Metrics</value>
   </data>
+  <data name="HelpDialogGoToTerminals" xml:space="preserve">
+    <value>Go to Terminals</value>
+  </data>
   <data name="HelpDialogGoToHelp" xml:space="preserve">
     <value>Go to Help</value>
   </data>

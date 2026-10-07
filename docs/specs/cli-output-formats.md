@@ -292,6 +292,17 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire describe`
 
+`aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
+
+```bash
+aspire resources --format mermaid >> file.txt
+aspire describe --format mermaid > resources.mmd
+```
+
+The output is an unfenced `flowchart LR` diagram with deterministic node identifiers, escaped resource labels, and directed relationships. Hidden resources are excluded unless `--include-hidden` is supplied or a specific resource is requested. Parameters, endpoints, configuration values, and resource state are not exported. References outside the selected resource set and self-references are omitted. Replicas appear as separate nodes.
+
+Progress and informational messages go to stderr, so redirection captures only Mermaid source. When no AppHost is running, the command preserves the existing successful empty-result behavior and writes no diagram. `--follow` is not supported with Mermaid output; each invocation captures one snapshot. Appending multiple invocations with `>>` produces multiple diagrams, not a merged diagram.
+
 `aspire describe --format json` emits a snapshot wrapper with one or more resources:
 
 ```json
@@ -693,6 +704,8 @@ The `devtools` category surfaces development-tooling recommendations. The `vscod
 ```
 
 The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
+
+The `agent-mcp.v1` capability indicates that `aspire agent mcp` is supported. Tooling gates automatic MCP server registration on this capability being advertised explicitly: a CLI that omits it — including one old enough not to emit `capabilities` at all — is never handed the command.
 
 ## MCP tooling
 

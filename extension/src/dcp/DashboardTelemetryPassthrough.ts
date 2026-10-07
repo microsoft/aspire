@@ -24,15 +24,12 @@ import { EventMeasurements, EventProperties, TelemetryPropertyValue } from '../u
 // IMPORTANT: property names use camelCase here even though the C# records
 // use PascalCase. The dashboard sends requests via `HttpClient.PostAsJsonAsync`
 // without explicit options; that helper goes through
-// `System.Net.Http.Json.JsonContent.Create<T>` whose default options come from
-// `JsonHelpers.s_defaultSerializerOptions = new(JsonSerializerDefaults.Web)`
-// on net8.0 (the dashboard's TFM) — see
-// https://github.com/dotnet/runtime/blob/release/8.0/src/libraries/System.Net.Http.Json/src/System/Net/Http/Json/JsonHelpers.cs
+// `System.Net.Http.Json.JsonContent.Create<T>` with the web serializer defaults — see
+// https://learn.microsoft.com/dotnet/api/system.net.http.json.httpclientjsonextensions.postasjsonasync#remarks
 // `JsonSerializerDefaults.Web` sets `PropertyNamingPolicy.CamelCase`, so a C#
 // record `EndOperationRequest(string Id, TelemetryResult Result, ...)` arrives
-// as `{"id":"...","result":2,...}`. Verified empirically by running
-// `JsonContent.Create<T>` on net8.0 and net10.0 against the actual record
-// types in `src/Aspire.Dashboard/Telemetry/`.
+// as `{"id":"...","result":2,...}` for the record types in
+// `src/Aspire.Dashboard/Telemetry/`.
 //
 // Similarly, enums without `[JsonStringEnumConverter]` serialize as integers,
 // not strings. `TelemetryResult` and `FaultSeverity` (VisualStudioTelemetryTypes.cs)

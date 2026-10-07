@@ -468,6 +468,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Accéder aux journaux structurés</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogGoToTerminals">
+        <source>Go to Terminals</source>
+        <target state="new">Go to Terminals</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Go to Traces</source>
         <target state="translated">Accéder aux traces</target>

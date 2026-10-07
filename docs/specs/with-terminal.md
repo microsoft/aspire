@@ -426,6 +426,11 @@ When no terminal resources remain, the navigation entry disappears and page
 visits redirect to `/`. Terminals are unavailable without the resource service
 or when viewing a historical, read-only run.
 
+Press <kbd>E</kbd>, without modifiers, to open the Terminals page. The shortcut
+is active and listed under **Page navigation** in shortcut help only while the
+Terminals navigation entry is available. Like other page navigation shortcuts,
+it is suppressed while a terminal or text input has focus.
+
 Console logs always displays the standard log stream, including pre-PTY hosting
 messages and post-PTY exit output. Its options menu no longer switches views.
 Navigating away from Terminals disposes the inline consumer, not the producer;

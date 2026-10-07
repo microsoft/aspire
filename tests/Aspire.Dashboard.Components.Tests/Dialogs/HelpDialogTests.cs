@@ -16,6 +16,35 @@ public class HelpDialogTests : DashboardTestContext
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void PageNavigation_OnlyShowsTerminalsShortcutWhenAvailable(bool expectTerminalsShortcut)
+    {
+        FluentUISetupHelpers.SetupDialogInfrastructure(this);
+        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
+        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.GoToMetrics));
+        if (expectTerminalsShortcut)
+        {
+            shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.GoToTerminals));
+        }
+
+        var cut = Render<HelpDialog>();
+
+        var heading = Assert.Single(cut.FindAll("h6"), h => h.TextContent == Resources.Dialogs.HelpDialogCategoryPageNavigation);
+        var navigationShortcuts = cut.Find($"dl[aria-labelledby='{heading.Id}']");
+        List<string> expectedDescriptions = [Resources.Dialogs.HelpDialogGoToMetrics];
+        List<string> expectedKeys = ["m"];
+        if (expectTerminalsShortcut)
+        {
+            expectedDescriptions.Add(Resources.Dialogs.HelpDialogGoToTerminals);
+            expectedKeys.Add("e");
+        }
+
+        Assert.Equal(expectedDescriptions, navigationShortcuts.QuerySelectorAll("dt").Select(element => element.TextContent));
+        Assert.Equal(expectedKeys, navigationShortcuts.QuerySelectorAll("kbd").Select(element => element.TextContent));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void SiteWideNavigation_OnlyShowsTerminalShortcutWhenAvailable(bool expectTerminalShortcut)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
@@ -61,21 +90,21 @@ public class HelpDialogTests : DashboardTestContext
 
         Assert.Equal(
             [
-                Resources.Dialogs.HelpDialogCategoryPanels,
                 Resources.Dialogs.HelpDialogCategoryPageNavigation,
+                Resources.Dialogs.HelpDialogCategoryPanels,
                 Resources.Dialogs.HelpDialogCategoryNavigation
             ],
             cut.FindAll("h6").Select(element => element.TextContent));
         Assert.Equal(
             [
+                Resources.Dialogs.HelpDialogGoToStructuredLogs,
+                Resources.Dialogs.HelpDialogGoToTraces,
+                Resources.Dialogs.HelpDialogGoToMetrics,
                 Resources.Dialogs.HelpDialogIncreasePanelSize,
                 Resources.Dialogs.HelpDialogDecreasePanelSize,
                 Resources.Dialogs.HelpDialogResetPanelSize,
                 Resources.Dialogs.HelpDialogTogglePanelOrientation,
                 Resources.Dialogs.HelpDialogTogglePanelOpen,
-                Resources.Dialogs.HelpDialogGoToStructuredLogs,
-                Resources.Dialogs.HelpDialogGoToTraces,
-                Resources.Dialogs.HelpDialogGoToMetrics,
                 Resources.Dialogs.HelpDialogGoToHelp,
                 Resources.Dialogs.HelpDialogGoToSettings
             ],

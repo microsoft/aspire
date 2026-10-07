@@ -6,23 +6,19 @@ builder.AddServiceDefaults();
 // Add services to the container.
 builder.Services.AddProblemDetails();
 
-#if (Framework != 'net8.0')
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-#endif
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
 app.UseExceptionHandler();
 
-#if (Framework != 'net8.0')
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-#endif
 string[] summaries = ["Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"];
 
 app.MapGet("/", () => "API service is running. Navigate to /weatherforecast to see sample data.");

@@ -9,7 +9,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.TemplateEngine.Edge" />
     <PackageReference Include="Microsoft.TemplateEngine.Orchestrator.RunnableProjects" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="NuGet.Configuration" />
     <PackageReference Include="NuGet.Versioning" />
     <PackageReference Include="System.CommandLine" />

@@ -97,6 +97,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Starter App (Java AppHost/Express/React).
+        /// </summary>
+        public static string AspireJavaStarter_Description {
+            get {
+                return ResourceManager.GetString("AspireJavaStarter_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Starter App (ASP.NET Core/React, C# AppHost).
+        /// </summary>
+        public static string AspireJsFrontendStarter_Description {
+            get {
+                return ResourceManager.GetString("AspireJsFrontendStarter_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to MSTest.
         /// </summary>
         public static string AspireMSTest_Description {
@@ -124,29 +142,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Blazor &amp; Minimal API starter.
+        ///   Looks up a localized string similar to Starter App (ASP.NET Core/Blazor).
         /// </summary>
         public static string AspireStarter_Description {
             get {
                 return ResourceManager.GetString("AspireStarter_Description", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to React (Vite) &amp; Minimal API starter.
-        /// </summary>
-        public static string AspireJsFrontendStarter_Description {
-            get {
-                return ResourceManager.GetString("AspireJsFrontendStarter_Description", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Java AppHost, Express, and React starter.
-        /// </summary>
-        public static string AspireJavaStarter_Description {
-            get {
-                return ResourceManager.GetString("AspireJavaStarter_Description", resourceCulture);
             }
         }
 
@@ -231,18 +231,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to No matching local Aspire.ProjectTemplates package was found for Aspire CLI version &apos;{0}&apos;. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version..
+        /// </summary>
         public static string NoMatchingLocalTemplatePackage {
             get {
                 return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Template version &apos;{0}&apos; was not found..
-        /// </summary>
-        public static string TemplateVersionNotFound {
-            get {
-                return ResourceManager.GetString("TemplateVersionNotFound", resourceCulture);
             }
         }
 
@@ -292,15 +286,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Update NuGet.config to add missing package sources for the selected channel?.
-        /// </summary>
-        public static string UpdateNuGetConfigConfirmation {
-            get {
-                return ResourceManager.GetString("UpdateNuGetConfigConfirmation", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location..
         /// </summary>
         public static string ProjectAlreadyExists {
@@ -319,7 +304,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project creation failed with exit code {0}.
+        ///   Looks up a localized string similar to Project creation failed with exit code {0}..
         /// </summary>
         public static string ProjectCreationFailed {
             get {
@@ -364,6 +349,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Run &apos;aspire run&apos; to start your AppHost..
+        /// </summary>
+        public static string RunAspireRun {
+            get {
+                return ResourceManager.GetString("RunAspireRun", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;cd &quot;{0}&quot;&apos; and then &apos;aspire run&apos; to start your AppHost..
+        /// </summary>
+        public static string RunCdThenAspireRun {
+            get {
+                return ResourceManager.GetString("RunCdThenAspireRun", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Searching for available project template versions....
         /// </summary>
         public static string SearchingForAvailableTemplateVersions {
@@ -373,11 +376,29 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The template installation failed with exit code {0}.
+        ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later &apos;aspire restore&apos; / &apos;aspire add&apos; will use the channel feeds configured for this project.[/].
+        /// </summary>
+        public static string SourceOverrideNotPersistedWarning {
+            get {
+                return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The template installation failed with exit code {0}..
         /// </summary>
         public static string TemplateInstallationFailed {
             get {
                 return ResourceManager.GetString("TemplateInstallationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Template version &apos;{0}&apos; was not found..
+        /// </summary>
+        public static string TemplateVersionNotFound {
+            get {
+                return ResourceManager.GetString("TemplateVersionNotFound", resourceCulture);
             }
         }
 
@@ -387,6 +408,15 @@ namespace Aspire.Cli.Resources {
         public static string Unknown {
             get {
                 return ResourceManager.GetString("Unknown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Update NuGet.config to add missing package sources for the selected channel?.
+        /// </summary>
+        public static string UpdateNuGetConfigConfirmation {
+            get {
+                return ResourceManager.GetString("UpdateNuGetConfigConfirmation", resourceCulture);
             }
         }
 
@@ -468,33 +498,6 @@ namespace Aspire.Cli.Resources {
         public static string UsingProjectTemplatesVersion {
             get {
                 return ResourceManager.GetString("UsingProjectTemplatesVersion", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Run 'cd "{0}"' and then 'aspire run' to start your apphost..
-        /// </summary>
-        public static string RunCdThenAspireRun {
-            get {
-                return ResourceManager.GetString("RunCdThenAspireRun", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Run 'aspire run' to start your apphost..
-        /// </summary>
-        public static string RunAspireRun {
-            get {
-                return ResourceManager.GetString("RunAspireRun", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/].
-        /// </summary>
-        public static string SourceOverrideNotPersistedWarning {
-            get {
-                return ResourceManager.GetString("SourceOverrideNotPersistedWarning", resourceCulture);
             }
         }
 
