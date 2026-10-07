@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using Xunit;
 
 using IOPath = System.IO.Path;
@@ -28,13 +29,22 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
     {
         outputHelper.WriteLine($"Initializing git repository at: {workspaceDirectory.FullName}");
 
+        await RunGitAsync(workspaceDirectory.FullName, outputHelper, ["init"], cancellationToken);
+    }
+
+    internal static async Task RunGitAsync(string workingDirectory, ITestOutputHelper outputHelper, string[] arguments, CancellationToken cancellationToken)
+    {
+        var command = $"git {string.Join(' ', arguments)}";
+        var stopwatch = Stopwatch.StartNew();
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting '{command}' in '{workingDirectory}'");
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, TestContext.Current.CancellationToken, timeout.Token);
         using var process = new Process
         {
-            StartInfo = new ProcessStartInfo
+            StartInfo = new ProcessStartInfo("git", arguments)
             {
-                FileName = "git",
-                Arguments = "init",
-                WorkingDirectory = workspaceDirectory.FullName,
+                WorkingDirectory = workingDirectory,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -43,12 +53,58 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         };
 
         process.Start();
-        await process.WaitForExitAsync(cancellationToken);
+        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' started with PID {process.Id} after {stopwatch.Elapsed}");
+
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+
+        // Drain both pipes while Git runs: waiting for exit first can deadlock if either
+        // pipe fills. Log each line immediately so output survives a timeout.
+        var stdoutTask = ReadOutputAsync(process.StandardOutput, stdout, "stdout");
+        var stderrTask = ReadOutputAsync(process.StandardError, stderr, "stderr");
+
+        try
+        {
+            await Task.WhenAll(process.WaitForExitAsync(cancellation.Token), stdoutTask, stderrTask);
+        }
+        catch (OperationCanceledException)
+        {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {(timeout.IsCancellationRequested ? "timed out" : "was canceled")} after {stopwatch.Elapsed}");
+
+            // Disposing Process does not stop it. Reap the child before workspace disposal
+            // so a timed-out Git command cannot keep writing into a deleted directory.
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
+            if (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !TestContext.Current.CancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"'{command}' in '{workingDirectory}' (PID {process.Id}) timed out after 30 seconds.");
+            }
+
+            throw;
+        }
+        finally
+        {
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) finished after {stopwatch.Elapsed}; exit code: {(process.HasExited ? process.ExitCode.ToString() : "still running")}");
+        }
 
         if (process.ExitCode != 0)
         {
-            var error = await process.StandardError.ReadToEndAsync(cancellationToken);
-            throw new InvalidOperationException($"Failed to initialize git repository: {error}");
+            throw new InvalidOperationException($"'{command}' in '{workingDirectory}' failed with exit code {process.ExitCode}. stdout: {stdout}, stderr: {stderr}");
+        }
+
+        async Task ReadOutputAsync(StreamReader reader, StringBuilder capturedOutput, string streamName)
+        {
+            while (await reader.ReadLineAsync(cancellation.Token) is { } line)
+            {
+                capturedOutput.AppendLine(line);
+                outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {streamName}: {line}");
+            }
+
+            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {streamName} closed");
         }
     }
 
