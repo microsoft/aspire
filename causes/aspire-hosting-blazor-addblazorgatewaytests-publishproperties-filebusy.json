@@ -11,6 +11,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-06T23:39:18Z"
+    },
+    {
+      "run_id": 37552989617,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37552989617",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-07T01:33:54Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20774"

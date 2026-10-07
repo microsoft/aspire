@@ -1,0 +1,76 @@
+{
+  "run_id": 37552989617,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37552989617",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-07T01:33:54Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20748,
+    "title": "Add Terminals keyboard shortcut and improve dashboard shortcut help",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "jamesnk/dashboard-terminals-shortcut-help",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20748",
+    "merged_at": "2026-10-07T00:38:02Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "0b622d65e77afce9c1d810b3965ded9038294f59",
+    "failed_sha": "61ec17dc623b27c2f72a4b175f9f41e2c07b08bb",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "765317c1c565d5a735c00f962695c41e087d388f",
+        "message": "Use a direct connection for Mongo Express with single-member replica sets (#20571) ## Description `AddMongoDB(\"mongo\").WithReplicaSet().WithMongoExpress()` gives a healthy MongoDB server, but its Mongo Express companion exits with code 1 after about 30 seconds: ```text MongoServerSelectionError: connect ECONNREFUSED ::1:27017 ``` `WithReplicaSet()` sets up the replica set with a `localhost:<port>` member address, which assumes clients will use `directConnection=true`. The connection strings Aspi",
+        "html_url": "https://github.com/microsoft/aspire/commit/765317c1c565d5a735c00f962695c41e087d388f",
+        "pull_request": {
+          "number": 20571,
+          "title": "Use a direct connection for Mongo Express with single-member replica sets",
+          "url": "https://github.com/microsoft/aspire/pull/20571",
+          "merged_at": "2026-10-07T00:15:38Z"
+        }
+      },
+      {
+        "sha": "61ec17dc623b27c2f72a4b175f9f41e2c07b08bb",
+        "message": "Add Terminals keyboard shortcut and improve dashboard shortcut help (#20748)",
+        "html_url": "https://github.com/microsoft/aspire/commit/61ec17dc623b27c2f72a4b175f9f41e2c07b08bb",
+        "pull_request": {
+          "number": 20748,
+          "title": "Add Terminals keyboard shortcut and improve dashboard shortcut help",
+          "url": "https://github.com/microsoft/aspire/pull/20748",
+          "merged_at": "2026-10-07T00:38:02Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "id": 112578532494,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37552989617/job/112578532494",
+      "classification": "flaky-test",
+      "reason": "Single test AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration failed with IOException deleting a Windows temp dir locked by another process, a known intermittent Windows file-locking race matching a prior recurring flaky-test cause (issue #20774).",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Blazor.Tests, Hosting.Blazor, Hosting.Blazor, tests/Asp... / Hosting.Blazor (windows-latest)",
+      "error": "System.IO.IOException : The process cannot access the file '\\\\?\\C:\\Users\\runneradmin\\AppData\\Local\\Temp\\ichvymxu.2vy' because it is being used by another process.",
+      "stack_trace": "at System.IO.FileSystem.RemoveDirectoryInternal(String fullPath, Boolean topLevel, Boolean allowDirectoryNotEmpty)\n   at System.IO.FileSystem.RemoveDirectoryRecursive(String fullPath, WIN32_FIND_DATA& findData, Boolean topLevel)\n   at System.IO.FileSystem.RemoveDirectory(String fullPath, Boolean recursive)\n   at System.IO.DirectoryInfo.Delete(Boolean recursive)\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Blazor.Tests\\AddBlazorGatewayTests.cs:line 405\n   at Aspire.Hosting.Blazor.Tests.AddBlazorGatewayTests.GetPublishPropertiesAsync_UsesReleaseConfiguration()\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Windows temp directory deletion races with another process still holding a handle; this is a timing/environmental issue, not caused by main repository changes, and exactly matches a previously recorded recurring flaky-test cause."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-blazor-addblazorgatewaytests-publishproperties-filebusy"
+  ]
+}
