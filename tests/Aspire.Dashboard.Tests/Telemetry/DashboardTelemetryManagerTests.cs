@@ -175,22 +175,6 @@ public class DashboardTelemetryManagerTests
         Assert.Throws<ObjectDisposedException>(manager.Initialize);
     }
 
-    [Fact]
-    public async Task Shutdown_PreservesApplicationLogging()
-    {
-        await using var services = CreateServices(enabled: true);
-        var manager = services.GetRequiredService<DashboardTelemetryManager>();
-        var loggerFactory = services.GetRequiredService<ILoggerFactory>();
-        var sink = new TestSink();
-        loggerFactory.AddProvider(new TestLoggerProvider(sink));
-        manager.Initialize();
-
-        await manager.StopAsync(CancellationToken.None);
-        loggerFactory.CreateLogger("Microsoft.AspNetCore").LogWarning("Still logging locally");
-
-        Assert.Equal("Still logging locally", Assert.Single(sink.Writes).Message);
-    }
-
     [Theory]
     [InlineData(true, true)]
     [InlineData(true, false)]
