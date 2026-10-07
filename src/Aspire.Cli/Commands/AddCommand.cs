@@ -227,7 +227,11 @@ internal sealed class AddCommand : BaseCommand
                 throw new EmptyChoicesException(AddCommandStrings.NoIntegrationPackagesFound);
             }
 
-            var packagesWithShortName = packagesWithChannels.Select(IntegrationPackageSearchService.GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitLastComparer()).ToList();
+            var packagesWithShortName = packagesWithChannels
+                .Select(IntegrationPackageSearchService.GenerateFriendlyName)
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             if (packagesWithShortName.Count == 0)
             {

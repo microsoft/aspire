@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -98,7 +99,8 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)
-                .OrderBy(p => p.FriendlyName, new CommunityToolkitLastComparer())
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             var polyglotFilterRemovedAllIntegrations = false;
@@ -155,7 +157,10 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             .Select(IntegrationPackageSearchService.SelectPreferredIntegrationPackage);
 
         var orderedMatches = searchTerm is null
-            ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitLastComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
+            ? matches
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
             : matches;
 
         var results = orderedMatches

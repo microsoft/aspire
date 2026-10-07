@@ -4,6 +4,7 @@
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Semver;
@@ -232,13 +233,17 @@ internal sealed class IntegrationPackageSearchService(
         return (friendlyName, packageWithChannel.Package, packageWithChannel.Channel);
     }
 
+    /// <summary>
+    /// Orders matching integrations by official-package priority, then relevance and friendly name.
+    /// </summary>
     public static IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> GetIntegrationSearchMatches(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string searchTerm)
     {
         return packages
             .Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: GetIntegrationSearchScore(searchTerm, p)))
             .Where(p => p.SearchScore > FuzzyMatchThreshold)
-            .OrderByDescending(p => p.SearchScore)
-            .ThenByDescending(p => p.FriendlyName, new CommunityToolkitLastComparer());
+            .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+            .ThenByDescending(p => p.SearchScore)
+            .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase);
     }
 
     public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages)

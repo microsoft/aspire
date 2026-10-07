@@ -14,6 +14,20 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData("Aspire.Hosting.Redis", true)]
+    [InlineData("aspire.hosting.redis", true)]
+    [InlineData("Aspire.Hosting.CommunityToolkit.Redis", true)]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis", false)]
+    [InlineData("Acme.Aspire.Hosting.Redis", false)]
+    [InlineData("Aspire.HostingExtra.Redis", false)]
+    [InlineData("Aspire.Hosting.Sdk", false)]
+    [InlineData("Aspire.Hosting.AppHost", false)]
+    public void IsOfficialIntegrationPackageIdRecognizesOfficialIntegrations(string packageId, bool expected)
+    {
+        Assert.Equal(expected, PackageIdFilters.IsOfficialIntegrationPackageId(packageId));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task SearchAppliesMappingsToLatestAndExactVersionResults(bool useChannelOverlay)

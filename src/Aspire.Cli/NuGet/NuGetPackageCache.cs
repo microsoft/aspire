@@ -56,6 +56,15 @@ internal static class DeprecatedPackages
 
 internal static class PackageIdFilters
 {
+    /// <summary>
+    /// Identifies official hosting integration package IDs for display priority.
+    /// </summary>
+    public static bool IsOfficialIntegrationPackageId(string packageId)
+    {
+        return packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) &&
+            !IsExcludedHostingPackage(packageId);
+    }
+
     public static bool IsOfficialOrCommunityToolkitPackage(string packageId)
     {
         var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||

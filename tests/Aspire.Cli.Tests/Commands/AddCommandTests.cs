@@ -164,10 +164,12 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 {
                     return (0, new[]
                     {
+                        CreatePackage("CommunityToolkit.Aspire.Hosting.Aardvark", "9.2.0"),
                         CreatePackage("Aspire.Hosting.Docker", "9.2.0"),
                         CreatePackage("Aspire.Hosting.Redis", "9.2.0"),
                         CreatePackage("Aspire.Hosting.Redis", "9.3.0"),
-                        CreatePackage("Aspire.Hosting.Azure.Redis", "9.2.0")
+                        CreatePackage("Aspire.Hosting.Azure.Redis", "9.2.0"),
+                        CreatePackage("Aspire.Hosting.CommunityToolkit.Redis", "9.2.0")
                     });
                 };
                 runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
@@ -192,10 +194,15 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.False(addPackageWasCalled);
 
         var integrations = ReadIntegrationResults(rawJson);
-        Assert.Equal(3, integrations.Length);
-        Assert.Contains(integrations, i => i.Name == "azure-redis" && i.Package == "Aspire.Hosting.Azure.Redis" && i.Version == "9.2.0");
-        Assert.Contains(integrations, i => i.Name == "docker" && i.Package == "Aspire.Hosting.Docker" && i.Version == "9.2.0");
-        Assert.Contains(integrations, i => i.Name == "redis" && i.Package == "Aspire.Hosting.Redis" && i.Version == "9.3.0");
+        Assert.Equal(
+            [
+                ("azure-redis", "Aspire.Hosting.Azure.Redis", "9.2.0"),
+                ("communitytoolkit-redis", "Aspire.Hosting.CommunityToolkit.Redis", "9.2.0"),
+                ("docker", "Aspire.Hosting.Docker", "9.2.0"),
+                ("redis", "Aspire.Hosting.Redis", "9.3.0"),
+                ("communitytoolkit-aardvark", "CommunityToolkit.Aspire.Hosting.Aardvark", "9.2.0")
+            ],
+            integrations);
     }
 
     [Theory]
@@ -1005,14 +1012,21 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandInteractiveFlowSmokeTest()
     {
+        var promptedPackages = Array.Empty<string>();
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                return new TestAddCommandPrompter(interactionService);
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = packages =>
+                {
+                    promptedPackages = packages.Select(p => p.Package.Id).ToArray();
+                    return packages.First();
+                };
+                return prompter;
             };
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
@@ -1045,7 +1059,14 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
                     return (
                         0, // Exit code.
-                        new NuGetPackage[] { dockerPackage, redisPackage, azureRedisPackage } //
+                        new NuGetPackage[]
+                        {
+                            CreatePackage("CommunityToolkit.Aspire.Hosting.Aardvark", "9.2.0"),
+                            dockerPackage,
+                            redisPackage,
+                            azureRedisPackage,
+                            CreatePackage("Aspire.Hosting.CommunityToolkit.Redis", "9.2.0")
+                        }
                         );
                 };
 
@@ -1065,6 +1086,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+        Assert.Equal(
+            ["Aspire.Hosting.Azure.Redis", "Aspire.Hosting.CommunityToolkit.Redis", "Aspire.Hosting.Docker", "Aspire.Hosting.Redis", "CommunityToolkit.Aspire.Hosting.Aardvark"],
+            promptedPackages);
     }
 
     [Fact]
