@@ -971,15 +971,17 @@ public sealed class TestTriggerMapTests
         Assert.Contains(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, "eng/scripts/test-native-terminalhost.ps1"));
     }
 
-    [Fact]
-    public void TerminalHostPublishSettingsRunTheirInfrastructureCoverage()
+    [Theory]
+    [InlineData("Aspire.TerminalHost", "Aspire.Cli.EndToEnd.Tests")]
+    [InlineData("Aspire.Dashboard", "Aspire.Templates.Tests")]
+    public void TerminalPipelinePublishSettingsRunTheirInfrastructureCoverage(string projectName, string consumerProject)
     {
         var result = SelectWithRealMap(
-            "src/Aspire.TerminalHost/Aspire.TerminalHost.csproj", "Aspire.TerminalHost");
+            $"src/{projectName}/{projectName}.csproj", projectName);
 
         Assert.False(result.SelectsAll);
         Assert.Contains("Infrastructure.Tests", result.TestProjects);
-        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains(consumerProject, result.TestProjects);
     }
 
     [Fact]

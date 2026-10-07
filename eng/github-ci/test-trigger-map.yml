@@ -519,9 +519,11 @@ path_rules:
       - tools/CreateLayout/**
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: assembles and validates native CLI bundle payloads
-  - paths: [src/Aspire.TerminalHost/Aspire.TerminalHost.csproj]
+  - paths:
+      - src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
+      - src/Aspire.Dashboard/Aspire.Dashboard.csproj
     targets: [test:Infrastructure.Tests]
-    reason: evaluates terminal host native publish and managed build settings
+    reason: evaluates terminal pipeline native publish and managed build settings
   - paths: [src/Aspire.Tray/Windows/publish.ps1]
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: Windows native publishing and smoke invocation

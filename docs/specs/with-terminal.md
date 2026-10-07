@@ -707,7 +707,9 @@ publish or bundle rebuild is needed.
 Native publishing and bundle assembly include the executable and all RID-specific
 Hex1b dependencies under `terminalhost/`. The compatibility command
 `aspire-managed terminalhost` only forwards to this sibling executable.
-Native publishes enable optimization even for Debug bundles: Native AOT cannot
-later JIT-optimize the terminal parser or its dependencies. Ordinary managed Debug
-builds remain unoptimized. Both execution modes use server GC, matching the
-previous managed host.
+TerminalHost and Dashboard native publishes enable optimization even for Debug
+bundles: Native AOT cannot later JIT-optimize the relay, dashboard terminal mirror,
+or their dependencies. Both stages need sufficient throughput to prevent a slow
+dashboard consumer from exhausting the relay's bounded output queue and being
+disconnected. Ordinary managed Debug builds remain unoptimized. Both execution
+modes use server GC, matching the previous managed host.

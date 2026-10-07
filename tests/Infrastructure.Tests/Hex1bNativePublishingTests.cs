@@ -23,16 +23,22 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     public void Dispose() => _workspace.Dispose();
 
     [Theory]
-    [InlineData("Debug", false, false, false)]
-    [InlineData("Debug", false, true, false)]
-    [InlineData("Debug", true, false, false)]
-    [InlineData("Debug", true, true, true)]
-    [InlineData("Release", false, true, true)]
-    [InlineData("Release", true, true, true)]
-    public async Task TerminalHostPreservesManagedBuildsAndOptimizesNativePublishing(
-        string configuration, bool publishing, bool native, bool optimized)
+    [InlineData("Aspire.TerminalHost", "Debug", false, false, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", false, true, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, false, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, true, true)]
+    [InlineData("Aspire.TerminalHost", "Release", false, true, true)]
+    [InlineData("Aspire.TerminalHost", "Release", true, true, true)]
+    [InlineData("Aspire.Dashboard", "Debug", false, false, false)]
+    [InlineData("Aspire.Dashboard", "Debug", false, true, false)]
+    [InlineData("Aspire.Dashboard", "Debug", true, false, false)]
+    [InlineData("Aspire.Dashboard", "Debug", true, true, true)]
+    [InlineData("Aspire.Dashboard", "Release", false, true, true)]
+    [InlineData("Aspire.Dashboard", "Release", true, true, true)]
+    public async Task TerminalPipelinePreservesManagedBuildsAndOptimizesNativePublishing(
+        string projectName, string configuration, bool publishing, bool native, bool optimized)
     {
-        var project = Path.Combine(RepoRoot.Path, "src", "Aspire.TerminalHost", "Aspire.TerminalHost.csproj");
+        var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
         var result = await RunDotNetAsync(
             ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
              $"-p:_IsPublishing={publishing}", $"-p:PublishAot={native}",

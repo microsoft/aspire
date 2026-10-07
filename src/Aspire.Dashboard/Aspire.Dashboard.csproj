@@ -5,6 +5,8 @@
     <TargetFramework>net11.0</TargetFramework>
     <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <PublishAot>true</PublishAot>
+    <!-- Native AOT cannot JIT-optimize the terminal mirror or its dependencies later. -->
+    <Optimize Condition="'$(_IsPublishing)' == 'true' and '$(PublishAot)' == 'true'">true</Optimize>
     <!-- .NET 11 persistent services serialize framework-owned state with the internal
          JsonSerializerOptionsProvider instead of CircuitOptions.JsonTypeInfoResolvers.
          Remove the reflection fallback when https://github.com/dotnet/aspnetcore/issues/69325 is fixed. -->
