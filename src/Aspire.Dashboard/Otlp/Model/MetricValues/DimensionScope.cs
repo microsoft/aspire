@@ -32,8 +32,8 @@ public class DimensionScope
     public void AddPointValue(NumberDataPoint d, OtlpContext context)
     {
         OtlpHelpers.ValidateNumberDataPoint(d);
-        var start = OtlpHelpers.UnixNanoSecondsToDateTime(d.StartTimeUnixNano);
-        var end = OtlpHelpers.UnixNanoSecondsToDateTime(d.TimeUnixNano);
+        var start = d.StartTimeUnixNano;
+        var end = d.TimeUnixNano;
 
         if (d.ValueCase == NumberDataPoint.ValueOneofCase.AsInt)
         {
@@ -41,7 +41,7 @@ public class DimensionScope
             var lastLongValue = _lastValue as MetricValue<long>;
             if (lastLongValue is not null && lastLongValue.Value == value)
             {
-                lastLongValue.End = end;
+                lastLongValue.EndTimeUnixNano = end;
                 AddExemplars(lastLongValue, d.Exemplars, context);
                 Interlocked.Increment(ref lastLongValue.Count);
             }
@@ -49,7 +49,7 @@ public class DimensionScope
             {
                 if (lastLongValue is not null)
                 {
-                    start = lastLongValue.End;
+                    start = lastLongValue.EndTimeUnixNano;
                 }
                 _lastValue = new MetricValue<long>(d.AsInt, start, end);
                 AddExemplars(_lastValue, d.Exemplars, context);
@@ -61,7 +61,7 @@ public class DimensionScope
             var lastDoubleValue = _lastValue as MetricValue<double>;
             if (lastDoubleValue is not null && lastDoubleValue.Value == d.AsDouble)
             {
-                lastDoubleValue.End = end;
+                lastDoubleValue.EndTimeUnixNano = end;
                 AddExemplars(lastDoubleValue, d.Exemplars, context);
                 Interlocked.Increment(ref lastDoubleValue.Count);
             }
@@ -69,7 +69,7 @@ public class DimensionScope
             {
                 if (lastDoubleValue is not null)
                 {
-                    start = lastDoubleValue.End;
+                    start = lastDoubleValue.EndTimeUnixNano;
                 }
                 _lastValue = new MetricValue<double>(d.AsDouble, start, end);
                 AddExemplars(_lastValue, d.Exemplars, context);
@@ -114,16 +114,15 @@ public class DimensionScope
                 }
 
                 var exemplarValue = exemplar.HasAsDouble ? exemplar.AsDouble : exemplar.AsInt;
-                if (!double.IsFinite(exemplarValue))
+                if (!double.IsFinite(exemplarValue) || !OtlpHelpers.TryValidateMetricExemplarTimestamp(exemplar, context))
                 {
                     continue;
                 }
-                var start = OtlpHelpers.UnixNanoSecondsToDateTime(exemplar.TimeUnixNano);
 
                 var exists = false;
                 foreach (var existingExemplar in value.Exemplars)
                 {
-                    if (start == existingExemplar.Start && exemplarValue == existingExemplar.Value)
+                    if (exemplar.TimeUnixNano == existingExemplar.TimeUnixNano && exemplarValue == existingExemplar.Value)
                     {
                         exists = true;
                         break;
@@ -136,7 +135,7 @@ public class DimensionScope
 
                 value.Exemplars.Add(new MetricsExemplar
                 {
-                    Start = start,
+                    TimeUnixNano = exemplar.TimeUnixNano,
                     Value = exemplarValue,
                     Attributes = exemplar.FilteredAttributes.ToKeyValuePairs(context),
                     SpanId = exemplar.SpanId.ToHexString(),

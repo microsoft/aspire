@@ -15,9 +15,9 @@ public class HistogramValue : MetricValueBase
     public double[] ExplicitBounds { get; init; }
 
     /// <summary>
-    /// Gets the producer's aggregation start time, independently of the chart interval.
+    /// Gets the producer's aggregation start in nanoseconds since the Unix epoch, independently of the chart interval.
     /// </summary>
-    public DateTime AggregationStart { get; init; }
+    public ulong AggregationStartUnixNano { get; init; }
 
     internal long AggregationId { get; init; }
     internal OtlpAggregationTemporality AggregationTemporality { get; init; }
@@ -28,20 +28,20 @@ public class HistogramValue : MetricValueBase
     /// <param name="values">The counts in each histogram bucket.</param>
     /// <param name="sum">The sum of recorded measurements.</param>
     /// <param name="count">The number of recorded measurements.</param>
-    /// <param name="start">The start of the chart interval.</param>
-    /// <param name="end">The end of the data point.</param>
+    /// <param name="startTimeUnixNano">The normalized interval start in nanoseconds since the Unix epoch.</param>
+    /// <param name="endTimeUnixNano">The point end in nanoseconds since the Unix epoch.</param>
     /// <param name="explicitBounds">The explicit upper bucket boundaries.</param>
-    /// <param name="aggregationStart">The aggregation start reported by the producer.</param>
+    /// <param name="aggregationStartUnixNano">The aggregation start reported by the producer, in nanoseconds since the Unix epoch.</param>
     /// <param name="aggregationId">The identity separating cumulative aggregations or delta intervals.</param>
     /// <param name="aggregationTemporality">The producer's aggregation temporality.</param>
-    public HistogramValue(ulong[] values, double sum, ulong count, DateTime start, DateTime end, double[] explicitBounds,
-        DateTime aggregationStart, long aggregationId, OtlpAggregationTemporality aggregationTemporality) : base(start, end)
+    public HistogramValue(ulong[] values, double sum, ulong count, ulong startTimeUnixNano, ulong endTimeUnixNano, double[] explicitBounds,
+        ulong aggregationStartUnixNano, long aggregationId, OtlpAggregationTemporality aggregationTemporality) : base(startTimeUnixNano, endTimeUnixNano)
     {
         Values = values;
         Sum = sum;
         Count = count;
         ExplicitBounds = explicitBounds;
-        AggregationStart = aggregationStart;
+        AggregationStartUnixNano = aggregationStartUnixNano;
         AggregationId = aggregationId;
         AggregationTemporality = aggregationTemporality;
     }
@@ -51,12 +51,12 @@ public class HistogramValue : MetricValueBase
     /// </summary>
     internal static HistogramValue Create(HistogramDataPoint point, OtlpAggregationTemporality temporality, HistogramValue? previous)
     {
-        var aggregationStart = OtlpHelpers.UnixNanoSecondsToDateTime(point.StartTimeUnixNano);
-        var end = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano);
+        var aggregationStart = point.StartTimeUnixNano;
+        var end = point.TimeUnixNano;
 
         // Out-of-order delivery is not a reset. Reject before changing the aggregation
         // identity or extending the previous snapshot, which would move its end backwards.
-        if (temporality != OtlpAggregationTemporality.Delta && previous is not null && end < previous.End)
+        if (temporality != OtlpAggregationTemporality.Delta && previous is not null && point.TimeUnixNano < previous.EndTimeUnixNano)
         {
             throw new InvalidOperationException("Cumulative histogram point timestamp is earlier than the previous point.");
         }
@@ -70,11 +70,12 @@ public class HistogramValue : MetricValueBase
         // The unchecked cast preserves all timestamp bits in an opaque signed database key.
         var aggregationId = temporality == OtlpAggregationTemporality.Delta
             ? unchecked((long)point.TimeUnixNano)
-            : end.Ticks;
+            : OtlpHelpers.UnixNanoSecondsToDateTime(end).Ticks;
 
         if (temporality != OtlpAggregationTemporality.Delta && previous is not null)
         {
-            var reset = aggregationStart != previous.AggregationStart || point.Count < previous.Count;
+            // Starts 20 ns apart can identify different aggregations even when their chart timestamps share a tick.
+            var reset = point.StartTimeUnixNano != previous.AggregationStartUnixNano || point.Count < previous.Count;
             if (!reset)
             {
                 if (!sameBounds || previous.Values.Length != point.BucketCounts.Count)
@@ -97,15 +98,15 @@ public class HistogramValue : MetricValueBase
                 if (!reset && sameCounts && point.Count == previous.Count && point.Sum.Equals(previous.Sum) &&
                     previous.AggregationTemporality != OtlpAggregationTemporality.Delta)
                 {
-                    previous.End = end;
+                    previous.EndTimeUnixNano = end;
                     return previous;
                 }
             }
 
-            start = reset && aggregationStart > previous.End ? aggregationStart : previous.End;
+            start = reset && aggregationStart > previous.EndTimeUnixNano ? aggregationStart : previous.EndTimeUnixNano;
             // Resets can share an end tick or even an exact timestamp. Advance past the persisted
             // epoch identity so those resets remain distinct, including after database reopening.
-            aggregationId = reset ? Math.Max(end.Ticks, checked(previous.AggregationId + 1)) : previous.AggregationId;
+            aggregationId = reset ? Math.Max(aggregationId, checked(previous.AggregationId + 1)) : previous.AggregationId;
         }
 
         var bounds = previous is not null && sameBounds ? previous.ExplicitBounds : point.ExplicitBounds.ToArray();
@@ -155,7 +156,7 @@ public class HistogramValue : MetricValueBase
 
     protected override MetricValueBase Clone()
     {
-        var value = new HistogramValue(Values, Sum, Count, Start, End, ExplicitBounds, AggregationStart, AggregationId, AggregationTemporality);
+        var value = new HistogramValue(Values, Sum, Count, StartTimeUnixNano, EndTimeUnixNano, ExplicitBounds, AggregationStartUnixNano, AggregationId, AggregationTemporality);
         if (HasExemplars)
         {
             value.Exemplars.AddRange(Exemplars);
@@ -169,8 +170,8 @@ public class HistogramValue : MetricValueBase
             && Values.Equivalent(other.Values)
             && Sum.Equals(other.Sum)
             && Count.Equals(other.Count)
-            && Start.Equals(other.Start)
-            && AggregationStart.Equals(other.AggregationStart)
+            && StartTimeUnixNano == other.StartTimeUnixNano
+            && AggregationStartUnixNano == other.AggregationStartUnixNano
             && AggregationId == other.AggregationId
             && AggregationTemporality == other.AggregationTemporality
             && ExplicitBounds.Equivalent(other.ExplicitBounds);
@@ -178,6 +179,6 @@ public class HistogramValue : MetricValueBase
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Start, Count, Values, Sum, ExplicitBounds, AggregationStart, AggregationId, AggregationTemporality);
+        return HashCode.Combine(StartTimeUnixNano, Count, Values, Sum, ExplicitBounds, AggregationStartUnixNano, AggregationId, AggregationTemporality);
     }
 }

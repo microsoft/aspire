@@ -25,12 +25,14 @@ internal static class MetricInstrumentDataCache
             var latestValue = dimension.Values[^1];
             // Refresh recent complete buckets because data can arrive behind the latest displayed value. Starting from
             // the rolled value's start when it is earlier also retains source points that determine its representative.
-            var lookbackStartTicks = latestValue.End.Ticks - Math.Min(latestValue.End.Ticks, refreshLookback.Ticks);
-            var alignedLookbackStartTicks = lookbackStartTicks - (lookbackStartTicks % dataPointInterval.Ticks);
+            var refreshLookbackUnixNano = checked((ulong)refreshLookback.Ticks * (ulong)TimeSpan.NanosecondsPerTick);
+            var pointIntervalUnixNano = checked((ulong)dataPointInterval.Ticks * (ulong)TimeSpan.NanosecondsPerTick);
+            var lookbackStartUnixNano = latestValue.EndTimeUnixNano - Math.Min(latestValue.EndTimeUnixNano, refreshLookbackUnixNano);
+            var alignedLookbackStartUnixNano = lookbackStartUnixNano - (lookbackStartUnixNano % pointIntervalUnixNano);
             cursors.Add(new MetricDimensionCursor
             {
                 Attributes = dimension.Attributes,
-                StartTime = new DateTime(Math.Min(latestValue.Start.Ticks, alignedLookbackStartTicks), DateTimeKind.Utc)
+                StartTime = OtlpHelpers.UnixNanoSecondsToDateTime(Math.Min(latestValue.StartTimeUnixNano, alignedLookbackStartUnixNano))
             });
         }
         return cursors;

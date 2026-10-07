@@ -253,7 +253,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
                 // ChartExemplar properties are init-only, so replace with a new instance.
                 exemplars[i] = new ChartExemplar
                 {
-                    Start = exemplar.Start,
+                    TimeUnixNano = exemplar.TimeUnixNano,
                     Value = exemplar.Value,
                     TraceId = exemplar.TraceId,
                     SpanId = exemplar.SpanId,

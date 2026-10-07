@@ -36,6 +36,7 @@ public class HistogramAllocationTests
         Assert.Equal(0, allocated);
         Assert.Same(previous, current);
         Assert.Equal(OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano), previous.End);
+        Assert.Equal(point.TimeUnixNano, previous.EndTimeUnixNano);
     }
 
     [Theory]

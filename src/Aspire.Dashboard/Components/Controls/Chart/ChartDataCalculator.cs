@@ -51,7 +51,7 @@ internal sealed class ChartDataCalculator
             // Compatibility is a property of the histogram data, not the selected visualization.
             // Count mode only intersects contributing bounds; it does not accumulate percentile buckets.
             if (isHistogram && !hasIncompatibleBounds &&
-                TryAggregateHistogram(dimensions, start, end, collectBucketCounts: false, exemplars: null, toLocal, out _, out var bounds))
+                TryAggregateHistogram(dimensions, start, end, collectBucketCounts: false, exemplars: null, out _, out var bounds))
             {
                 hasIncompatibleBounds = bounds!.Length == 0;
             }
@@ -101,7 +101,7 @@ internal sealed class ChartDataCalculator
 
             xValues.Add(toLocal(end));
 
-            if (!TryCalculateHistogramPoints(dimensions, start, end, traces, exemplars, toLocal, out var incompatibleBounds))
+            if (!TryCalculateHistogramPoints(dimensions, start, end, traces, exemplars, out var incompatibleBounds))
             {
                 foreach (var trace in traces)
                 {
@@ -222,9 +222,9 @@ internal sealed class ChartDataCalculator
         return hasValue;
     }
 
-    internal static bool TryCalculateHistogramPoints(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, Dictionary<int, ChartTrace> traces, List<ChartExemplar> exemplars, Func<DateTimeOffset, DateTimeOffset> toLocal, out bool incompatibleBounds)
+    internal static bool TryCalculateHistogramPoints(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, Dictionary<int, ChartTrace> traces, List<ChartExemplar> exemplars, out bool incompatibleBounds)
     {
-        var hasValue = TryAggregateHistogram(dimensions, start, end, collectBucketCounts: true, exemplars, toLocal,
+        var hasValue = TryAggregateHistogram(dimensions, start, end, collectBucketCounts: true, exemplars,
             out var currentBucketCounts, out var explicitBounds);
         incompatibleBounds = hasValue && explicitBounds!.Length == 0;
 
@@ -241,7 +241,7 @@ internal sealed class ChartDataCalculator
     }
 
     private static bool TryAggregateHistogram(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end,
-        bool collectBucketCounts, List<ChartExemplar>? exemplars, Func<DateTimeOffset, DateTimeOffset> toLocal,
+        bool collectBucketCounts, List<ChartExemplar>? exemplars,
         out ulong[]? currentBucketCounts, out double[]? explicitBounds)
     {
         var hasValue = false;
@@ -270,7 +270,7 @@ internal sealed class ChartDataCalculator
                 {
                     if (exemplars is not null)
                     {
-                        CollectExemplars(exemplars, metric, toLocal);
+                        CollectExemplars(exemplars, metric);
                     }
 
                     // Only use the first recorded entry if it is the beginning of data.
@@ -345,7 +345,7 @@ internal sealed class ChartDataCalculator
         return now.Subtract(pointDuration * pointIndex);
     }
 
-    private static void CollectExemplars(List<ChartExemplar> exemplars, MetricValueBase metric, Func<DateTimeOffset, DateTimeOffset> toLocal)
+    private static void CollectExemplars(List<ChartExemplar> exemplars, MetricValueBase metric)
     {
         if (!metric.HasExemplars)
         {
@@ -357,7 +357,7 @@ internal sealed class ChartDataCalculator
             var exists = false;
             foreach (var existingExemplar in exemplars)
             {
-                if (exemplar.Start == existingExemplar.Start &&
+                if (exemplar.TimeUnixNano == existingExemplar.TimeUnixNano &&
                     exemplar.Value == existingExemplar.Value &&
                     exemplar.SpanId == existingExemplar.SpanId &&
                     exemplar.TraceId == existingExemplar.TraceId)
@@ -371,10 +371,9 @@ internal sealed class ChartDataCalculator
                 continue;
             }
 
-            var exemplarStart = toLocal(new DateTimeOffset(exemplar.Start, TimeSpan.Zero));
             exemplars.Add(new ChartExemplar
             {
-                Start = exemplarStart,
+                TimeUnixNano = exemplar.TimeUnixNano,
                 Value = exemplar.Value,
                 TraceId = exemplar.TraceId,
                 SpanId = exemplar.SpanId,

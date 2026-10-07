@@ -13,22 +13,22 @@ namespace Aspire.Dashboard.Otlp.Storage;
 public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxMetricReadBatchSize = 500;
-    private const string MetricPointRangeFilterSql = "p.start_time_ticks <= @EndTicks AND p.end_time_ticks >= r.start_time_ticks";
-    private const string MetricSourcePointRangeFilterSql = "source.start_time_ticks <= @EndTicks AND source.end_time_ticks >= r.start_time_ticks";
+    private const string MetricPointRangeFilterSql = "p.start_time_unix_nano <= @EndUnixNano AND p.end_time_unix_nano >= r.start_time_unix_nano";
+    private const string MetricSourcePointRangeFilterSql = "source.start_time_unix_nano <= @EndUnixNano AND source.end_time_unix_nano >= r.start_time_unix_nano";
     private const string SelectedMetricPointsCteSql = $"""
         selected_metric_points AS (
             SELECT
                 p.point_id,
                 p.dimension_id,
                 p.point_type,
-                p.start_time_ticks,
-                p.end_time_ticks,
+                p.start_time_unix_nano,
+                p.end_time_unix_nano,
                 p.repeat_count,
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
                 p.histogram_count,
-                p.histogram_aggregation_start_ticks,
+                p.histogram_aggregation_start_unix_nano,
                 p.histogram_aggregation_id,
                 i.aggregation_temporality
             FROM telemetry_metric_points p
@@ -44,7 +44,7 @@ public sealed partial class SqliteTelemetryRepository
             SELECT
                 p.*,
                 ROW_NUMBER() OVER (
-                    PARTITION BY p.start_time_ticks, p.dimension_id, p.histogram_aggregation_id
+                    PARTITION BY p.start_time_unix_nano, p.dimension_id, p.histogram_aggregation_id
                     ORDER BY p.point_id DESC) AS point_rank
             FROM selected_metric_points p
         ),
@@ -63,22 +63,22 @@ public sealed partial class SqliteTelemetryRepository
         bucketed_metric_points AS (
             SELECT
                 p.*,
-                (p.start_time_ticks / @PointIntervalTicks) * @PointIntervalTicks AS rollup_start_time_ticks
+                (p.start_time_unix_nano / @PointIntervalUnixNano) * @PointIntervalUnixNano AS rollup_start_time_unix_nano
             FROM effective_metric_points p
         ),
         ranked_rollup_metric_points AS (
             SELECT
                 p.*,
-                MIN(p.start_time_ticks) OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_source_start_time_ticks,
-                MAX(p.end_time_ticks) OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_end_time_ticks,
+                MIN(p.start_time_unix_nano) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_source_start_time_unix_nano,
+                MAX(p.end_time_unix_nano) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_end_time_unix_nano,
                 SUM(p.repeat_count) OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_repeat_count,
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id) AS rollup_repeat_count,
                 ROW_NUMBER() OVER (
-                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_unix_nano, p.histogram_aggregation_id
                     ORDER BY
-                        CASE WHEN p.point_type = {HistogramPointType} THEN p.start_time_ticks END DESC,
+                        CASE WHEN p.point_type = {HistogramPointType} THEN p.start_time_unix_nano END DESC,
                         p.integer_value DESC,
                         p.double_value DESC,
                         p.point_id DESC) AS rollup_rank
@@ -90,17 +90,17 @@ public sealed partial class SqliteTelemetryRepository
                 p.dimension_id,
                 p.point_type,
                 CASE
-                    WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.start_time_ticks
-                    WHEN p.point_type = {HistogramPointType} THEN p.rollup_source_start_time_ticks
-                    ELSE p.rollup_start_time_ticks
-                END AS start_time_ticks,
-                p.rollup_end_time_ticks AS end_time_ticks,
+                    WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.start_time_unix_nano
+                    WHEN p.point_type = {HistogramPointType} THEN p.rollup_source_start_time_unix_nano
+                    ELSE p.rollup_start_time_unix_nano
+                END AS start_time_unix_nano,
+                p.rollup_end_time_unix_nano AS end_time_unix_nano,
                 p.rollup_repeat_count AS repeat_count,
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
                 p.histogram_count,
-                p.histogram_aggregation_start_ticks,
+                p.histogram_aggregation_start_unix_nano,
                 p.histogram_aggregation_id,
                 p.aggregation_temporality
             FROM ranked_rollup_metric_points p
@@ -114,14 +114,14 @@ public sealed partial class SqliteTelemetryRepository
                 p.point_id,
                 p.dimension_id,
                 p.point_type,
-                p.start_time_ticks,
-                p.end_time_ticks,
+                p.start_time_unix_nano,
+                p.end_time_unix_nano,
                 p.repeat_count,
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
                 p.histogram_count,
-                p.histogram_aggregation_start_ticks,
+                p.histogram_aggregation_start_unix_nano,
                 p.histogram_aggregation_id,
                 p.aggregation_temporality
             FROM effective_metric_points p
@@ -167,8 +167,8 @@ public sealed partial class SqliteTelemetryRepository
     private DateTime? GetInstrumentLatestEndTimeFromDatabase(ResourceKey resourceKey, string meterName, string instrumentName)
     {
         using var connection = _database.OpenConnection();
-        var endTimeTicks = connection.QuerySingleOrDefault<long?>("""
-            SELECT MAX(p.end_time_ticks)
+        var endTimeUnixNano = connection.QuerySingleOrDefault<long?>("""
+            SELECT MAX(p.end_time_unix_nano)
             FROM telemetry_metric_points p
             JOIN telemetry_metric_dimensions d ON d.dimension_id = p.dimension_id
             JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
@@ -179,7 +179,7 @@ public sealed partial class SqliteTelemetryRepository
               AND s.scope_name = @MeterName
               AND i.instrument_name = @InstrumentName;
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId, MeterName = meterName, InstrumentName = instrumentName });
-        return endTimeTicks is not null ? new DateTime(endTimeTicks.Value, DateTimeKind.Utc) : null;
+        return endTimeUnixNano is not null ? OtlpHelpers.UnixNanoSecondsToDateTime(checked((ulong)endTimeUnixNano.Value)) : null;
     }
 
     private List<DimensionScope> MaterializeMetricDimensions(
@@ -199,6 +199,10 @@ public sealed partial class SqliteTelemetryRepository
         if (dataPointInterval is { } interval && interval <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(dataPointInterval), interval, "The metric data point interval must be greater than zero.");
+        }
+        if (dataPointInterval is { } largeInterval && largeInterval.Ticks > long.MaxValue / TimeSpan.NanosecondsPerTick)
+        {
+            throw new ArgumentOutOfRangeException(nameof(dataPointInterval), largeInterval, "The metric data point interval must fit in signed nanoseconds.");
         }
 
         var dimensions = GetMetricDimensions(
@@ -222,8 +226,8 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         var queryParameters = new DynamicParameters();
-        queryParameters.Add("EndTicks", endTime.Value.Ticks);
-        queryParameters.Add("PointIntervalTicks", dataPointInterval?.Ticks ?? 0);
+        queryParameters.Add("EndUnixNano", GetMetricQueryTimeUnixNano(endTime.Value, upperBound: true));
+        queryParameters.Add("PointIntervalUnixNano", dataPointInterval is { } pointInterval ? pointInterval.Ticks * TimeSpan.NanosecondsPerTick : 0);
         var dimensionQueryRangesCteSql = CreateMetricDimensionQueryRangesCte(
             dimensions,
             dimensionCursors,
@@ -237,22 +241,22 @@ public sealed partial class SqliteTelemetryRepository
                 p.point_id AS PointId,
                 p.dimension_id AS DimensionId,
                 p.point_type AS PointType,
-                p.start_time_ticks AS StartTimeTicks,
-                p.end_time_ticks AS EndTimeTicks,
+                p.start_time_unix_nano AS StartTimeUnixNano,
+                p.end_time_unix_nano AS EndTimeUnixNano,
                 p.repeat_count AS RepeatCount,
                 p.integer_value AS IntegerValue,
                 p.double_value AS DoubleValue,
                 p.histogram_sum AS HistogramSum,
                 p.histogram_count AS HistogramCount,
-                p.histogram_aggregation_start_ticks AS HistogramAggregationStartTicks,
+                p.histogram_aggregation_start_unix_nano AS HistogramAggregationStartUnixNano,
                 p.histogram_aggregation_id AS HistogramAggregationId,
                 p.aggregation_temporality AS AggregationTemporality,
-                stored.start_time_ticks AS SourceStartTimeTicks,
+                stored.start_time_unix_nano AS SourceStartTimeUnixNano,
                 stored.bucket_counts AS BucketCounts,
                 stored.explicit_bounds AS ExplicitBounds
             FROM rolled_up_metric_points p
             JOIN telemetry_metric_points stored ON stored.point_id = p.point_id
-            ORDER BY p.dimension_id, p.start_time_ticks, p.point_id;
+            ORDER BY p.dimension_id, p.start_time_unix_nano, p.point_id;
             """, queryParameters, transaction).AsList();
         var points = pointRecords.ToLookup(record => record.DimensionId);
         var exemplars = includeExemplars
@@ -274,8 +278,8 @@ public sealed partial class SqliteTelemetryRepository
             {
                 MetricValueBase value = point.PointType switch
                 {
-                    LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    LongPointType => new MetricValue<long>(point.IntegerValue!.Value, checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
+                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, checked((ulong)point.StartTimeUnixNano), checked((ulong)point.EndTimeUnixNano)),
                     HistogramPointType => CreateHistogramValue(point),
                     _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
                 };
@@ -362,7 +366,7 @@ public sealed partial class SqliteTelemetryRepository
         DateTime? defaultStartTime,
         DynamicParameters queryParameters)
     {
-        var sql = new StringBuilder("metric_dimension_query_ranges(dimension_id, start_time_ticks) AS (VALUES ");
+        var sql = new StringBuilder("metric_dimension_query_ranges(dimension_id, start_time_unix_nano) AS (VALUES ");
         for (var i = 0; i < dimensions.Count; i++)
         {
             if (i > 0)
@@ -374,11 +378,31 @@ public sealed partial class SqliteTelemetryRepository
             var cursor = dimensionCursors.FirstOrDefault(cursor =>
                 cursor.Attributes.SequenceEqual(dimension.Scope.Attributes));
             queryParameters.Add($"DimensionId{i}", dimension.DimensionId);
-            queryParameters.Add($"DimensionStartTicks{i}", cursor?.StartTime.Ticks ?? defaultStartTime?.Ticks ?? 0);
-            sql.Append(CultureInfo.InvariantCulture, $"(@DimensionId{i}, @DimensionStartTicks{i})");
+            queryParameters.Add($"DimensionStartUnixNano{i}", GetMetricQueryTimeUnixNano(cursor?.StartTime ?? defaultStartTime ?? DateTime.UnixEpoch, upperBound: false));
+            sql.Append(CultureInfo.InvariantCulture, $"(@DimensionId{i}, @DimensionStartUnixNano{i})");
         }
         sql.Append(')');
         return sql.ToString();
+    }
+
+    private static long? GetMetricQueryTimeUnixNano(DateTime time, bool upperBound)
+    {
+        var ticks = time.Ticks - DateTime.UnixEpoch.Ticks;
+        if (ticks < 0)
+        {
+            return upperBound ? null : 0;
+        }
+        if (ticks > long.MaxValue / TimeSpan.NanosecondsPerTick)
+        {
+            return upperBound ? long.MaxValue : null;
+        }
+
+        var nanoseconds = ticks * TimeSpan.NanosecondsPerTick;
+        // DateTime filters include their entire display tick. Otherwise a read-only query ending at
+        // the latest displayed time could exclude a point 20 ns into that tick. Min/MaxValue remain
+        // usable as unbounded filters; bounds wholly outside the supported range match no points.
+        const long tickRemainder = TimeSpan.NanosecondsPerTick - 1;
+        return upperBound ? Math.Min(nanoseconds, long.MaxValue - tickRemainder) + tickRemainder : nanoseconds;
     }
 
     private static bool MatchesDimensionFilters(IEnumerable<OwnedAttributeRecord> attributes, IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters)
@@ -433,10 +457,10 @@ public sealed partial class SqliteTelemetryRepository
         UnpackUInt64Values(point.BucketCounts!),
         point.HistogramSum!.Value,
         checked((ulong)point.HistogramCount!.Value),
-        new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
-        new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
+        checked((ulong)point.StartTimeUnixNano),
+        checked((ulong)point.EndTimeUnixNano),
         UnpackDoubleValues(point.ExplicitBounds!),
-        new DateTime(point.HistogramAggregationStartTicks!.Value, DateTimeKind.Utc),
+        checked((ulong)point.HistogramAggregationStartUnixNano!.Value),
         point.HistogramAggregationId!.Value,
         (OtlpAggregationTemporality)point.AggregationTemporality);
 
@@ -456,8 +480,8 @@ public sealed partial class SqliteTelemetryRepository
                 source.dimension_id AS DimensionId,
                 source.point_type AS PointType,
                 source.histogram_aggregation_id AS HistogramAggregationId,
-                source.start_time_ticks AS SourceStartTimeTicks,
-                e.start_time_ticks AS StartTimeTicks,
+                source.start_time_unix_nano AS SourceStartTimeUnixNano,
+                e.time_unix_nano AS TimeUnixNano,
                 e.exemplar_value AS ExemplarValue,
                 e.span_id AS SpanId,
                 e.trace_id AS TraceId
@@ -465,20 +489,20 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_metric_points source ON source.point_id = e.point_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = source.dimension_id
             WHERE {MetricSourcePointRangeFilterSql}
-              AND e.start_time_ticks >= r.start_time_ticks
-              AND e.start_time_ticks <= @EndTicks
-            ORDER BY source.dimension_id, source.start_time_ticks, e.exemplar_id;
+              AND e.time_unix_nano >= r.start_time_unix_nano
+              AND e.time_unix_nano <= @EndUnixNano
+            ORDER BY source.dimension_id, source.start_time_unix_nano, e.exemplar_id;
             """, queryParameters, transaction).AsList();
-        var pointIntervalTicks = dataPointInterval?.Ticks;
+        var pointIntervalUnixNano = dataPointInterval is { } interval ? interval.Ticks * TimeSpan.NanosecondsPerTick : (long?)null;
         // Match the SQL partition using source timestamps, independently of the displayed start.
         // A cumulative reset's representative can start at 3.5s while its SQL group starts at 3s.
         var pointIds = points.ToDictionary(
-            point => GetPointKey(point.DimensionId, point.PointType, point.SourceStartTimeTicks, point.HistogramAggregationId),
+            point => GetPointKey(point.DimensionId, point.PointType, point.SourceStartTimeUnixNano, point.HistogramAggregationId),
             point => point.PointId);
         var mappedRecords = new List<(long PointId, MetricExemplarRecord Record)>();
         foreach (var record in records)
         {
-            if (pointIds.TryGetValue(GetPointKey(record.DimensionId, record.PointType, record.SourceStartTimeTicks,
+            if (pointIds.TryGetValue(GetPointKey(record.DimensionId, record.PointType, record.SourceStartTimeUnixNano,
                 record.HistogramAggregationId), out var pointId))
             {
                 mappedRecords.Add((pointId, record));
@@ -494,7 +518,7 @@ public sealed partial class SqliteTelemetryRepository
                 item.PointId,
                 new MetricsExemplar
                 {
-                    Start = new DateTime(item.Record.StartTimeTicks, DateTimeKind.Utc),
+                    TimeUnixNano = checked((ulong)item.Record.TimeUnixNano),
                     Value = item.Record.ExemplarValue,
                     SpanId = item.Record.SpanId,
                     TraceId = item.Record.TraceId,
@@ -502,12 +526,12 @@ public sealed partial class SqliteTelemetryRepository
                 }))
             .ToLookup(pair => pair.Key, pair => pair.Value);
 
-        MetricPointKey GetPointKey(long dimensionId, int pointType, long sourceStartTimeTicks, long? aggregationId)
+        MetricPointKey GetPointKey(long dimensionId, int pointType, long sourceStartTimeUnixNano, long? aggregationId)
         {
-            var groupStartTimeTicks = pointIntervalTicks is { } intervalTicks
-                ? (sourceStartTimeTicks / intervalTicks) * intervalTicks
-                : sourceStartTimeTicks;
-            return new MetricPointKey(dimensionId, pointType, groupStartTimeTicks, aggregationId);
+            var groupStartTimeUnixNano = pointIntervalUnixNano is { } intervalUnixNano
+                ? (sourceStartTimeUnixNano / intervalUnixNano) * intervalUnixNano
+                : sourceStartTimeUnixNano;
+            return new MetricPointKey(dimensionId, pointType, groupStartTimeUnixNano, aggregationId);
         }
     }
 
@@ -532,11 +556,11 @@ public sealed partial class SqliteTelemetryRepository
     internal sealed class MetricPointDataRecord : MetricPointRecord
     {
         public required long DimensionId { get; init; }
-        public required long StartTimeTicks { get; init; }
-        public required long SourceStartTimeTicks { get; init; }
+        public required long StartTimeUnixNano { get; init; }
+        public required long SourceStartTimeUnixNano { get; init; }
         public required long RepeatCount { get; init; }
         public double? HistogramSum { get; init; }
-        public long? HistogramAggregationStartTicks { get; init; }
+        public long? HistogramAggregationStartUnixNano { get; init; }
         public long? HistogramAggregationId { get; init; }
         public int AggregationTemporality { get; init; }
         public byte[]? BucketCounts { get; init; }
@@ -557,8 +581,8 @@ public sealed partial class SqliteTelemetryRepository
         public required long DimensionId { get; init; }
         public required int PointType { get; init; }
         public long? HistogramAggregationId { get; init; }
-        public required long SourceStartTimeTicks { get; init; }
-        public required long StartTimeTicks { get; init; }
+        public required long SourceStartTimeUnixNano { get; init; }
+        public required long TimeUnixNano { get; init; }
         public required double ExemplarValue { get; init; }
         public required string SpanId { get; init; }
         public required string TraceId { get; init; }
@@ -566,5 +590,5 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record StoredMetricDimension(long DimensionId, DimensionScope Scope);
 
-    private readonly record struct MetricPointKey(long DimensionId, int PointType, long StartTimeTicks, long? HistogramAggregationId);
+    private readonly record struct MetricPointKey(long DimensionId, int PointType, long StartTimeUnixNano, long? HistogramAggregationId);
 }

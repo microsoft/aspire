@@ -24,6 +24,50 @@ public class ChartDataCalculatorTests
     // Identity function for time conversion — tests use UTC directly.
     private static DateTimeOffset ToLocal(DateTimeOffset dt) => dt;
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddExemplars_SubTickTimestamps_PreserveDistinctSamplesAndDeduplicateRetries(bool histogram)
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(capacity: 100, []);
+        var sampleTime = s_startTime.UtcDateTime;
+        var first = TelemetryTestHelpers.CreateExemplar(sampleTime, 1);
+        first.TimeUnixNano += 10;
+        var second = first.Clone();
+        second.TimeUnixNano += 10;
+        if (histogram)
+        {
+            var point = HistogramTestHelpers.CreatePoint(sampleTime, sampleTime.AddSeconds(1), [3, 0], [100]);
+            point.Exemplars.AddRange([first, second, first.Clone()]);
+            dimension.AddHistogramValue(point, OtlpAggregationTemporality.Cumulative, context);
+            dimension.AddHistogramValue(point, OtlpAggregationTemporality.Cumulative, context);
+            var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(5));
+            var data = calculator.CalculateHistogramValues([dimension], s_startTime, time => time.ToOffset(TimeSpan.FromHours(2)), "ms");
+            Assert.Equal([first.TimeUnixNano, second.TimeUnixNano], data.Exemplars.Select(exemplar => exemplar.TimeUnixNano));
+            Assert.All(data.Exemplars, exemplar =>
+            {
+                Assert.Equal(s_startTime, exemplar.Start);
+                Assert.Equal(TimeSpan.Zero, exemplar.Start.Offset);
+            });
+        }
+        else
+        {
+            var point = new NumberDataPoint
+            {
+                StartTimeUnixNano = first.TimeUnixNano - 10,
+                TimeUnixNano = first.TimeUnixNano + 1_000_000_000,
+                AsInt = 1
+            };
+            point.Exemplars.AddRange([first, second, first.Clone()]);
+            dimension.AddPointValue(point, context);
+            dimension.AddPointValue(point, context);
+        }
+        var value = Assert.Single(dimension.Values);
+        Assert.Equal([first.TimeUnixNano, second.TimeUnixNano], value.Exemplars.Select(exemplar => exemplar.TimeUnixNano));
+        Assert.All(value.Exemplars, exemplar => Assert.Equal(sampleTime, exemplar.Start));
+    }
+
     [Fact]
     public void CalcOffset_ReturnsCorrectOffset()
     {
@@ -405,7 +449,6 @@ public class ChartDataCalculatorTests
             start,
             traces,
             exemplars,
-            ToLocal,
             out _);
         var secondResult = ChartDataCalculator.TryCalculateHistogramPoints(
             [stableDimension, changingDimension],
@@ -413,7 +456,6 @@ public class ChartDataCalculatorTests
             start.AddMinutes(1),
             traces,
             exemplars,
-            ToLocal,
             out _);
 
         Assert.True(firstResult);
@@ -653,7 +695,7 @@ public class ChartDataCalculatorTests
             [99] = new() { Name = "P99", Percentile = 99 }
         };
         Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime, s_startTime.AddSeconds(1),
-            traces, [], ToLocal, out var incompatibleBounds));
+            traces, [], out var incompatibleBounds));
         Assert.False(incompatibleBounds);
         Assert.All(traces.Values, trace => Assert.Equal([100d], trace.Values));
         Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
@@ -742,9 +784,9 @@ public class ChartDataCalculatorTests
         var traces = new Dictionary<int, ChartTrace> { [50] = new() { Name = "P50", Percentile = 50 } };
 
         Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime, s_startTime.AddSeconds(1),
-            traces, [], ToLocal, out _));
+            traces, [], out _));
         Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime.AddSeconds(1), s_startTime.AddSeconds(2),
-            traces, [], ToLocal, out _));
+            traces, [], out _));
         Assert.Equal([10d, 100d], traces[50].Values);
         Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
         Assert.Equal(10, count);

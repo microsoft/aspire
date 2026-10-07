@@ -10,7 +10,18 @@ public class MetricValue<T> : MetricValueBase where T : struct
 {
     public readonly T Value;
 
-    public MetricValue(T value, DateTime start, DateTime end) : base(start, end)
+    public MetricValue(T value, DateTime start, DateTime end)
+        : this(value, OtlpHelpers.DateTimeToUnixNanoseconds(start), OtlpHelpers.DateTimeToUnixNanoseconds(end))
+    {
+    }
+
+    /// <summary>
+    /// Initializes a numeric metric value with a nanosecond interval.
+    /// </summary>
+    /// <param name="value">The measurement value.</param>
+    /// <param name="startTimeUnixNano">The normalized interval start in nanoseconds since the Unix epoch.</param>
+    /// <param name="endTimeUnixNano">The point end in nanoseconds since the Unix epoch.</param>
+    public MetricValue(T value, ulong startTimeUnixNano, ulong endTimeUnixNano) : base(startTimeUnixNano, endTimeUnixNano)
     {
         Value = value;
     }
@@ -19,7 +30,7 @@ public class MetricValue<T> : MetricValueBase where T : struct
 
     protected override MetricValueBase Clone()
     {
-        var value = new MetricValue<T>(Value, Start, End);
+        var value = new MetricValue<T>(Value, StartTimeUnixNano, EndTimeUnixNano);
         if (HasExemplars)
         {
             value.Exemplars.AddRange(Exemplars);
@@ -42,13 +53,13 @@ public class MetricValue<T> : MetricValueBase where T : struct
     public override bool Equals(object? obj)
     {
         return obj is MetricValue<T> other
-            && Start.Equals(other.Start)
+            && StartTimeUnixNano == other.StartTimeUnixNano
             && Count == other.Count
             && Equals(Value, other.Value);
     }
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Start, End, Count, Value);
+        return HashCode.Combine(StartTimeUnixNano, Count, Value);
     }
 }

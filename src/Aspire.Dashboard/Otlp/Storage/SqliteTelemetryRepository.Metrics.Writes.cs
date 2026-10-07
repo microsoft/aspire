@@ -192,42 +192,42 @@ public sealed partial class SqliteTelemetryRepository
             var pendingLatest = dimension.PendingPoint;
             var latest = dimension.LatestPoint;
             var latestPointType = pendingLatest?.PointType ?? latest?.PointType;
-            var latestEndTimeTicks = pendingLatest?.EndTimeTicks ?? latest?.EndTimeTicks;
+            var latestEndTimeUnixNano = pendingLatest?.EndTimeUnixNano ?? latest?.EndTimeUnixNano;
             var sameValue = latestPointType == pointType && (pendingLatest is not null
                 ? pointType == LongPointType ? pendingLatest.IntegerValue == point.AsInt : pendingLatest.DoubleValue == point.AsDouble
                 : pointType == LongPointType ? latest?.IntegerValue == point.AsInt : latest?.DoubleValue == point.AsDouble);
-            var endTimeTicks = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano).Ticks;
+            var endTimeUnixNano = checked((long)point.TimeUnixNano);
             if (sameValue)
             {
                 if (pendingLatest is not null)
                 {
-                    pendingLatest.EndTimeTicks = endTimeTicks;
+                    pendingLatest.EndTimeUnixNano = endTimeUnixNano;
                     pendingLatest.RepeatCount++;
                     pendingLatest.SourcePointCount++;
                     pendingLatest.Exemplars.AddRange(point.Exemplars);
                 }
                 else
                 {
-                    pointBatch.AddUpdate(latest!.PointId, endTimeTicks, incrementRepeatCount: true);
-                    latest.EndTimeTicks = endTimeTicks;
+                    pointBatch.AddUpdate(latest!.PointId, endTimeUnixNano, incrementRepeatCount: true);
+                    latest.EndTimeUnixNano = endTimeUnixNano;
                     QueueMetricExemplars(pointBatch, latest.PointId, point.Exemplars);
                     context.SuccessCount++;
                 }
             }
             else
             {
-                var start = OtlpHelpers.UnixNanoSecondsToDateTime(point.StartTimeUnixNano);
+                var start = checked((long)point.StartTimeUnixNano);
                 if (latestPointType == pointType)
                 {
-                    start = new DateTime(latestEndTimeTicks!.Value, DateTimeKind.Utc);
+                    start = latestEndTimeUnixNano!.Value;
                 }
                 var pendingPoint = new PendingMetricPoint
                 {
                     Context = context,
                     Dimension = dimension,
                     PointType = pointType,
-                    StartTimeTicks = start.Ticks,
-                    EndTimeTicks = endTimeTicks,
+                    StartTimeUnixNano = start,
+                    EndTimeUnixNano = endTimeUnixNano,
                     RepeatCount = 1,
                     IntegerValue = pointType == LongPointType ? point.AsInt : (long?)null,
                     DoubleValue = pointType == DoublePointType ? point.AsDouble : (double?)null,
@@ -265,19 +265,19 @@ public sealed partial class SqliteTelemetryRepository
             var previousHistogram = pendingLatest?.Histogram ?? latest?.Histogram;
             var histogramCount = checked((long)point.Count);
             var histogram = HistogramValue.Create(point, temporality, previousHistogram);
-            var endTimeTicks = histogram.End.Ticks;
+            var endTimeUnixNano = checked((long)histogram.EndTimeUnixNano);
             if (ReferenceEquals(histogram, previousHistogram))
             {
                 if (pendingLatest is not null)
                 {
-                    pendingLatest.EndTimeTicks = endTimeTicks;
+                    pendingLatest.EndTimeUnixNano = endTimeUnixNano;
                     pendingLatest.SourcePointCount++;
                     pendingLatest.Exemplars.AddRange(point.Exemplars);
                 }
                 else
                 {
-                    pointBatch.AddUpdate(latest!.PointId, endTimeTicks, incrementRepeatCount: false);
-                    latest.EndTimeTicks = endTimeTicks;
+                    pointBatch.AddUpdate(latest!.PointId, endTimeUnixNano, incrementRepeatCount: false);
+                    latest.EndTimeUnixNano = endTimeUnixNano;
                     QueueMetricExemplars(pointBatch, latest.PointId, point.Exemplars);
                     context.SuccessCount++;
                 }
@@ -295,8 +295,8 @@ public sealed partial class SqliteTelemetryRepository
                     Context = context,
                     Dimension = dimension,
                     PointType = HistogramPointType,
-                    StartTimeTicks = histogram.Start.Ticks,
-                    EndTimeTicks = endTimeTicks,
+                    StartTimeUnixNano = checked((long)histogram.StartTimeUnixNano),
+                    EndTimeUnixNano = endTimeUnixNano,
                     RepeatCount = 1,
                     HistogramSum = histogram.Sum,
                     HistogramCount = histogramCount,
@@ -321,7 +321,7 @@ public sealed partial class SqliteTelemetryRepository
         foreach (var updates in pointBatch.Updates.Values.Chunk(MaxMetricPointBatchSize))
         {
             var sql = new StringBuilder("""
-                WITH updates(point_id, end_time_ticks, repeat_delta) AS (
+                WITH updates(point_id, end_time_unix_nano, repeat_delta) AS (
                     VALUES
                 """);
             var parameters = new DynamicParameters();
@@ -332,9 +332,9 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     sql.AppendLine(",");
                 }
-                sql.Append(CultureInfo.InvariantCulture, $"        (@PointId{index}, @EndTimeTicks{index}, @RepeatDelta{index})");
+                sql.Append(CultureInfo.InvariantCulture, $"        (@PointId{index}, @EndTimeUnixNano{index}, @RepeatDelta{index})");
                 parameters.Add($"PointId{index}", update.PointId);
-                parameters.Add($"EndTimeTicks{index}", update.EndTimeTicks);
+                parameters.Add($"EndTimeUnixNano{index}", update.EndTimeUnixNano);
                 parameters.Add($"RepeatDelta{index}", update.RepeatDelta);
                 index++;
             }
@@ -342,7 +342,7 @@ public sealed partial class SqliteTelemetryRepository
             sql.Append("""
                 )
                 UPDATE telemetry_metric_points AS points
-                SET end_time_ticks = updates.end_time_ticks,
+                SET end_time_unix_nano = updates.end_time_unix_nano,
                     repeat_count = points.repeat_count + updates.repeat_delta
                 FROM updates
                 WHERE points.point_id = updates.point_id;
@@ -352,16 +352,16 @@ public sealed partial class SqliteTelemetryRepository
 
         string[] columns =
         [
-            "dimension_id", "point_type", "start_time_ticks", "end_time_ticks", "repeat_count",
+            "dimension_id", "point_type", "start_time_unix_nano", "end_time_unix_nano", "repeat_count",
             "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags",
-            "histogram_aggregation_start_ticks", "histogram_aggregation_id"
+            "histogram_aggregation_start_unix_nano", "histogram_aggregation_id"
         ];
         BindRowParameters<PendingMetricPoint> bindParameters = static (point, parameters) =>
         {
             parameters[0].Value = point.Dimension.DimensionId;
             parameters[1].Value = point.PointType;
-            parameters[2].Value = point.StartTimeTicks;
-            parameters[3].Value = point.EndTimeTicks;
+            parameters[2].Value = point.StartTimeUnixNano;
+            parameters[3].Value = point.EndTimeUnixNano;
             parameters[4].Value = point.RepeatCount;
             parameters[5].Value = point.IntegerValue ?? (object)DBNull.Value;
             parameters[6].Value = point.DoubleValue ?? (object)DBNull.Value;
@@ -370,7 +370,7 @@ public sealed partial class SqliteTelemetryRepository
             parameters[9].Value = point.Histogram is not null ? PackUInt64Values(point.Histogram.Values) : DBNull.Value;
             parameters[10].Value = point.Histogram is not null ? PackDoubleValues(point.Histogram.ExplicitBounds) : DBNull.Value;
             parameters[11].Value = point.Flags;
-            parameters[12].Value = point.Histogram?.AggregationStart.Ticks ?? (object)DBNull.Value;
+            parameters[12].Value = point.Histogram is { } histogram ? checked((long)histogram.AggregationStartUnixNano) : DBNull.Value;
             parameters[13].Value = point.Histogram?.AggregationId ?? (object)DBNull.Value;
         };
 
@@ -389,17 +389,17 @@ public sealed partial class SqliteTelemetryRepository
                 pointBatch.Inserts, MaxMetricPointBatchSize, columns.Length,
                 rowCount => SqliteBatchInsert.CreateBatchInsertCommand(
                     connection, transaction, rowCount, "telemetry_metric_points", columns,
-                    returningColumnName: "point_id, dimension_id, start_time_ticks, histogram_aggregation_id, point_type",
+                    returningColumnName: "point_id, dimension_id, start_time_unix_nano, histogram_aggregation_id, point_type",
                     onConflictClause: $"""
-                        ON CONFLICT(dimension_id, start_time_ticks, histogram_aggregation_id) WHERE point_type = {HistogramPointType}
+                        ON CONFLICT(dimension_id, start_time_unix_nano, histogram_aggregation_id) WHERE point_type = {HistogramPointType}
                         DO UPDATE SET
-                            end_time_ticks = excluded.end_time_ticks,
+                            end_time_unix_nano = excluded.end_time_unix_nano,
                             histogram_sum = excluded.histogram_sum,
                             histogram_count = excluded.histogram_count,
                             bucket_counts = excluded.bucket_counts,
                             explicit_bounds = excluded.explicit_bounds,
                             flags = excluded.flags,
-                            histogram_aggregation_start_ticks = excluded.histogram_aggregation_start_ticks
+                            histogram_aggregation_start_unix_nano = excluded.histogram_aggregation_start_unix_nano
                         """),
                 bindParameters,
                 command =>
@@ -441,7 +441,7 @@ public sealed partial class SqliteTelemetryRepository
         foreach (var point in pointBatch.Inserts)
         {
             point.PointId = histogramPointIds is not null && point.Histogram is { } histogram
-                ? histogramPointIds[new MetricPointKey(point.Dimension.DimensionId, point.PointType, point.StartTimeTicks, histogram.AggregationId)]
+                ? histogramPointIds[new MetricPointKey(point.Dimension.DimensionId, point.PointType, point.StartTimeUnixNano, histogram.AggregationId)]
                 : numberPointIds[numberIndex++];
             QueueMetricExemplars(pointBatch, point.PointId, point.Exemplars);
         }
@@ -462,7 +462,7 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     PointId = point.PointId,
                     PointType = point.PointType,
-                    EndTimeTicks = point.EndTimeTicks,
+                    EndTimeUnixNano = point.EndTimeUnixNano,
                     IntegerValue = point.IntegerValue,
                     DoubleValue = point.DoubleValue,
                     HistogramCount = point.HistogramCount,
@@ -494,13 +494,13 @@ public sealed partial class SqliteTelemetryRepository
                     a.attribute_value AS AttributeValue,
                     p.point_id AS PointId,
                     p.point_type AS PointType,
-                    p.start_time_ticks AS StartTimeTicks,
-                    p.end_time_ticks AS EndTimeTicks,
+                    p.start_time_unix_nano AS StartTimeUnixNano,
+                    p.end_time_unix_nano AS EndTimeUnixNano,
                     p.integer_value AS IntegerValue,
                     p.double_value AS DoubleValue,
                     p.histogram_count AS HistogramCount,
                     p.histogram_sum AS HistogramSum,
-                    p.histogram_aggregation_start_ticks AS HistogramAggregationStartTicks,
+                    p.histogram_aggregation_start_unix_nano AS HistogramAggregationStartUnixNano,
                     p.histogram_aggregation_id AS HistogramAggregationId,
                     p.bucket_counts AS HistogramBucketCounts,
                     p.explicit_bounds AS HistogramExplicitBounds,
@@ -535,7 +535,7 @@ public sealed partial class SqliteTelemetryRepository
                             {
                                 PointId = first.PointId.Value,
                                 PointType = first.PointType!.Value,
-                                EndTimeTicks = first.EndTimeTicks!.Value,
+                                EndTimeUnixNano = first.EndTimeUnixNano!.Value,
                                 IntegerValue = first.IntegerValue,
                                 DoubleValue = first.DoubleValue,
                                 HistogramCount = first.HistogramCount,
@@ -543,10 +543,10 @@ public sealed partial class SqliteTelemetryRepository
                                     ? new HistogramValue(
                                         UnpackUInt64Values(first.HistogramBucketCounts!), first.HistogramSum!.Value,
                                         checked((ulong)first.HistogramCount!.Value),
-                                        new DateTime(first.StartTimeTicks!.Value, DateTimeKind.Utc),
-                                        new DateTime(first.EndTimeTicks.Value, DateTimeKind.Utc),
+                                        checked((ulong)first.StartTimeUnixNano!.Value),
+                                        checked((ulong)first.EndTimeUnixNano.Value),
                                         UnpackDoubleValues(first.HistogramExplicitBounds!),
-                                        new DateTime(first.HistogramAggregationStartTicks!.Value, DateTimeKind.Utc),
+                                        checked((ulong)first.HistogramAggregationStartUnixNano!.Value),
                                         first.HistogramAggregationId!.Value,
                                         (OtlpAggregationTemporality)first.AggregationTemporality)
                                     : null
@@ -734,17 +734,17 @@ public sealed partial class SqliteTelemetryRepository
                 continue;
             }
             var value = exemplar.HasAsDouble ? exemplar.AsDouble : exemplar.AsInt;
-            if (!double.IsFinite(value))
+            if (!double.IsFinite(value) || !OtlpHelpers.TryValidateMetricExemplarTimestamp(exemplar, _otlpContext))
             {
                 continue;
             }
-            var startTicks = OtlpHelpers.UnixNanoSecondsToDateTime(exemplar.TimeUnixNano).Ticks;
+            var timeUnixNano = checked((long)exemplar.TimeUnixNano);
             pointBatch.Exemplars.TryAdd(
-                new MetricExemplarKey(pointId, startTicks, value),
+                new MetricExemplarKey(pointId, timeUnixNano, value),
                 new PendingMetricExemplar
                 {
                     PointId = pointId,
-                    StartTimeTicks = startTicks,
+                    TimeUnixNano = timeUnixNano,
                     Value = value,
                     SpanId = exemplar.SpanId.ToHexString(),
                     TraceId = exemplar.TraceId.ToHexString(),
@@ -762,7 +762,7 @@ public sealed partial class SqliteTelemetryRepository
         {
             var sql = new StringBuilder("""
                 INSERT OR IGNORE INTO telemetry_metric_exemplars (
-                    point_id, start_time_ticks, exemplar_value, span_id, trace_id)
+                    point_id, time_unix_nano, exemplar_value, span_id, trace_id)
                 VALUES
                 """);
             var parameters = new DynamicParameters();
@@ -772,9 +772,9 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     sql.AppendLine(",");
                 }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @StartTimeTicks{index}, @Value{index}, @SpanId{index}, @TraceId{index})");
+                sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @TimeUnixNano{index}, @Value{index}, @SpanId{index}, @TraceId{index})");
                 parameters.Add($"PointId{index}", batch[index].PointId);
-                parameters.Add($"StartTimeTicks{index}", batch[index].StartTimeTicks);
+                parameters.Add($"TimeUnixNano{index}", batch[index].TimeUnixNano);
                 parameters.Add($"Value{index}", batch[index].Value);
                 parameters.Add($"SpanId{index}", batch[index].SpanId);
                 parameters.Add($"TraceId{index}", batch[index].TraceId);
@@ -783,12 +783,12 @@ public sealed partial class SqliteTelemetryRepository
                 RETURNING
                     exemplar_id AS ExemplarId,
                     point_id AS PointId,
-                    start_time_ticks AS StartTimeTicks,
+                    time_unix_nano AS TimeUnixNano,
                     exemplar_value AS ExemplarValue;
                 """);
             foreach (var inserted in connection.Query<InsertedMetricExemplarRecord>(sql.ToString(), parameters, transaction))
             {
-                exemplars[new MetricExemplarKey(inserted.PointId, inserted.StartTimeTicks, inserted.ExemplarValue)].ExemplarId = inserted.ExemplarId;
+                exemplars[new MetricExemplarKey(inserted.PointId, inserted.TimeUnixNano, inserted.ExemplarValue)].ExemplarId = inserted.ExemplarId;
             }
         }
 
@@ -963,14 +963,14 @@ public sealed partial class SqliteTelemetryRepository
         public List<PendingMetricPoint> Inserts { get; } = [];
         public Dictionary<MetricExemplarKey, PendingMetricExemplar> Exemplars { get; } = [];
 
-        public void AddUpdate(long pointId, long endTimeTicks, bool incrementRepeatCount)
+        public void AddUpdate(long pointId, long endTimeUnixNano, bool incrementRepeatCount)
         {
             if (!Updates.TryGetValue(pointId, out var update))
             {
                 update = new MetricPointUpdate { PointId = pointId };
                 Updates.Add(pointId, update);
             }
-            update.EndTimeTicks = endTimeTicks;
+            update.EndTimeUnixNano = endTimeUnixNano;
             if (incrementRepeatCount)
             {
                 update.RepeatDelta++;
@@ -978,12 +978,12 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private readonly record struct MetricExemplarKey(long PointId, long StartTimeTicks, double Value);
+    private readonly record struct MetricExemplarKey(long PointId, long TimeUnixNano, double Value);
 
     private sealed class PendingMetricExemplar
     {
         public required long PointId { get; init; }
-        public required long StartTimeTicks { get; init; }
+        public required long TimeUnixNano { get; init; }
         public required double Value { get; init; }
         public required string SpanId { get; init; }
         public required string TraceId { get; init; }
@@ -997,14 +997,14 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required long ExemplarId { get; init; }
         public required long PointId { get; init; }
-        public required long StartTimeTicks { get; init; }
+        public required long TimeUnixNano { get; init; }
         public required double ExemplarValue { get; init; }
     }
 
     private sealed class MetricPointUpdate
     {
         public required long PointId { get; init; }
-        public long EndTimeTicks { get; set; }
+        public long EndTimeUnixNano { get; set; }
         public long RepeatDelta { get; set; }
     }
 
@@ -1013,8 +1013,8 @@ public sealed partial class SqliteTelemetryRepository
         public required AddContext Context { get; init; }
         public required MetricDimensionState Dimension { get; init; }
         public required int PointType { get; init; }
-        public required long StartTimeTicks { get; init; }
-        public required long EndTimeTicks { get; set; }
+        public required long StartTimeUnixNano { get; init; }
+        public required long EndTimeUnixNano { get; set; }
         public required long RepeatCount { get; set; }
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
@@ -1035,13 +1035,13 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
         public long? PointId { get; init; }
         public int? PointType { get; init; }
-        public long? StartTimeTicks { get; init; }
-        public long? EndTimeTicks { get; init; }
+        public long? StartTimeUnixNano { get; init; }
+        public long? EndTimeUnixNano { get; init; }
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public long? HistogramCount { get; init; }
         public double? HistogramSum { get; init; }
-        public long? HistogramAggregationStartTicks { get; init; }
+        public long? HistogramAggregationStartUnixNano { get; init; }
         public long? HistogramAggregationId { get; init; }
         public int AggregationTemporality { get; init; }
         public byte[]? HistogramBucketCounts { get; init; }
@@ -1052,7 +1052,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required long PointId { get; init; }
         public required int PointType { get; init; }
-        public required long EndTimeTicks { get; set; }
+        public required long EndTimeUnixNano { get; set; }
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public long? HistogramCount { get; init; }
