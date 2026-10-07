@@ -262,8 +262,8 @@ internal sealed class ChartDataCalculator
                 var metricStart = new DateTimeOffset(metric.Start, TimeSpan.Zero);
                 var histogramValue = GetHistogramValue(metric);
                 var isDelta = histogramValue.AggregationTemporality == OtlpAggregationTemporality.Delta;
-                // Each delta interval belongs to exactly one chart window. The cumulative padding
-                // accommodates rounded rollup timestamps, but would double-count delta intervals.
+                // Retain the existing cumulative sampling tolerance. Delta intervals must belong
+                // to exactly one half-open chart window, or their observations would be double-counted.
                 if (isDelta
                     ? metricStart >= start && metricStart < end
                     : metricStart >= cumulativeStart && metricStart <= cumulativeEnd)

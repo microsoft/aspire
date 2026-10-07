@@ -56,6 +56,8 @@ public sealed partial class SqliteTelemetryRepository
         """;
     // An aggregation identity separates cumulative resets within one rollup. Delta points each
     // have their own identity and retain their interval start, so no delta observations are discarded.
+    // Cumulative representatives start at their earliest source interval, not the rounded bucket
+    // boundary: rounding a reset at 3.5s to 3s would lower the preceding window's count.
     private static readonly string s_rolledUpMetricPointsCteSql = $"""
         {EffectiveMetricPointsCteSql},
         bucketed_metric_points AS (
@@ -67,6 +69,8 @@ public sealed partial class SqliteTelemetryRepository
         ranked_rollup_metric_points AS (
             SELECT
                 p.*,
+                MIN(p.start_time_ticks) OVER (
+                    PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_source_start_time_ticks,
                 MAX(p.end_time_ticks) OVER (
                     PARTITION BY p.dimension_id, p.point_type, p.rollup_start_time_ticks, p.histogram_aggregation_id) AS rollup_end_time_ticks,
                 SUM(p.repeat_count) OVER (
@@ -85,8 +89,11 @@ public sealed partial class SqliteTelemetryRepository
                 p.point_id,
                 p.dimension_id,
                 p.point_type,
-                CASE WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta}
-                    THEN p.start_time_ticks ELSE p.rollup_start_time_ticks END AS start_time_ticks,
+                CASE
+                    WHEN p.point_type = {HistogramPointType} AND p.aggregation_temporality = {(int)OtlpAggregationTemporality.Delta} THEN p.start_time_ticks
+                    WHEN p.point_type = {HistogramPointType} THEN p.rollup_source_start_time_ticks
+                    ELSE p.rollup_start_time_ticks
+                END AS start_time_ticks,
                 p.rollup_end_time_ticks AS end_time_ticks,
                 p.rollup_repeat_count AS repeat_count,
                 p.integer_value,
@@ -240,6 +247,7 @@ public sealed partial class SqliteTelemetryRepository
                 p.histogram_aggregation_start_ticks AS HistogramAggregationStartTicks,
                 p.histogram_aggregation_id AS HistogramAggregationId,
                 p.aggregation_temporality AS AggregationTemporality,
+                stored.start_time_ticks AS SourceStartTimeTicks,
                 stored.bucket_counts AS BucketCounts,
                 stored.explicit_bounds AS ExplicitBounds
             FROM rolled_up_metric_points p
@@ -461,25 +469,17 @@ public sealed partial class SqliteTelemetryRepository
               AND e.start_time_ticks <= @EndTicks
             ORDER BY source.dimension_id, source.start_time_ticks, e.exemplar_id;
             """, queryParameters, transaction).AsList();
-        var pointIds = points.ToDictionary(
-            point => new MetricPointKey(point.DimensionId, point.PointType, point.StartTimeTicks, point.HistogramAggregationId),
-            point => point.PointId);
         var pointIntervalTicks = dataPointInterval?.Ticks;
+        // Match the SQL partition using source timestamps, independently of the displayed start.
+        // A cumulative reset's representative can start at 3.5s while its SQL group starts at 3s.
+        var pointIds = points.ToDictionary(
+            point => GetPointKey(point.DimensionId, point.PointType, point.SourceStartTimeTicks, point.HistogramAggregationId),
+            point => point.PointId);
         var mappedRecords = new List<(long PointId, MetricExemplarRecord Record)>();
         foreach (var record in records)
         {
-            // Delta intervals and reset representatives retain their own points. Other cumulative
-            // exemplars attach to the representative of their rollup and aggregation, never across a reset.
-            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, record.SourceStartTimeTicks,
+            if (pointIds.TryGetValue(GetPointKey(record.DimensionId, record.PointType, record.SourceStartTimeTicks,
                 record.HistogramAggregationId), out var pointId))
-            {
-                mappedRecords.Add((pointId, record));
-                continue;
-            }
-            var rollupStartTimeTicks = pointIntervalTicks is { } intervalTicks
-                ? (record.SourceStartTimeTicks / intervalTicks) * intervalTicks
-                : record.SourceStartTimeTicks;
-            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, rollupStartTimeTicks, record.HistogramAggregationId), out pointId))
             {
                 mappedRecords.Add((pointId, record));
             }
@@ -501,6 +501,14 @@ public sealed partial class SqliteTelemetryRepository
                     Attributes = attributes[item.Record.ExemplarId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray()
                 }))
             .ToLookup(pair => pair.Key, pair => pair.Value);
+
+        MetricPointKey GetPointKey(long dimensionId, int pointType, long sourceStartTimeTicks, long? aggregationId)
+        {
+            var groupStartTimeTicks = pointIntervalTicks is { } intervalTicks
+                ? (sourceStartTimeTicks / intervalTicks) * intervalTicks
+                : sourceStartTimeTicks;
+            return new MetricPointKey(dimensionId, pointType, groupStartTimeTicks, aggregationId);
+        }
     }
 
     private static ILookup<long, OwnedAttributeRecord> MaterializeMetricExemplarAttributes(
@@ -525,6 +533,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required long DimensionId { get; init; }
         public required long StartTimeTicks { get; init; }
+        public required long SourceStartTimeTicks { get; init; }
         public required long RepeatCount { get; init; }
         public double? HistogramSum { get; init; }
         public long? HistogramAggregationStartTicks { get; init; }

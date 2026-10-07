@@ -46,9 +46,11 @@ public class HistogramValue : MetricValueBase
         AggregationTemporality = aggregationTemporality;
     }
 
+    /// <summary>
+    /// Creates a snapshot from a validated point, extending and returning the previous instance when cumulative values are unchanged.
+    /// </summary>
     internal static HistogramValue Create(HistogramDataPoint point, OtlpAggregationTemporality temporality, HistogramValue? previous)
     {
-        OtlpHelpers.ValidateHistogramDataPoint(point);
         var aggregationStart = OtlpHelpers.UnixNanoSecondsToDateTime(point.StartTimeUnixNano);
         var end = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano);
 
@@ -108,21 +110,6 @@ public class HistogramValue : MetricValueBase
 
         var bounds = previous is not null && sameBounds ? previous.ExplicitBounds : point.ExplicitBounds.ToArray();
         return new HistogramValue(point.BucketCounts.ToArray(), point.Sum, point.Count, start, end, bounds, aggregationStart, aggregationId, temporality);
-    }
-
-    internal bool CanMerge(HistogramValue other)
-    {
-        if (AggregationTemporality == OtlpAggregationTemporality.Delta)
-        {
-            return false;
-        }
-
-        return ReferenceEquals(this, other) ||
-            (AggregationId == other.AggregationId &&
-            Count == other.Count &&
-            Sum.Equals(other.Sum) &&
-            Values.AsSpan().SequenceEqual(other.Values) &&
-            ExplicitBounds.AsSpan().SequenceEqual(other.ExplicitBounds));
     }
 
     private static bool HasSameBounds(double[] bounds, HistogramDataPoint point)

@@ -86,12 +86,12 @@ public class DimensionScope
     /// <param name="context">The telemetry ingestion context.</param>
     public void AddHistogramValue(HistogramDataPoint h, OtlpAggregationTemporality temporality, OtlpContext context)
     {
+        OtlpHelpers.ValidateHistogramDataPoint(h);
         var lastHistogramValue = _lastValue as HistogramValue;
         var value = HistogramValue.Create(h, temporality, lastHistogramValue);
-        if (lastHistogramValue is not null && lastHistogramValue.CanMerge(value))
+        if (ReferenceEquals(value, lastHistogramValue))
         {
-            lastHistogramValue.End = value.End;
-            AddExemplars(lastHistogramValue, h.Exemplars, context);
+            AddExemplars(value, h.Exemplars, context);
         }
         else
         {

@@ -1227,7 +1227,8 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             StartTime = DateTime.MinValue,
             EndTime = DateTime.MaxValue
         }, cancellationToken: CancellationToken.None);
-        Assert.All(instrument!.Dimensions, dimension => Assert.Empty(dimension.Values));
+        Assert.NotNull(instrument);
+        Assert.Empty(instrument.Dimensions);
     }
 
     [Fact]

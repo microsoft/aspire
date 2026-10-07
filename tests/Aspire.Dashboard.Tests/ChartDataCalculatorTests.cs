@@ -579,6 +579,40 @@ public class ChartDataCalculatorTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddHistogramValue_InvalidPoint_RejectsBeforeExtendingSnapshot(bool nonFiniteSum)
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        var valid = HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [10, 0], [100]);
+        dimension.AddHistogramValue(valid, OtlpAggregationTemporality.Cumulative, context);
+        var previous = Assert.IsType<HistogramValue>(Assert.Single(dimension.Values));
+        var invalid = nonFiniteSum
+            ? HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(200), [10, 0], [100])
+            : HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(200), [1], []);
+        if (nonFiniteSum)
+        {
+            invalid.Sum = double.NaN;
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => dimension.AddHistogramValue(invalid, OtlpAggregationTemporality.Cumulative, context));
+
+        Assert.Equal(nonFiniteSum
+            ? "Histogram data point sum must be finite."
+            : "Histogram data point has bucket counts without any explicit bounds.", exception.Message);
+        Assert.Same(previous, Assert.Single(dimension.Values));
+        Assert.Equal(time.AddMilliseconds(100), previous.End);
+        Assert.Equal(10UL, previous.Count);
+        valid.TimeUnixNano = ToNanos(s_startTime.AddMilliseconds(300));
+        dimension.AddHistogramValue(valid, OtlpAggregationTemporality.Cumulative, context);
+        Assert.Same(previous, Assert.Single(dimension.Values));
+        Assert.Equal(time.AddMilliseconds(300), previous.End);
+    }
+
+    [Theory]
     [InlineData(15ul, false)]
     [InlineData(20ul, false)]
     [InlineData(25ul, false)]

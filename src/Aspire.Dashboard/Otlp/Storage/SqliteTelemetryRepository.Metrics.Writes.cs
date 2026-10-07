@@ -265,10 +265,9 @@ public sealed partial class SqliteTelemetryRepository
             var previousHistogram = pendingLatest?.Histogram ?? latest?.Histogram;
             var histogramCount = checked((long)point.Count);
             var histogram = HistogramValue.Create(point, temporality, previousHistogram);
-            var endTimeTicks = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano).Ticks;
-            if (previousHistogram is not null && previousHistogram.CanMerge(histogram))
+            var endTimeTicks = histogram.End.Ticks;
+            if (ReferenceEquals(histogram, previousHistogram))
             {
-                previousHistogram.End = histogram.End;
                 if (pendingLatest is not null)
                 {
                     pendingLatest.EndTimeTicks = endTimeTicks;
@@ -299,7 +298,7 @@ public sealed partial class SqliteTelemetryRepository
                     StartTimeTicks = histogram.Start.Ticks,
                     EndTimeTicks = endTimeTicks,
                     RepeatCount = 1,
-                    HistogramSum = point.Sum,
+                    HistogramSum = histogram.Sum,
                     HistogramCount = histogramCount,
                     Histogram = histogram,
                     Flags = (long)point.Flags
