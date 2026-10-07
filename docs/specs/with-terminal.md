@@ -25,6 +25,8 @@ Per-replica terminal host resources are hidden by default. Use **Show hidden
 resources** in the dashboard to inspect their state and console logs. They
 export diagnostic logs, metrics, and traces to the configured dashboard OTLP
 endpoint independently of their visibility.
+When `DistributedApplicationOptions.DisableDashboard` is `true`, terminal host
+telemetry is disabled, even if an explicit OTLP collector endpoint is configured.
 
 ## AppHost-owned terminals
 

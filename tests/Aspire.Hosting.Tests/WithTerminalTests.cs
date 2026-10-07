@@ -284,7 +284,7 @@ public class WithTerminalTests : IAsyncLifetime
     [InlineData(true)]
     public async Task HiddenTerminalHostsExportTelemetry(bool parentExportsTelemetry)
     {
-        using var builder = CreateBuilder();
+        using var builder = CreateBuilder(disableDashboard: false);
         const string otlpEndpoint = "http://localhost:4317";
         builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = otlpEndpoint;
         builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "false";
@@ -326,6 +326,49 @@ public class WithTerminalTests : IAsyncLifetime
             Assert.Equal(otlpEndpoint, parentEnvironment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
         }
         Assert.False(parentEnvironment.ContainsKey(KnownConfigNames.TerminalHostTelemetryEnabled));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)]
+    [InlineData(KnownConfigNames.DashboardOtlpHttpEndpointUrl)]
+    [InlineData(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl)]
+    [InlineData(KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl)]
+    public async Task TerminalHostsDisableTelemetryWhenDashboardIsDisabled(string? endpointConfigurationKey)
+    {
+        using var builder = CreateBuilder(disableDashboard: true);
+        builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.DashboardOtlpHttpEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "true";
+        if (endpointConfigurationKey is not null)
+        {
+            builder.Configuration[endpointConfigurationKey] = "http://localhost:4317";
+        }
+
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithOtlpExporter()
+            .WithTerminal();
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(2, hosts.Count);
+        foreach (var host in hosts)
+        {
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(host, serviceProvider: app.Services);
+            Assert.True(host.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot.IsHidden);
+            Assert.Empty(host.Annotations.OfType<OtlpExporterAnnotation>());
+            Assert.Equal("false", environment[KnownConfigNames.TerminalHostTelemetryEnabled]);
+            Assert.False(environment.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"));
+            Assert.False(environment.ContainsKey("OTEL_EXPORTER_OTLP_PROTOCOL"));
+            Assert.False(environment.ContainsKey("OTEL_SERVICE_NAME"));
+            Assert.False(environment.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"));
+        }
     }
 
     [Fact]
@@ -1422,6 +1465,17 @@ public class WithTerminalTests : IAsyncLifetime
         DistributedApplicationOperation operation = DistributedApplicationOperation.Run)
     {
         var builder = TestDistributedApplicationBuilder.Create(operation);
+        builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = _terminalDirectory;
+        return builder;
+    }
+
+    private IDistributedApplicationTestingBuilder CreateBuilder(bool disableDashboard)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.DisableDashboard = disableDashboard;
+            options.TrustDeveloperCertificate = false;
+        });
         builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = _terminalDirectory;
         return builder;
     }

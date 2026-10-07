@@ -35,7 +35,8 @@ public static class TerminalResourceBuilderExtensions
     /// HMP v1 protocol. The terminal session can be accessed from the Aspire Dashboard's terminal
     /// page or via the <c>aspire terminal</c> CLI command.
     /// Terminal host resources can be revealed using the dashboard's Show hidden resources control
-    /// to inspect their state and diagnostic telemetry.
+    /// to inspect their state and diagnostic telemetry. Terminal host telemetry is disabled when
+    /// <see cref="DistributedApplicationOptions.DisableDashboard"/> is <see langword="true"/>.
     /// </para>
     /// <para>
     /// One terminal host process is spawned per parent replica (e.g. <c>WithReplicas(3).WithTerminal()</c>
@@ -198,6 +199,7 @@ public static class TerminalResourceBuilderExtensions
         var appHostProcessScopeId = TerminalHostOrphanCleanupService.GetCurrentProcessScopeId();
         var appHostBootId = TerminalHostOrphanCleanupService.GetCurrentBootId();
         var createdAtUtc = DateTime.UtcNow;
+        var dashboardEnabled = @event.Services.GetRequiredService<DistributedApplicationOptions>().DashboardEnabled;
 
         for (var i = 0; i < replicaCount; i++)
         {
@@ -210,9 +212,13 @@ public static class TerminalResourceBuilderExtensions
                 terminalHost,
                 options,
                 appHostPid,
-                appHostProcessIdentity);
+                appHostProcessIdentity,
+                dashboardEnabled);
 
-            OtlpConfigurationExtensions.AddOtlpEnvironment(terminalHost, configuration, @event.Services.GetRequiredService<IHostEnvironment>());
+            if (dashboardEnabled)
+            {
+                OtlpConfigurationExtensions.AddOtlpEnvironment(terminalHost, configuration, @event.Services.GetRequiredService<IHostEnvironment>());
+            }
 
             var hostLogLevel = Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_HOST_LOG_LEVEL");
             if (!string.IsNullOrWhiteSpace(hostLogLevel))
@@ -348,7 +354,8 @@ public static class TerminalResourceBuilderExtensions
         TerminalHostResource host,
         TerminalOptions options,
         int appHostPid,
-        long appHostProcessIdentity)
+        long appHostProcessIdentity,
+        bool dashboardEnabled)
     {
         // Equivalent to the previous WithInitialState(...).ExcludeFromManifest().WithArgs(...) chain
         // but we can't go through IResourceBuilder<T> here — we're running mid-event without an
@@ -368,7 +375,9 @@ public static class TerminalResourceBuilderExtensions
 
         host.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
         {
-            context.EnvironmentVariables[KnownConfigNames.TerminalHostTelemetryEnabled] = "true";
+            // Explicitly disable the exporter for dashboard-free AppHosts, even if the process
+            // inherits telemetry activation or an OTLP endpoint from its environment.
+            context.EnvironmentVariables[KnownConfigNames.TerminalHostTelemetryEnabled] = dashboardEnabled ? "true" : "false";
             context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessId] =
                 appHostPid.ToString(CultureInfo.InvariantCulture);
             context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessStartedStable] =
