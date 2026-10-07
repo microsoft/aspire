@@ -204,7 +204,7 @@ function isCopilotLogin(login) {
 // human's work rather than a bot.
 function resolveAuthor(login, assignees) {
   if (!isCopilotLogin(login)) return login;
-  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && a.toLowerCase() !== "copilot");
+  const humans = assignees.filter((a) => a && !/\[bot\]$/i.test(a) && !isCopilotLogin(a));
   return humans.length === 1 ? `${humans[0]}/copilot` : login;
 }
 

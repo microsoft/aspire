@@ -100,11 +100,17 @@ test("loadDashboard ranks review-ready PRs by time waiting for review", async ()
   assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
 });
 
-test("loadDashboard attributes copilot-swe-agent identities to their sole human assignee", async () => {
-  for (const login of ["copilot-swe-agent", "copilot-swe-agent[bot]"]) {
+test("loadDashboard attributes Copilot PRs only to their sole human assignee", async () => {
+  const cases = [
+    { author: "copilot-swe-agent", assignee: "octocat", expected: "octocat/copilot" },
+    { author: "copilot-swe-agent[bot]", assignee: "octocat", expected: "octocat/copilot" },
+    { author: "copilot-swe-agent", assignee: "copilot-swe-agent", expected: "copilot-swe-agent" },
+  ];
+
+  for (const { author, assignee, expected } of cases) {
     const copilotPr = prNode(19893, new Date().toISOString());
-    copilotPr.author = { __typename: "Bot", login, avatarUrl: null };
-    copilotPr.assignees.nodes = [{ login: "ellahathaway" }];
+    copilotPr.author = { __typename: "Bot", login: author, avatarUrl: null };
+    copilotPr.assignees.nodes = [{ login: assignee }];
 
     globalThis.fetch = async (_url, options = {}) => {
       const body = JSON.parse(options.body);
@@ -121,7 +127,7 @@ test("loadDashboard attributes copilot-swe-agent identities to their sole human 
     };
 
     const dashboard = await loadDashboard({
-      accounts: [{ token: "token", login: "davidfowl", repos: ["microsoft/aspire"] }],
+      accounts: [{ token: "token", login: "octocat", repos: ["microsoft/aspire"] }],
       mode: "review",
       release: "9.5",
       prefs: {},
@@ -130,7 +136,7 @@ test("loadDashboard attributes copilot-swe-agent identities to their sole human 
 
     const pullRequests = dashboard.attention.buckets.flatMap((bucket) => bucket.items.map((item) => item.pr));
     const attributed = pullRequests.find((pr) => pr.number === copilotPr.number);
-    assert.equal(attributed.author, "ellahathaway/copilot");
+    assert.equal(attributed.author, expected);
   }
 });
 
