@@ -38,6 +38,7 @@ internal sealed class ExternalCapabilityRegistry : IDisposable
     private readonly object _registrationGate = new();
     private readonly ILogger<ExternalCapabilityRegistry> _logger;
     private readonly TimeSpan _invocationTimeout;
+    private readonly TimeSpan _callbackTimeout = IntegrationHostConfiguration.Default.CallbackTimeout;
     private readonly TimeProvider _timeProvider = TimeProvider.System;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry = RemoteHostProfilingTelemetry.Disabled;
     private InvalidOperationException? _initializationException;
@@ -56,6 +57,7 @@ internal sealed class ExternalCapabilityRegistry : IDisposable
         TimeProvider timeProvider, RemoteHostProfilingTelemetry profilingTelemetry)
         : this(logger, configuration.InvocationTimeout, timeProvider)
     {
+        _callbackTimeout = configuration.CallbackTimeout;
         _profilingTelemetry = profilingTelemetry;
     }
 
@@ -560,10 +562,11 @@ internal sealed class ExternalCapabilityRegistry : IDisposable
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token, owner.Invoker.LifetimeToken);
         _logger.LogInformation(
             "Guest callback relay {CallbackId} started: integration invocation {InvocationId}, capability {CapabilityId}, host {Host}, timeout {Timeout}.",
-            callbackId, owner.InvocationId, owner.CapabilityId, host.GetHashCode(), _invocationTimeout);
+            callbackId, owner.InvocationId, owner.CapabilityId, host.GetHashCode(), _callbackTimeout);
         try
         {
-            return await owner.Invoker.InvokeAsync<JsonNode?>(owner.CallbackId, args, cancellation.Token, _invocationTimeout).ConfigureAwait(false);
+            // The guest may await integration calls, so its outer callback budget must remain independent.
+            return await owner.Invoker.InvokeAsync<JsonNode?>(owner.CallbackId, args, cancellation.Token, _callbackTimeout).ConfigureAwait(false);
         }
         catch (TimeoutException ex)
         {
@@ -572,10 +575,10 @@ internal sealed class ExternalCapabilityRegistry : IDisposable
             _logger.LogError(ex,
                 "Guest callback relay {CallbackId} stalled: integration invocation {InvocationId}, capability {CapabilityId}, host {Host}, elapsed {Elapsed}, timeout {Timeout}. " +
                 "The integration connection was retired; restart the AppHost session to rebuild callbacks.",
-                callbackId, owner.InvocationId, owner.CapabilityId, host.GetHashCode(), _timeProvider.GetElapsedTime(started), _invocationTimeout);
+                callbackId, owner.InvocationId, owner.CapabilityId, host.GetHashCode(), _timeProvider.GetElapsedTime(started), _callbackTimeout);
             throw new TimeoutException(
                 $"Guest callback relay '{callbackId}' for integration capability '{owner.CapabilityId}' " +
-                $"(invocation {owner.InvocationId}) timed out after {_invocationTimeout}. Restart the AppHost session to rebuild callbacks.", ex);
+                $"(invocation {owner.InvocationId}) timed out after {_callbackTimeout}. Restart the AppHost session to rebuild callbacks.", ex);
         }
         catch (Exception ex)
         {

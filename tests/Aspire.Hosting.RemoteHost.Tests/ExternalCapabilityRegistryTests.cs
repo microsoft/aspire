@@ -48,7 +48,14 @@ public class ExternalCapabilityRegistryTests
         var sink = new TestSink();
         using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
         var clock = new FakeTimeProvider();
-        using var registry = new ExternalCapabilityRegistry(loggerFactory.CreateLogger<ExternalCapabilityRegistry>(), TimeSpan.FromMilliseconds(100), clock);
+        var configuration = new IntegrationHostConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPIRE_INTEGRATION_HOSTS_ENABLED"] = "true",
+            ["IntegrationHost:InvocationTimeout"] = "00:00:00.100",
+            ["IntegrationHost:CallbackTimeout"] = "00:00:00.300"
+        }).Build());
+        using var registry = new ExternalCapabilityRegistry(
+            loggerFactory.CreateLogger<ExternalCapabilityRegistry>(), configuration, clock, RemoteHostProfilingTelemetry.Disabled);
         var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var response = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var connection = new IntegrationHostTestConnection(CreateCapabilities("test.external/stall"), (_, _) =>
@@ -230,24 +237,89 @@ public class ExternalCapabilityRegistryTests
     }
 
     [Fact]
-    public async Task InvokeGuestCallbackAsync_StalledRelayRetiresBothConnectionsAndRequiresSessionRestart()
+    public async Task InvokeGuestCallbackAsync_ConfiguredCallbackCanOutliveInvocationDeadline()
     {
         var clock = new FakeTimeProvider();
-        using var registry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance, TimeSpan.FromMilliseconds(100), clock);
+        var configuration = new IntegrationHostConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPIRE_INTEGRATION_HOSTS_ENABLED"] = "true",
+            ["IntegrationHost:InvocationTimeout"] = "00:00:00.100",
+            ["IntegrationHost:CallbackTimeout"] = "00:00:00.300"
+        }).Build());
+        using var registry = new ExternalCapabilityRegistry(
+            NullLogger<ExternalCapabilityRegistry>.Instance, configuration, clock, RemoteHostProfilingTelemetry.Disabled);
         string? relayId = null;
         using var integration = new IntegrationHostTestConnection(CreateCallbackCapabilities(), (_, args) =>
         {
             relayId = args!["configure"]!.GetValue<string>();
             return Task.FromResult<JsonNode?>(null);
         });
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var response = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var guest = new IntegrationHostTestConnection(CreateCapabilities(), (_, _, _) => response.Task);
-        using var guestInvoker = new JsonRpcCallbackInvoker(
-            NullLogger<JsonRpcCallbackInvoker>.Instance,
-            new IntegrationHostConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ASPIRE_INTEGRATION_HOSTS_ENABLED"] = "true"
-            }).Build()), clock);
+        using var guest = new IntegrationHostTestConnection(CreateCapabilities(), (_, _, _) =>
+        {
+            started.TrySetResult();
+            return response.Task;
+        });
+        await using var guestInvoker = new JsonRpcCallbackInvoker(NullLogger<JsonRpcCallbackInvoker>.Instance, configuration, clock);
+        guestInvoker.SetConnection(guest.ServerRpc);
+        registry.AddIntegrationHost(integration.ServerRpc);
+        await registry.InitializeAllHostsAsync(1, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await registry.TryInvokeAsync("test.external/callback", new JsonObject { ["configure"] = "guest_callback" }, guestInvoker);
+        Assert.NotNull(relayId);
+        var invocation = registry.InvokeGuestCallbackAsync(integration.ServerRpc, relayId, null, TestContext.Current.CancellationToken);
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            clock.Advance(TimeSpan.FromMilliseconds(200));
+            Assert.False(invocation.IsCompleted);
+            response.SetResult(JsonValue.Create("completed"));
+            var result = await invocation.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.Equal("completed", result!.GetValue<string>());
+            Assert.True(guestInvoker.IsConnected);
+            Assert.False(guestInvoker.LifetimeToken.IsCancellationRequested);
+            Assert.True((await registry.TryInvokeAsync(
+                "test.external/callback", new JsonObject { ["configure"] = "guest_callback" }, guestInvoker)).Found);
+        }
+        finally
+        {
+            response.TrySetResult(null);
+        }
+    }
+
+    [Theory]
+    [InlineData(100, 100)]
+    [InlineData(100, 300)]
+    [InlineData(300, 100)]
+    public async Task InvokeGuestCallbackAsync_StalledRelayRetiresBothConnectionsAndRequiresSessionRestart(
+        int invocationMilliseconds, int callbackMilliseconds)
+    {
+        var clock = new FakeTimeProvider();
+        var configuration = new IntegrationHostConfiguration(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ASPIRE_INTEGRATION_HOSTS_ENABLED"] = "true",
+            ["IntegrationHost:InvocationTimeout"] = TimeSpan.FromMilliseconds(invocationMilliseconds).ToString("c"),
+            ["IntegrationHost:CallbackTimeout"] = TimeSpan.FromMilliseconds(callbackMilliseconds).ToString("c")
+        }).Build());
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        using var registry = new ExternalCapabilityRegistry(
+            loggerFactory.CreateLogger<ExternalCapabilityRegistry>(), configuration, clock, RemoteHostProfilingTelemetry.Disabled);
+        string? relayId = null;
+        using var integration = new IntegrationHostTestConnection(CreateCallbackCapabilities(), (_, args) =>
+        {
+            relayId = args!["configure"]!.GetValue<string>();
+            return Task.FromResult<JsonNode?>(null);
+        });
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var guest = new IntegrationHostTestConnection(CreateCapabilities(), (_, _, _) =>
+        {
+            started.TrySetResult();
+            return response.Task;
+        });
+        await using var guestInvoker = new JsonRpcCallbackInvoker(
+            NullLogger<JsonRpcCallbackInvoker>.Instance, configuration, clock);
         guestInvoker.SetConnection(guest.ServerRpc);
         _ = registry.ExpectHostRegistration("integration");
         registry.AddIntegrationHost("integration", integration.ServerRpc, integration.CallbackInvoker);
@@ -257,9 +329,32 @@ public class ExternalCapabilityRegistryTests
         try
         {
             var invocation = registry.InvokeGuestCallbackAsync(integration.ServerRpc, relayId, null, TestContext.Current.CancellationToken);
-            clock.Advance(TimeSpan.FromMilliseconds(100));
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            clock.Advance(TimeSpan.FromMilliseconds(callbackMilliseconds - 1));
+            Assert.False(invocation.IsCompleted);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
             var error = await Assert.ThrowsAsync<TimeoutException>(() => invocation.WaitAsync(TimeSpan.FromSeconds(10)));
-            Assert.Contains("Restart the AppHost session to rebuild callbacks.", error.Message);
+            var records = sink.Writes.Where(write => write.State is IEnumerable<KeyValuePair<string, object?>> state &&
+                state.Any(entry => entry.Key == "CallbackId") &&
+                state.Any(entry => entry.Key is "Timeout" or "Elapsed")).ToArray();
+            Assert.Collection(records,
+                write => Assert.Equal(LogLevel.Information, write.LogLevel),
+                write =>
+                {
+                    Assert.Equal(LogLevel.Error, write.LogLevel);
+                    Assert.IsType<TimeoutException>(write.Exception);
+                },
+                write => Assert.Equal(LogLevel.Information, write.LogLevel));
+            var states = records.Select(write => ((IEnumerable<KeyValuePair<string, object?>>)write.State!).ToDictionary()).ToArray();
+            var invocationId = Assert.IsType<string>(states[0]["InvocationId"]);
+            Assert.All(states, state => Assert.Equal(invocationId, state["InvocationId"]));
+            Assert.Equal(configuration.CallbackTimeout, states[0]["Timeout"]);
+            Assert.Equal(configuration.CallbackTimeout, states[1]["Timeout"]);
+            Assert.Equal(configuration.CallbackTimeout, states[1]["Elapsed"]);
+            Assert.Equal(
+                $"Guest callback relay '{relayId}' for integration capability 'test.external/callback' " +
+                $"(invocation {invocationId}) timed out after {configuration.CallbackTimeout}. Restart the AppHost session to rebuild callbacks.",
+                error.Message);
             await integration.ServerRpc.Completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             await guest.ServerRpc.Completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             Assert.Null(registry.ResolveCallbackOwner(relayId));
