@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
@@ -16,6 +17,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<FileInfo, bool, ProcessInvocationOptions, CancellationToken, int>? BuildAsyncCallback { get; set; }
     public Func<FileInfo, bool, IDictionary<string, string>?, ProcessInvocationOptions, CancellationToken, int>? BuildAsyncWithEnvironmentCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, int>? RestoreAsyncCallback { get; set; }
+    public Func<FileInfo, ProcessInvocationOptions, CancellationToken, Task<int>>? RestoreAsyncCallbackAsync { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, bool IsAspireHost, string? AspireHostingVersion)>? GetAppHostInformationAsyncCallback { get; set; }
     public Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, string[] ConfigPaths)>? GetNuGetConfigPathsAsyncCallback { get; set; }
     public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync { get; set; }
@@ -63,6 +65,10 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
 
     public Task<int> RestoreAsync(FileInfo projectFilePath, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
+        if (RestoreAsyncCallbackAsync is not null)
+        {
+            return RestoreAsyncCallbackAsync(projectFilePath, options, cancellationToken);
+        }
         return RestoreAsyncCallback != null
             ? Task.FromResult(RestoreAsyncCallback(projectFilePath, options, cancellationToken))
             : Task.FromResult(0); // If not overridden, just return success.
@@ -102,6 +108,11 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
         if (GetProjectItemsAndPropertiesAsyncCallbackWithTargets != null)
         {
             return Task.FromResult(GetProjectItemsAndPropertiesAsyncCallbackWithTargets(projectFile, items, properties, targets, options, cancellationToken));
+        }
+
+        if (targets.SequenceEqual(["_GetRestoreProjectStyle", "_GetRestoreSettings"]))
+        {
+            return Task.FromResult<(int, JsonDocument?)>((0, CreateRestoreSettingsOutput(projectFile, properties)));
         }
 
         if (GetProjectItemsAndPropertiesAsyncCallbackAsync != null)
@@ -147,6 +158,20 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             }
             """;
         return Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse(defaultJson)));
+    }
+
+    internal static JsonDocument CreateRestoreSettingsOutput(FileInfo projectFile, string[] properties)
+    {
+        var values = new JsonObject(properties.Select(name =>
+            KeyValuePair.Create<string, JsonNode?>(name, JsonValue.Create(string.Empty))));
+        values["MSBuildProjectFullPath"] = projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase)
+            ? projectFile.FullName + ".csproj"
+            : projectFile.FullName;
+        values["MSBuildToolsPath"] = AppContext.BaseDirectory;
+        values["NuGetRestoreTargets"] = Path.Combine(AppContext.BaseDirectory, "NuGet.targets");
+        values["_OutputConfigFilePaths"] = string.Join(';', GetGlobalNuGetPaths());
+        values["_OutputPackagesPath"] = Path.Combine(projectFile.DirectoryName!, ".nugetpackages");
+        return JsonDocument.Parse(new JsonObject { ["Properties"] = values }.ToJsonString());
     }
 
     public Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken)

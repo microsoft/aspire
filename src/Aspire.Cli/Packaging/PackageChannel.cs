@@ -600,12 +600,25 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             return [new NuGetPackage { Id = packageId, Version = PinnedVersion, Source = SourceDetails }];
         }
 
-        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
-
         using var searchConfiguration = await nuGetPackageCache.CreateChannelConfigurationAsync(
             workingDirectory,
             Mappings,
             cancellationToken);
+
+        return await GetPackagesAsync(packageId, searchConfiguration, cancellationToken);
+    }
+
+    public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(
+        string packageId,
+        NuGetPackageOperationConfiguration searchConfiguration,
+        CancellationToken cancellationToken)
+    {
+        if (PinnedVersion is not null)
+        {
+            return [new NuGetPackage { Id = packageId, Version = PinnedVersion, Source = SourceDetails }];
+        }
+
+        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {

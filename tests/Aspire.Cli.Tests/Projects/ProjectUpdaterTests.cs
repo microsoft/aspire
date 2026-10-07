@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -20,6 +21,8 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 {
+    private const string DailyPackageSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
+
     [Fact]
     public void IsAppHostProjectMatchesFilesystemAliases()
     {
@@ -91,11 +94,11 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = "nuget.org" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.4.1", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.4.1", Source = "nuget.org" },
-                            "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.4.1", Source = "nuget.org" },
-                            "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.4.1", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.4.1", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException("Unexpected package query."),
                         });
 
@@ -216,11 +219,11 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0-preview.1", Source = DailyPackageSource },
                             _ => throw new InvalidOperationException("Unexpected package query."),
                         });
 
@@ -370,11 +373,11 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
-                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
-                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
-                                "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0-preview.1", Source = "daily" },
-                                "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                                "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                                "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0-preview.1", Source = DailyPackageSource },
                                 _ => throw new InvalidOperationException("Unexpected package query."),
                             }
                         };
@@ -473,6 +476,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
+            config.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
             config.DotNetCliRunnerFactory = (sp) =>
             {
                 return new TestDotNetCliRunner()
@@ -483,13 +490,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         var matchedPackage = (query, prerelease) switch
                         {
-                            { query: "Aspire.AppHost.Sdk", prerelease: false } => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = "nuget" },
-                            { query: "Aspire.Hosting.AppHost", prerelease: false } => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.4.1", Source = "nuget" },
-                            { query: "Aspire.Hosting.Redis", prerelease: false } => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.4.1", Source = "nuget" },
-                            { query: "Aspire.Hosting.Docker", prerelease: true } => new NuGetPackageCli { Id = "Aspire.Hosting.Docker", Version = "9.4.1-preview.1", Source = "nuget" },
+                            { query: "Aspire.AppHost.Sdk", prerelease: false } => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            { query: "Aspire.Hosting.AppHost", prerelease: false } => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            { query: "Aspire.Hosting.Redis", prerelease: false } => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            { query: "Aspire.Hosting.Docker", prerelease: true } => new NuGetPackageCli { Id = "Aspire.Hosting.Docker", Version = "9.4.1-preview.1", Source = PackageSources.NuGetOrg },
                             { query: "Aspire.Hosting.Docker", prerelease: false } => null, // Not in feed.
-                            { query: "Aspire.StackExchange.Redis.OutputCaching", prerelease: false } => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.4.1", Source = "nuget" },
-                            { query: "Microsoft.Extensions.ServiceDiscovery", prerelease: false } => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.4.1", Source = "nuget" },
+                            { query: "Aspire.StackExchange.Redis.OutputCaching", prerelease: false } => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.4.1", Source = PackageSources.NuGetOrg },
+                            { query: "Microsoft.Extensions.ServiceDiscovery", prerelease: false } => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.4.1", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException("Unexpected package query."),
                         };
 
@@ -638,9 +645,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         var matchedPackage = query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = DailyPackageSource },
                             // Third-party or otherwise unpublished Aspire.Hosting.* package - returns nothing.
                             "Aspire.Hosting.ThirdParty" => null,
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}."),
@@ -766,8 +773,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -926,10 +933,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0", Source = "nuget.org" },
-                            "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -1045,9 +1052,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -1147,9 +1154,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -1273,8 +1280,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                                 _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                             }
                         };
@@ -1367,8 +1374,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                                 _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                             }
                         };
@@ -1442,7 +1449,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                                 _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                             }
                         };
@@ -1537,8 +1544,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                                 _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                             }
                         };
@@ -1587,7 +1594,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
 
-        var services = CreateNuGetConfigTestServices(workspace, "9.5.0", "nuget.org");
+        var services = CreateNuGetConfigTestServices(workspace, "9.5.0", PackageSources.NuGetOrg, verifySearch: null);
         using var provider = services.BuildServiceProvider();
 
         var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
@@ -1629,7 +1636,19 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
 
-        var services = CreateNuGetConfigTestServices(workspace, "9.5.0", "nuget.org", getNuGetConfigPathsCallback: (_, _, _) =>
+        var originalConfig = await File.ReadAllBytesAsync(nugetConfigPath);
+        DirectoryInfo? previewDirectory = null;
+        var services = CreateNuGetConfigTestServices(
+            workspace, "9.5.0", PackageSources.NuGetOrg,
+            verifySearch: (workingDirectory, query, explicitConfigFile) =>
+            {
+                Assert.Null(explicitConfigFile);
+                Assert.StartsWith(Path.Combine(appHostProjectFile.DirectoryName!, ".aspire") + Path.DirectorySeparatorChar, workingDirectory.FullName);
+                Assert.Equal(originalConfig, File.ReadAllBytes(nugetConfigPath));
+                Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(workingDirectory.FullName, query));
+                previewDirectory = workingDirectory;
+            },
+            getNuGetConfigPathsCallback: (_, _, _) =>
         {
             return (0, new[]
             {
@@ -1644,8 +1663,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "stable"))).DefaultTimeout();
 
         Assert.True(File.Exists(nugetConfigPath));
-        var updatedConfig = await File.ReadAllTextAsync(nugetConfigPath);
-        Assert.Contains("https://api.nuget.org/v3/index.json", updatedConfig);
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(appHostProjectFile.DirectoryName!, "Aspire.AppHost.Sdk"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(appHostProjectFile.DirectoryName!, "Aspire.Hosting.Redis"));
+        Assert.NotNull(previewDirectory);
+        Assert.False(Directory.Exists(previewDirectory.FullName));
     }
 
     [Fact]
@@ -1656,7 +1677,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var (appHostProjectFile, _) = await SetupNuGetConfigTestProject(workspace);
 
-        var services = CreateNuGetConfigTestServices(workspace, "9.5.0-preview.1", "daily");
+        var services = CreateNuGetConfigTestServices(workspace, "9.5.0-preview.1", DailyPackageSource, verifySearch: null);
         using var provider = services.BuildServiceProvider();
 
         var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
@@ -1686,16 +1707,22 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         TemporaryWorkspace workspace,
         string targetVersion,
         string source,
+        Action<DirectoryInfo, string, FileInfo?>? verifySearch,
         Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int, string[])>? getNuGetConfigPathsCallback = null)
     {
         return CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
+            config.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
             config.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner()
                 {
-                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    SearchPackagesAsyncCallback = (workingDirectory, query, _, _, _, _, explicitConfigFile, _, _, _) =>
                     {
+                        verifySearch?.Invoke(workingDirectory, query, explicitConfigFile);
                         var packages = new List<NuGetPackageCli>
                         {
                             query switch
@@ -1739,6 +1766,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         {
             AppHostFile = appHostFile,
             Channel = channel,
+            HasExplicitChannel = channel.Type == PackageChannelType.Explicit,
             ConfirmBinding = PromptBinding.CreateDefault(true),
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
         };
@@ -1849,8 +1877,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -1965,9 +1993,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.StackExchange.Redis" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis", Version = "9.5.0-preview.1", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.StackExchange.Redis" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis", Version = "9.5.0-preview.1", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2086,8 +2114,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2199,8 +2227,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2295,9 +2323,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2349,7 +2377,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should not throw ProjectUpdaterException; should produce update steps including AppHost SDK
@@ -2404,8 +2432,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2451,7 +2479,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should discover package reference (version may be absent) and not crash
@@ -2489,7 +2517,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2530,7 +2558,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
 
         // Should throw ProjectUpdaterException due to invalid XML
         await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
@@ -2565,7 +2593,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException("Unexpected package query."),
                         });
 
@@ -2612,7 +2640,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Normal path unaffected - no updates needed since version is already current
@@ -2649,7 +2677,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2691,7 +2719,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
@@ -2744,8 +2772,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                                 _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                             }
                         };
@@ -2836,7 +2864,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                         {
                             query switch
                             {
-                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                                 _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                             }
                         };
@@ -2912,7 +2940,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -2954,7 +2982,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
@@ -2992,8 +3020,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -3042,7 +3070,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
 
         // This should not throw and should handle the * version gracefully
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
@@ -3082,7 +3110,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -3161,7 +3189,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -3239,9 +3267,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Azure.Functions" => new NuGetPackageCli { Id = "Aspire.Hosting.Azure.Functions", Version = "9.5.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Azure.Functions" => new NuGetPackageCli { Id = "Aspire.Hosting.Azure.Functions", Version = "9.5.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -3384,8 +3412,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
                         packages.Add(query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.6.0", Source = "nuget.org" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.6.0", Source = "nuget.org" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.6.0", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.6.0", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         });
 
@@ -3476,7 +3504,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(projectFile, originalContent);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3508,7 +3536,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(projectFile, originalContent);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3545,7 +3573,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(projectFile, originalContent);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3581,7 +3609,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(projectFile, originalContent);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3613,7 +3641,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(projectFile, originalContent);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3646,7 +3674,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         await File.WriteAllTextAsync(projectFile, originalContent);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3702,7 +3730,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
-        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = "nuget.org" };
+        var package = new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.0.2", Source = PackageSources.NuGetOrg };
 
         // Act
         await ProjectUpdater.UpdateSdkVersionInProjectAppHostAsync(new FileInfo(projectFile), package).DefaultTimeout();
@@ -3766,11 +3794,11 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     {
                         var package = query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.PostgreSQL" => new NuGetPackageCli { Id = "Aspire.Hosting.PostgreSQL", Version = "9.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.Kafka" => new NuGetPackageCli { Id = "Aspire.Hosting.Kafka", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.PostgreSQL" => new NuGetPackageCli { Id = "Aspire.Hosting.PostgreSQL", Version = "9.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.Kafka" => new NuGetPackageCli { Id = "Aspire.Hosting.Kafka", Version = "9.5.0-preview.1", Source = DailyPackageSource },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         };
 
@@ -3825,7 +3853,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         // 'daily' is an Explicit channel (see PackagingService.CreateExplicitChannel), which is
-        // the trigger condition for the NuGetConfigMerger path that surfaces the original bug.
+        // the trigger condition for the .NET configuration persistence path.
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var dailyChannel = channels.Single(c => c.Name == "daily");
 
@@ -3876,9 +3904,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     {
                         var package = query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.3", Source = "stable" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.4.3", Source = "stable" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.4.3", Source = "stable" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.3", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.4.3", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.4.3", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         };
 
@@ -3945,6 +3973,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
+            config.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
             config.DotNetCliRunnerFactory = (sp) =>
             {
                 return new TestDotNetCliRunner()
@@ -3953,9 +3985,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     {
                         var package = query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.3", Source = "stable" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.4.3", Source = "stable" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.4.3", Source = "stable" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.4.3", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.4.3", Source = PackageSources.NuGetOrg },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.4.3", Source = PackageSources.NuGetOrg },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         };
 
@@ -4043,9 +4075,9 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     {
                         var package = query switch
                         {
-                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.5.0-preview.1", Source = "daily" },
-                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.5.0-preview.1", Source = "daily" },
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "13.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "13.5.0-preview.1", Source = DailyPackageSource },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "13.5.0-preview.1", Source = DailyPackageSource },
                             _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
                         };
 

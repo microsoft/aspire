@@ -1,18 +1,57 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Xml.Linq;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Tests.TestServices;
 using NuGet.Configuration;
 
-namespace Aspire.Cli.Tests.Packaging;
+namespace Aspire.Cli.Tests.NuGet;
 
-public class TemporaryNuGetConfigTests
+public class TemporaryNuGetConfigFileTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task CreatePreviewAsync_DisposeOwnsOnlySiblingDraft()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var target = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"));
+        const string original = "<configuration />";
+        await File.WriteAllTextAsync(target.FullName, original);
+        var content = Encoding.UTF8.GetBytes("<configuration><candidate /></configuration>");
+        using var draft = await TemporaryNuGetConfigFile.CreatePreviewAsync(target, content, TestContext.Current.CancellationToken);
+
+        Assert.Equal(target.DirectoryName, draft.ConfigFile.DirectoryName);
+        Assert.Equal(content, await File.ReadAllBytesAsync(draft.ConfigFile.FullName));
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(draft.ConfigFile.FullName));
+        }
+        draft.Dispose();
+
+        Assert.Equal(original, await File.ReadAllTextAsync(target.FullName));
+        Assert.True(Directory.Exists(target.DirectoryName));
+        Assert.False(File.Exists(draft.ConfigFile.FullName));
+    }
+
+    [Fact]
+    public async Task CreatePreviewAsync_InvalidContentCleansUpOnlyDraft()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var target = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"));
+        await File.WriteAllTextAsync(target.FullName, "<configuration />");
+
+        await Assert.ThrowsAsync<System.Xml.XmlException>(() => TemporaryNuGetConfigFile.CreatePreviewAsync(
+            target, Encoding.UTF8.GetBytes("<invalid"), TestContext.Current.CancellationToken));
+
+        Assert.Equal([target.Name], workspace.WorkspaceRoot.EnumerateFiles().Select(static file => file.Name));
+    }
+
     [Fact]
     public async Task CreateAsync_IncludesSourcesAndMappings()
     {
-        using var config = await TemporaryNuGetConfig.CreateAsync(
+        using var config = await NuGetTestHelper.CreateStandaloneConfigurationAsync(
         [
             new PackageMapping("Aspire.*", "https://example.com/feed1"),
             new PackageMapping(PackageMapping.AllPackages, "https://example.com/feed2"),
@@ -27,7 +66,6 @@ public class TemporaryNuGetConfigTests
                 static element => element.Attribute("key")!.Value,
                 PackageSourceIdentity.Comparer);
 
-        Assert.NotNull(document.Descendants("packageSources").ElementAt(0).Element("clear"));
         Assert.Equal(2, sourceKeys.Count);
         Assert.Contains(
             document.Descendants("packageSourceMapping").Elements("packageSource"),
@@ -43,7 +81,7 @@ public class TemporaryNuGetConfigTests
     [Fact]
     public async Task CreateAsync_WithConfiguredGlobalPackagesFolder_AddsConfigEntry()
     {
-        using var config = await TemporaryNuGetConfig.CreateAsync(
+        using var config = await NuGetTestHelper.CreateStandaloneConfigurationAsync(
             [new PackageMapping("Aspire.*", "https://example.com/feed")],
             configureGlobalPackagesFolder: true,
             globalPackagesFolderValue: "/packages");
@@ -61,7 +99,7 @@ public class TemporaryNuGetConfigTests
     [Fact]
     public async Task CreateAsync_PreservesCaseDistinctSourcePaths()
     {
-        using var config = await TemporaryNuGetConfig.CreateAsync(
+        using var config = await NuGetTestHelper.CreateStandaloneConfigurationAsync(
         [
             new PackageMapping("Upper.*", "https://example.com/Feed/index.json"),
             new PackageMapping("Lower.*", "https://example.com/feed/index.json")
@@ -86,14 +124,14 @@ public class TemporaryNuGetConfigTests
         Assert.Equal(
             sources,
             new PackageSourceProvider(settings).LoadPackageSources().Select(source => source.Source));
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources("Upper.Example"));
-        Assert.Equal(["aspire-1"], nativeMapping.GetConfiguredPackageSources("Lower.Example"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("Upper.Example"));
+        Assert.Equal(["aspire-standalone-0"], nativeMapping.GetConfiguredPackageSources("Lower.Example"));
     }
 
     [Fact]
     public async Task CreateRestoreOverlayAsync_UsesProvidedWriter()
     {
-        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        using var config = await TemporaryNuGetConfigFile.CreateAsync(
             path => File.WriteAllText(
                 path,
                 """
@@ -118,7 +156,7 @@ public class TemporaryNuGetConfigTests
     [Fact]
     public async Task RegenerateAsync_RewritesConfigAndCacheIdentity()
     {
-        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        using var config = await TemporaryNuGetConfigFile.CreateAsync(
             path => File.WriteAllText(
                 path,
                 "<configuration><packageSourceMapping><clear /></packageSourceMapping></configuration>"));
@@ -142,7 +180,7 @@ public class TemporaryNuGetConfigTests
     [Fact]
     public async Task Dispose_RemovesDirectoryWhenFailedRegenerationDeletedConfig()
     {
-        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        using var config = await TemporaryNuGetConfigFile.CreateAsync(
             path => File.WriteAllText(path, "<configuration />"));
         var directory = config.ConfigFile.Directory!.FullName;
 
@@ -163,11 +201,11 @@ public class TemporaryNuGetConfigTests
     [Fact]
     public async Task CacheIdentity_DoesNotDependOnGlobalPackagesFolderLocation()
     {
-        using var first = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        using var first = await TemporaryNuGetConfigFile.CreateAsync(
             path => File.WriteAllText(
                 path,
                 "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages/first\" /></config></configuration>"));
-        using var second = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        using var second = await TemporaryNuGetConfigFile.CreateAsync(
             path => File.WriteAllText(
                 path,
                 "<configuration><config><add key=\"globalPackagesFolder\" value=\"/packages/second\" /></config></configuration>"));
@@ -178,7 +216,7 @@ public class TemporaryNuGetConfigTests
     [Fact]
     public async Task CacheIdentity_DoesNotChangeWhenGlobalPackagesFolderIsAdded()
     {
-        using var config = await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+        using var config = await TemporaryNuGetConfigFile.CreateAsync(
             path => File.WriteAllText(path, "<configuration />"));
         var originalIdentity = config.CacheIdentity;
 

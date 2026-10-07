@@ -706,6 +706,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Stable);
             options.DotNetCliRunnerFactory = _ => CreateTestRunnerWithStandardPackages();
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
             configure?.Invoke(options);
         });
     }
@@ -732,37 +736,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputPath, "nuget.config"));
         var packageSources = doc.Root!.Element("packageSources")!;
 
-        Assert.Contains(packageSources.Elements("clear"), _ => true);
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
-        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
-    }
-
-    private static string[] GetPackagePatternsForSource(XDocument doc, string source)
-    {
-        var sourceKey = doc.Root!
-            .Element("packageSources")!
-            .Elements("add")
-            .FirstOrDefault(element =>
-                (string?)element.Attribute("value") == source ||
-                string.Equals((string?)element.Attribute("key"), source, StringComparison.OrdinalIgnoreCase))
-            ?.Attribute("key")
-            ?.Value;
-        var packageSourceMapping = doc.Root!.Element("packageSourceMapping");
-        if (sourceKey is null || packageSourceMapping is null)
-        {
-            return [];
-        }
-
-        return packageSourceMapping
-            .Elements("packageSource")
-            .Where(e => string.Equals((string?)e.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase))
-            .Elements("package")
-            .Select(e => (string?)e.Attribute("pattern"))
-            .Where(pattern => pattern is not null)
-            .Select(pattern => pattern!)
-            .ToArray();
+        Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Aspire.Hosting"));
+        Assert.Equal([PackageSources.NuGetOrg], NuGetTestHelper.GetEligiblePackageSources(outputPath, "Example.Dependency"));
     }
 
     [Fact]

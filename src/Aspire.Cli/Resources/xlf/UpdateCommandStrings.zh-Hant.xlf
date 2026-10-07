@@ -57,6 +57,11 @@
         <target state="translated">要更新的通道 (穩定、暫存、每日)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
+        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</source>
+        <target state="new">Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CheckingForUpdates">
         <source>Checking for updates...</source>
         <target state="translated">正在檢查更新...</target>
@@ -207,6 +212,11 @@
         <target state="new">Directory to create or update the NuGet.config file in</target>
         <note />
       </trans-unit>
+      <trans-unit id="NuGetConfigOutsideHierarchyFormat">
+        <source>NuGet configuration '{0}' must be in '{1}' or an ancestor directory so that native restore uses the updated policy.</source>
+        <target state="new">NuGet configuration '{0}' must be in '{1}' or an ancestor directory so that native restore uses the updated policy.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageNotFoundInChannelWarningFormat">
         <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
         <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
@@ -235,6 +245,11 @@
       <trans-unit id="PerformUpdatesPrompt">
         <source>Perform updates?</source>
         <target state="translated">執行更新?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PreparingSdkForUpdateStatus">
+        <source>Preparing the target AppHost SDK...</source>
+        <target state="new">Preparing the target AppHost SDK...</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
@@ -350,6 +365,26 @@
       <trans-unit id="UnxpectedCodePath">
         <source>Unexpected code path.</source>
         <target state="translated">未預期的程式碼路徑。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCandidateFileChangedFormat">
+        <source>The file '{0}' changed after the update was planned. Run 'aspire update' again.</source>
+        <target state="new">The file '{0}' changed after the update was planned. Run 'aspire update' again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCandidatePolicyChangedFormat">
+        <source>NuGet policy for '{0}' changed while the update was being validated. Run 'aspire update' again.</source>
+        <target state="new">NuGet policy for '{0}' changed while the update was being validated. Run 'aspire update' again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCandidateRollbackFailed">
+        <source>The update failed and some original files could not be restored.</source>
+        <target state="new">The update failed and some original files could not be restored.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCandidateRollbackFileChangedFormat">
+        <source>Could not restore '{0}' because it changed after the candidate edit.</source>
+        <target state="new">Could not restore '{0}' because it changed after the candidate edit.</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdateChannelStepDescriptionFormat">

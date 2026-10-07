@@ -1,0 +1,24 @@
+﻿<configuration>
+  <packageSources>
+    <add key="private" value="https://private.example/v3/index.json" protocolVersion="3" />
+    <add key="aspire-test" value="https://feed.example/v3/index.json" />
+  </packageSources>
+  <packageSourceCredentials>
+    <private>
+      <add key="Username" value="test-user" />
+      <add key="ClearTextPassword" value="test-password" />
+    </private>
+  </packageSourceCredentials>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="private">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="nuget.org">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-test">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

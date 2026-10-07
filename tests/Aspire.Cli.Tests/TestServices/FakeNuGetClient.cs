@@ -13,14 +13,14 @@ internal sealed class FakeNuGetClient : INuGetClient
     public int WriteManifestCallCount { get; private set; }
     public int SearchCallCount { get; private set; }
     public int GetSettingsCallCount { get; private set; }
-    public int WriteConfigOverlayCallCount { get; private set; }
+    public int WriteNuGetConfigCallCount { get; private set; }
     public IReadOnlyList<(string Id, string Version)>? LastRestorePackages { get; private set; }
     public IReadOnlyList<string>? LastRestoreSources { get; private set; }
     public IReadOnlyList<string>? LastNuGetConfigPaths { get; private set; }
     public IReadOnlyList<string>? LastConfiguredRestoreSources { get; private set; }
     public string? LastWorkingDirectory { get; private set; }
     public string? LastSettingsWorkingDirectory { get; private set; }
-    public string? LastConfigOverlayPath { get; private set; }
+    public string? LastNuGetConfigPath { get; private set; }
 
     public Func<
         IReadOnlyList<(string Id, string Version)>,
@@ -49,7 +49,7 @@ internal sealed class FakeNuGetClient : INuGetClient
 
     public Func<string, byte[], NuGetSettingsInfo>? GetSettingsCallback { get; set; }
 
-    public Action<NuGetConfigOverlay, string>? WriteConfigOverlayCallback { get; set; }
+    public Action<NuGetConfigOverlay, string>? WriteNuGetConfigCallback { get; set; }
 
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -88,6 +88,17 @@ internal sealed class FakeNuGetClient : INuGetClient
             sensitiveSources,
             cancellationToken) ?? Task.CompletedTask;
     }
+
+    public Task AcquirePackageAsync(
+        (string Id, string Version) package,
+        string outputPath,
+        string workingDirectory,
+        string globalPackagesFolder,
+        IReadOnlyList<string> sensitiveSources,
+        CancellationToken cancellationToken)
+        => RestoreAsync([package], global::NuGet.Frameworks.FrameworkConstants.CommonFrameworks.NetStandard.GetShortFolderName(),
+            runtimeIdentifier: null, outputPath, sources: [], nugetConfigPaths: [],
+            workingDirectory, globalPackagesFolder, sensitiveSources, cancellationToken);
 
     public Task WriteManifestAsync(
         string assetsFilePath,
@@ -145,23 +156,31 @@ internal sealed class FakeNuGetClient : INuGetClient
                 sourceIdentityKey);
     }
 
+    public string GetGlobalPackagesFolder(string workingDirectory)
+        => NuGetTestHelper.CreateClient().GetGlobalPackagesFolder(workingDirectory);
+
+    public void WriteNuGetConfig(IReadOnlyList<string> configPaths, string outputPath)
+        => NuGetTestHelper.CreateClient().WriteNuGetConfig(configPaths, outputPath);
+
     public IReadOnlyList<NuGetPackage> FilterPackageSearchResults(
         IReadOnlyList<NuGetPackage> packages,
         string? nugetConfigPath,
         string workingDirectory)
         => NuGetTestHelper.CreateClient().FilterPackageSearchResults(packages, nugetConfigPath, workingDirectory);
 
-    public void WriteConfigOverlay(NuGetConfigOverlay overlay, string outputPath)
+    public void WriteNuGetConfig(NuGetConfigOverlay overlay, string outputPath)
+        => WriteNuGetConfig(overlay, outputPath, originalContent: null);
+
+    public void WriteNuGetConfig(NuGetConfigOverlay overlay, string outputPath, ReadOnlyMemory<byte>? originalContent)
     {
-        WriteConfigOverlayCallCount++;
-        LastConfigOverlayPath = outputPath;
-        if (WriteConfigOverlayCallback is not null)
+        WriteNuGetConfigCallCount++;
+        LastNuGetConfigPath = outputPath;
+        if (WriteNuGetConfigCallback is not null)
         {
-            WriteConfigOverlayCallback(overlay, outputPath);
+            WriteNuGetConfigCallback(overlay, outputPath);
             return;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-        File.WriteAllText(outputPath, "<configuration />");
+        NuGetTestHelper.CreateClient().WriteNuGetConfig(overlay, outputPath, originalContent);
     }
 }

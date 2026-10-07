@@ -10,6 +10,7 @@ using System.Text.Json;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGet.ProjectModel;
@@ -22,7 +23,10 @@ internal sealed record NuGetSourceInfo(
     string Identity,
     bool IsEnabled,
     bool HasCredentials,
-    bool HasClientCertificates);
+    bool HasClientCertificates)
+{
+    public bool IsCliManaged { get; init; }
+}
 
 internal sealed record NuGetPackageSourceMapping(
     string SourceKey,
@@ -219,6 +223,14 @@ internal sealed class BundleNuGetService : INuGetService
     {
         ArgumentNullException.ThrowIfNull(workingDirectory);
         var settings = GetNuGetSettings(workingDirectory.FullName, cancellationToken);
+        selectedMappings = selectedMappings?
+            .Select(mapping => new PackageMapping(
+                mapping.PackageFilter,
+                PackageSourceIdentity.IsNamedSourceReference(mapping.Source) &&
+                settings.Sources.Any(source => string.Equals(source.Name, mapping.Source, StringComparison.OrdinalIgnoreCase))
+                    ? mapping.Source
+                    : PackageSourceOverrideMappings.ResolveForWorkingDirectory(mapping.Source, workingDirectory)))
+            .ToArray();
         return NuGetConfigurationBuilder.Build(
             settings,
             workloadId,
@@ -232,6 +244,148 @@ internal sealed class BundleNuGetService : INuGetService
     {
         ArgumentNullException.ThrowIfNull(workingDirectory);
         return GetNuGetSettings(workingDirectory.FullName, cancellationToken).PackageSourceMappings.Count > 0;
+    }
+
+    internal NuGetConfiguration BuildChannelConfiguration(
+        DirectoryInfo workingDirectory,
+        string workloadId,
+        PackageChannel? channel,
+        string? packageSourceOverride,
+        string? nugetServiceIndexOverride,
+        CancellationToken cancellationToken)
+    {
+        var mappings = string.IsNullOrWhiteSpace(packageSourceOverride)
+            ? channel?.Mappings
+            : PackageSourceOverrideMappings.Create(packageSourceOverride, channel, nugetServiceIndexOverride);
+        var selectedMappings = mappings?
+            .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
+            .ToArray();
+        if (selectedMappings is { Length: 0 } && mappings is { Length: > 0 })
+        {
+            // An explicitly selected catch-all-only channel (including a transition to stable)
+            // selects Aspire's source without taking ownership of unrelated dependencies.
+            selectedMappings =
+            [
+                .. mappings.Select(static mapping => new PackageMapping(
+                    PackageSourceOverrideMappings.DefaultPackagePattern, mapping.Source))
+            ];
+        }
+
+        return BuildConfiguration(
+            workingDirectory,
+            workloadId,
+            selectedMappings is { Length: > 0 } ? selectedMappings : null,
+            restrictToSelectedSources: false,
+            hasAuthoritativeAspirePolicy: true,
+            cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Materializes the shared desired configuration without changing ambient configuration.
+    /// </summary>
+    internal async Task<NuGetPackageOperationConfiguration> CreateConfigurationPreviewAsync(
+        DirectoryInfo workingDirectory,
+        NuGetConfiguration configuration,
+        string? globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(workingDirectory);
+        ArgumentNullException.ThrowIfNull(configuration);
+        var overlay = await WriteTemporaryOverlayAsync(
+            configuration,
+            new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire")),
+            globalPackagesFolder,
+            cancellationToken).ConfigureAwait(false);
+        return overlay is null
+            ? NuGetPackageOperationConfiguration.Ambient(workingDirectory, configuration.Settings.CacheIdentity)
+            : NuGetPackageOperationConfiguration.FromTemporaryOverlay(
+                workingDirectory,
+                overlay,
+                configuration.Settings.CacheIdentity);
+    }
+
+    internal string GetGlobalPackagesFolder(DirectoryInfo workingDirectory)
+        => _nuGetClient.GetGlobalPackagesFolder(workingDirectory.FullName);
+
+    /// <summary>
+    /// Acquires an exact package without reusing an asset-only restore manifest.
+    /// </summary>
+    internal async Task AcquirePackageAsync(
+        (string Id, string Version) package,
+        NuGetPackageOperationConfiguration configuration,
+        string globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-package-acquisition-");
+        try
+        {
+            var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, cancellationToken);
+            await _nuGetClient.AcquirePackageAsync(
+                package, directory.FullName,
+                configuration.EffectiveWorkingDirectory.FullName, globalPackagesFolder,
+                settings.SensitiveSourceValues, cancellationToken);
+        }
+        catch (NuGetOperationException exception)
+        {
+            // Native NuGet diagnostics already redact the selected policy's sensitive sources.
+            _logger.LogError("Package acquisition failed: {Output}", exception.Output);
+            throw new InvalidOperationException($"Package acquisition failed: {exception.Output}", exception);
+        }
+        finally
+        {
+            try
+            {
+                directory.Delete(recursive: true);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(exception, "Could not remove package acquisition directory {Directory}", directory.FullName);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Previews one configuration-file replacement in the caller's native hierarchy.
+    /// </summary>
+    internal async Task<NuGetPackageOperationConfiguration> CreateConfigurationPreviewAsync(
+        DirectoryInfo workingDirectory, FileInfo targetFile, FileInfo replacementFile,
+        CancellationToken cancellationToken)
+    {
+        var settings = GetNuGetSettings(workingDirectory.FullName, cancellationToken);
+        var paths = settings.ConfigPaths.ToList();
+        var targetPath = PathNormalizer.ResolveToFilesystemPath(targetFile.FullName);
+        var index = paths.FindIndex(path => string.Equals(
+            PathNormalizer.ResolveToFilesystemPath(path), targetPath, StringComparisons.FileSystemPath));
+        if (index >= 0)
+        {
+            paths[index] = replacementFile.FullName;
+        }
+        else
+        {
+            if (!IsAncestorDirectory(targetFile.DirectoryName!, workingDirectory.FullName))
+            {
+                throw new InvalidOperationException(
+                    $"NuGet configuration '{targetFile.FullName}' is not in the hierarchy of '{workingDirectory.FullName}'.");
+            }
+            index = paths.FindIndex(path =>
+                IsAncestorDirectory(Path.GetDirectoryName(path)!, targetFile.DirectoryName!) ||
+                !IsAncestorDirectory(Path.GetDirectoryName(path)!, workingDirectory.FullName));
+            paths.Insert(index < 0 ? paths.Count : index, replacementFile.FullName);
+        }
+
+        var overlay = await TemporaryNuGetConfigFile.CreateAsync(
+            new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire")),
+            path => _nuGetClient.WriteNuGetConfig(paths, path));
+        return NuGetPackageOperationConfiguration.FromTemporaryOverlay(
+            workingDirectory, overlay, settings.CacheIdentity);
+    }
+
+    internal static bool IsAncestorDirectory(string ancestor, string directory)
+    {
+        var relativePath = Path.GetRelativePath(
+            PathNormalizer.ResolveToFilesystemPath(ancestor), PathNormalizer.ResolveToFilesystemPath(directory));
+        return !Path.IsPathRooted(relativePath) && relativePath != ".." &&
+            !relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparisons.FileSystemPath);
     }
 
     internal async Task<NuGetPackageOperationConfiguration> CreatePackageOperationConfigurationAsync(
@@ -287,7 +441,7 @@ internal sealed class BundleNuGetService : INuGetService
         return _nuGetClient.FilterPackageSearchResults(packages, nugetConfigPath, workingDirectory);
     }
 
-    internal async Task<TemporaryNuGetConfig?> WriteTemporaryOverlayAsync(
+    internal async Task<TemporaryNuGetConfigFile?> WriteTemporaryOverlayAsync(
         NuGetConfiguration configuration,
         DirectoryInfo? parentDirectory,
         string? globalPackagesFolder,
@@ -300,14 +454,14 @@ internal sealed class BundleNuGetService : INuGetService
 
         overlay = overlay with { GlobalPackagesFolder = globalPackagesFolder };
         return parentDirectory is null
-            ? await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
-                path => WriteNuGetConfigOverlay(overlay, path, cancellationToken)).ConfigureAwait(false)
-            : await TemporaryNuGetConfig.CreateRestoreOverlayAsync(
+            ? await TemporaryNuGetConfigFile.CreateAsync(
+                path => WriteNuGetConfig(overlay, path, cancellationToken)).ConfigureAwait(false)
+            : await TemporaryNuGetConfigFile.CreateAsync(
                 parentDirectory,
-                path => WriteNuGetConfigOverlay(overlay, path, cancellationToken)).ConfigureAwait(false);
+                path => WriteNuGetConfig(overlay, path, cancellationToken)).ConfigureAwait(false);
     }
 
-    internal void WriteOverlay(
+    internal void WriteNuGetConfig(
         NuGetConfiguration configuration,
         string outputPath,
         string? globalPackagesFolder,
@@ -315,7 +469,28 @@ internal sealed class BundleNuGetService : INuGetService
     {
         var overlay = configuration.Overlay
             ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet policy overlay.");
-        WriteNuGetConfigOverlay(overlay with { GlobalPackagesFolder = globalPackagesFolder }, outputPath, cancellationToken);
+        WriteNuGetConfig(overlay with { GlobalPackagesFolder = globalPackagesFolder }, outputPath, cancellationToken);
+    }
+
+    internal async Task<byte[]> CreateNuGetConfigContentAsync(
+        NuGetConfiguration configuration,
+        ReadOnlyMemory<byte>? originalContent,
+        string? globalPackagesFolder,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        var content = configuration.Overlay
+            ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet configuration change.");
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // NuGet's typed settings writer is file-backed. Stage serialization outside the
+        // workspace; the same writer preserves unrelated sections when a baseline is supplied.
+        using var file = await TemporaryNuGetConfigFile.CreateAsync(
+            path => _nuGetClient.WriteNuGetConfig(
+                content with { GlobalPackagesFolder = globalPackagesFolder },
+                path,
+                originalContent)).ConfigureAwait(false);
+        return await File.ReadAllBytesAsync(file.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
     }
 
     internal static string CombineCacheIdentities(string configurationIdentity, string overlayIdentity)
@@ -331,7 +506,7 @@ internal sealed class BundleNuGetService : INuGetService
         return builder.ToString();
     }
 
-    internal void WriteNuGetConfigOverlay(
+    internal void WriteNuGetConfig(
         NuGetConfigOverlay overlay,
         string outputPath,
         CancellationToken cancellationToken)
@@ -339,7 +514,7 @@ internal sealed class BundleNuGetService : INuGetService
         ArgumentNullException.ThrowIfNull(overlay);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         cancellationToken.ThrowIfCancellationRequested();
-        _nuGetClient.WriteConfigOverlay(overlay, outputPath);
+        _nuGetClient.WriteNuGetConfig(overlay, outputPath);
     }
 
     private static bool TryValidatePackageManifest(string manifestPath, ILogger logger)

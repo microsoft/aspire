@@ -14,24 +14,13 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
     public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetCliPackagesAsyncCallback { get; set; }
     public Func<DirectoryInfo, string, bool, FileInfo?, bool, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetPackageVersionsAsyncCallback { get; set; }
 
-    public async Task<NuGetPackageOperationConfiguration> CreateChannelConfigurationAsync(
+    public Task<NuGetPackageOperationConfiguration> CreateChannelConfigurationAsync(
         DirectoryInfo workingDirectory,
         IReadOnlyList<PackageMapping>? channelMappings,
         CancellationToken cancellationToken)
     {
-        var selectedMappings = channelMappings?
-            .Where(static mapping => mapping.PackageFilter != PackageMapping.AllPackages)
-            .ToArray() ?? [];
-        if (selectedMappings.Length == 0)
-        {
-            return NuGetPackageOperationConfiguration.Ambient(workingDirectory, cacheIdentity: "ambient");
-        }
-
-        var temporaryConfig = await TemporaryNuGetConfig.CreateAsync(selectedMappings);
-        return NuGetPackageOperationConfiguration.FromTemporaryOverlay(
-            workingDirectory,
-            temporaryConfig,
-            ambientCacheIdentity: "ambient");
+        return NuGetTestHelper.CreateService().CreatePackageOperationConfigurationAsync(
+            workingDirectory, channelMappings, restrictToSelectedSources: false, cancellationToken);
     }
 
     public Task<NuGetPackageOperationConfiguration> CreateSourceRestrictedConfigurationAsync(

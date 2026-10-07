@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Packaging;
-
 namespace Aspire.Cli.NuGet;
 
 /// <summary>
@@ -10,7 +8,7 @@ namespace Aspire.Cli.NuGet;
 /// </summary>
 internal sealed class NuGetPackageOperationConfiguration : IDisposable
 {
-    private readonly TemporaryNuGetConfig? _temporaryConfig;
+    private readonly TemporaryNuGetConfigFile? _temporaryConfig;
 
     private NuGetPackageOperationConfiguration(
         DirectoryInfo originalWorkingDirectory,
@@ -18,7 +16,7 @@ internal sealed class NuGetPackageOperationConfiguration : IDisposable
         FileInfo? explicitConfigFile,
         FileInfo? configurationFile,
         string cacheIdentity,
-        TemporaryNuGetConfig? temporaryConfig)
+        TemporaryNuGetConfigFile? temporaryConfig)
     {
         OriginalWorkingDirectory = originalWorkingDirectory;
         EffectiveWorkingDirectory = effectiveWorkingDirectory;
@@ -55,7 +53,7 @@ internal sealed class NuGetPackageOperationConfiguration : IDisposable
 
     public static NuGetPackageOperationConfiguration FromTemporaryOverlay(
         DirectoryInfo workingDirectory,
-        TemporaryNuGetConfig temporaryConfig,
+        TemporaryNuGetConfigFile temporaryConfig,
         string ambientCacheIdentity)
         => new(
             workingDirectory,

@@ -1180,7 +1180,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     // The local pseudo-channel has no package-source mappings, so it does not require an overlay.
-    // Every other explicit channel emits its mapping policy regardless of the running CLI identity.
+    // Channels with a selected source policy emit it regardless of the running CLI identity.
 
     [Fact]
     public async Task CreateRestoreOverlay_LocalIdentity_LocalRequested_ReturnsNull()
@@ -1211,7 +1211,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CreateRestoreOverlay_StableIdentity_StableRequested_GeneratesAmbientPolicy()
+    public async Task CreateRestoreOverlay_StableIdentity_StableRequested_ReturnsNull()
     {
         // Stable uses the same ambient NuGet source policy as an omitted channel.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1221,9 +1221,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         using var result = await CreateRestoreOverlayAsync(server, "stable");
 
-        var overlayFile = Assert.IsType<FileInfo>(result.PolicyOverlayFile);
-        var doc = XDocument.Load(overlayFile.FullName);
-        Assert.Empty(doc.Descendants("packageSources").Elements("add"));
+        Assert.Null(result.PolicyOverlayFile);
     }
 
     [Fact]
@@ -1416,7 +1414,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     sources: [(sourceAlias, source, true)],
                     packageSourceMappings: [(sourceAlias, ["Aspire*"])],
                     sourceIdentityKey: sourceIdentityKey),
-                WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+                WriteNuGetConfigCallback = settingsClient.WriteNuGetConfig
             };
 
             return CreatePrebuiltAppHostServer(
@@ -1672,20 +1670,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveNuGetConfigSources_RejectsConflictingPrimaryGeneratedSourceKey()
+    public void ResolveNuGetConfigSources_SkipsReservedPrimaryGeneratedSourceKey()
     {
         const string workloadId = "apphost-0123456789abcdef";
-        var exception = Assert.Throws<InvalidOperationException>(() =>
-            NuGetConfigurationBuilder.ResolveSourceAliases(
+        var sources = NuGetConfigurationBuilder.ResolveSourceAliases(
                 [new PackageMapping("Aspire*", "https://example.com/staging")],
                 workloadId,
                 ambientSources: [],
                 reservedPackageSourceKeys: [$"aspire-{workloadId}"],
-                s_sourceIdentityKey));
+                s_sourceIdentityKey);
 
         Assert.Equal(
-            $"The generated NuGet source key 'aspire-{workloadId}' conflicts with an existing NuGet configuration key.",
-            exception.Message);
+            $"aspire-{workloadId}-0",
+            Assert.Single(sources).Key);
     }
 
     [Theory]
@@ -3183,7 +3180,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 nugetConfigDiscoveryDirectory = workingDirectory;
                 return settingsClient.GetSettings(workingDirectory, sourceIdentityKey);
             },
-            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+            WriteNuGetConfigCallback = settingsClient.WriteNuGetConfig
         };
         var server = CreatePrebuiltAppHostServer(
             workspace,
@@ -4481,7 +4478,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     sources: [(alias, source, true)],
                     sourceIdentityKey: sourceIdentityKey);
             },
-            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+            WriteNuGetConfigCallback = settingsClient.WriteNuGetConfig
         };
         var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -4929,7 +4926,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             NullLogger<NuGetClient>.Instance);
         return new FakeNuGetClient
         {
-            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+            WriteNuGetConfigCallback = settingsClient.WriteNuGetConfig
         };
     }
 
@@ -4942,7 +4939,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         return new FakeNuGetClient
         {
             GetSettingsCallback = settingsClient.GetSettings,
-            WriteConfigOverlayCallback = settingsClient.WriteConfigOverlay
+            WriteNuGetConfigCallback = settingsClient.WriteNuGetConfig
         };
     }
 

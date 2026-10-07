@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -963,7 +962,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // is that nugetConfigFile stays null on the implicit channel.
 
         // The fix must also leave the solution-directory NuGet.config alone on the implicit
-        // channel — TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync
+        // channel — TemplateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync
         // short-circuits when the matched channel is not Explicit. A regression that dropped
         // the channel-type guard would silently create a workspace NuGet.config here.
         Assert.False(
@@ -1210,7 +1209,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// workspace <c>nuget.config</c> to the channel baked into the running CLI binary
     /// (exposed as <see cref="CliExecutionContext.IdentityChannel"/>). One named explicit channel is
     /// registered per theory row with a uniquely-sourced feed; the assertion reads the
-    /// workspace <c>nuget.config</c> emitted by <c>NuGetConfigMerger</c> and verifies it
+    /// workspace <c>nuget.config</c> emitted by the .NET configuration merger and verifies it
     /// carries the matching feed URL — proving the resolver picked the binary's identity
     /// channel rather than skipping the merge or selecting a different registered channel.
     /// The <c>stable</c> channel is intentionally excluded: it uses ambient NuGet configuration,
@@ -1998,7 +1997,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <c>SolutionLocator</c> still finds it (it searches with <c>SearchOption.AllDirectories</c>),
     /// and the workspace NuGet.config must be written next to the solution — not at the
     /// working directory root. A mutation that passed <c>workingDirectory.FullName</c> instead
-    /// of <c>solutionDir.FullName</c> to <c>CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// of <c>solutionDir.FullName</c> to <c>ConfigureDotNetAppHostNuGetConfigAsync</c>
     /// would put the file in the wrong place and the AppHost wouldn't resolve.
     /// </summary>
     [Fact]
@@ -2047,7 +2046,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// When a NuGet.config already exists in the solution directory with the user's own
     /// package source, <c>aspire init</c> must merge the channel feed in (via
-    /// <c>NuGetConfigMerger.UpdateExistingNuGetConfigAsync</c>) instead of clobbering the
+    /// <c>DotNetAppHostNuGetConfigTestHelper.UpdateExistingNuGetConfigAsync</c>) instead of clobbering the
     /// file. The merger has its own unit tests; this test guards the InitCommand-level
     /// integration so a regression in how the helper is invoked from the command path
     /// (wrong arg, missing call, accidental overwrite) doesn't slip through.
@@ -2330,33 +2329,14 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         => $"https://feeds.test.invalid/{channelName}-fallback/v3/index.json";
 
     /// <summary>
-    /// Asserts that the workspace NuGet.config written by
-    /// <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
-    /// carries the structural elements the fix depends on: the channel feed URL is registered
-    /// as a package source, a <c>&lt;clear/&gt;</c> element neutralizes any inherited
-    /// parent-directory NuGet config (without which a user-level config disabling our hive
-    /// would shadow the mapping), and the <c>Aspire*</c> pattern routes to the channel
-    /// feed via <c>&lt;packageSourceMapping&gt;</c>.
+    /// Asserts that native NuGet evaluation routes Aspire packages exclusively to the selected channel.
     /// </summary>
     private static void AssertNuGetConfigHasChannelShape(string nugetConfigPath, string channelName)
     {
         var channelSource = SourceForChannel(channelName);
-        var root = XDocument.Load(nugetConfigPath).Root ?? throw new InvalidOperationException("Empty NuGet.config.");
-
-        var packageSources = root.Element("packageSources");
-        Assert.NotNull(packageSources);
-        Assert.NotNull(packageSources!.Element("clear"));
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == channelSource);
-
-        var packageSourceMapping = root.Element("packageSourceMapping");
-        Assert.NotNull(packageSourceMapping);
-        var aspirePatternSource = packageSourceMapping!.Elements("packageSource")
-            .FirstOrDefault(ps => ps.Elements("package").Any(p => (string?)p.Attribute("pattern") == "Aspire*"));
-        Assert.NotNull(aspirePatternSource);
-        var aspirePatternSourceKey = (string?)aspirePatternSource!.Attribute("key");
-        Assert.Contains(packageSources.Elements("add"), element =>
-            string.Equals((string?)element.Attribute("key"), aspirePatternSourceKey, StringComparison.OrdinalIgnoreCase) &&
-            (string?)element.Attribute("value") == channelSource);
+        var workingDirectory = Path.GetDirectoryName(nugetConfigPath)!;
+        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.AppHost.Sdk"));
+        Assert.Equal([channelSource], NuGetTestHelper.GetEligiblePackageSources(workingDirectory, "Aspire.Hosting.Redis"));
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

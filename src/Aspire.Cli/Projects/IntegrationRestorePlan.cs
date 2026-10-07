@@ -251,13 +251,6 @@ internal sealed class IntegrationRestorePlanResolver(
             ];
             configureGlobalPackagesFolder = sourcePolicyChannel.ConfigureGlobalPackagesFolder;
         }
-        else if (requestedPolicyChannel is not null && UsesAmbientSourcePolicy(requestedPolicyChannel))
-        {
-            // Keep an explicit stable restore on the same generated-config path as other named
-            // channels, but contribute no source. The overlay reproduces ambient eligibility.
-            packageSourceMappings = [];
-        }
-
         return new IntegrationRestoreSources(
             [.. additionalSources],
             packageSourceMappings,
@@ -442,7 +435,7 @@ internal sealed class IntegrationRestorePlan
         }
         else
         {
-            _nugetService.WriteOverlay(
+            _nugetService.WriteNuGetConfig(
                 _configuration,
                 restoreOverlayFile.FullName,
                 globalPackagesFolder,
@@ -513,7 +506,7 @@ internal sealed class IntegrationRestorePlan
             ?.Key ?? primarySource;
     }
 
-    private string? GetGlobalPackagesFolder(TemporaryNuGetConfig? restoreOverlay)
+    private string? GetGlobalPackagesFolder(TemporaryNuGetConfigFile? restoreOverlay)
     {
         if (!_restoreSources.ConfigureGlobalPackagesFolder)
         {
@@ -536,7 +529,7 @@ internal sealed class IntegrationRestorePlan
             identity);
     }
 
-    private async Task<TemporaryNuGetConfig?> CreateRestoreOverlayAsync(
+    private async Task<TemporaryNuGetConfigFile?> CreateRestoreOverlayAsync(
         CancellationToken cancellationToken)
     {
         if (_restoreSources.PackageSourceMappings is null)
@@ -555,8 +548,8 @@ internal sealed class IntegrationRestorePlan
             cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<TemporaryNuGetConfig> ConfigureGlobalPackagesFolderAsync(
-        TemporaryNuGetConfig config,
+    private async Task<TemporaryNuGetConfigFile> ConfigureGlobalPackagesFolderAsync(
+        TemporaryNuGetConfigFile config,
         CancellationToken cancellationToken)
     {
         var globalPackagesFolder = GetGlobalPackagesFolder(config);
@@ -568,7 +561,7 @@ internal sealed class IntegrationRestorePlan
         try
         {
             await config.RegenerateAsync(
-                path => _nugetService.WriteOverlay(
+                path => _nugetService.WriteNuGetConfig(
                     _configuration,
                     path,
                     globalPackagesFolder,
@@ -593,7 +586,7 @@ internal sealed record IntegrationRestoreSources(
     string? GlobalPackagesFolderIdentity);
 
 internal sealed class IntegrationPackageRestoreConfiguration(
-    TemporaryNuGetConfig? policyOverlay,
+    TemporaryNuGetConfigFile? policyOverlay,
     string[]? sources,
     string[] configPaths,
     string settingsCacheIdentity,

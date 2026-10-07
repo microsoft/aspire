@@ -2,13 +2,140 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.NuGet;
+using Aspire.Cli.DotNet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
+using NativeSettings = global::NuGet.Configuration.Settings;
+using NativeSourceProvider = global::NuGet.Configuration.PackageSourceProvider;
+using NativeSettingsUtility = global::NuGet.Configuration.SettingsUtility;
 
 namespace Aspire.Cli.Tests.NuGet;
 
 public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task CreateConfigurationPreviewAsync_MatchesPersistedPolicyWithoutChangingOriginal()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        const string original = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="private" value="./private-feed" protocolVersion="3" allowInsecureConnections="true" disableTLSCertificateValidation="true" />
+                <add key="daily" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceCredentials>
+                <private>
+                  <add key="Username" value="test-user" />
+                  <add key="ClearTextPassword" value="test-password" />
+                </private>
+              </packageSourceCredentials>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="daily"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="private"><package pattern="Contoso.*" /></packageSource>
+                <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+              <config><add key="globalPackagesFolder" value="./packages" /></config>
+              <custom><add key="retained" value="unchanged" /></custom>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var client = NuGetTestHelper.CreateClient();
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable",
+            PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json"), new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance);
+        var configuration = service.BuildChannelConfiguration(
+            appHostDirectory, "test", channel, packageSourceOverride: null,
+            nugetServiceIndexOverride: null, TestContext.Current.CancellationToken);
+        using var preview = await service.CreateConfigurationPreviewAsync(
+            appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: false,
+            globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+        Assert.StartsWith(Path.Combine(appHostDirectory.FullName, ".aspire") + Path.DirectorySeparatorChar, preview.EffectiveWorkingDirectory.FullName);
+        Assert.Empty(workspace.WorkspaceRoot.EnumerateFiles(".aspire-nuget-preview-*.config"));
+        var previewSettings = NativeSettings.LoadDefaultSettings(preview.EffectiveWorkingDirectory.FullName);
+        var privateSource = new NativeSourceProvider(previewSettings).LoadPackageSources().Single(source => source.Name == "private");
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "private-feed"), privateSource.Source);
+        Assert.Equal("test-user", privateSource.Credentials!.Username);
+        Assert.Equal("test-password", privateSource.Credentials.Password);
+
+        var key = new byte[NuGetSourceIdentity.KeySizeInBytes];
+        var previewSnapshot = client.GetSettings(preview.EffectiveWorkingDirectory.FullName, key);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        var persistedSnapshot = client.GetSettings(appHostDirectory.FullName, key);
+        Assert.Equal(
+            persistedSnapshot.Sources.Where(static source => source.IsEnabled),
+            previewSnapshot.Sources.Where(static source => source.IsEnabled));
+        Assert.Equal(
+            persistedSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"),
+            previewSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"));
+        Assert.Equal(persistedSnapshot.DisabledPackageSourceKeys, previewSnapshot.DisabledPackageSourceKeys);
+        var persistedSettings = NativeSettings.LoadDefaultSettings(appHostDirectory.FullName);
+        Assert.Equal(
+            NativeSettingsUtility.GetGlobalPackagesFolder(persistedSettings),
+            NativeSettingsUtility.GetGlobalPackagesFolder(previewSettings));
+        Assert.Equal(
+            persistedSettings.GetSection("packageSources")!.Items.OfType<global::NuGet.Configuration.SourceItem>().Single(source => source.Key == "private").AdditionalAttributes,
+            previewSettings.GetSection("packageSources")!.Items.OfType<global::NuGet.Configuration.SourceItem>().Single(source => source.Key == "private").AdditionalAttributes);
+        Assert.Equal("unchanged", previewSettings.GetSection("custom")!.Items.OfType<global::NuGet.Configuration.AddItem>().Single().Value);
+    }
+
+    [Fact]
+    public async Task CreateConfigurationPreviewAsync_PreservesParentConfigWhenCreatingLocalFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
+            """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="app" value="https://app.example/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="app"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var client = NuGetTestHelper.CreateClient();
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client);
+        var configuration = service.BuildConfiguration(
+            appHostDirectory, "test",
+            [new PackageMapping("Aspire*", "https://selected.example/v3/index.json")],
+            restrictToSelectedSources: false,
+            hasAuthoritativeAspirePolicy: true,
+            cancellationToken: TestContext.Current.CancellationToken);
+        using var preview = await service.CreateConfigurationPreviewAsync(
+            appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+            appHostDirectory, configuration, createIfMissing: true,
+            globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+
+        Assert.False(candidate.TargetFile.Exists);
+        var previewSnapshot = client.GetSettings(preview.EffectiveWorkingDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.Equal(["aspire-test", "app"], previewSnapshot.Sources.Select(source => source.Name));
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        var persistedSnapshot = client.GetSettings(appHostDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.Equal(persistedSnapshot.Sources, previewSnapshot.Sources);
+    }
+
     [Fact]
     public async Task RestorePackagesAsync_UsesWorkspaceAspireDirectoryAndForwardsInputs()
     {
@@ -55,7 +182,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, nuGetClient.RestoreCallCount);
         Assert.Equal(1, nuGetClient.WriteManifestCallCount);
         Assert.Equal(0, nuGetClient.GetSettingsCallCount);
-        Assert.Equal(0, nuGetClient.WriteConfigOverlayCallCount);
+        Assert.Equal(0, nuGetClient.WriteNuGetConfigCallCount);
     }
 
     [Fact]

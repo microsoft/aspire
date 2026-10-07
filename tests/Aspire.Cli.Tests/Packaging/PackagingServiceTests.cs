@@ -800,7 +800,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
     /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a
     /// non-empty <see cref="PackageChannel.Mappings"/> array containing a <see cref="PackageMapping.AllPackages"/>
-    /// pattern. <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// pattern. <c>TemplateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync</c>
     /// short-circuits if the matching channel is not explicit or has no mappings, so a future
     /// refactor that flipped stable to implicit / removed its mappings would silently turn the
     /// workspace-NuGet.config write into a no-op for every stable-channel CLI user. The
@@ -1088,7 +1088,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
+    public async Task DotNetConfigurationPersistence_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1115,7 +1115,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");
@@ -1342,7 +1342,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
+    public async Task DotNetConfigurationPersistence_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1370,7 +1370,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");

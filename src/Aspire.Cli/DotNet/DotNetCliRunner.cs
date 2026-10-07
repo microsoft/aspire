@@ -54,6 +54,22 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardErrorCallback { get; set; }
 
     public bool NoLaunchProfile { get; set; }
+
+    /// <summary>
+    /// Suppresses implicit restore during single-file project property and target queries.
+    /// </summary>
+    public bool NoRestore { get; set; }
+
+    /// <summary>
+    /// Excludes generated package imports during MSBuild restore-settings inspection.
+    /// </summary>
+    public bool ExcludeRestorePackageImports { get; set; }
+
+    /// <summary>
+    /// Imports invocation-scoped NuGet restore targets for candidate graph validation.
+    /// </summary>
+    public FileInfo? NuGetRestoreTargetsFile { get; set; }
+
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
@@ -162,6 +178,9 @@ internal sealed class ProcessInvocationOptions
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
         NoLaunchProfile = NoLaunchProfile,
+        NoRestore = NoRestore,
+        ExcludeRestorePackageImports = ExcludeRestorePackageImports,
+        NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -804,6 +823,14 @@ internal sealed class DotNetCliRunner(
 
         // If we are a single file app host then we use the build command instead of msbuild command.
         var cliArgsList = new List<string> { isSingleFileAppHost ? "build" : "msbuild" };
+        if (isSingleFileAppHost && options.NoRestore)
+        {
+            cliArgsList.Add("--no-restore");
+        }
+        if (options.ExcludeRestorePackageImports)
+        {
+            cliArgsList.Add("-property:ExcludeRestorePackageImports=true");
+        }
 
         if (properties.Length > 0)
         {
@@ -879,14 +906,18 @@ internal sealed class DotNetCliRunner(
 
             var stdout = stdoutBuilder.ToString();
             var stderr = stderrBuilder.ToString();
+            // Restore-setting probes can return credential-bearing source properties.
+            // Suppression must cover failure and retry diagnostics as well as process output.
+            var diagnosticStdout = options.SuppressLogging ? string.Empty : stdout;
+            var diagnosticStderr = options.SuppressLogging ? string.Empty : stderr;
 
             if (exitCode != 0)
             {
                 logger.LogError(
                     "Failed to get items and properties from project. Exit code was: {ExitCode}. See debug logs for more details. Stderr: {Stderr}, Stdout: {Stdout}",
                     exitCode,
-                    stderr,
-                    stdout
+                    diagnosticStderr,
+                    diagnosticStdout
                 );
 
                 return (exitCode, null);
@@ -900,7 +931,7 @@ internal sealed class DotNetCliRunner(
                         "dotnet msbuild returned exit code 0 but produced no output (attempt {Attempt}/{MaxRetries}). Retrying after delay. Stderr: {Stderr}",
                         attempt + 1,
                         maxRetries,
-                        stderr);
+                        diagnosticStderr);
                     await Task.Delay(TimeSpan.FromSeconds(attempt + 1), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -908,7 +939,7 @@ internal sealed class DotNetCliRunner(
                 logger.LogWarning(
                     "dotnet msbuild returned exit code 0 but produced no output after {MaxRetries} attempts. Stderr: {Stderr}",
                     maxRetries,
-                    stderr);
+                    diagnosticStderr);
                 return (exitCode, null);
             }
 
@@ -1282,6 +1313,10 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         string[] cliArgs = ["restore", projectFilePath.FullName];
+        if (options.NuGetRestoreTargetsFile is { } restoreTargets)
+        {
+            cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];
+        }
 
         return await ExecuteAsync(
             args: cliArgs,

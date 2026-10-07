@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
@@ -105,7 +106,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
                 var (projectFilePath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
 
                 Assert.Equal(repoRoot.FullName, XDocument.Load(projectFilePath).Descendants("RestoreRootConfigDirectory").Single().Value);
-                Assert.False(NuGetConfigMerger.TryFindNuGetConfigInDirectory(projectModelPath, out _));
+                Assert.False(DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(projectModelPath, out _));
 
                 // Evaluate NuGet's actual settings without restoring packages. A relative source such as
                 // <add key="repo-feed" value="./feed" /> must resolve beside the original config file.

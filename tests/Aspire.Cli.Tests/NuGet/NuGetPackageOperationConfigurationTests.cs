@@ -211,7 +211,7 @@ public class NuGetPackageOperationConfigurationTests(ITestOutputHelper outputHel
             overlay.PackageSourceMappings.Select(mapping => mapping.SourceKey).Order(StringComparer.Ordinal));
 
         var persistentPath = Path.Combine(workspace.CreateDirectory("persistent").FullName, "NuGet.Config");
-        service.WriteOverlay(configuration, persistentPath, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        service.WriteNuGetConfig(configuration, persistentPath, globalPackagesFolder: null, TestContext.Current.CancellationToken);
         using var temporary = await service.WriteTemporaryOverlayAsync(
             configuration,
             workspace.WorkspaceRoot,
@@ -221,7 +221,7 @@ public class NuGetPackageOperationConfigurationTests(ITestOutputHelper outputHel
         Assert.Equal(XDocument.Load(persistentPath).ToString(), XDocument.Load(temporary.ConfigFile.FullName).ToString());
 
         await temporary.RegenerateAsync(path =>
-            service.WriteOverlay(configuration, path, globalPackagesFolder: null, TestContext.Current.CancellationToken));
+            service.WriteNuGetConfig(configuration, path, globalPackagesFolder: null, TestContext.Current.CancellationToken));
         Assert.Equal(XDocument.Load(persistentPath).ToString(), XDocument.Load(temporary.ConfigFile.FullName).ToString());
     }
 

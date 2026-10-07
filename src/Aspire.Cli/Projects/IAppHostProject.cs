@@ -32,6 +32,11 @@ internal sealed class UpdatePackagesContext
     public required Packaging.PackageChannel Channel { get; init; }
 
     /// <summary>
+    /// Gets whether the invocation explicitly requested a channel.
+    /// </summary>
+    public required bool HasExplicitChannel { get; init; }
+
+    /// <summary>
     /// Gets the prompt binding for confirmation prompts.
     /// Enables non-interactive confirmation via CLI options (e.g. <c>--yes</c>).
     /// </summary>

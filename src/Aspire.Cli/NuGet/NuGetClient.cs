@@ -51,6 +51,14 @@ internal interface INuGetClient
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken);
 
+    Task AcquirePackageAsync(
+        (string Id, string Version) package,
+        string outputPath,
+        string workingDirectory,
+        string globalPackagesFolder,
+        IReadOnlyList<string> sensitiveSources,
+        CancellationToken cancellationToken);
+
     Task WriteManifestAsync(
         string assetsFilePath,
         string outputPath,
@@ -69,9 +77,15 @@ internal interface INuGetClient
 
     NuGetSettingsInfo GetSettings(string workingDirectory, byte[] sourceIdentityKey);
 
+    string GetGlobalPackagesFolder(string workingDirectory);
+
+    void WriteNuGetConfig(IReadOnlyList<string> configPaths, string outputPath);
+
     IReadOnlyList<NuGetPackage> FilterPackageSearchResults(IReadOnlyList<NuGetPackage> packages, string? nugetConfigPath, string workingDirectory);
 
-    void WriteConfigOverlay(NuGetConfigOverlay overlay, string outputPath);
+    void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath);
+
+    void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath, ReadOnlyMemory<byte>? originalContent);
 }
 
 internal sealed record NuGetConfigOverlay(
@@ -79,7 +93,14 @@ internal sealed record NuGetConfigOverlay(
     IReadOnlyList<NuGetPackageSourceMapping> PackageSourceMappings,
     bool ClearDisabledPackageSources,
     IReadOnlyList<string> DisabledPackageSourceKeys,
-    string? GlobalPackagesFolder);
+    string? GlobalPackagesFolder)
+{
+    public bool ClearPackageSources { get; init; }
+    public bool ClearPackageSourceMappings { get; init; }
+    public IReadOnlyList<string> RetiredSourceKeys { get; init; } = [];
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> SourceAttributes { get; init; }
+        = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+}
 
 internal sealed record NuGetSearchResult(
     string Id,
@@ -118,7 +139,7 @@ internal sealed class NuGetClient(
     internal Func<IMachineWideSettings> MachineWideSettingsFactory { get; init; }
         = static () => new XPlatMachineWideSetting();
 
-    public async Task RestoreAsync(
+    public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
         string framework,
         string? runtimeIdentifier,
@@ -128,6 +149,36 @@ internal sealed class NuGetClient(
         string workingDirectory,
         string? globalPackagesFolderOverride,
         IReadOnlyList<string> sensitiveSources,
+        CancellationToken cancellationToken)
+        => RestoreAsync(packages, framework, runtimeIdentifier, outputPath, sources, nugetConfigPaths,
+            workingDirectory, globalPackagesFolderOverride, sensitiveSources, acquireOnly: false, cancellationToken);
+
+    public Task AcquirePackageAsync(
+        (string Id, string Version) package,
+        string outputPath,
+        string workingDirectory,
+        string globalPackagesFolder,
+        IReadOnlyList<string> sensitiveSources,
+        CancellationToken cancellationToken)
+        // Like MSBuild's SDK resolver, exclude assets and use an exact version. The framework
+        // only satisfies NuGet's package-spec requirement; SDK acquisition must not depend on
+        // the AppHost's framework or validate the SDK's libraries as application references.
+        // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/Microsoft.Build.NuGetSdkResolver/RestoreRunnerEx.cs
+        => RestoreAsync([package], FrameworkConstants.CommonFrameworks.NetStandard.GetShortFolderName(),
+            runtimeIdentifier: null, outputPath, sources: [], nugetConfigPaths: [],
+            workingDirectory, globalPackagesFolder, sensitiveSources, acquireOnly: true, cancellationToken);
+
+    private async Task RestoreAsync(
+        IReadOnlyList<(string Id, string Version)> packages,
+        string framework,
+        string? runtimeIdentifier,
+        string outputPath,
+        IReadOnlyList<string> sources,
+        IReadOnlyList<string> nugetConfigPaths,
+        string workingDirectory,
+        string? globalPackagesFolderOverride,
+        IReadOnlyList<string> sensitiveSources,
+        bool acquireOnly,
         CancellationToken cancellationToken)
     {
         using var operation = BeginOperation(sensitiveSources);
@@ -157,7 +208,8 @@ internal sealed class NuGetClient(
                 outputPath,
                 packageSources,
                 settings,
-                globalPackagesFolderOverride);
+                globalPackagesFolderOverride,
+                acquireOnly);
 
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(packageSpec);
@@ -219,7 +271,8 @@ internal sealed class NuGetClient(
         string outputPath,
         List<PackageSource> sources,
         ISettings settings,
-        string? globalPackagesFolderOverride)
+        string? globalPackagesFolderOverride,
+        bool acquireOnly)
     {
         var projectName = "AspireRestore";
         var projectPath = Path.Combine(outputPath, "project.json");
@@ -228,12 +281,21 @@ internal sealed class NuGetClient(
             ? EnsureRuntimeIdentifierGraphPath(outputPath)
             : null;
 
-        var dependencies = packages.Select(package => new LibraryDependency
+        var dependencies = packages.Select(package =>
         {
-            LibraryRange = new LibraryRange(
+            var range = new LibraryRange(
                 package.Id,
-                VersionRange.Parse(package.Version),
-                LibraryDependencyTarget.Package)
+                VersionRange.Parse(acquireOnly ? $"[{package.Version}]" : package.Version),
+                LibraryDependencyTarget.Package);
+            return acquireOnly
+                ? new LibraryDependency
+                {
+                    LibraryRange = range,
+                    IncludeType = LibraryIncludeFlags.None,
+                    SuppressParent = LibraryIncludeFlags.All,
+                    AutoReferenced = true
+                }
+                : new LibraryDependency { LibraryRange = range };
         }).ToImmutableArray();
 
         var tfInfo = new TargetFrameworkInformation
@@ -260,6 +322,10 @@ internal sealed class NuGetClient(
         foreach (var source in sources)
         {
             restoreMetadata.Sources.Add(source);
+        }
+        if (acquireOnly)
+        {
+            restoreMetadata.FallbackFolders = pathContext.FallbackPackageFolders.ToList();
         }
 
         restoreMetadata.TargetFrameworks.Add(new ProjectRestoreMetadataFrameworkInfo(framework)
@@ -687,6 +753,43 @@ internal sealed class NuGetClient(
         ArgumentNullException.ThrowIfNull(sourceIdentityKey);
 
         var settings = LoadAmbientSettings(workingDirectory, MachineWideSettingsFactory());
+        return GetSettings(settings, sourceIdentityKey);
+    }
+
+    public string GetGlobalPackagesFolder(string workingDirectory)
+        => SettingsUtility.GetGlobalPackagesFolder(LoadAmbientSettings(workingDirectory, MachineWideSettingsFactory()));
+
+    public void WriteNuGetConfig(IReadOnlyList<string> configPaths, string outputPath)
+    {
+        var settings = Settings.LoadSettingsGivenConfigPaths(configPaths.ToList());
+        var sources = new PackageSourceProvider(settings).LoadPackageSources().ToArray();
+        var mappings = new PackageSourceMappingProvider(settings).GetPackageSourceMappingItems()
+            .Select(static item => new NuGetPackageSourceMapping(
+                item.Key, item.Patterns.Select(static pattern => pattern.Pattern).ToArray()))
+            .ToArray();
+        var attributes = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var source in settings.GetSection(ConfigurationConstants.PackageSources)?.Items.OfType<SourceItem>() ?? [])
+        {
+            attributes.Add(source.Key, source.AdditionalAttributes);
+        }
+
+        // Flatten only source policy and the resolved package folder. Credentials and
+        // unrelated settings retain their native origins in the unchanged hierarchy.
+        WriteNuGetConfig(new NuGetConfigOverlay(
+            sources.Select(static source => (source.Name, source.Source)).ToArray(),
+            mappings,
+            ClearDisabledPackageSources: true,
+            sources.Where(static source => !source.IsEnabled).Select(static source => source.Name).ToArray(),
+            SettingsUtility.GetGlobalPackagesFolder(settings))
+        {
+            ClearPackageSources = true,
+            ClearPackageSourceMappings = true,
+            SourceAttributes = attributes
+        }, outputPath);
+    }
+
+    private static NuGetSettingsInfo GetSettings(ISettings settings, byte[] sourceIdentityKey)
+    {
         var packageSourceProvider = new PackageSourceProvider(settings);
         var packageSources = packageSourceProvider.LoadPackageSources().ToArray();
         var auditSources = packageSourceProvider.LoadAuditSources().ToArray();
@@ -737,14 +840,22 @@ internal sealed class NuGetClient(
             sourceIdentityKey);
     }
 
-    public void WriteConfigOverlay(NuGetConfigOverlay overlay, string outputPath)
+    public void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath)
+        => WriteNuGetConfig(configuration, outputPath, originalContent: null);
+
+    public void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath, ReadOnlyMemory<byte>? originalContent)
     {
-        ArgumentNullException.ThrowIfNull(overlay);
+        ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
 
         var outputFile = new FileInfo(outputPath);
         outputFile.Directory?.Create();
         outputFile.Delete();
+        if (originalContent is { } baseline)
+        {
+            using var stream = outputFile.Create();
+            stream.Write(baseline.Span);
+        }
 
         var settings = new Settings(
             outputFile.DirectoryName!,
@@ -758,24 +869,50 @@ internal sealed class NuGetClient(
             .Items
             .OfType<SourceItem>()
             .ToArray() ?? [];
-        foreach (var defaultSource in defaultSources)
+        foreach (var defaultSource in originalContent is null || configuration.ClearPackageSources ? defaultSources : [])
         {
             settings.Remove(ConfigurationConstants.PackageSources, defaultSource);
         }
-
-        foreach (var source in overlay.Sources)
+        if (originalContent is not null)
         {
-            settings.AddOrUpdate(
-                ConfigurationConstants.PackageSources,
-                new SourceItem(source.Key, source.Source));
+            foreach (var source in defaultSources.Where(source =>
+                configuration.RetiredSourceKeys.Contains(source.Key, StringComparer.OrdinalIgnoreCase)))
+            {
+                settings.Remove(ConfigurationConstants.PackageSources, source);
+            }
         }
 
-        if (overlay.ClearDisabledPackageSources)
+        if (configuration.ClearPackageSources)
         {
+            settings.AddOrUpdate(ConfigurationConstants.PackageSources, new ClearItem());
+        }
+
+        foreach (var source in configuration.Sources)
+        {
+            var sourceItem = new SourceItem(source.Key, source.Source);
+            if (configuration.SourceAttributes.TryGetValue(source.Key, out var attributes))
+            {
+                foreach (var attribute in attributes)
+                {
+                    sourceItem.AddOrUpdateAdditionalAttribute(attribute.Key, attribute.Value);
+                }
+            }
+
+            settings.AddOrUpdate(
+                ConfigurationConstants.PackageSources,
+                sourceItem);
+        }
+
+        if (configuration.ClearDisabledPackageSources)
+        {
+            foreach (var item in settings.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items.ToArray() ?? [])
+            {
+                settings.Remove(ConfigurationConstants.DisabledPackageSources, item);
+            }
             settings.AddOrUpdate(
                 ConfigurationConstants.DisabledPackageSources,
                 new ClearItem());
-            foreach (var sourceKey in overlay.DisabledPackageSourceKeys)
+            foreach (var sourceKey in configuration.DisabledPackageSourceKeys)
             {
                 settings.AddOrUpdate(
                     ConfigurationConstants.DisabledPackageSources,
@@ -783,12 +920,20 @@ internal sealed class NuGetClient(
             }
         }
 
-        if (overlay.PackageSourceMappings.Count > 0)
+        if (configuration.ClearPackageSourceMappings || configuration.PackageSourceMappings.Count > 0)
         {
+            foreach (var item in settings.GetSection(ConfigurationConstants.PackageSourceMapping)?.Items.ToArray() ?? [])
+            {
+                settings.Remove(ConfigurationConstants.PackageSourceMapping, item);
+            }
             settings.AddOrUpdate(
                 ConfigurationConstants.PackageSourceMapping,
                 new ClearItem());
-            var mappings = overlay.PackageSourceMappings
+        }
+
+        if (configuration.PackageSourceMappings.Count > 0)
+        {
+            var mappings = configuration.PackageSourceMappings
                 .Select(static mapping => new PackageSourceMappingSourceItem(
                     mapping.SourceKey,
                     mapping.Patterns.Select(static pattern => new PackagePatternItem(pattern))))
@@ -797,13 +942,13 @@ internal sealed class NuGetClient(
                 .SavePackageSourceMappings(mappings);
         }
 
-        if (!string.IsNullOrEmpty(overlay.GlobalPackagesFolder))
+        if (!string.IsNullOrEmpty(configuration.GlobalPackagesFolder))
         {
             settings.AddOrUpdate(
                 ConfigurationConstants.Config,
                 new AddItem(
                     ConfigurationConstants.GlobalPackagesFolder,
-                    overlay.GlobalPackagesFolder));
+                    configuration.GlobalPackagesFolder));
         }
 
         settings.SaveToDisk();
@@ -913,12 +1058,22 @@ internal sealed class NuGetClient(
     }
 
     private static NuGetSourceInfo CreateSourceInfo(PackageSource source, byte[] identityKey)
-        => new(
+    {
+        var isMicrosoftControlled = Uri.TryCreate(source.Source, UriKind.Absolute, out var uri) &&
+            (string.Equals(uri.Host, "api.nuget.org", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(uri.Host, "pkgs.dev.azure.com", StringComparison.OrdinalIgnoreCase));
+        var normalizedPath = source.Source.Replace('\\', '/');
+        return new(
             source.Name,
             NuGetSourceIdentity.Compute(source.Source, identityKey),
             source.IsEnabled,
             source.Credentials is not null,
-            source.ClientCertificates is { Count: > 0 });
+            source.ClientCertificates is { Count: > 0 })
+        {
+            IsCliManaged = (uri is null || uri.IsFile) && normalizedPath.Contains(".aspire/hives/", StringComparison.OrdinalIgnoreCase) ||
+               isMicrosoftControlled && uri is not null && uri.AbsolutePath.Contains("aspire", StringComparison.OrdinalIgnoreCase)
+        };
+    }
 
     /// <summary>
     /// Records one operation's output the way the aspire-managed helper wrote it to stderr.

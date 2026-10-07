@@ -798,6 +798,7 @@ public class GuestAppHostProjectTests : IDisposable
         var additionalStepApplied = false;
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = implicitChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -902,6 +903,7 @@ public class GuestAppHostProjectTests : IDisposable
             languageId: "test/runtime");
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = channel,
             ConfirmBinding = PromptBinding.CreateDefault(false),
@@ -963,6 +965,7 @@ public class GuestAppHostProjectTests : IDisposable
         var additionalStepApplied = false;
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = CreateGuestUpdateChannel("2.0.0", explicitChannel: true),
             ConfirmBinding = PromptBinding.CreateDefault(false),
@@ -1009,6 +1012,7 @@ public class GuestAppHostProjectTests : IDisposable
         var additionalStepApplied = false;
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = CreateGuestUpdateChannel(projectUpdate ? "2.0.0" : "1.0.0", explicitChannel: true),
             ConfirmBinding = PromptBinding.CreateDefault(true),
@@ -1059,6 +1063,7 @@ public class GuestAppHostProjectTests : IDisposable
         var additionalStepCalls = 0;
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = CreateGuestUpdateChannel("1.0.0", explicitChannel: false),
             ConfirmBinding = PromptBinding.CreateDefault(false),
@@ -1288,6 +1293,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = stableChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -1344,6 +1350,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = stagingChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -1402,6 +1409,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = stableChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -1457,6 +1465,7 @@ public class GuestAppHostProjectTests : IDisposable
         var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = stableChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -1504,6 +1513,7 @@ public class GuestAppHostProjectTests : IDisposable
         var project = CreateGuestAppHostProject();
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = stableChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -1910,6 +1920,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = implicitChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
@@ -1999,6 +2010,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var context = new UpdatePackagesContext
         {
+            HasExplicitChannel = false,
             AppHostFile = new FileInfo(appHostPath),
             Channel = implicitChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),

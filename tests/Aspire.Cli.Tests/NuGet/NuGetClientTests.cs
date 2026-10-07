@@ -191,6 +191,9 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         };
 
         var snapshot = client.GetSettings(workspace.WorkspaceRoot.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath: null, workspace.WorkspaceRoot.FullName),
+            packageId);
         Assert.Contains(machineSettings.GetConfigFilePaths().Single(), snapshot.ConfigPaths);
         var sdkResults = client.FilterPackageSearchResults(
             [
@@ -226,10 +229,14 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             globalPackagesFolderOverride: null,
             sensitiveSources: [],
             TestContext.Current.CancellationToken);
+        var restoredPackage = Assert.Single(ReadRestoredPackages(
+            restoreDirectory.FullName, nugetConfigPath: null, workspace.WorkspaceRoot.FullName));
+        Assert.Equal(packageId, restoredPackage.Id);
+        Assert.Equal(result.Version, restoredPackage.Version);
         Assert.Equal(
             "selected",
             await File.ReadAllTextAsync(
-                Path.Combine(packageDirectory.FullName, packageId.ToLowerInvariant(), result.Version, "lib", "net10.0", "Aspire.Test.Package.dll"),
+                Path.Combine(restoredPackage.InstallPath, "lib", "net10.0", "Aspire.Test.Package.dll"),
                 TestContext.Current.CancellationToken));
     }
 
@@ -452,6 +459,9 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         var packageId = $"Aspire.Test.Package.{Guid.NewGuid():N}";
         CreatePackage(feedDirectory.FullName, packageId);
         var nugetConfigPath = CreateLocalFeedConfig(workspace, feedDirectory, workspace.CreateDirectory("packages"));
+        using var restoredPackageScope = new RestoredPackageScope(
+            GetEffectiveGlobalPackagesFolder(nugetConfigPath, workspace.WorkspaceRoot.FullName),
+            packageId);
 
         RemoteExecutor.Invoke(
             static async (packageId, configPath, restorePath, workingDirectory) =>
@@ -1432,7 +1442,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WriteConfigOverlay_WritesPolicySections()
+    public void WriteNuGetConfig_WritesPolicySections()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "policy", "NuGet.Config");
@@ -1441,7 +1451,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             new TestEnvironment(),
             NullLogger<NuGetClient>.Instance);
 
-        client.WriteConfigOverlay(
+        client.WriteNuGetConfig(
             new NuGetConfigOverlay(
                 [("private", "https://packages.example.com/v3/index.json")],
                 [new("private", ["Aspire.*"])],
@@ -1466,10 +1476,41 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             document.Descendants("config").Elements("add").Single().Attribute("value")?.Value);
     }
 
+    [Fact]
+    public async Task WriteNuGetConfig_ClearsInheritedMappingsWhenReplacementIsEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var originalPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(originalPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="stable" value="https://stable.example/v3/index.json" />
+                <add key="daily" value="https://daily.example/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="daily"><package pattern="Aspire*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var overlayDirectory = workspace.CreateDirectory("preview");
+        var overlayPath = Path.Combine(overlayDirectory.FullName, "NuGet.Config");
+        var client = NuGetTestHelper.CreateClient();
+        client.WriteNuGetConfig(
+            new NuGetConfigOverlay([], [], false, [], null) { ClearPackageSourceMappings = true },
+            overlayPath);
+
+        var settings = client.GetSettings(overlayDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        Assert.Empty(settings.PackageSourceMappings);
+        Assert.Equal(["stable", "daily"], settings.Sources.Select(source => source.Name));
+        await Verify(XDocument.Load(overlayPath).ToString(), "xml");
+    }
+
     /// <summary>
-    /// Writes a NuGet config that redirects the global packages folder into the temporary workspace
-    /// so restored packages are removed with the workspace instead of accumulating in the machine's
-    /// real global packages folder.
+    /// Writes a NuGet config whose global packages folder defaults to the temporary workspace.
+    /// Environment overrides still follow native NuGet precedence.
     /// </summary>
     private static string CreateWorkspaceGlobalPackagesConfig(TemporaryWorkspace workspace, DirectoryInfo packagesDirectory)
     {
@@ -1488,8 +1529,8 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Writes a nuget.config with a single local feed and a workspace-scoped global packages folder, so restores
-    /// neither read the machine's configured feeds nor add packages to its real global packages folder.
+    /// Writes a nuget.config with a single local feed and a workspace-scoped global packages folder default.
+    /// Environment overrides still follow native NuGet precedence.
     /// </summary>
     private static string CreateLocalFeedConfig(TemporaryWorkspace workspace, DirectoryInfo feedDirectory, DirectoryInfo packagesDirectory)
     {

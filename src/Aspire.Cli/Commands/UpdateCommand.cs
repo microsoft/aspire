@@ -238,30 +238,19 @@ internal sealed class UpdateCommand : BaseCommand
             var project = projectFile is not null ? _projectFactory.GetProject(projectFile) : null;
             var isProjectReferenceMode = project is not null && projectFile is not null && project.IsUsingProjectReferences(projectFile);
 
-            // Resolve the channel using the documented precedence:
-            //   1. explicit --channel / hidden --quality
-            //   2. nearest local app config "channel" (relative to the resolved AppHost project, NOT cwd)
-            //   3. global config "channel"
-            //   4. interactive channel prompt when appropriate (PR hives present)
-            //   5. implicit/default channel as the documented fallback
-            // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
-            // must consult the selected project's config tree, not the user's launch cwd.
-            // The process-wide IConfiguration is rooted at the launch cwd at startup, so
-            // using it here would silently read the wrong app's local config (issue #16650).
-            //
-            // Step 3 (global config "channel") is intentionally a read-only path: no CLI
-            // code path seeds the global "channel" config (neither the acquisition scripts
-            // nor `aspire update --self` write it), and the running CLI's channel is
-            // already discoverable via the AspireCliChannel assembly metadata. The global
-            // read remains so users who explicitly ran `aspire config set -g channel <x>`
-            // continue to have their preference honored.
-            // TODO: revisit removing the step-3 fallback once telemetry confirms global
-            // channel usage is negligible.
+            // Non-C# updates retain explicit option, project-scoped configuration, CLI
+            // identity, hive prompt, and implicit fallback precedence. Scope configuration
+            // lookup to the selected AppHost, not the launch directory (issue #16650).
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+            var hasExplicitChannel = !string.IsNullOrWhiteSpace(channelName);
+            // Native NuGet policy owns unqualified C# updates. Neither project metadata nor
+            // replacing the CLI may silently change the feeds used by dotnet restore.
+            var preserveNuGetPolicy = project?.LanguageId == KnownLanguageId.CSharp && !hasExplicitChannel;
             var channelFromConfig = false;
-            if (string.IsNullOrWhiteSpace(channelName))
+            if (!hasExplicitChannel && !preserveNuGetPolicy)
             {
-                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", updateDirectory, cancellationToken: cancellationToken);
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync(
+                    "channel", updateDirectory, cancellationToken: cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
             }
 
@@ -269,7 +258,9 @@ internal sealed class UpdateCommand : BaseCommand
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
-                async () => await _packagingService.GetChannelsAsync(cancellationToken, channelName));
+                async () => preserveNuGetPolicy
+                    ? [_packagingService.GetImplicitChannel()]
+                    : await _packagingService.GetChannelsAsync(cancellationToken, channelName));
 
             if (!string.IsNullOrWhiteSpace(channelName))
             {
@@ -304,6 +295,10 @@ internal sealed class UpdateCommand : BaseCommand
                 {
                     _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
                 }
+            }
+            else if (preserveNuGetPolicy)
+            {
+                channel = allChannels.First(c => c.Type is PackageChannelType.Implicit);
             }
             else if (isProjectReferenceMode)
             {
@@ -392,6 +387,7 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 AppHostFile = projectFile,
                 Channel = channel,
+                HasExplicitChannel = hasExplicitChannel,
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
                 AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]

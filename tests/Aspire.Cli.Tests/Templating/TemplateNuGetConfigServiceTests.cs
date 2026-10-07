@@ -23,7 +23,7 @@ namespace Aspire.Cli.Tests.Templating;
 public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CreatesSelfContainedConfigWithoutAmbientSources()
+    public async Task CreateNuGetConfigForSourceOverrideAsync_PreservesAmbientPolicyAndAuthentication()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -55,20 +55,21 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var service = CreateService();
         const string sourceOverride = "/tmp/aspire-pr-hive/packages";
 
-        Assert.True(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: null, outputDirectory.FullName, CancellationToken.None));
+        Assert.True(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: null, outputDirectory.FullName, CancellationToken.None));
 
-        var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
-        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("clear"), _ => true);
-        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
-        Assert.DoesNotContain(doc.Descendants("add"), e => (string?)e.Attribute("value") == "https://private.example/v3/index.json");
-        Assert.Null(doc.Root!.Element("disabledPackageSources"));
-        Assert.Null(doc.Root!.Element("packageSourceCredentials"));
-        Assert.Empty(GetPackagePatternsForSource(doc, "ambient-private"));
+        Assert.Equal([sourceOverride], NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Aspire.Hosting"));
+        Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Contoso.Package"));
+        Assert.Empty(NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
+        var settings = global::NuGet.Configuration.Settings.LoadDefaultSettings(outputDirectory.FullName);
+        var privateSource = new global::NuGet.Configuration.PackageSourceProvider(settings).LoadPackageSources()
+            .Single(static source => source.Name == "ambient-private");
+        Assert.False(privateSource.IsEnabled);
+        Assert.Equal("user", privateSource.Credentials!.Username);
+        Assert.Equal("secret", privateSource.Credentials.Password);
     }
 
     [Fact]
-    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_PreservesRequestedChannelFallbackMappings()
+    public async Task CreateNuGetConfigForSourceOverrideAsync_PreservesRequestedChannelSpecificMappings()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -95,19 +96,20 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             }
         };
         var service = CreateService(packagingService: packagingService);
+        var dependencySources = NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency");
 
-        Assert.True(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: "daily", outputDirectory.FullName, CancellationToken.None));
+        Assert.True(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: "daily", outputDirectory.FullName, CancellationToken.None));
 
         var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
         Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, communitySource));
-        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, fallbackSource));
+        Assert.Equal(dependencySources, NuGetTestHelper.GetEligiblePackageSources(outputDirectory.FullName, "Example.Dependency"));
         Assert.Empty(GetPackagePatternsForSource(doc, channelAspireSource));
         Assert.Empty(GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
     [Fact]
-    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_UpdatesOnlyProjectLocalConfig()
+    public async Task CreateNuGetConfigForSourceOverrideAsync_RefusesToOverwriteExistingConfig()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -139,18 +141,19 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         var service = CreateService();
         const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        var projectConfigPath = Path.Combine(outputDirectory.FullName, "nuget.config");
+        var parentConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        var originalProjectContent = await File.ReadAllTextAsync(projectConfigPath);
+        var originalParentContent = await File.ReadAllTextAsync(parentConfigPath);
 
-        Assert.True(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: null, outputDirectory.FullName, CancellationToken.None));
-
-        var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
-        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://project.example/v3/index.json");
-        Assert.DoesNotContain(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://parent.example/v3/index.json");
-        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal(["Project.*"], GetPackagePatternsForSource(doc, "project-local"));
+        await Assert.ThrowsAsync<IOException>(() => service.CreateNuGetConfigForSourceOverrideAsync(
+            sourceOverride, channelName: null, outputDirectory.FullName, CancellationToken.None));
+        Assert.Equal(originalProjectContent, await File.ReadAllTextAsync(projectConfigPath));
+        Assert.Equal(originalParentContent, await File.ReadAllTextAsync(parentConfigPath));
     }
 
     [Fact]
-    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_NullSourceShortCircuits()
+    public async Task CreateNuGetConfigForSourceOverrideAsync_NullSourceShortCircuits()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagingService = new TestPackagingService
@@ -159,22 +162,22 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         };
         var service = CreateService(packagingService: packagingService);
 
-        Assert.False(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride: null, channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
-        Assert.False(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride: "", channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
-        Assert.False(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride: "   ", channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
+        Assert.False(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride: null, channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
+        Assert.False(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride: "", channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
+        Assert.False(await service.CreateNuGetConfigForSourceOverrideAsync(sourceOverride: "   ", channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
     }
 
     [Theory]
     [InlineData("https://user:token@example.invalid/v3/index.json")]
     [InlineData("https://example.invalid/v3/index.json?sig=token")]
     [InlineData("https://example.invalid/v3/index.json#token")]
-    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CredentialBearingHttpSourceThrows(string sourceOverride)
+    public async Task CreateNuGetConfigForSourceOverrideAsync_CredentialBearingHttpSourceThrows(string sourceOverride)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            async () => await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+            async () => await service.CreateNuGetConfigForSourceOverrideAsync(
                 sourceOverride,
                 channelName: null,
                 workspace.WorkspaceRoot.FullName,
@@ -183,19 +186,19 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync_NullChannelName_ShortCircuits()
+    public async Task PromptToCreateNuGetConfigAsync_NullChannelName_ShortCircuits()
     {
         // Null/whitespace channelName must short-circuit without consulting any
         // ambient channel source. No exception, no implicit-channel work requested.
         var service = CreateService();
 
-        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: null, outputPath: Directory.CreateTempSubdirectory().FullName, CancellationToken.None);
-        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "", outputPath: Directory.CreateTempSubdirectory().FullName, CancellationToken.None);
-        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "   ", outputPath: Directory.CreateTempSubdirectory().FullName, CancellationToken.None);
+        await service.PromptToCreateNuGetConfigAsync(channelName: null, outputPath: Directory.CreateTempSubdirectory().FullName, CancellationToken.None);
+        await service.PromptToCreateNuGetConfigAsync(channelName: "", outputPath: Directory.CreateTempSubdirectory().FullName, CancellationToken.None);
+        await service.PromptToCreateNuGetConfigAsync(channelName: "   ", outputPath: Directory.CreateTempSubdirectory().FullName, CancellationToken.None);
     }
 
     [Fact]
-    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync_NullChannelName_ShortCircuits()
+    public async Task ConfigureDotNetAppHostNuGetConfigAsync_NullChannelName_ShortCircuits()
     {
         var service = CreateService();
 
@@ -204,9 +207,9 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             // Null/whitespace inputs must short-circuit and return false without
             // resolving a channel from any ambient source.
-            Assert.False(await service.CreateOrUpdateNuGetConfigWithoutPromptAsync(channelName: null, outputPath: dir.FullName, CancellationToken.None));
-            Assert.False(await service.CreateOrUpdateNuGetConfigWithoutPromptAsync(channelName: "", outputPath: dir.FullName, CancellationToken.None));
-            Assert.False(await service.CreateOrUpdateNuGetConfigWithoutPromptAsync(channelName: "   ", outputPath: dir.FullName, CancellationToken.None));
+            Assert.False(await service.ConfigureDotNetAppHostNuGetConfigAsync(channelName: null, outputPath: dir.FullName, CancellationToken.None));
+            Assert.False(await service.ConfigureDotNetAppHostNuGetConfigAsync(channelName: "", outputPath: dir.FullName, CancellationToken.None));
+            Assert.False(await service.ConfigureDotNetAppHostNuGetConfigAsync(channelName: "   ", outputPath: dir.FullName, CancellationToken.None));
         }
         finally
         {
@@ -1103,7 +1106,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync_ExplicitChannelRequiringConfig_CreatesConfig()
+    public async Task PromptToCreateNuGetConfigAsync_ExplicitChannelRequiringConfig_CreatesConfig()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -1128,7 +1131,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         var service = CreateService(packagingService: packagingService);
 
-        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "daily", outputDir.FullName, CancellationToken.None);
+        await service.PromptToCreateNuGetConfigAsync(channelName: "daily", outputDir.FullName, CancellationToken.None);
 
         // nuget.config should be created because the daily channel routes Aspire* to a custom feed
         var configPath = Path.Combine(outputDir.FullName, "nuget.config");
@@ -1137,13 +1140,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var sources = doc.Root!.Element("packageSources")!.Elements("add")
             .Select(e => (string)e.Attribute("value")!)
             .ToArray();
+        Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"], sources);
         Assert.Equal(
-            ["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json", "https://api.nuget.org/v3/index.json"],
-            sources);
+            ["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Aspire.Hosting"));
     }
 
     [Fact]
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync_StableChannel_DoesNotCreateConfig()
+    public async Task PromptToCreateNuGetConfigAsync_StableChannel_DoesNotCreateConfig()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -1166,14 +1170,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         var service = CreateService(packagingService: packagingService);
 
-        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
+        await service.PromptToCreateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
 
         // No nuget.config should be created because the stable channel maps to nuget.org
         Assert.False(File.Exists(Path.Combine(outputDir.FullName, "nuget.config")));
     }
 
     [Fact]
-    public async Task PromptToCreateOrUpdateNuGetConfigAsync_StableChannel_UpdatesExistingConfig()
+    public async Task PromptToCreateNuGetConfigAsync_StableChannel_LeavesExistingConfigUntouched()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
@@ -1210,25 +1214,18 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         };
 
         var service = CreateService(packagingService: packagingService);
-
-        await service.PromptToCreateOrUpdateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
-
-        // Existing nuget.config should still exist (it was updated)
         var configPath = Path.Combine(outputDir.FullName, "nuget.config");
-        Assert.True(File.Exists(configPath));
+        var originalContent = await File.ReadAllTextAsync(configPath);
 
-        // The stable channel's mapping (* → nuget.org) should now be present
-        var doc = XDocument.Load(configPath);
-        var sources = doc.Root!.Element("packageSources")!.Elements("add")
-            .Select(e => (string)e.Attribute("value")!)
-            .ToArray();
-        Assert.Equal(["https://api.nuget.org/v3/index.json"], sources);
+        await service.PromptToCreateNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
+
+        Assert.Equal(originalContent, await File.ReadAllTextAsync(configPath));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task CreateOrUpdateNuGetConfigWithoutPromptAsync_StableChannel_RespectsExistingConfig(bool hasExistingConfig)
+    public async Task ConfigureDotNetAppHostNuGetConfigAsync_StableChannel_RespectsExistingConfig(bool hasExistingConfig)
     {
         // The "without prompt" path is used by aspire init. When the channel does not
         // require a project-level nuget.config (e.g. stable → nuget.org only):
@@ -1268,7 +1265,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
         var service = CreateService(packagingService: packagingService);
 
-        var result = await service.CreateOrUpdateNuGetConfigWithoutPromptAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
+        var result = await service.ConfigureDotNetAppHostNuGetConfigAsync(channelName: "stable", outputDir.FullName, CancellationToken.None);
 
         var configPath = Path.Combine(outputDir.FullName, "nuget.config");
 
@@ -1280,7 +1277,10 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             var sources = doc.Root!.Element("packageSources")!.Elements("add")
                 .Select(e => (string)e.Attribute("value")!)
                 .ToArray();
-            Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json", "https://api.nuget.org/v3/index.json"], sources);
+            Assert.Equal(["https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"], sources);
+            Assert.Equal(
+                [PackageSources.NuGetOrg],
+                NuGetTestHelper.GetEligiblePackageSources(outputDir.FullName, "Aspire.Hosting"));
         }
         else
         {
@@ -1298,7 +1298,8 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             executionContext ?? TestExecutionContextFactory.CreateTestContext(),
             packagingService ?? MockPackagingServiceFactory.Create(),
             new StubTemplateVersionPrompter(),
-            new StubCliHostEnvironment());
+            new StubCliHostEnvironment(),
+            NuGetTestHelper.CreateService());
     }
 
     private sealed class StubTemplateVersionPrompter : Aspire.Cli.Commands.ITemplateVersionPrompter

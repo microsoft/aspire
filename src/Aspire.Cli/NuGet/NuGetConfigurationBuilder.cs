@@ -78,7 +78,10 @@ internal static class NuGetConfigurationBuilder
             var isPrimarySource = sourceIndex++ == 0;
             var sourceIdentity = NuGetSourceIdentity.Compute(source, sourceIdentityKey);
             var ambientMatches = ambientSources
-                .Where(candidate => string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal))
+                .Where(candidate =>
+                    string.Equals(candidate.Identity, sourceIdentity, StringComparison.Ordinal) ||
+                    PackageSourceIdentity.IsNamedSourceReference(source) &&
+                    string.Equals(candidate.Name, source, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             if (ambientMatches.Length > 0)
             {
@@ -113,8 +116,11 @@ internal static class NuGetConfigurationBuilder
                 key = generatedSourceKeyPrefix;
                 if (!usedKeys.Add(key))
                 {
-                    throw new InvalidOperationException(
-                        $"The generated NuGet source key '{key}' conflicts with an existing NuGet configuration key.");
+                    do
+                    {
+                        key = $"{generatedSourceKeyPrefix}-{nextAdditionalSourceKey++}";
+                    }
+                    while (!usedKeys.Add(key));
                 }
             }
             else
@@ -155,9 +161,10 @@ internal static class NuGetConfigurationBuilder
                 .Where(key => !enabledSourceKeys.Contains(key))
                 .ToArray()
             : [];
+        var ambientMappings = ResolveAmbientMappingAliases(settings);
         var packageSourceMappings = ComposePackageSourceMappings(
             selectedMappings,
-            settings.PackageSourceMappings,
+            ambientMappings,
             settings.Sources,
             selectedSources,
             packageScopedAppendSource,
@@ -184,6 +191,34 @@ internal static class NuGetConfigurationBuilder
                 .ToArray();
         }
 
+        var selectedKeysForPolicy = selectedSources.Select(static source => source.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var retiredSourceKeys = settings.Sources
+            .Where(source =>
+                !selectedKeysForPolicy.Contains(source.Name) &&
+                !packageSourceMappings.Any(mapping =>
+                    string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase) &&
+                    mapping.Patterns.Any(static pattern => pattern != PackageMapping.AllPackages)) &&
+                (source.IsCliManaged ||
+                 !packageSourceMappings.Any(mapping => string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase)) &&
+                 ambientMappings.Any(mapping => string.Equals(mapping.SourceKey, source.Name, StringComparison.OrdinalIgnoreCase))))
+            .Select(static source => source.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (retiredSourceKeys.Count > 0)
+        {
+            // Retired CLI hives must not remain eligible for dependency lookup after a
+            // channel change: they can disappear independently of the AppHost.
+            packageSourceMappings = packageSourceMappings.Where(mapping => !retiredSourceKeys.Contains(mapping.SourceKey)).ToArray();
+            clearDisabledPackageSources = true;
+            disabledPackageSourceKeys =
+            [
+                .. settings.DisabledPackageSourceKeys.Where(key => !enabledSourceKeys.Contains(key)),
+                .. disabledPackageSourceKeys,
+                .. retiredSourceKeys
+            ];
+            disabledPackageSourceKeys = disabledPackageSourceKeys.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
         return new NuGetConfigOverlay(
             selectedSources
                 .Where(static source => !source.IsAmbient)
@@ -192,7 +227,10 @@ internal static class NuGetConfigurationBuilder
             packageSourceMappings,
             clearDisabledPackageSources,
             disabledPackageSourceKeys,
-            globalPackagesFolder);
+            globalPackagesFolder)
+        {
+            RetiredSourceKeys = [.. retiredSourceKeys]
+        };
     }
 
     public static NuGetPackageSourceMapping[] ComposePackageSourceMappings(
@@ -276,6 +314,7 @@ internal static class NuGetConfigurationBuilder
         {
             if (ambientMappings.Count > 0 &&
                 mapping.PackageFilter == PackageMapping.AllPackages &&
+                authoritativeSources.Count > 0 &&
                 !authoritativeSources.Contains(mapping.Source))
             {
                 // Existing mapping policy already owns unrelated package eligibility. Do not
@@ -296,6 +335,28 @@ internal static class NuGetConfigurationBuilder
                 mapping.Key,
                 [.. mapping.Value]))
             .ToArray();
+    }
+
+    private static NuGetPackageSourceMapping[] ResolveAmbientMappingAliases(NuGetSettingsInfo settings)
+    {
+        return
+        [
+            .. settings.PackageSourceMappings.SelectMany<NuGetPackageSourceMapping, NuGetPackageSourceMapping>(mapping =>
+            {
+                if (settings.Sources.Any(source => string.Equals(source.Name, mapping.SourceKey, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return [mapping];
+                }
+
+                // Older generated configs used a source URL as a mapping key even when the
+                // source itself had a different alias. NuGet only matches mapping keys by alias.
+                var identity = NuGetSourceIdentity.Compute(mapping.SourceKey, settings.SourceIdentityKey);
+                var aliases = settings.Sources.Where(source => string.Equals(source.Identity, identity, StringComparison.Ordinal)).ToArray();
+                return aliases.Length == 0
+                    ? [mapping]
+                    : aliases.Select(source => new NuGetPackageSourceMapping(source.Name, mapping.Patterns)).ToArray();
+            })
+        ];
     }
 
     private static void AddPattern(

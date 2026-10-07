@@ -268,9 +268,9 @@ internal sealed class InitCommand : BaseCommand
         // `aspire add` (`dotnet package add --file apphost.cs`) and for
         // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
         // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.) is
-        // invisible and SDK resolution fails. `NuGetConfigMerger` underneath creates a
-        // new file or merges missing sources into an existing one.
-        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+        // invisible and SDK resolution fails. Shared NuGet policy is persisted into a
+        // new or existing workspace configuration.
+        var createdNuGetConfig = await _templateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync(
             channelName: _executionContext.IdentityChannel,
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
@@ -368,11 +368,9 @@ internal sealed class InitCommand : BaseCommand
         // outright.
         //
         // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
-        // local). NuGetConfigMerger underneath creates a new file or merges missing
-        // sources into an existing one, so adding hives later is handled the same way as
-        // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
-        // the apphost.cs path on every channel.
-        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+        // local). Persist the shared NuGet policy into a new or existing workspace
+        // configuration, as the single-file AppHost path does.
+        var createdNuGetConfig = await _templateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync(
             channelName: _executionContext.IdentityChannel,
             outputPath: solutionDir.FullName,
             cancellationToken).ConfigureAwait(false);

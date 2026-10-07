@@ -9,15 +9,13 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Cli.Tests.Packaging;
+namespace Aspire.Cli.Tests.DotNet;
 
-// Initial focused snapshot tests for NuGetConfigMerger. These allow us to feed a literal NuGet.config
-// then exercise CreateOrUpdateAsync and verify the resulting XML in a stable, readable snapshot.
-public class NuGetConfigMergerSnapshotTests
+public class DotNetAppHostNuGetConfigMergerSnapshotTests
 {
     private readonly ITestOutputHelper _output;
 
-    public NuGetConfigMergerSnapshotTests(ITestOutputHelper output)
+    public DotNetAppHostNuGetConfigMergerSnapshotTests(ITestOutputHelper output)
     {
         _output = output;
     }
@@ -68,7 +66,7 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -131,7 +129,7 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString()
@@ -193,7 +191,7 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -252,7 +250,13 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        var configPath = Path.Combine(root.FullName, "nuget.config");
+        var originalContent = await File.ReadAllBytesAsync(configPath);
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        if (channelName == PackageChannelNames.Daily)
+        {
+            Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath));
+        }
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -317,7 +321,7 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString()

@@ -3,8 +3,10 @@
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
+    <clear />
     <packageSource key="nuget.org">
       <package pattern="*" />
+      <package pattern="Aspire*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

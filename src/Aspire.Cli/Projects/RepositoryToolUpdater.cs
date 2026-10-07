@@ -152,7 +152,10 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
             string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.RepositoryToolUpdateFormat,
                 update.Manifest.File.FullName.EscapeMarkup(), update.Manifest.PackageId.EscapeMarkup(),
                 update.Reference.Version.EscapeMarkup(), update.Version.EscapeMarkup())));
-        return new RepositoryToolsUpdateStep(displayText, () => ApplyUpdatesAsync(updates, cancellationToken));
+        return new RepositoryToolsUpdateStep(displayText, () => ApplyUpdatesAsync(updates, cancellationToken))
+        {
+            Files = updates.Select(static update => update.Manifest.File).DistinctBy(static file => file.FullName).ToArray()
+        };
     }
 
     /// <summary>

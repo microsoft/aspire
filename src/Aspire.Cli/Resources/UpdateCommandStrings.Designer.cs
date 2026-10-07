@@ -76,6 +76,12 @@ namespace Aspire.Cli.Resources {
     internal static string RestoreRepositoryNpmTool => ResourceManager.GetString("RestoreRepositoryNpmTool", resourceCulture);
     internal static string UnsupportedToolVersionFormat => ResourceManager.GetString("UnsupportedToolVersionFormat", resourceCulture);
     internal static string ToolManifestChangedFormat => ResourceManager.GetString("ToolManifestChangedFormat", resourceCulture);
+    internal static string PreparingSdkForUpdateStatus => ResourceManager.GetString("PreparingSdkForUpdateStatus", resourceCulture);
+    internal static string UpdateCandidateFileChangedFormat => ResourceManager.GetString("UpdateCandidateFileChangedFormat", resourceCulture);
+    internal static string UpdateCandidatePolicyChangedFormat => ResourceManager.GetString("UpdateCandidatePolicyChangedFormat", resourceCulture);
+    internal static string UpdateCandidateRollbackFileChangedFormat => ResourceManager.GetString("UpdateCandidateRollbackFileChangedFormat", resourceCulture);
+    internal static string UpdateCandidateRollbackFailed => ResourceManager.GetString("UpdateCandidateRollbackFailed", resourceCulture);
+    internal static string NuGetConfigOutsideHierarchyFormat => ResourceManager.GetString("NuGetConfigOutsideHierarchyFormat", resourceCulture);
     internal static string FailedResolveNpmToolFormat => ResourceManager.GetString("FailedResolveNpmToolFormat", resourceCulture);
     internal static string FailedReadToolManifestFormat => ResourceManager.GetString("FailedReadToolManifestFormat", resourceCulture);
     internal static string AnalyzingProjectStatus => ResourceManager.GetString("AnalyzingProjectStatus", resourceCulture);
@@ -89,6 +95,7 @@ namespace Aspire.Cli.Resources {
     internal static string AnalyzeProjectFormat => ResourceManager.GetString("AnalyzeProjectFormat", resourceCulture);
     internal static string UpdatePackageFormat => ResourceManager.GetString("UpdatePackageFormat", resourceCulture);
     internal static string FailedDiscoverNuGetConfig => ResourceManager.GetString("FailedDiscoverNuGetConfig", resourceCulture);
+    internal static string ChannelUpdateRequiresAmbientNuGetConfigurationFormat => ResourceManager.GetString("ChannelUpdateRequiresAmbientNuGetConfigurationFormat", resourceCulture);
     internal static string FailedFetchItemsAndPropertiesFormat => ResourceManager.GetString("FailedFetchItemsAndPropertiesFormat", resourceCulture);
     internal static string NoPackageFoundFormat => ResourceManager.GetString("NoPackageFoundFormat", resourceCulture);
     internal static string PackageNotFoundInChannelWarningFormat => ResourceManager.GetString("PackageNotFoundInChannelWarningFormat", resourceCulture);

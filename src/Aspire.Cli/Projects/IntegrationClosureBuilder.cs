@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
@@ -120,7 +120,7 @@ internal static class IntegrationClosureBuilder
 
         var escapedSources = additionalSources
             .Where(static source => !string.IsNullOrWhiteSpace(source))
-            .Select(EscapeMSBuildPropertyValue)
+            .Select(MSBuildEscaping.Escape)
             .ToArray();
         if (escapedSources.Length == 0)
         {
@@ -131,25 +131,6 @@ internal static class IntegrationClosureBuilder
         return string.IsNullOrEmpty(existingValue)
             ? additionalValue
             : $"{existingValue};{additionalValue}";
-    }
-
-    private static string EscapeMSBuildPropertyValue(string value)
-    {
-        var builder = new StringBuilder(value.Length);
-        foreach (var character in value)
-        {
-            if (character is '%' or '*' or '?' or '@' or '$' or '(' or ')' or ';' or '\'')
-            {
-                builder.Append('%');
-                builder.Append(((int)character).ToString("X2", CultureInfo.InvariantCulture));
-            }
-            else
-            {
-                builder.Append(character);
-            }
-        }
-
-        return builder.ToString();
     }
 
     /// <summary>

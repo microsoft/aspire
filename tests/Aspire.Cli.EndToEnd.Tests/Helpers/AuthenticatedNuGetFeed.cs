@@ -41,6 +41,7 @@ internal sealed record AuthenticatedNuGetFeed(string ServiceIndexUrl, string Req
 
     // The service index advertises search and flat-container resources as specified by:
     // https://learn.microsoft.com/nuget/api/service-index
+    // https://learn.microsoft.com/nuget/api/search-query-service-resource#versioning
     // Every route requires the deliberately synthetic test-user:test-password credentials.
     private const string ServerScript = """
         import base64
@@ -78,7 +79,7 @@ internal sealed record AuthenticatedNuGetFeed(string ServiceIndexUrl, string Req
                     self.write_json({
                         "version": "3.0.0",
                         "resources": [
-                            {"@id": base_url + "/search", "@type": "SearchQueryService/3.0.0"},
+                            {"@id": base_url + "/search", "@type": "SearchQueryService"},
                             {"@id": base_url + "/flat/", "@type": "PackageBaseAddress/3.0.0"}
                         ]
                     })

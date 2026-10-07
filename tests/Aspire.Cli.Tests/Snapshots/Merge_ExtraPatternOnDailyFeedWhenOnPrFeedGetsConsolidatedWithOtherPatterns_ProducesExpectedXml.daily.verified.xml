@@ -5,16 +5,18 @@
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
     <add key="mycompany" value="http://mycompany.com/feed" />
   </packageSources>
+  <disabledPackageSources>
+    <clear />
+    <add key="{STALE_PR_HIVE}" value="true" />
+  </disabledPackageSources>
   <packageSourceMapping>
+    <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
       <package pattern="Microsoft.Extensions.HelperStuff*" />
       <package pattern="Aspire*" />
-    </packageSource>
-    <packageSource key="mycompany">
-      <package pattern="*" />
     </packageSource>
   </packageSourceMapping>
 </configuration>

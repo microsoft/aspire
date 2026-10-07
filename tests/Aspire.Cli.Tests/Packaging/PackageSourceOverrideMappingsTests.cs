@@ -91,14 +91,14 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
             IntegrationRestorePlanResolver.CreateGlobalPackagesFolderIdentity([canonicalSource], canonicalMappings),
             IntegrationRestorePlanResolver.CreateGlobalPackagesFolderIdentity([source], mappings));
 
-        using var config = await TemporaryNuGetConfig.CreateAsync(mappings);
+        using var config = await NuGetTestHelper.CreateStandaloneConfigurationAsync(mappings);
         var settings = Settings.LoadSpecificSettings(config.ConfigFile.DirectoryName!, config.ConfigFile.Name);
         var nativeMapping = PackageSourceMapping.GetPackageSourceMapping(settings);
 
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources("aspire.hosting.redis"));
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources(packageId));
-        Assert.Equal(["aspire-0", "aspire-1"], nativeMapping.GetConfiguredPackageSources("Example.Dependency"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("aspire.hosting.redis"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources(packageId));
+        Assert.Equal(["aspire-standalone", "aspire-standalone-0"], nativeMapping.GetConfiguredPackageSources("Example.Dependency"));
     }
 
     [Theory]
@@ -123,12 +123,12 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
         ],
             mappings.Select(mapping => (mapping.PackageFilter, mapping.Source)));
 
-        using var config = await TemporaryNuGetConfig.CreateAsync(mappings);
+        using var config = await NuGetTestHelper.CreateStandaloneConfigurationAsync(mappings);
         var settings = Settings.LoadSpecificSettings(config.ConfigFile.DirectoryName!, config.ConfigFile.Name);
         var nativeMapping = PackageSourceMapping.GetPackageSourceMapping(settings);
 
-        Assert.Equal(["aspire-0", "aspire-1"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources(packageId));
+        Assert.Equal(["aspire-standalone", "aspire-standalone-0"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources(packageId));
     }
 
     [Fact]
@@ -155,12 +155,12 @@ public class PackageSourceOverrideMappingsTests(ITestOutputHelper outputHelper)
             IntegrationRestorePlanResolver.CreateGlobalPackagesFolderIdentity([fileUri], fileUriMappings),
             IntegrationRestorePlanResolver.CreateGlobalPackagesFolderIdentity([source], mappings));
 
-        using var config = await TemporaryNuGetConfig.CreateAsync(mappings);
+        using var config = await NuGetTestHelper.CreateStandaloneConfigurationAsync(mappings);
         var settings = Settings.LoadSpecificSettings(config.ConfigFile.DirectoryName!, config.ConfigFile.Name);
         var nativeMapping = PackageSourceMapping.GetPackageSourceMapping(settings);
 
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
-        Assert.Equal(["aspire-0"], nativeMapping.GetConfiguredPackageSources(packageId));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources("Aspire.Hosting.Redis"));
+        Assert.Equal(["aspire-standalone"], nativeMapping.GetConfiguredPackageSources(packageId));
     }
 
     [Fact]

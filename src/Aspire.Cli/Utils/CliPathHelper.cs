@@ -103,8 +103,8 @@ internal static class CliPathHelper
     /// Returns the stable NuGet package cache used by generated staging-channel configs.
     /// </summary>
     /// <remarks>
-    /// The default NuGet <c>globalPackagesFolder</c> used by <c>TemporaryNuGetConfig</c> is relative to
-    /// the config file, which is unsafe for generated configs that may be copied from or disposed with a
+    /// A relative NuGet <c>globalPackagesFolder</c> resolves against its config file, which is
+    /// unsafe for generated configs that may be copied from or disposed with a
     /// temporary directory. Anchoring staging restores under <c>ASPIRE_HOME</c> keeps package paths alive
     /// for manifests that reference them and keys the cache by the complete restore policy to avoid
     /// sharing the same stable-shaped package versions across different staging feeds.
