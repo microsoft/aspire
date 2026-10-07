@@ -1,0 +1,98 @@
+{
+  "run_id": 37626802914,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37626802914",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-07T13:56:17Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 17885,
+    "title": "Allow choosing the Service Bus emulator SQL instance",
+    "author": "thomhurst",
+    "state": "closed",
+    "head_branch": "servicebus-emulator-sql-config",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/17885",
+    "merged_at": "2026-10-07T13:13:17Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "0b622d65e77afce9c1d810b3965ded9038294f59",
+    "failed_sha": "cb97d11d02ff8fa746e970ccbb8f5fc1be9074c7",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "765317c1c565d5a735c00f962695c41e087d388f",
+        "message": "Use a direct connection for Mongo Express with single-member replica sets (#20571) ## Description `AddMongoDB(\"mongo\").WithReplicaSet().WithMongoExpress()` gives a healthy MongoDB server, but its Mongo Express companion exits with code 1 after about 30 seconds: ```text MongoServerSelectionError: connect ECONNREFUSED ::1:27017 ``` `WithReplicaSet()` sets up the replica set with a `localhost:<port>` member address, which assumes clients will use `directConnection=true`. The connection strings Aspi",
+        "html_url": "https://github.com/microsoft/aspire/commit/765317c1c565d5a735c00f962695c41e087d388f",
+        "pull_request": {
+          "number": 20571,
+          "title": "Use a direct connection for Mongo Express with single-member replica sets",
+          "url": "https://github.com/microsoft/aspire/pull/20571",
+          "merged_at": "2026-10-07T00:15:38Z"
+        }
+      },
+      {
+        "sha": "61ec17dc623b27c2f72a4b175f9f41e2c07b08bb",
+        "message": "Add Terminals keyboard shortcut and improve dashboard shortcut help (#20748)",
+        "html_url": "https://github.com/microsoft/aspire/commit/61ec17dc623b27c2f72a4b175f9f41e2c07b08bb",
+        "pull_request": {
+          "number": 20748,
+          "title": "Add Terminals keyboard shortcut and improve dashboard shortcut help",
+          "url": "https://github.com/microsoft/aspire/pull/20748",
+          "merged_at": "2026-10-07T00:38:02Z"
+        }
+      },
+      {
+        "sha": "809a672cc49e98037b7fd10b291fb5efd19c1a1a",
+        "message": "Regenerate strongly typed string resource classes (#20776) ## Description Bring the checked-in strongly typed string resource classes back into sync with their `.resx` sources. Stale and hand-maintained designer code omitted resource accessors and contained outdated summaries and resource-key references. - Regenerate all 69 resource designer files across the CLI, Dashboard, and hosting projects with Visual Studio's `System.Resources.Tools.StronglyTypedResourceBuilder` version 18. - Preserve each",
+        "html_url": "https://github.com/microsoft/aspire/commit/809a672cc49e98037b7fd10b291fb5efd19c1a1a",
+        "pull_request": {
+          "number": 20776,
+          "title": "Regenerate strongly typed string resource classes",
+          "url": "https://github.com/microsoft/aspire/pull/20776",
+          "merged_at": "2026-10-07T05:00:06Z"
+        }
+      },
+      {
+        "sha": "cb97d11d02ff8fa746e970ccbb8f5fc1be9074c7",
+        "message": "Allow choosing the Service Bus emulator SQL instance (#17885) ## Description The Azure Service Bus emulator creates a hardcoded companion SQL Server container with no way to customize its image or container name, and no way to reuse an existing SQL Server instance. Users have been working around this by locating the internal `{name}-mssql` resource by naming convention and mutating annotations, or removing it from the model and wiring environment variables by hand (see the workarounds posted in ",
+        "html_url": "https://github.com/microsoft/aspire/commit/cb97d11d02ff8fa746e970ccbb8f5fc1be9074c7",
+        "pull_request": {
+          "number": 17885,
+          "title": "Allow choosing the Service Bus emulator SQL instance",
+          "url": "https://github.com/microsoft/aspire/pull/17885",
+          "merged_at": "2026-10-07T13:13:17Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "id": 112811450148,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37626802914/job/112811450148",
+      "classification": "flaky-test",
+      "reason": "Single test AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects failed with TaskCanceledException during DistributedApplication.StopAsync; matches a recurring flaky shutdown-timeout pattern (13 prior occurrences) unrelated to code changes.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (ubuntu-latest)",
+      "error": "System.Threading.Tasks.TaskCanceledException : A task was canceled.",
+      "stack_trace": "at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)\n   at Microsoft.Extensions.Hosting.Internal.Host.StopAsync(CancellationToken cancellationToken)\n   at Aspire.Hosting.DistributedApplication.StopAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting/DistributedApplication.cs:line 497\n   at Aspire.Hosting.Azure.Tests.AzureFunctionsTests.AddAzureFunctionsProject_WorksWithMultipleProjects() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Azure.Tests/AzureFunctionsTests.cs:line 200\n--- End of stack trace from previous location ---",
+      "standard_output": "| [2026-10-07T13:19:06] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-07T13:19:06] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-07T13:19:06] Aspire.Hosting.DistributedApplication Information: Application host directory is: /home/runner/work/aspire/aspire/tests/Aspire.Hosting.TestUtilities\n| [2026-10-07T13:19:06] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-07T13:19:06] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: /home/runner/.aspire/cli/bch/KfshLkY6TmIy2oTMcVG.4439\n| [2026-10-07T13:19:06] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on /home/runner/.aspire/cli/bch/KfshLkY6TmIy2oTMcVG.4439\n| [2026-10-07T13:19:06] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-07T13:19:06] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-07T13:19:07] Aspire.Hosting.Dcp.DcpHost Debug: Prepared DCP TLS certificate files for thumbprint D5CC4625825BEA216EEEC98A02792091E003A771.\n| [2026-10-07T13:19:07] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: /tmp/aspire-dcp2TQYXm\n| [2026-10-07T13:19:07] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 4439 --detach --kubeconfig \"/tmp/aspire-dcp2TQYXm/kubeconfig\" --tls-cert-thumbprint \"D5CC4625825BEA216EEEC98A02792091E003A771\" --tls-cert-file \"/home/runner/.aspire/dev-certs/https/B26478CAF352566A28BA086B723A8B53CCD191DD308DF4C1E4513CA522066BED.crt\" --tls-key-file \"/home/runner/.aspire/dev-certs/https/B26478CAF352566A28BA086B723A8B53CCD191DD308DF4C1E4513CA522066BED.key\"\n| [2026-10-07T13:19:07] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-10-07T13:19:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource azure-environment/azure-environment update published: ResourceType = AzureEnvironmentResource, CreationTimeStamp = 2026-10-07T13:19:06, State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { reset-provisioning-state (Reset provisioning state) = Enabled change-azure-context (Change Azure context) = Enabled reprovision-all (Reprovision all) = Enabled delete-azure-resources (Delete Azure resources) = Enabled }\n| [2026-10-07T13:19:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcstorage53c8d/funcstorage53c8d-kvzrcpjm update published: ResourceType = AzureStorageResource, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = { funcstorage53c8d_check = (null) }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled }\n| [2026-10-07T13:19:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcapp/funcapp-smaxsmhp update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-07T13:19:07] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource funcapp2/funcapp2-xgxccpcg update published: ResourceType = Project, Creation",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Exactly matches a previously tracked flaky test (13 prior occurrences) with the same TaskCanceledException shutdown-timeout stack trace in DistributedApplication.StopAsync, unrelated to the merged PR's Service Bus emulator changes."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-azure-servicebus-stopasync-taskcanceled"
+  ]
+}
