@@ -10,7 +10,10 @@ $socket = $null
 $stream = $null
 $started = $false
 try {
-    $paths = @('p.sock', 'h.sock', 'c.sock') | ForEach-Object { Join-Path $root.FullName $_ }
+    # Let TerminalHost create this directory with its protected owner-only Windows ACL.
+    # The pre-created temporary root inherits permissions that a socket directory rejects.
+    $socketDirectory = Join-Path $root.FullName 's'
+    $paths = @('p.sock', 'h.sock', 'c.sock') | ForEach-Object { Join-Path $socketDirectory $_ }
     $process.StartInfo = [System.Diagnostics.ProcessStartInfo]::new((Resolve-Path -LiteralPath $TerminalHostPath).Path)
     $process.StartInfo.UseShellExecute = $false
     $process.StartInfo.RedirectStandardOutput = $true
