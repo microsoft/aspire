@@ -149,6 +149,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
                 {
                     var fault = replicaRun.Exception?.GetBaseException();
                     _logger.LogError(fault, "Replica recycle loop terminated with a fault; exiting non-zero.");
+                    await Console.Error.WriteLineAsync($"[Aspire.TerminalHost] Replica recycle loop failed: {fault}").ConfigureAwait(false);
                     return 1;
                 }
 
@@ -156,6 +157,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
                 // permanent condition it considered fatal but didn't throw. Treat as
                 // an abnormal exit so DCP doesn't quietly keep a wedged process.
                 _logger.LogError("Replica recycle loop completed unexpectedly without cancellation; exiting non-zero.");
+                await Console.Error.WriteLineAsync("[Aspire.TerminalHost] Replica recycle loop completed unexpectedly without cancellation.").ConfigureAwait(false);
                 return 1;
             }
 
@@ -168,6 +170,9 @@ public sealed class TerminalHostApp : IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Terminal host failed.");
+            // Hidden terminal hosts have no telemetry logger; startup failures must still
+            // reach DCP's stderr capture rather than disappear into NullLoggerFactory.
+            await Console.Error.WriteLineAsync($"[Aspire.TerminalHost] Terminal host failed: {ex}").ConfigureAwait(false);
             return 1;
         }
         finally

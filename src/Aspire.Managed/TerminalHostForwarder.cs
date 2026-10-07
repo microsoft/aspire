@@ -3,9 +3,11 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
 using Aspire.Shared;
+using StreamJsonRpc;
 
 internal static partial class TerminalHostForwarder
 {
@@ -60,7 +62,21 @@ internal static partial class TerminalHostForwarder
                 {
                     if (OperatingSystem.IsWindows())
                     {
-                        process.Kill(entireProcessTree: true);
+                        // TerminateProcess cannot run the child's socket cleanup. Ask its
+                        // control RPC to stop first, retaining the bounded kill fallback.
+                        using var shutdownTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        try
+                        {
+                            await RequestShutdownAsync(args, shutdownTimeout.Token).ConfigureAwait(false);
+                        }
+                        catch (Exception ex) when (ex is SocketException or IOException or ArgumentException or OperationCanceledException or ConnectionLostException)
+                        {
+                            Console.Error.WriteLine($"Failed to request terminal host shutdown: {ex.Message}");
+                            if (!process.HasExited)
+                            {
+                                process.Kill(entireProcessTree: true);
+                            }
+                        }
                     }
                     else if (SendSignal(process.Id, 15) != 0 && !process.HasExited)
                     {
@@ -96,6 +112,23 @@ internal static partial class TerminalHostForwarder
                 await watchdog.DisposeAsync().ConfigureAwait(false);
             }
         }
+    }
+
+    internal static async Task RequestShutdownAsync(string[] args, CancellationToken cancellationToken)
+    {
+        // TerminalHost receives the control socket as two arguments: --control-uds <path>.
+        var controlPathIndex = Array.IndexOf(args, "--control-uds");
+        if (controlPathIndex < 0 || controlPathIndex + 1 >= args.Length)
+        {
+            throw new ArgumentException("A terminal host control socket path is required for graceful shutdown.", nameof(args));
+        }
+
+        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(args[controlPathIndex + 1]), cancellationToken).ConfigureAwait(false);
+        using var stream = new NetworkStream(socket);
+        using var rpc = new JsonRpc(stream);
+        rpc.StartListening();
+        await rpc.NotifyAsync("shutdown").WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]

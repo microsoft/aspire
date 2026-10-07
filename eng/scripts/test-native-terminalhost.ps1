@@ -28,7 +28,7 @@ try {
     $stderr = $process.StandardError.ReadToEndAsync()
     $deadline = [DateTime]::UtcNow.AddSeconds(30)
     while (@($paths | Where-Object { ![System.IO.File]::Exists($_) }).Count -ne 0) {
-        if ($process.HasExited) { throw "Native TerminalHost exited with $($process.ExitCode): $($stderr.GetAwaiter().GetResult())" }
+        if ($process.HasExited) { throw "Native TerminalHost exited with $($process.ExitCode). stdout: $($stdout.GetAwaiter().GetResult()) stderr: $($stderr.GetAwaiter().GetResult())" }
         if ([DateTime]::UtcNow -gt $deadline) { throw 'Native TerminalHost did not bind its sockets.' }
         Start-Sleep -Milliseconds 50
     }

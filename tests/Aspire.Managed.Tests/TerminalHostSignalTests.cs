@@ -99,6 +99,43 @@ public partial class TerminalHostSignalTests
     public async Task TerminalHostSubcommandStopsWhenOwningAppHostIsGone()
         => await AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(hostAssemblyPath: null);
 
+    [Fact]
+    public async Task TerminalHostControlShutdownUnlinksSockets()
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var paths = new[] { "p.sock", "h.sock", "c.sock" }
+                .Select(name => Path.Combine(root.FullName, "terminals", name)).ToArray();
+            var startInfo = CreateTerminalHostStartInfo(paths[0], paths[1], paths[2]);
+            using var process = Process.Start(startInfo)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await WaitForFilesAsync(paths, TimeSpan.FromSeconds(10));
+                using var shutdownTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await TerminalHostForwarder.RequestShutdownAsync(startInfo.ArgumentList.ToArray(), shutdownTimeout.Token);
+                await process.WaitForExitAsync().WaitAsync(shutdownTimeout.Token);
+                Assert.True(process.ExitCode == 0,
+                    $"Terminal host exited with code {process.ExitCode}.{Environment.NewLine}stdout: {await stdout}{Environment.NewLine}stderr: {await stderr}");
+                Assert.All(paths, path => Assert.False(File.Exists(path), $"Expected '{path}' to be unlinked."));
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(false, 64)]
     [InlineData(true, 1)]
