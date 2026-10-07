@@ -6,7 +6,7 @@
 
 ### Features
 
-- Add Aspire editor assistance tools for GitHub Copilot Chat, including inspecting AppHost and resource debug status, explaining launch failures, opening the Dashboard and Output panel, listing active debug sessions, and checking Hot Reload applicability ([#19460](https://github.com/microsoft/aspire/issues/19460), [#19414](https://github.com/microsoft/aspire/pull/19414)).
+- Add Aspire editor assistance tools for AI agents, including inspecting AppHost and resource debug status, explaining launch failures, opening the Dashboard and Output panel, listing active editor-managed AppHost sessions, and checking Hot Reload applicability ([#19460](https://github.com/microsoft/aspire/issues/19460), [#19414](https://github.com/microsoft/aspire/pull/19414)).
 
 ## v1.23.0
 
