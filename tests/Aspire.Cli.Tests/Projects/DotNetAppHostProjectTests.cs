@@ -2250,10 +2250,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("13.6.0", true, false)]
     [InlineData("17.0.0-preview.1", true, true)]
     [InlineData("17.0.0", true, true)]
+    [InlineData("", false, false)]
     public async Task RunAsync_SingleFileAppHostUsingCliBundlePassesBundleEnvironmentToRunner(string hostingVersion, bool supportsNativeDashboard, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
-        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: hostingVersion);
+        // A valid SDK directive can coexist with an inspection result that omits the Hosting version.
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: string.IsNullOrEmpty(hostingVersion) ? "17.0.0" : hostingVersion);
         var bundleRoot = CreateCliBundle(out var layout);
 
         var runner = new TestDotNetCliRunner
@@ -2320,10 +2322,11 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("13.6.0", false)]
     [InlineData("17.0.0-preview.1", true)]
     [InlineData("17.0.0", true)]
+    [InlineData("", false)]
     public async Task RunAsync_SingleFileNoBuildUsingCliBundlePassesBundleEnvironmentToSafetyBuild(string hostingVersion, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
-        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: hostingVersion);
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: string.IsNullOrEmpty(hostingVersion) ? "17.0.0" : hostingVersion);
         var bundleRoot = CreateCliBundle(out var layout);
 
         var runner = new TestDotNetCliRunner
