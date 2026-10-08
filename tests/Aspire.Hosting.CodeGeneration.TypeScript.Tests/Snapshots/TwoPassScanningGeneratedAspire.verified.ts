@@ -9526,7 +9526,6 @@ export interface DistributedApplicationBuilder {
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
-     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -9758,7 +9757,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
-     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -12615,20 +12613,15 @@ export interface UserSecretsManager {
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
-     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /**
-     * Gets the path to the user secrets file.
-     * @experimental
-     */
+    /** Gets the path to the user secrets file. */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12637,7 +12630,6 @@ export interface UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12660,20 +12652,15 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
-     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /**
-     * Gets the path to the user secrets file.
-     * @experimental
-     */
+    /** Gets the path to the user secrets file. */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12682,7 +12669,6 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12730,7 +12716,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     async trySetSecret(name: string, value: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name, value };
@@ -12746,7 +12731,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     async tryDeleteSecret(name: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name };
