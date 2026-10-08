@@ -8,7 +8,6 @@ using System.ClientModel;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
-using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Azure.Core;
@@ -114,8 +113,7 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
             // Invoke that hosted agent, not a prompt agent or a dashboard health URL.
             // Hosting can cold-start after version creation. The bounded retry is not a fallback
             // to another route: incorrect protocol/auth/routing must fail the deployment scenario.
-            var responses = client.ProjectOpenAIClient.GetProjectResponsesClientForAgent(
-                new AgentReference(name: agentName));
+            var responses = client.ProjectOpenAIClient.GetProjectResponsesClientForAgentEndpoint(agentName);
             string? lastFailure = null;
             var succeeded = false;
             for (var attempt = 0; attempt < 18; attempt++)
