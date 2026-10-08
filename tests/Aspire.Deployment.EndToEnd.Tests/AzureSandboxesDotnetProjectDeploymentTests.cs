@@ -26,7 +26,6 @@ public sealed class AzureSandboxesDotnetProjectDeploymentTests(ITestOutputHelper
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/20777")]
     public async Task DeployDotnetProjectResourcesWithEndpointsAndAzureStorageToAzureSandbox()
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
