@@ -28,6 +28,13 @@
       "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-05T18:30:18Z"
+    },
+    {
+      "run_id": 37782413043,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37782413043",
+      "job": "Tests / No-package tests (regular, Infrastructure.Tests, Infrastructure, Infrastructure, tests/Infrastruc... / Infrastructure (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-08T14:33:05Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20272"
