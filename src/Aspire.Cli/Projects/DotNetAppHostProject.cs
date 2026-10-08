@@ -1494,7 +1494,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false, aspireHostingVersion: null);
+        // The build needs the bundle path and lease, but launch selection must wait for
+        // the Hosting version so a temporary compatibility path cannot become an override.
+        ConfigureCliBundleBuildEnvironment(env, cliBundleLease);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
@@ -2600,6 +2602,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private Task<BundleLayoutLease?> AcquireCliBundleLayoutAsync(CancellationToken cancellationToken)
         => _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
 
+    private void ConfigureCliBundleBuildEnvironment(Dictionary<string, string> env, BundleLayoutLease? layoutLease)
+    {
+        if (!HasEnvironmentOverride(env, "AspireCliBundlePath") && !string.IsNullOrEmpty(layoutLease?.Layout.LayoutPath))
+        {
+            env["AspireCliBundlePath"] = layoutLease.Layout.LayoutPath;
+        }
+
+        layoutLease?.AddEnvironment(env);
+    }
+
     private void ConfigureCliBundleEnvironment(
         Dictionary<string, string> env,
         BundleLayoutLease? layoutLease,
@@ -2619,11 +2631,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // Don't return yet — repo-mode runs (DEBUG, `dotnet run --project src/Aspire.Cli`)
             // can still inject the terminal host path from the just-built artifact even when
             // no bundle layout exists at all (e.g. clean dev machine with no `aspire` install).
-        }
-
-        if (!HasEnvironmentOverride(env, "AspireCliBundlePath") && !string.IsNullOrEmpty(layout?.LayoutPath))
-        {
-            env["AspireCliBundlePath"] = layout.LayoutPath;
         }
 
         if (injectDcpAndDashboard && layout is not null)
@@ -2665,8 +2672,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 }
             }
         }
-
-        layoutLease?.AddEnvironment(env);
     }
 
     private bool HasEnvironmentOverride(IReadOnlyDictionary<string, string> env, string name)
