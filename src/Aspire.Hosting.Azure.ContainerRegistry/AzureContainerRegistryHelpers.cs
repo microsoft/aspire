@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREAZURE001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;

@@ -1,5 +1,3 @@
-#pragma warning disable ASPIREAZURE001
-
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http.Headers;

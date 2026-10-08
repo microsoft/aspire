@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREACAEXPRESS001
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES003
 
