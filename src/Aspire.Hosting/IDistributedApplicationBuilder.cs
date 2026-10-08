@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREUSERSECRETS001
-
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
@@ -168,7 +166,6 @@ public interface IDistributedApplicationBuilder
     /// used by Aspire, enabling testability and consistent secret management.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREUSERSECRETS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IUserSecretsManager UserSecretsManager => throw new NotImplementedException();
 
     /// <summary>
