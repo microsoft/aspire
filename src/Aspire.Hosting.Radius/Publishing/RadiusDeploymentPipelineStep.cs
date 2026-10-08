@@ -3,8 +3,6 @@
 
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
-#pragma warning disable ASPIREPIPELINES004
-
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
