@@ -1046,10 +1046,6 @@ internal sealed class NuGetClient(
 
     private static NuGetSourceInfo CreateSourceInfo(PackageSource source, byte[] identityKey)
     {
-        var isMicrosoftControlled = Uri.TryCreate(source.Source, UriKind.Absolute, out var uri) &&
-            (string.Equals(uri.Host, "api.nuget.org", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(uri.Host, "pkgs.dev.azure.com", StringComparison.OrdinalIgnoreCase));
-        var normalizedPath = source.Source.Replace('\\', '/');
         return new(
             source.Name,
             NuGetSourceIdentity.Compute(source.Source, identityKey),
@@ -1057,9 +1053,20 @@ internal sealed class NuGetClient(
             source.Credentials is not null,
             source.ClientCertificates is { Count: > 0 })
         {
-            IsCliManaged = (uri is null || uri.IsFile) && normalizedPath.Contains(".aspire/hives/", StringComparison.OrdinalIgnoreCase) ||
-               isMicrosoftControlled && uri is not null && uri.AbsolutePath.Contains("aspire", StringComparison.OrdinalIgnoreCase)
+            IsCliManaged = IsCliManagedSource(source.Source)
         };
+    }
+
+    private static bool IsCliManagedSource(string source)
+    {
+        if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) || uri.IsFile)
+        {
+            return source.Replace('\\', '/').Contains("/.aspire/hives/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Other Azure tenants and shared feeds are not CLI-owned.
+        return string.Equals(uri.Host, "pkgs.dev.azure.com", StringComparison.OrdinalIgnoreCase) &&
+            uri.AbsolutePath.StartsWith("/dnceng/public/_packaging/darc-pub-microsoft-aspire-", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

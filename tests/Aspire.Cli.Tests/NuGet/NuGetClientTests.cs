@@ -1448,6 +1448,32 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(settings.CacheIdentity);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetSettings_RecognizesLocalCliHives(bool useFileUri)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var hive = workspace.CreateDirectory(".aspire/hives/pr-test/packages");
+        var source = useFileUri ? new Uri(hive.FullName).AbsoluteUri : hive.FullName;
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
+            $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="ambient" value="{{source}}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var settings = NuGetTestHelper.CreateClient().GetSettings(
+            workspace.WorkspaceRoot.FullName,
+            new byte[NuGetSourceIdentity.KeySizeInBytes]);
+
+        Assert.True(Assert.Single(settings.Sources).IsCliManaged);
+    }
+
     [Fact]
     public void GetSettings_TreatsCredentialBearingSourceNameAsSensitive()
     {

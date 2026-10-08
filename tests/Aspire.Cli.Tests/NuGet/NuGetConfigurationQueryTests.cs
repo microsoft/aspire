@@ -13,6 +13,92 @@ namespace Aspire.Cli.Tests.NuGet;
 public class NuGetConfigurationQueryTests(ITestOutputHelper outputHelper)
 {
     [Theory]
+    [InlineData(PackageChannelNames.Daily, false)]
+    [InlineData(PackageChannelNames.Daily, true)]
+    [InlineData(PackageChannelNames.Staging, false)]
+    [InlineData(PackageChannelNames.Staging, true)]
+    [InlineData(PackageChannelNames.Stable, false)]
+    [InlineData(PackageChannelNames.Stable, true)]
+    public async Task ChannelPolicy_PreservesAmbientFeedsAndRetiresOwnedSources(string channelName, bool hasMappings)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var oldHive = workspace.CreateDirectory(".aspire/hives/pr-old/packages").FullName;
+        const string customerSource = "https://pkgs.dev.azure.com/contoso/team/_packaging/aspire-company/nuget/v3/index.json";
+        const string privateSource = "https://packages.example.com/v3/index.json";
+        const string sharedSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
+        const string oldStagingSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json";
+        const string newStagingSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-12345678/nuget/v3/index.json";
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        var original = $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="customer" value="{{customerSource}}" />
+                <add key="private" value="{{privateSource}}" />
+                <add key="shared" value="{{sharedSource}}" />
+                <add key="public" value="{{PackageSources.NuGetOrg}}" />
+                <add key="old-staging" value="{{oldStagingSource}}" />
+                <add key="old-hive" value="{{oldHive}}" />
+              </packageSources>
+              {{(hasMappings ? """
+              <packageSourceMapping>
+                <packageSource key="customer"><package pattern="*" /></packageSource>
+                <packageSource key="private"><package pattern="*" /></packageSource>
+                <packageSource key="shared"><package pattern="*" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+                <packageSource key="old-staging"><package pattern="*" /></packageSource>
+                <packageSource key="old-hive"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+              """ : "")}}
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var service = NuGetTestHelper.CreateService();
+        var selectedSource = channelName switch
+        {
+            PackageChannelNames.Daily => sharedSource,
+            PackageChannelNames.Staging => newStagingSource,
+            _ => PackageSources.NuGetOrg
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, channelName == PackageChannelNames.Stable ? PackageChannelQuality.Stable : PackageChannelQuality.Both,
+            channelName == PackageChannelNames.Stable
+                ? [new PackageMapping("*", PackageSources.NuGetOrg)]
+                : [new PackageMapping("Aspire*", selectedSource), new PackageMapping("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var configuration = channelName == PackageChannelNames.Stable
+            ? NuGetConfigurationBuilder.BuildStableAppHostConfiguration(
+                service.GetNuGetSettings(appHostDirectory.FullName, TestContext.Current.CancellationToken),
+                "test", channel)
+            : service.BuildChannelConfiguration(
+                appHostDirectory, "test", channel, packageSourceOverride: null,
+                nugetServiceIndexOverride: null, TestContext.Current.CancellationToken);
+
+        var overlay = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Equal(["old-hive", "old-staging"], overlay.RetiredSourceKeys.Order(StringComparer.Ordinal));
+        using var preview = await service.CreateConfigurationPreviewAsync(
+            appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        var ambientSources = new[] { customerSource, privateSource, sharedSource, PackageSources.NuGetOrg }
+            .Order(StringComparer.Ordinal).ToArray();
+        string[] aspireSources = channelName == PackageChannelNames.Stable ? ambientSources : [selectedSource];
+        var previewDirectory = preview.EffectiveWorkingDirectory.FullName;
+
+        Assert.Equal(ambientSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Contoso.Package"));
+        Assert.Equal(aspireSources, NuGetTestHelper.GetEligiblePackageSources(previewDirectory, "Aspire.Hosting"));
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+
+        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+            workspace.WorkspaceRoot, configuration, createIfMissing: false,
+            globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ambientSources, NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Contoso.Package"));
+        Assert.Equal(aspireSources, NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting"));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task ChannelPolicy_RetiresUnselectedHivesBeforePersistence(bool hasMappings)
