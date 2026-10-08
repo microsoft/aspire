@@ -215,7 +215,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                                 // Keep probing. A newly inserted member can be uninitialized while another declared member
                                 // still holds the persisted replica set configuration that must be preserved.
                             }
-                            catch (MongoCommandException ex) when (ex.CodeName is ReplicaSetInterruptedDueToReplStateChangeCodeName)
+                            catch (MongoCommandException ex) when (IsTransientReplicaSetConfigurationProbeError(ex.CodeName))
                             {
                                 // A member can interrupt config reads while transitioning during initialization. Its persisted
                                 // configuration is unknown, so retry before deciding whether the set needs to be initialized.
@@ -668,6 +668,11 @@ public static class MongoDBReplicaSetBuilderExtensions
         }
 
         return result;
+    }
+
+    internal static bool IsTransientReplicaSetConfigurationProbeError(string? codeName)
+    {
+        return codeName is ReplicaSetInterruptedDueToReplStateChangeCodeName;
     }
 
     /// <summary>
