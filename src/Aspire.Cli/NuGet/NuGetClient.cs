@@ -127,7 +127,6 @@ internal sealed class NuGetClient(
     IEnvironment environment,
     ILogger<NuGetClient> logger) : INuGetClient
 {
-    private const string NuGetOrgUrl = "https://api.nuget.org/v3/index.json";
     private const string RuntimeIdentifierGraphResourceName = "Aspire.Cli.RuntimeIdentifierGraph.json";
     private static readonly Lock s_operationLock = new();
     private static int s_activeOperationCount;
@@ -206,7 +205,7 @@ internal sealed class NuGetClient(
                 ? Settings.LoadSettingsGivenConfigPaths(nugetConfigPaths.ToList())
                 : LoadAmbientSettings(workingDirectory, machineWideSettings);
 
-            var packageSources = ResolvePackageSources(settings, sources, addNuGetOrgFallback: false);
+            var packageSources = ResolvePackageSources(settings, sources);
             var targetFramework = NuGetFramework.Parse(framework);
             var packageSpec = BuildPackageSpec(
                 packages,
@@ -461,17 +460,12 @@ internal sealed class NuGetClient(
             // resources can log source URLs immediately. Discover credential-bearing source spellings first so every
             // diagnostic path is protected for the operation's entire lifetime.
             var settings = LoadSearchSettings(nugetConfigPath, workingDirectory);
-            var packageSources = LoadPackageSources(settings, explicitSources, out var usedNuGetOrgFallback);
+            var packageSources = LoadPackageSources(settings, explicitSources);
             var sourceFilter = CreatePackageSearchSourceFilter(settings, packageSources);
             var sensitiveSources = GetSensitiveSourceValues(packageSources);
             output = new NuGetOperationOutput(logger, sensitiveSources);
 
             using var operation = BeginOperation(sensitiveSources);
-            if (usedNuGetOrgFallback)
-            {
-                output.WriteLine("Note: No package sources configured, using nuget.org as fallback.");
-            }
-
             var searchFilter = new global::NuGet.Protocol.Core.Types.SearchFilter(prerelease);
 
             var searchResults = await Task.WhenAll(packageSources.Select(source => SearchSourceSafelyAsync(
@@ -647,12 +641,10 @@ internal sealed class NuGetClient(
         return packages;
     }
 
-    private static List<PackageSource> LoadPackageSources(
+    internal static List<PackageSource> LoadPackageSources(
         ISettings settings,
-        IReadOnlyList<string> explicitSources,
-        out bool usedNuGetOrgFallback)
+        IReadOnlyList<string> explicitSources)
     {
-        usedNuGetOrgFallback = false;
         var sources = explicitSources.Select(source => new PackageSource(source)).ToList();
 
         if (sources.Count == 0)
@@ -662,12 +654,7 @@ internal sealed class NuGetClient(
                 .Where(source => source.IsEnabled));
         }
 
-        if (sources.Count == 0)
-        {
-            sources.Add(new PackageSource(NuGetOrgUrl, "nuget.org"));
-            usedNuGetOrgFallback = true;
-        }
-
+        // An empty enabled source set is deliberate policy, including <packageSources><clear /></packageSources>.
         return sources;
     }
 
@@ -729,8 +716,7 @@ internal sealed class NuGetClient(
 
     private static List<PackageSource> ResolvePackageSources(
         ISettings settings,
-        IReadOnlyList<string> cliSources,
-        bool addNuGetOrgFallback)
+        IReadOnlyList<string> cliSources)
     {
         var sources = new PackageSourceProvider(settings)
             .LoadPackageSources()
@@ -743,12 +729,6 @@ internal sealed class NuGetClient(
             {
                 sources.Add(new PackageSource(cliSource));
             }
-        }
-
-        if (addNuGetOrgFallback &&
-            !sources.Any(source => source.Source.Equals(NuGetOrgUrl, StringComparison.OrdinalIgnoreCase)))
-        {
-            sources.Add(new PackageSource(NuGetOrgUrl, "nuget.org"));
         }
 
         return sources;

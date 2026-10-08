@@ -20,6 +20,69 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetClientTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task SearchAsync_EmptyEnabledSourcePolicyDoesNotSynthesizeSources(
+        bool disableSource, bool useExplicitConfig, bool hasExplicitSource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var feedDirectory = workspace.CreateDirectory("feed");
+        const string packageId = "Aspire.Test.Package";
+        CreatePackage(feedDirectory.FullName, packageId);
+        var sourceEntry = disableSource
+            ? $"""<add key="local" value="{feedDirectory.FullName}" />"""
+            : string.Empty;
+        var disabledSources = disableSource
+            ? """<disabledPackageSources><add key="local" value="true" /></disabledPackageSources>"""
+            : string.Empty;
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config");
+        await File.WriteAllTextAsync(configPath, $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                {sourceEntry}
+              </packageSources>
+              {disabledSources}
+            </configuration>
+            """);
+        var settings = useExplicitConfig
+            ? Settings.LoadSpecificSettings(workspace.WorkspaceRoot.FullName, "NuGet.Config")
+            : NuGetTestHelper.LoadSettings(workspace.WorkspaceRoot.FullName);
+        string[] explicitSources = hasExplicitSource ? [feedDirectory.FullName] : [];
+
+        // Check selection before searching so a policy regression cannot contact an unconfigured feed.
+        Assert.Equal(explicitSources,
+            NuGetClient.LoadPackageSources(settings, explicitSources).Select(static source => source.Source));
+
+        var results = await NuGetTestHelper.CreateClient().SearchAsync(
+            packageId,
+            prerelease: false,
+            take: 1000,
+            explicitSources,
+            nugetConfigPath: useExplicitConfig ? configPath : null,
+            workspace.WorkspaceRoot.FullName,
+            TestContext.Current.CancellationToken);
+
+        if (hasExplicitSource)
+        {
+            var package = Assert.Single(results);
+            Assert.Equal(packageId, package.Id);
+            Assert.Equal("1.0.0", package.Version);
+            Assert.Equal(feedDirectory.FullName, package.Source);
+        }
+        else
+        {
+            Assert.Empty(results);
+        }
+    }
+
     [Fact]
     public async Task SearchAsync_ReturnsOnlyTheFirstPage()
     {
