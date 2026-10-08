@@ -58,6 +58,8 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 {
                     // Simulate a search that returns both regular and deprecated packages
                     return (0, [
+                        new NuGetPackage { Id = "Aspire.Azure.AI.Inference", Version = "9.4.0", Source = "nuget.org" },
+                        new NuGetPackage { Id = "Aspire.Azure.AI.OpenAI", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.GitHub.Models", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
@@ -82,6 +84,8 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Aspire.Hosting.Dapr", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.NodeJs", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.Inference", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.OpenAI", packageIds);
     }
 
     [Fact]
@@ -100,6 +104,8 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 {
                     // Simulate a search that returns both regular and deprecated packages
                     return (0, [
+                        new NuGetPackage { Id = "Aspire.Azure.AI.Inference", Version = "9.4.0", Source = "nuget.org" },
+                        new NuGetPackage { Id = "Aspire.Azure.AI.OpenAI", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.4.0", Source = "nuget.org" },
                         new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
                         new NuGetPackage { Id = "Aspire.Hosting.GitHub.Models", Version = "9.4.0", Source = "nuget.org" }, // Deprecated
@@ -124,6 +130,22 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
         Assert.Contains("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.Contains("Aspire.Hosting.NodeJs", packageIds);
+        // The deprecated-package flag does not expand hosting discovery to client packages.
+        Assert.DoesNotContain("Aspire.Azure.AI.Inference", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.OpenAI", packageIds);
+    }
+
+    [Theory]
+    [InlineData("Aspire.Azure.AI.Inference", true)]
+    [InlineData("Aspire.Azure.AI.OpenAI", true)]
+    [InlineData("aspire.azure.ai.inference", true)]
+    [InlineData("aspire.azure.ai.openai", true)]
+    [InlineData("Aspire.Azure.AI.Projects", false)]
+    [InlineData("Aspire.Azure.AI.Extensions.OpenAI", false)]
+    [InlineData("Aspire.OpenAI", false)]
+    public void AIClientPackageRetirementPolicy(string packageId, bool deprecated)
+    {
+        Assert.Equal(deprecated, DeprecatedPackages.IsDeprecated(packageId));
     }
 
     [Fact]

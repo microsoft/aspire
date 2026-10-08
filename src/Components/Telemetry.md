@@ -1,22 +1,24 @@
 # Log categories, activity source names and metric names
 
-Aspire.Azure.AI.Inference:
+Aspire.Azure.AI.Projects:
 - Log categories:
   - "Azure.Core"
   - "Azure.Identity"
 - Activity source names:
-  - "Azure.AI.Inference.*"
+  - "Azure.AI.Projects.*"
 - Metric names:
   - none (currently not supported by the Azure SDK)
 
-Aspire.Azure.AI.OpenAI:
+Aspire.Azure.AI.Extensions.OpenAI:
 - Log categories:
   - "Azure.Core"
   - "Azure.Identity"
 - Activity source names:
-  - "OpenAI.*"
+  - "Experimental.Microsoft.Extensions.AI"
+  - "Microsoft.Extensions.AI"
 - Metric names:
-  - "OpenAI.*"
+  - "Experimental.Microsoft.Extensions.AI"
+  - "Microsoft.Extensions.AI"
 
 Aspire.Azure.Data.Tables:
 - Log categories:

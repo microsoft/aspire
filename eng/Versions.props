@@ -43,7 +43,7 @@
     <MicrosoftDotNetBuildTasksArchivesVersion>10.0.0-beta.26472.2</MicrosoftDotNetBuildTasksArchivesVersion>
     <!-- dotnet/extensions -->
     <MicrosoftExtensionsAIVersion>10.10.0</MicrosoftExtensionsAIVersion>
-    <MicrosoftExtensionsAIOpenAIVersion>10.10.0</MicrosoftExtensionsAIOpenAIVersion>
+    <MicrosoftExtensionsAIOpenAIVersion>10.10.1</MicrosoftExtensionsAIOpenAIVersion>
     <MicrosoftExtensionsAIAzureAIInferenceVersion>10.0.0-preview.1.25559.3</MicrosoftExtensionsAIAzureAIInferenceVersion>
     <MicrosoftExtensionsHttpResilienceVersion>10.10.0</MicrosoftExtensionsHttpResilienceVersion>
     <MicrosoftExtensionsDependencyInjectionAutoActivationVersion>10.10.0</MicrosoftExtensionsDependencyInjectionAutoActivationVersion>

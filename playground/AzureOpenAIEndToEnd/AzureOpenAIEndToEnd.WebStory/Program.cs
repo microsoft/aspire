@@ -2,13 +2,26 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using AzureOpenAIEndToEnd.WebStory.Components;
+using Azure.AI.OpenAI;
+using Azure.Identity;
+using Microsoft.Extensions.AI;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.AddAzureOpenAIClient("chat")
-       .AddChatClient();
+// This sample targets an Azure OpenAI account, not a Foundry project.
+// The account SDK consumes the connection properties supplied by WithReference(chat).
+builder.Services.AddChatClient(_ =>
+{
+    var endpoint = builder.Configuration["CHAT_URI"] ?? throw new InvalidOperationException("CHAT_URI is required.");
+    var deployment = builder.Configuration["CHAT_MODELNAME"] ?? throw new InvalidOperationException("CHAT_MODELNAME is required.");
+    return new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential()).GetChatClient(deployment).AsIChatClient();
+}).UseOpenTelemetry();
+
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing => tracing.AddSource("Experimental.Microsoft.Extensions.AI", "Microsoft.Extensions.AI"))
+    .WithMetrics(metrics => metrics.AddMeter("Experimental.Microsoft.Extensions.AI", "Microsoft.Extensions.AI"));
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

@@ -74,6 +74,7 @@ builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithComputeEnvironment(aca)
     // Prompt-agent references provide connection details; the account reference configures identity and access.
     .WithReference(foundry)
+    .WithReference(project)
     .WithReference(jokerAgent).WaitFor(jokerAgent)
     .WithReference(researchAgent).WaitFor(researchAgent);
 
