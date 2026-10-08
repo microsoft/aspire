@@ -72,6 +72,8 @@ builder.AddProject<Projects.DotNetInvocationHostedAgent>("echo-invocations-dotne
 builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithExternalHttpEndpoints()
     .WithComputeEnvironment(aca)
+    // Prompt-agent references provide connection details; the account reference configures identity and access.
+    .WithReference(foundry)
     .WithReference(jokerAgent).WaitFor(jokerAgent)
     .WithReference(researchAgent).WaitFor(researchAgent);
 
