@@ -13,10 +13,10 @@ namespace Aspire.Shared;
 internal static class DashboardImage
 {
     /// <summary>
-    /// The Aspire Dashboard container image (without a tag), published to the .NET nightly registry.
-    /// See <see href="https://mcr.microsoft.com/artifact/mar/dotnet/nightly/aspire-dashboard/about"/>.
+    /// The Aspire Dashboard container image (without a tag), published to the Aspire nightly repository.
+    /// See <see href="https://mcr.microsoft.com/artifact/mar/aspire/nightly/dashboard/about"/>.
     /// </summary>
-    public const string Name = "mcr.microsoft.com/dotnet/nightly/aspire-dashboard";
+    public const string Name = "mcr.microsoft.com/aspire/nightly/dashboard";
 
     /// <summary>
     /// Resolves the dashboard image tag from a build-time override, or the running Aspire product
