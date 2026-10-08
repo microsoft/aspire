@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
@@ -23,6 +24,84 @@ namespace Aspire.Cli.Tests.Telemetry;
 
 public class ReportedLogExportTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task ReportedResource_ExportsOnlyApprovedAttributes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using (var process = RemoteExecutor.Invoke(static async directory =>
+        {
+            // Statsbeat uses a separate transport; this test covers the product envelopes only.
+            Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            Environment.SetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS", "true");
+            Environment.SetEnvironmentVariable("OTEL_SERVICE_NAME", "sensitive-service");
+            Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES",
+                "customer.tenant=sensitive-tenant,deployment.path=sensitive-path,service.namespace=sensitive-namespace,service.instance.id=sensitive-instance");
+            var configuration = new TelemetryConfiguration { ReportedTelemetryEnabled = true };
+            using var fixture = new TelemetryFixture(telemetryConfiguration: configuration, initialize: false);
+            var exported = new ConcurrentQueue<JsonElement>();
+            using var handler = CreateHandler(exported);
+            using var client = new HttpClient(handler);
+            using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
+                (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource,
+                    AspireCliTelemetry.ReportedActivitySourceName, AspireCliTelemetry.EventLogCategoryName,
+                    $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/", directory,
+                    builder => builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(
+                        options => options.Transport = new HttpClientTransport(client))),
+                    options => options.Transport = new HttpClientTransport(client)));
+            manager.Initialize();
+            using var source = new ActivitySource(AspireCliTelemetry.ReportedActivitySourceName);
+            using (var activity = source.StartActivity("reported-operation"))
+            {
+                Assert.NotNull(activity);
+                fixture.Telemetry.RecordEvent("reported-event", [new("test.property", "approved")]);
+            }
+
+            Assert.True(await manager.ForceFlushReportedAsync());
+            Assert.True(await manager.TryShutdownAsync());
+            var records = exported.OrderBy(record => record.GetProperty("data").GetProperty("baseType").GetString(), StringComparer.Ordinal).ToArray();
+            Assert.Equal(["MessageData", "MetricData", "RemoteDependencyData"],
+                records.Select(record => record.GetProperty("data").GetProperty("baseType").GetString()).ToArray());
+            await File.WriteAllTextAsync(Path.Combine(directory, "envelopes.json"), JsonSerializer.Serialize(records));
+        }, workspace.Path))
+        {
+        }
+
+        var envelopes = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "envelopes.json")))!.AsArray();
+        foreach (var envelope in envelopes)
+        {
+            var tags = envelope!["tags"]!.AsObject();
+            envelope["time"] = "timestamp";
+            envelope["iKey"] = "instrumentation-key";
+            tags["ai.cloud.roleInstance"] = "instance-id";
+            tags["ai.application.ver"] = "cli-version";
+            tags["ai.internal.sdkVersion"] = "sdk-version";
+            if (tags.ContainsKey("ai.operation.id"))
+            {
+                tags["ai.operation.id"] = "trace-id";
+            }
+            if (tags.ContainsKey("ai.operation.parentId"))
+            {
+                tags["ai.operation.parentId"] = "span-id";
+            }
+
+            var data = envelope["data"]!;
+            var baseData = data["baseData"]!;
+            switch (data["baseType"]!.GetValue<string>())
+            {
+                case "MetricData":
+                    baseData["properties"]!["service.instance.id"] = "instance-id";
+                    baseData["properties"]!["service.version"] = "cli-version";
+                    break;
+                case "RemoteDependencyData":
+                    baseData["id"] = "span-id";
+                    baseData["duration"] = "duration";
+                    break;
+            }
+        }
+
+        await Verify(envelopes.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), "json").UseDirectory("Snapshots");
+    }
+
     [Theory]
     [InlineData(true, true)]
     [InlineData(true, false)]
@@ -146,7 +225,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             var exported = new ConcurrentQueue<JsonElement>();
             using var handler = CreateHandler(exported);
             using var client = new HttpClient(handler);
-            using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), TelemetryManager.CreateResourceBuilder(),
+            using var logProvider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), TelemetryManager.CreateReportedResourceBuilder(),
                 AspireCliTelemetry.ReportedActivitySourceName, AspireCliTelemetry.EventLogCategoryName,
                 $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/",
                 directory, builder =>

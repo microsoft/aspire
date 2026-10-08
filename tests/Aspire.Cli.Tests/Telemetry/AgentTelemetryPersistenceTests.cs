@@ -142,12 +142,12 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 #if DEBUG
     [InlineData(false)]
 #endif
-    public void TelemetryManager_UsesCliResourceForAllProviders(bool profilingEnabled)
+    public void TelemetryManager_IsolatesProductResourceFromDiagnosticAndProfilingResources(bool profilingEnabled)
     {
         using var process = RemoteExecutor.Invoke(static profilingValue =>
         {
             Environment.SetEnvironmentVariable("OTEL_SERVICE_NAME", "environment-service");
-            Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", null);
+            Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", "customer.tenant=synthetic-tenant,deployment.path=synthetic-path");
             var profilingEnabled = bool.Parse(profilingValue);
             var configuration = new TelemetryConfiguration
             {
@@ -184,12 +184,21 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             Assert.NotNull(field);
             var otlpProvider = Assert.IsAssignableFrom<TracerProvider>(field.GetValue(manager));
             var otlpResource = otlpProvider.GetResource();
-            Assert.Equal(azureTraceResource.Attributes.ToArray(), otlpResource.Attributes.ToArray());
             Assert.Equal("aspire-cli", otlpResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
             var expectedVersion = AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
             Assert.NotEmpty(expectedVersion);
-            Assert.Equal(expectedVersion, azureTraceResource.Attributes.Single(attribute => attribute.Key == "service.version").Value);
+            Assert.Collection(azureTraceResource.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal),
+                attribute =>
+                {
+                    Assert.Equal("service.instance.id", attribute.Key);
+                    Assert.True(Guid.TryParse(Assert.IsType<string>(attribute.Value), out var instanceId));
+                    Assert.NotEqual(Guid.Empty, instanceId);
+                },
+                attribute => Assert.Equal(new KeyValuePair<string, object>("service.name", "aspire-cli"), attribute),
+                attribute => Assert.Equal(new KeyValuePair<string, object>("service.version", expectedVersion), attribute));
             Assert.Equal(expectedVersion, otlpResource.Attributes.Single(attribute => attribute.Key == "service.version").Value);
+            Assert.Equal("synthetic-tenant", otlpResource.Attributes.Single(attribute => attribute.Key == "customer.tenant").Value);
+            Assert.Equal("synthetic-path", otlpResource.Attributes.Single(attribute => attribute.Key == "deployment.path").Value);
         }, profilingEnabled.ToString());
     }
 

@@ -158,8 +158,7 @@ internal sealed class TelemetryManager : IDisposable
             TracerProvider? debugDiagnosticProvider = null;
             try
             {
-                var resource = CreateResourceBuilder();
-                CreateProviders(resource, out azureMonitorProvider, out profilingProvider, out debugDiagnosticProvider);
+                CreateProviders(out azureMonitorProvider, out profilingProvider, out debugDiagnosticProvider);
                 if (azureMonitorProvider is not null)
                 {
                     _telemetry.SetEventLogger(azureMonitorProvider.EventLogger);
@@ -182,7 +181,7 @@ internal sealed class TelemetryManager : IDisposable
         }
     }
 
-    private void CreateProviders(ResourceBuilder resource, out AzureMonitorTelemetryProvider? azureMonitorProvider, out TracerProvider? profilingProvider, out TracerProvider? debugDiagnosticProvider)
+    private void CreateProviders(out AzureMonitorTelemetryProvider? azureMonitorProvider, out TracerProvider? profilingProvider, out TracerProvider? debugDiagnosticProvider)
     {
         azureMonitorProvider = null;
         profilingProvider = null;
@@ -207,19 +206,25 @@ internal sealed class TelemetryManager : IDisposable
 
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
-            azureMonitorProvider = _createReportedProvider(resource, AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
+            azureMonitorProvider = _createReportedProvider(CreateReportedResourceBuilder(), AspireTelemetryExporter.GetTelemetryStoragePath("cli"));
         }
 
+        if (!telemetryConfiguration.UseProfilingProvider && !useDebugDiagnosticProvider)
+        {
+            return;
+        }
+
+        var diagnosticResource = AddCliService(ResourceBuilder.CreateDefault());
         if (telemetryConfiguration.UseProfilingProvider)
         {
-            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, resource, tagsSource, _telemetry)
+            profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, diagnosticResource, tagsSource, _telemetry)
                 .AddOtlpExporter()
                 .Build();
         }
 
         if (useDebugDiagnosticProvider)
         {
-            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, resource, tagsSource, _telemetry);
+            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, diagnosticResource, tagsSource, _telemetry);
 
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
@@ -243,7 +248,10 @@ internal sealed class TelemetryManager : IDisposable
             .AddProcessor(new CliTagEnrichmentProcessor(tagsSource, telemetry));
     }
 
-    internal static ResourceBuilder CreateResourceBuilder() => ResourceBuilder.CreateDefault().AddService(
+    // Environment-derived attributes belong only to diagnostics/profiling, not product export.
+    internal static ResourceBuilder CreateReportedResourceBuilder() => AddCliService(ResourceBuilder.CreateEmpty());
+
+    private static ResourceBuilder AddCliService(ResourceBuilder resource) => resource.AddService(
         serviceName: "aspire-cli",
         // The resource identifies the physical binary, not an emulated ASPIRE_CLI_VERSION.
         // See docs/specs/cli-identity-sidecar.md; emulated identity is reported as identity.* tags.

@@ -53,6 +53,9 @@ internal static class AspireTelemetryExporter
         options.EnableLiveMetrics = false;
         options.EnableStandardMetrics = false;
         options.EnablePerformanceCounters = false;
+        // These options do not disable Statsbeat's separate hosting metadata collection/export.
+        // TODO: Disable Statsbeat for product exporters when a public per-exporter API is available,
+        // without changing process-wide environment variables: https://github.com/Azure/azure-sdk-for-net/issues/63651.
         options.StorageDirectory = storageDirectory;
     }
 }
