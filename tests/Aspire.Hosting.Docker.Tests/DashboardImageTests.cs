@@ -1,14 +1,45 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
+using Aspire.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker.Tests;
 
-public class DashboardImageTests
+public class DashboardImageTests(ITestOutputHelper output)
 {
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public async Task DefaultImage_StartsHealthyDashboard()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddLogging(logging => logging.AddXunit(output));
+
+        var dashboard = builder.AddContainer("dashboard", DashboardImage.Name, DashboardImage.ResolveTag())
+            .WithEnvironment("DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS", "true")
+            .WithHttpEndpoint(targetPort: 18888)
+            .WithHttpHealthCheck("/health");
+
+        await using var app = builder.Build();
+        using var startupTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        await app.StartAsync(startupTimeout.Token);
+
+        using var readinessTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(dashboard.Resource.Name, readinessTimeout.Token);
+
+        using var client = app.CreateHttpClient(dashboard.Resource.Name, "http");
+        using var response = await client.GetAsync("/health", readinessTimeout.Token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await app.StopAsync();
+    }
+
     [Fact]
     public void WithDashboard_UsesDefaultImage()
     {
