@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI infrastructure change (Azure Pipelines CodeQL scanning config) for the aspire.dev repo itself, not documentation of an Aspire product feature",
+  "mergedAt": "2026-10-07T19:15:45Z",
+  "number": 1838,
+  "runDate": "2026-10-08T00:08:50Z",
+  "status": "excluded",
+  "title": "Add Azure Pipelines CodeQL scanning"
+}
