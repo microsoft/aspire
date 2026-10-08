@@ -56,9 +56,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
     internal List<PersistentVolumeClaim> PersistentVolumeClaims { get; } = [];
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal List<(ProbeType Type, ProbeV1 Probe)> Probes { get; } = [];
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     /// <summary>
     /// </summary>
@@ -322,7 +320,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         }
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private void ProcessProbes()
     {
         if (!resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
@@ -359,7 +356,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             }
         }
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     private async Task ProcessArgumentsAsync(KubernetesEnvironmentContext environmentContext, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {

@@ -8,9 +8,6 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
     <MicrosoftFluentUIAspNetCoreComponentsVersion>5.0.0</MicrosoftFluentUIAspNetCoreComponentsVersion>
     <MicrosoftFluentUIAspNetCoreComponentsIsPreview>false</MicrosoftFluentUIAspNetCoreComponentsIsPreview>
-    <!-- The Npgsql versions used when using Npgsql EF Core on net8/net9. The major versions need to match between Npgsql and EF Core. -->
-    <Npgsql8Version>8.0.9</Npgsql8Version>
-    <Npgsql9Version>9.0.5</Npgsql9Version>
   </PropertyGroup>
   <ItemGroup>
     <!-- Azure SDK for .NET dependencies -->
@@ -122,9 +119,9 @@
     <PackageVersion Include="Grpc.Tools" Version="2.83.0" />
     <!-- Keep compatible with @hex1b/web-terminal in src/Aspire.Dashboard/package.json.
          Native-only Hex1b builds can differ without changing the web terminal package. -->
-    <PackageVersion Include="Hex1b" Version="0.171.0" />
-    <PackageVersion Include="Hex1b.McpServer" Version="0.171.0" />
-    <PackageVersion Include="Hex1b.Tool" Version="0.171.0" />
+    <PackageVersion Include="Hex1b" Version="0.172.0" />
+    <PackageVersion Include="Hex1b.McpServer" Version="0.172.0" />
+    <PackageVersion Include="Hex1b.Tool" Version="0.172.0" />
     <PackageVersion Include="Humanizer.Core" Version="3.0.10" />
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
     <PackageVersion Include="Markdig" Version="1.3.2" />
@@ -182,6 +179,8 @@
     <PackageVersion Include="MicroBuild.Plugins.SwixBuild.Dotnet" Version="1.1.87-gba258badda" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
+    <!-- EF design tools must use the same Roslyn workspace version as the central pins. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
     <PackageVersion Include="Microsoft.Signed.Wix" Version="$(MicrosoftSignedWixVersion)" />
     <PackageVersion Include="Microsoft.DotNet.Build.Tasks.Archives" Version="$(MicrosoftDotNetBuildTasksArchivesVersion)" />
     <PackageVersion Include="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
@@ -220,10 +219,10 @@
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
-  <!-- This group is for packages that are common between net8, net9, and net10.
-       The dependencies on this group should not be updated manually and should instead use arcade's dependency flow to get updated.-->
+  <!-- Common dotnet/extensions dependencies use Arcade dependency flow.
+       Framework packages use manual .NET 10 servicing pins and Darc-managed .NET 11 overrides. -->
   <ItemGroup>
-    <!-- dotnet/extensions dependencies ** Common between net8, net9, and net10 ** -->
+    <!-- dotnet/extensions dependencies ** Common between net10 and net11 ** -->
     <PackageVersion Include="Microsoft.Extensions.AI" Version="$(MicrosoftExtensionsAIVersion)" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="$(MicrosoftExtensionsAIOpenAIVersion)" />
     <PackageVersion Include="Microsoft.Extensions.AI.AzureAIInference" Version="$(MicrosoftExtensionsAIAzureAIInferenceVersion)" />
@@ -233,64 +232,72 @@
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="$(MicrosoftExtensionsServiceDiscoveryVersion)" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery.Yarp" Version="$(MicrosoftExtensionsServiceDiscoveryYarpVersion)" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="$(MicrosoftExtensionsTimeProviderTestingVersion)" />
-    <!-- Runtime dependencies ** Common between all TFMs because other dependencies (like Azure.Core) are lifting to the latest versions, so we need to as well ** -->
-    <PackageVersion Include="Microsoft.Bcl.Memory" Version="$(MicrosoftBclMemoryPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="$(MicrosoftExtensionsHostingAbstractionsPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(MicrosoftExtensionsHostingPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="$(MicrosoftExtensionsConfigurationAbstractionsPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="$(MicrosoftExtensionsConfigurationBinderPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="$(MicrosoftExtensionsConfigurationEnvironmentVariablesPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsCachingMemoryPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="$(MicrosoftExtensionsFileSystemGlobbingPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingAbstractionsPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="$(MicrosoftExtensionsLoggingPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsOptionsPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="$(MicrosoftExtensionsPrimitivesPreviewVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpPreviewVersion)" />
-    <PackageVersion Include="System.Formats.Asn1" Version="$(SystemFormatsAsn1PreviewVersion)" />
-    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
+    <!-- Runtime dependencies use the .NET 10 baseline, with .NET 11 overrides below. -->
+    <PackageVersion Include="Microsoft.Bcl.Memory" Version="$(MicrosoftBclMemoryNet10Version)" />
+    <!-- .NET 11 supplies these abstractions in Microsoft.NETCore.App. Do not transitively
+         pin packages for that target; retain the package versions needed by .NET 10. -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="$(MicrosoftExtensionsHostingAbstractionsNet10Version)" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(MicrosoftExtensionsHostingNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="$(MicrosoftExtensionsConfigurationAbstractionsNet10Version)" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="$(MicrosoftExtensionsConfigurationBinderNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="$(MicrosoftExtensionsConfigurationEnvironmentVariablesNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsCachingMemoryNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftExtensionsDependencyInjectionAbstractionsNet10Version)" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="$(MicrosoftExtensionsFileSystemGlobbingNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingAbstractionsNet10Version)" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="$(MicrosoftExtensionsLoggingNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsOptionsNet10Version)" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion Include="Microsoft.Extensions.Primitives" Version="$(MicrosoftExtensionsPrimitivesNet10Version)" Condition="'$(TargetFramework)' != 'net11.0'" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpNet10Version)" />
+    <PackageVersion Include="System.Formats.Asn1" Version="$(SystemFormatsAsn1Net10Version)" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsNet10Version)" />
     <!-- Kept in lockstep with System.Security.Cryptography.Pkcs: they ship from the same servicing
          band and the Pkcs lib assembly binds to this exact version. -->
-    <PackageVersion Include="Microsoft.Bcl.Cryptography" Version="$(SystemSecurityCryptographyPkcsVersion)" />
-    <PackageVersion Include="System.Text.Json" Version="$(SystemTextJsonPreviewVersion)" />
+    <PackageVersion Include="Microsoft.Bcl.Cryptography" Version="$(SystemSecurityCryptographyPkcsNet10Version)" />
+    <PackageVersion Include="System.Text.Json" Version="$(SystemTextJsonNet10Version)" />
   </ItemGroup>
 
-  <!-- The following groups are for packages that need to switch based on the .NET TFM being used.
-       The dependencies on any of these two groups should not be updated manually and should instead use arcade's dependency flow to get updated.-->
+  <!-- Framework-aligned dependencies default to .NET 10; .NET 11 overrides follow. -->
   <ItemGroup>
     <!-- EF -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosLTSVersion)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignLTSVersion)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerLTSVersion)" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsLTSVersion)" />
-    <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="8.4.4" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.11" />
-    <PackageVersion Include="Oracle.EntityFrameworkCore" Version="8.23.26200" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosNet10Version)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignNet10Version)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerNet10Version)" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsNet10Version)" />
+    <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="10.0.4" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Oracle.EntityFrameworkCore" Version="10.23.26000" />
     <!-- ASP.NET Core -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="$(MicrosoftAspNetCoreOutputCachingStackExchangeRedisLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(MicrosoftExtensionsCachingStackExchangeRedisLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesLTSVersion)" />
-    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="$(MicrosoftExtensionsFileProvidersEmbeddedLTSVersion)" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientLTSVersion)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateNet10Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerNet10Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectNet10Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiNet10Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="$(MicrosoftAspNetCoreOutputCachingStackExchangeRedisNet10Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(MicrosoftExtensionsCachingStackExchangeRedisNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesNet10Version)" />
+    <PackageVersion Include="Microsoft.Extensions.FileProviders.Embedded" Version="$(MicrosoftExtensionsFileProvidersEmbeddedNet10Version)" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientNet10Version)" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <!-- EF -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <PackageVersion Update="Microsoft.Bcl.Memory" Version="$(MicrosoftBclMemoryVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Hosting" Version="$(MicrosoftExtensionsHostingVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Configuration.Binder" Version="$(MicrosoftExtensionsConfigurationBinderVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="$(MicrosoftExtensionsConfigurationEnvironmentVariablesVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsCachingMemoryVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.FileSystemGlobbing" Version="$(MicrosoftExtensionsFileSystemGlobbingVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Logging" Version="$(MicrosoftExtensionsLoggingVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpVersion)" />
+    <PackageVersion Update="System.Formats.Asn1" Version="$(SystemFormatsAsn1Version)" />
+    <PackageVersion Update="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
+    <PackageVersion Update="Microsoft.Bcl.Cryptography" Version="$(SystemSecurityCryptographyPkcsVersion)" />
+    <PackageVersion Update="System.Text.Json" Version="$(SystemTextJsonVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerVersion)" />
     <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsVersion)" />
-    <PackageVersion Update="MongoDB.EntityFrameworkCore" Version="9.1.4" />
-    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
-    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="9.23.26000" />
-    <!-- ASP.NET Core -->
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectVersion)" />
@@ -301,43 +308,13 @@
     <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreVersion)" />
     <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksVersion)" />
     <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesVersion)" />
+    <PackageVersion Update="Microsoft.Extensions.FileProviders.Embedded" Version="$(MicrosoftExtensionsFileProvidersEmbeddedVersion)" />
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientVersion)" />
+    <PackageVersion Update="System.IO.Hashing" Version="11.0.0-rc.1.26425.128" />
+    <PackageVersion Update="Microsoft.Data.Sqlite.Core" Version="11.0.0-rc.1.26425.128" />
+    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0-rc.1.1" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <!-- EF -->
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Cosmos" Version="$(MicrosoftEntityFrameworkCoreCosmosPreviewVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Design" Version="$(MicrosoftEntityFrameworkCoreDesignPreviewVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerPreviewVersion)" />
-    <PackageVersion Update="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsPreviewVersion)" />
-    <PackageVersion Update="MongoDB.EntityFrameworkCore" Version="10.0.4" />
-    <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
-    <PackageVersion Update="Oracle.EntityFrameworkCore" Version="10.23.26000" />
-    <!-- ASP.NET Core -->
-    <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificatePreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.Authentication.JwtBearer" Version="$(MicrosoftAspNetCoreAuthenticationJwtBearerPreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectPreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="$(MicrosoftAspNetCoreOutputCachingStackExchangeRedisPreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostPreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Caching.StackExchangeRedis" Version="$(MicrosoftExtensionsCachingStackExchangeRedisPreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCorePreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksPreviewVersion)" />
-    <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesPreviewVersion)" />
-    <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientPreviewVersion)" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
-    <PackageVersion Update="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateNet11Version)" />
-    <PackageVersion Update="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="$(MicrosoftAspNetCoreAuthenticationOpenIdConnectNet11Version)" />
-    <PackageVersion Update="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftAspNetCoreOpenApiNet11Version)" />
-    <PackageVersion Update="Microsoft.AspNetCore.TestHost" Version="$(MicrosoftAspNetCoreTestHostNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsCachingMemoryNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.Configuration.Binder" Version="$(MicrosoftExtensionsConfigurationBinderNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="$(MicrosoftExtensionsConfigurationEnvironmentVariablesNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.FileSystemGlobbing" Version="$(MicrosoftExtensionsFileSystemGlobbingNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.Features" Version="$(MicrosoftExtensionsFeaturesNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpNet11Version)" />
-    <PackageVersion Update="Microsoft.Extensions.Logging" Version="$(MicrosoftExtensionsLoggingNet11Version)" />
-  </ItemGroup>
+
   <!-- The template engine uses the .NET 11 SDK dependency line. Keep these pins scoped to
        the build tool and its test host, not the shipping projects that use stable NuGet APIs.
        Its NuGet 7.11.0-rc.42628 dependencies were not published; use the available tooling
@@ -347,6 +324,6 @@
     <PackageVersion Include="NuGet.Credentials" Version="$(NuGetPackageVersionForCli)" />
     <PackageVersion Include="NuGet.Versioning" Version="$(NuGetPackageVersionForCli)" />
     <PackageVersion Update="NuGet.Protocol" Version="$(NuGetPackageVersionForCli)" />
-    <PackageVersion Update="System.Security.Cryptography.Pkcs" Version="11.0.0-rc.1.26425.128" />
+    <PackageVersion Update="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
   </ItemGroup>
 </Project>

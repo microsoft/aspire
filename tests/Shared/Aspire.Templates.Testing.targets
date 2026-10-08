@@ -1,29 +1,19 @@
 <Project>
   <!--
-    For template testing we track four SDK and TFM versions.
+    For template testing we track two SDK and TFM versions.
 
-      .NET 8
-      .NET 9
       .NET 10
       .NET 11
 
     Keep this list in sync with the version mapping in tests/Shared/TemplatesTesting/BuildEnvironment.cs
   -->
   <PropertyGroup>
-    <SdkVersionForNet8TFM>$(DotNetSdkNet8VersionForTesting)</SdkVersionForNet8TFM>
-    <SdkVersionForNet9TFM>$(DotNetSdkNet9VersionForTesting)</SdkVersionForNet9TFM>
     <SdkVersionForNet10TFM>$(DotNetSdkNet10VersionForTesting)</SdkVersionForNet10TFM>
 
     <!-- global.json uses the .NET 11 SDK. -->
     <_GlobalJsonContent>$([System.IO.File]::ReadAllText('$(RepoRoot)global.json'))</_GlobalJsonContent>
     <_DotNetCliVersionFromGlobalJson>$([System.Text.RegularExpressions.Regex]::Match($(_GlobalJsonContent), '(%3F&lt;="dotnet": ").*(%3F=")'))</_DotNetCliVersionFromGlobalJson>
     <SdkVersionForNet11TFM>$(_DotNetCliVersionFromGlobalJson)</SdkVersionForNet11TFM>
-
-    <SdkDirForNet8TFM>$(ArtifactsBinDir)dotnet-8\</SdkDirForNet8TFM>
-    <SdkStampPathForNet8TFM>$(SdkDirForNet8TFM).version-$(SdkVersionForNet8TFM).stamp</SdkStampPathForNet8TFM>
-
-    <SdkDirForNet9TFM>$(ArtifactsBinDir)dotnet-9\</SdkDirForNet9TFM>
-    <SdkStampPathForNet9TFM>$(SdkDirForNet9TFM).version-$(SdkVersionForNet9TFM).stamp</SdkStampPathForNet9TFM>
 
     <SdkDirForNet10TFM>$(ArtifactsBinDir)dotnet-10\</SdkDirForNet10TFM>
     <SdkStampPathForNet10TFM>$(SdkDirForNet10TFM).version-$(SdkVersionForNet10TFM).stamp</SdkStampPathForNet10TFM>
@@ -32,16 +22,12 @@
     <SdkStampPathForNet11TFM>$(SdkDirForNet11TFM).version-$(SdkVersionForNet11TFM).stamp</SdkStampPathForNet11TFM>
 
     <SdkDirForNet11WithAllSupportedRuntimes>$(ArtifactsBinDir)dotnet-tests\</SdkDirForNet11WithAllSupportedRuntimes>
-    <SdkStampPathForNet11WithAllSupportedRuntimes>$(SdkDirForNet11WithAllSupportedRuntimes).version-$(SdkVersionForNet11TFM)-$(DotNetRuntimeNet10VersionForTesting)-$(DotNetRuntimeNet9VersionForTesting)-$(DotNetRuntimeNet8VersionForTesting).stamp</SdkStampPathForNet11WithAllSupportedRuntimes>
+    <SdkStampPathForNet11WithAllSupportedRuntimes>$(SdkDirForNet11WithAllSupportedRuntimes).version-$(SdkVersionForNet11TFM)-$(DotNetRuntimeNet10VersionForTesting).stamp</SdkStampPathForNet11WithAllSupportedRuntimes>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)InstallSdk.props" />
 
   <ItemGroup>
-    <SupportedRuntimeToInstallArguments Include="-Runtime dotnet -Version $(DotNetRuntimeNet8VersionForTesting)" />
-    <SupportedRuntimeToInstallArguments Include="-Runtime aspnetcore -Version $(DotNetRuntimeNet8VersionForTesting)" />
-    <SupportedRuntimeToInstallArguments Include="-Runtime dotnet -Version $(DotNetRuntimeNet9VersionForTesting)" />
-    <SupportedRuntimeToInstallArguments Include="-Runtime aspnetcore -Version $(DotNetRuntimeNet9VersionForTesting)" />
     <SupportedRuntimeToInstallArguments Include="-Runtime dotnet -Version $(DotNetRuntimeNet10VersionForTesting)" />
     <SupportedRuntimeToInstallArguments Include="-Runtime aspnetcore -Version $(DotNetRuntimeNet10VersionForTesting)" />
   </ItemGroup>
@@ -49,16 +35,6 @@
   <Target Name="ProvisionSdksForTesting">
 
     <!-- Install the SDK for each supported TFM. -->
-    <MSBuild Projects="$(MSBuildThisFileDirectory)InstallSdk.targets"
-             Properties="SdkVersionToInstall=$(SdkVersionForNet8TFM);SdkTargetDir=$(SdkDirForNet8TFM);SdkStampPath=$(SdkStampPathForNet8TFM);ArtifactsObjDir=$(ArtifactsObjDir)"
-             Targets="ProvisionSdk" />
-    <Touch Files="$(SdkStampPathForNet8TFM)" AlwaysCreate="true" />
-
-    <MSBuild Projects="$(MSBuildThisFileDirectory)InstallSdk.targets"
-             Properties="SdkVersionToInstall=$(SdkVersionForNet9TFM);SdkTargetDir=$(SdkDirForNet9TFM);SdkStampPath=$(SdkStampPathForNet9TFM);ArtifactsObjDir=$(ArtifactsObjDir)"
-             Targets="ProvisionSdk" />
-    <Touch Files="$(SdkStampPathForNet9TFM)" AlwaysCreate="true" />
-
     <MSBuild Projects="$(MSBuildThisFileDirectory)InstallSdk.targets"
              Properties="SdkVersionToInstall=$(SdkVersionForNet10TFM);SdkTargetDir=$(SdkDirForNet10TFM);SdkStampPath=$(SdkStampPathForNet10TFM);ArtifactsObjDir=$(ArtifactsObjDir)"
              Targets="ProvisionSdk" />

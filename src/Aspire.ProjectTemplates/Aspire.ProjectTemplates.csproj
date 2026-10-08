@@ -96,10 +96,8 @@
       <Replacements Include="$(PackageVersion)" />
       <Replacements Include="!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!" />
       <Replacements Include="$(VersionMajorMinor)" />
-      <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_9_VERSION!!" />
-      <Replacements Include="$(MicrosoftAspNetCoreOpenApiVersion)" />
       <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_10_VERSION!!" />
-      <Replacements Include="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
+      <Replacements Include="$(MicrosoftAspNetCoreOpenApiNet10Version)" />
       <Replacements Include="!!REPLACE_WITH_ASPNETCORE_OPENAPI_11_VERSION!!" />
       <Replacements Include="$(MicrosoftAspNetCoreOpenApiNet11Version)" />
       <Replacements Include="!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!" />

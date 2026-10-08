@@ -3,8 +3,6 @@
   "name": "Aspire AppHost",
   "description": "用於建立 Aspire AppHost (協調器) 專案的專案範本。",
   "symbols/Framework/description": "專案的目標 Framework。",
-  "symbols/Framework/choices/net8.0/description": "目標 net8.0",
-  "symbols/Framework/choices/net9.0/description": "目標 net9.0",
   "symbols/Framework/choices/net10.0/description": "目標 net10.0",
   "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "要用於 AppHost 專案 launchSettings.json 中 HTTP 端點的連接埠號碼。",

@@ -17,6 +17,21 @@
         <target state="translated">Vývojový tunel {0} je aktivní s {1} připojeními hostitele a {2} porty.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevTunnelHostDisconnected">
+        <source>The local host for dev tunnel '{0}' is disconnected.</source>
+        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevTunnelHostHealthy">
+        <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
+        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevTunnelHostNotReady">
+        <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
+        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
         <source>Dev tunnel port '{0}' on dev tunnel '{1}' is active.</source>
         <target state="translated">Port vývojového tunelu {0} ve vývojovém tunelu {1} je aktivní.</target>

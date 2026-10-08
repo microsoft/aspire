@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREUSERSECRETS001
-#pragma warning disable ASPIREFILESYSTEM001
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;

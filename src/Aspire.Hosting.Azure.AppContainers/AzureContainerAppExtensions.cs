@@ -956,7 +956,6 @@ public static class AzureContainerAppExtensions
     /// </para>
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIREACANAMING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithCompactResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         builder.Resource.UseCompactResourceNaming = true;
@@ -1010,7 +1009,6 @@ public static class AzureContainerAppExtensions
     /// </code>
     /// </example>
     [AspireExport]
-    [Experimental("ASPIREACANAMING002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithUniqueResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

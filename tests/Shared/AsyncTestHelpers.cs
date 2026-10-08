@@ -150,7 +150,6 @@ internal static class AsyncTestHelpers
         {
             return await task.ConfigureAwait(false);
         }
-#if NET6_0_OR_GREATER
         try
         {
             return await task.WaitAsync(timeout).ConfigureAwait(false);
@@ -159,18 +158,6 @@ internal static class AsyncTestHelpers
         {
             throw new TimeoutException(CreateMessage(timeout, filePath!, lineNumber));
         }
-#else
-        var cts = new CancellationTokenSource();
-        if (task == await Task.WhenAny(task, Task.Delay(timeout, cts.Token)).ConfigureAwait(false))
-        {
-            cts.Cancel();
-            return await task.ConfigureAwait(false);
-        }
-        else
-        {
-            throw new TimeoutException(CreateMessage(timeout, filePath, lineNumber));
-        }
-#endif
     }
 
     public static async Task TimeoutAfter(this Task task, TimeSpan timeout,
@@ -184,7 +171,6 @@ internal static class AsyncTestHelpers
             await task.ConfigureAwait(false);
             return;
         }
-#if NET6_0_OR_GREATER
         try
         {
             await task.WaitAsync(timeout).ConfigureAwait(false);
@@ -193,18 +179,6 @@ internal static class AsyncTestHelpers
         {
             throw new TimeoutException(CreateMessage(timeout, filePath!, lineNumber));
         }
-#else
-        var cts = new CancellationTokenSource();
-        if (task == await Task.WhenAny(task, Task.Delay(timeout, cts.Token)).ConfigureAwait(false))
-        {
-            cts.Cancel();
-            await task.ConfigureAwait(false);
-        }
-        else
-        {
-            throw new TimeoutException(CreateMessage(timeout, filePath, lineNumber));
-        }
-#endif
     }
 
     private static string CreateMessage(TimeSpan timeout, string filePath, int lineNumber)

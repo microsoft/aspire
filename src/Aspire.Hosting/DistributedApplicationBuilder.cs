@@ -6,7 +6,6 @@
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREUSERSECRETS001
 #pragma warning disable ASPIREWATCH001
 

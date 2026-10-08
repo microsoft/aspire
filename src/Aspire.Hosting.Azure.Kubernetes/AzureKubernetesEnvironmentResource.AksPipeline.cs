@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
 #pragma warning disable ASPIREPIPELINES002 // IDeploymentStateManager is experimental
 #pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
-#pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService/TempDirectory are experimental
 
 using System.Text;
 using System.Text.Json;

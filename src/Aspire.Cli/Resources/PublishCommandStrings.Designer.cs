@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class PublishCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal PublishCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,16 +59,16 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Generates deployment artifacts for an Aspire apphost.
+        ///   Looks up a localized string similar to Generate deployment artifacts for an AppHost.
         /// </summary>
         public static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Generating artifacts....
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GeneratingArtifacts", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Loading....
         /// </summary>
@@ -88,7 +88,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Do not build or restore the project before running..
+        ///   Looks up a localized string similar to Do not build or restore the project before running.
         /// </summary>
         public static string NoBuildArgumentDescription {
             get {
@@ -104,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OperationCompletedPrefix", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to PUBLISHING FAILED.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OperationFailedPrefix", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The output path for the generated artifacts. Defaults to the AppHost directory&apos;s &apos;aspire-output&apos; folder if not specified..
         /// </summary>
@@ -122,16 +122,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputPathArgumentDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to The path to the Aspire apphost project file..
+        ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
         /// </summary>
         public static string ProjectArgumentDescription {
             get {
                 return ResourceManager.GetString("ProjectArgumentDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Select a publisher:.
         /// </summary>

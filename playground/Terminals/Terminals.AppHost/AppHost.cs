@@ -13,7 +13,6 @@ builder.AddCSharpApp("palette-test", "Scripts/palette-test.cs")
     {
         options.Columns = 120;
         options.Rows = 50;
-        options.ShowTerminalHost = true;
     });
 
 builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
@@ -21,7 +20,6 @@ builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
     {
         options.Columns = 120;
         options.Rows = 32;
-        options.ShowTerminalHost = true;
     });
 
 builder.AddPostgres("postgres").WithRepl();
@@ -42,7 +40,6 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
     {
         options.Columns = 120;
         options.Rows = 32;
-        options.ShowTerminalHost = true;
     })
     // Opens a shell owned by the AppHost rather than orchestrated by Aspire. It has nothing to do with `repl`;
     // commands just need a host resource to hang off.
@@ -82,7 +79,7 @@ if (OperatingSystem.IsWindows())
     // Single-replica executable wrapping cmd.exe to demonstrate that
     // WithTerminal() also works for arbitrary executables, not just projects.
     builder.AddExecutable("shell", "cmd.exe", ".")
-        .WithTerminal(options => options.ShowTerminalHost = true);
+        .WithTerminal();
 
     // A/B control resource: same cmd.exe but WITHOUT WithTerminal(). Used to
     // bisect whether the "Stop kills the dashboard" symptom is specific to
@@ -102,7 +99,7 @@ if (OperatingSystem.IsWindows())
     // ("node") appended after bash and immediately exit.
     builder.AddContainer("nodebox", "node", "lts")
         .WithArgs("bash", "-l")
-        .WithTerminal(options => options.ShowTerminalHost = true);
+        .WithTerminal();
 }
 else
 {
@@ -112,7 +109,7 @@ else
     // it source the user's login profile so `PATH`, aliases etc. behave the
     // same as a normal terminal session.
     builder.AddExecutable("shell", "/bin/bash", ".", "-i", "-l")
-        .WithTerminal(options => options.ShowTerminalHost = true);
+        .WithTerminal();
 }
 
 builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
@@ -122,7 +119,6 @@ builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
         // https://manpages.ubuntu.com/manpages/noble/man1/notcurses-demo.1.html
         options.Columns = 120;
         options.Rows = 45;
-        options.ShowTerminalHost = true;
     });
 
 #if !SKIP_DASHBOARD_REFERENCE
