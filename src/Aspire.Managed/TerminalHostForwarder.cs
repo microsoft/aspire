@@ -11,6 +11,13 @@ using StreamJsonRpc;
 
 internal static partial class TerminalHostForwarder
 {
+    // kill(2) takes the native SIGTERM number (15 on Linux/macOS), not the
+    // symbolic value of the .NET PosixSignal.SIGTERM enum.
+    private const int SigTerm = 15;
+
+    // Match ParentProcessWatchdog's conventional "terminated by timeout" exit code.
+    private const int ShutdownTimeoutExitCode = 124;
+
     internal static ProcessStartInfo CreateStartInfo(string managedDirectory, string[] args)
     {
         var directory = Path.GetFullPath(Path.Combine(managedDirectory, "..", BundleDiscovery.TerminalHostDirectoryName));
@@ -78,7 +85,7 @@ internal static partial class TerminalHostForwarder
                             }
                         }
                     }
-                    else if (SendSignal(process.Id, 15) != 0 && !process.HasExited)
+                    else if (SendSignal(process.Id, SigTerm) != 0 && !process.HasExited)
                     {
                         throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError());
                     }
@@ -93,7 +100,7 @@ internal static partial class TerminalHostForwarder
                     Console.Error.WriteLine("Terminal host did not stop within the shutdown grace period.");
                     process.Kill(entireProcessTree: true);
                     await process.WaitForExitAsync().ConfigureAwait(false);
-                    return 124;
+                    return ShutdownTimeoutExitCode;
                 }
 
                 return process.ExitCode;
