@@ -306,9 +306,11 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var assets = builder.AddContainer("assets", imageName, ImageTag)
             .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/sentinel.txt" });
+#pragma warning disable CS0618 // Compare legacy CSharpApp publishing with AddDotnetProject.
         IResourceBuilder<IComputeResource> resource = legacyProject
             ? builder.AddCSharpApp("file-app", appPath, options => options.ExcludeLaunchProfile = true)
             : builder.AddDotnetProject("file-app", appPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
         resource
             .WithAnnotation(new ContainerFilesDestinationAnnotation
             {

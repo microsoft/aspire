@@ -8,6 +8,7 @@ using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+#pragma warning disable CS0618 // Exercise terminal support for legacy CSharpApp resources.
 builder.AddCSharpApp("palette-test", "Scripts/palette-test.cs")
     .WithTerminal(options =>
     {
@@ -21,6 +22,7 @@ builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
         options.Columns = 120;
         options.Rows = 32;
     });
+#pragma warning restore CS0618
 
 builder.AddPostgres("postgres").WithRepl();
 builder.AddRedis("redis").WithRepl();

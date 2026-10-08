@@ -332,6 +332,9 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddCSharpApp(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
     /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
     /// If the path is not an absolute path then it will be computed relative to the app host directory.
@@ -347,6 +350,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path)
     {
@@ -360,6 +364,7 @@ public static class ProjectResourceBuilderExtensions
     /// <summary>
     /// Adds a C# application resource
     /// </summary>
+    [Obsolete("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     [AspireExport("addCSharpApp")]
     internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -382,6 +387,9 @@ public static class ProjectResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
+    /// This method is obsolete. Use <c>AddDotnetProject</c> from the <c>Aspire.Hosting.Dotnet</c> package instead.
+    /// </para>
+    /// <para>
     /// This overload of the <see cref="AddCSharpApp(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
     /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
     /// If the path is not an absolute path then it will be computed relative to the app host directory.
@@ -397,6 +405,7 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
     public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {

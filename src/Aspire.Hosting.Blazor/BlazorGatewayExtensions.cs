@@ -49,9 +49,11 @@ public static class BlazorGatewayExtensions
         [ResourceName] string name)
     {
         var gatewayPath = GetScriptPath("Gateway.cs");
+#pragma warning disable CS0618 // Preserve the gateway's ProjectResource launch and publishing behavior.
         var gateway = builder.AddCSharpApp(name, gatewayPath)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
+#pragma warning restore CS0618
 
         ConfigureGatewayToolForRunMode(gateway, builder.AppHostDirectory, builder.Environment.EnvironmentName);
         if (builder.ExecutionContext.IsPublishMode)
