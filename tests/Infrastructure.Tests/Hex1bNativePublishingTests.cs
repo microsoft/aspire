@@ -46,7 +46,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
              "-getProperty:Optimize,ServerGarbageCollection"]);
         Assert.True(result.ExitCode == 0, result.Output);
 
-        using var document = JsonDocument.Parse(result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
         var properties = document.RootElement.GetProperty("Properties");
         Assert.Equal(optimized ? "true" : "false", properties.GetProperty("Optimize").GetString());
         Assert.Equal("true", properties.GetProperty("ServerGarbageCollection").GetString());
@@ -69,7 +69,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var bundle = await RunDotNetAsync(
             ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-getProperty:Configuration"]);
         Assert.True(bundle.ExitCode == 0, bundle.Output);
-        Assert.Equal(configuration, bundle.Output.Trim());
+        Assert.Equal(configuration, bundle.StandardOutput.Trim());
 
         foreach (var projectName in new[] { "Aspire.Cli", "Aspire.Dashboard", "Aspire.TerminalHost" })
         {
@@ -79,7 +79,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
                  "-p:_IsPublishing=true", "-p:RuntimeIdentifier=osx-arm64", "-getProperty:Optimize,PublishAot"]);
             Assert.True(result.ExitCode == 0, result.Output);
 
-            using var document = JsonDocument.Parse(result.Output);
+            using var document = JsonDocument.Parse(result.StandardOutput);
             var properties = document.RootElement.GetProperty("Properties");
             Assert.Equal("true", properties.GetProperty("PublishAot").GetString());
             Assert.Equal("true", properties.GetProperty("Optimize").GetString());
@@ -99,7 +99,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles", "-getItem:NativeCopyLocalItems,ResolvedFileToPublish"]);
         Assert.True(result.ExitCode == 0, result.Output);
 
-        using var document = JsonDocument.Parse(result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
         var items = document.RootElement.GetProperty("Items");
         var published = items.GetProperty("ResolvedFileToPublish").EnumerateArray().ToArray();
         var expected = GetNativePaths(rid).Append("other/OpenConsole.exe").Order(StringComparer.Ordinal).ToArray();
@@ -441,7 +441,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         File.WriteAllText(path, contents);
     }
 
-    private async Task<(int ExitCode, string Output)> RunDotNetAsync(string[] arguments, string? packages = null)
+    private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
+        string[] arguments, string? packages = null)
     {
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
@@ -473,8 +474,10 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             throw;
         }
 
-        var output = await stdout + await stderr;
+        var standardOutput = await stdout;
+        var standardError = await stderr;
+        var output = standardOutput + standardError;
         _output.WriteLine(output);
-        return (process.ExitCode, output);
+        return (process.ExitCode, standardOutput, standardError, output);
     }
 }

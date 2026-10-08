@@ -82,6 +82,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
+          New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
           & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
             -ci `
             -restore `
