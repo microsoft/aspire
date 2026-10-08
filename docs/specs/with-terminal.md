@@ -346,7 +346,7 @@ a successful reconnect. The floating icon is inset from the terminal's focus
 border, and the overlay intercepts input only on its visible controls. Hex1b's
 redundant "Terminal view is not connected" status is suppressed while disconnected;
 unrelated errors and selection feedback remain visible.
-The current Hex1b alpha does not support selecting or copying output while
+Hex1b 0.173.0 does not support selecting or copying output while
 disconnected; that requires upstream offline-selection support, not merely
 collapsing the banner.
 Retryable transport loss keeps the retained view above replacement mounts until
@@ -374,7 +374,7 @@ it does not lock the terminal, its creator's automation, or other viewers.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.173.0-alpha.1824.1.98d8766`. HWT1 is experimental state transfer
+exactly `0.173.0`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The vendored runtime consists of one bundled
 JavaScript file for the client and both workers, a font, and two licenses.
