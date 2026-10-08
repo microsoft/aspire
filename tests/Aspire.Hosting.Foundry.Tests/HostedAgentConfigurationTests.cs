@@ -82,16 +82,18 @@ public class HostedAgentConfigurationTests
     }
 
     [Fact]
-    public void ToProjectsAgentVersionCreationOptions_PreservesCompatibilityToolsCollection()
+    public void ToProjectsAgentVersionCreationOptions_RejectsTools()
     {
         var tool = ResponseTool.CreateWebSearchTool();
         var config = new HostedAgentConfiguration("myimage:latest") { Tools = [tool] };
         config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0"));
 
-        var options = config.ToProjectsAgentVersionCreationOptions("target");
+        var exception = Assert.Throws<NotSupportedException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
 
-        var definition = Assert.IsType<HostedAgentDefinition>(options.Definition);
-        Assert.Same(tool, Assert.Single(definition.Tools));
+        Assert.Equal(
+            "Foundry hosted agent for target resource 'target' cannot configure tools through HostedAgentConfiguration.Tools. " +
+            "The Azure AI SDK 3.x hosted-agent definition does not support tool configuration. Configure tools in the hosted agent application instead.",
+            exception.Message);
     }
 
     [Fact]

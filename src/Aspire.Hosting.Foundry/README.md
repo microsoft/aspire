@@ -195,8 +195,11 @@ In run mode, the agent runs locally with health check endpoints and OpenTelemetr
 
 With the Azure AI SDK 3.0.0-beta.3 upgrade, custom .NET hosted-agent configuration uses
 `OpenAI.Responses.ResponseTool` in `HostedAgentConfiguration.Tools` instead of the removed
-`Azure.AI.Projects.Agents.ProjectsAgentTool` type. Azure-specific prompt-agent tool types now live
-in `Azure.AI.Extensions.OpenAI`; Aspire's tool builder methods are unchanged.
+`Azure.AI.Projects.Agents.ProjectsAgentTool` type. This legacy collection must remain empty:
+the SDK no longer serializes hosted-agent tools, so Aspire rejects non-empty collections before
+creating a remote agent version. Configure tools in the hosted agent application instead.
+Azure-specific prompt-agent tool types now live in `Azure.AI.Extensions.OpenAI`;
+Aspire's prompt-agent and toolbox tool builder methods are unchanged.
 
 ## Toolbox usage
 

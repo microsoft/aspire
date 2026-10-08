@@ -40,8 +40,13 @@ public partial class HostedAgentConfiguration(string image)
     public ContentFilterConfiguration? ContentFilterConfiguration { get; set; }
 
     /// <summary>
-    /// Tools available to the hosted agent.
+    /// Legacy tool configuration for the hosted agent.
     /// </summary>
+    /// <remarks>
+    /// This collection must remain empty. The Azure AI SDK 3.x hosted-agent definition does not support
+    /// tool configuration. Non-empty collections are rejected during deployment; configure tools in
+    /// the hosted agent application instead.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ResponseTool> Tools { get; init; } = [];
 
@@ -122,8 +127,15 @@ public partial class HostedAgentConfiguration(string image)
         ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
         ValidateProtocolVersions(targetResourceName);
 
-        // The SDK's two-argument constructor leaves its compatibility Tools collection null.
-        // Use the protocol-aware constructor, which initializes all exposed collections.
+        // The SDK retains Tools for compatibility but omits it from the creation request.
+        // https://github.com/Azure/azure-sdk-for-net/blob/Azure.AI.Projects.Agents_3.0.0-beta.3/sdk/ai/Azure.AI.Projects.Agents/src/Custom/HostedAgentDefinition.cs
+        if (Tools.Count > 0)
+        {
+            throw new NotSupportedException(
+                $"Foundry hosted agent for target resource '{targetResourceName}' cannot configure tools through {nameof(HostedAgentConfiguration)}.{nameof(Tools)}. " +
+                "The Azure AI SDK 3.x hosted-agent definition does not support tool configuration. Configure tools in the hosted agent application instead.");
+        }
+
         var def = new HostedAgentDefinition(
             versions: ProtocolVersions,
             cpu: CpuString,
@@ -134,10 +146,6 @@ public partial class HostedAgentConfiguration(string image)
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
-        }
-        foreach (var tool in Tools)
-        {
-            def.Tools.Add(tool);
         }
         foreach (var envVar in EnvironmentVariables)
         {
