@@ -124,6 +124,87 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task ReadRestoreConfiguration_AdditionalProjectSourcesDoNotOverrideConfiguration(
+        bool fileBased, bool hasConfiguredSources)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var libraryPacks = workspace.CreateDirectory("library-packs");
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "apphost.cs" : "AppHost.csproj"));
+        var sources = hasConfiguredSources ? "https://custom.example/v3/index.json" : string.Empty;
+        // Point the real SDK's offline-cache import at an isolated folder so the test
+        // exercises its implicit source without changing the installed SDK.
+        await File.WriteAllTextAsync(projectFile.FullName, fileBased
+            ? $$"""
+                #:property _WorkloadLibraryPacksFolder={{MSBuildEscaping.Escape(libraryPacks.FullName)}}
+                #:property DisableImplicitLibraryPacksFolder=false
+                #:property RestoreAdditionalProjectSources={{sources}}
+                #:property DisableImplicitFrameworkReferences=true
+                #:property PublishAot=false
+                #:property PublishTrimmed=false
+                #:property SelfContained=false
+                #:property UseAppHost=false
+                Console.WriteLine("Candidate");
+                """
+            : $$"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
+                    <_WorkloadLibraryPacksFolder>{{MSBuildEscaping.Escape(libraryPacks.FullName)}}</_WorkloadLibraryPacksFolder>
+                    <DisableImplicitLibraryPacksFolder>false</DisableImplicitLibraryPacksFolder>
+                    <RestoreAdditionalProjectSources>{{sources}}</RestoreAdditionalProjectSources>
+                    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                  </PropertyGroup>
+                </Project>
+                """);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ =>
+                new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        }).BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["RestoreAdditionalProjectSources"],
+            targets: [],
+            new ProcessInvocationOptions { NoRestore = true, ExcludeRestorePackageImports = true },
+            cancellationToken);
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(output);
+        using (output)
+        {
+            Assert.Equal($"{sources};{libraryPacks.FullName}",
+                output.RootElement.GetProperty("Properties").GetProperty("RestoreAdditionalProjectSources").GetString());
+        }
+
+        var settings = await DotNetRestoreConfiguration.ReadAsync(runner, projectFile, cancellationToken);
+
+        Assert.True(settings.UsesAmbientConfiguration);
+        Assert.Empty(settings.ConfigurationOverrides);
+
+        var (afterExitCode, afterOutput) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["RestoreAdditionalProjectSources"],
+            targets: [],
+            new ProcessInvocationOptions { NoRestore = true, ExcludeRestorePackageImports = true },
+            cancellationToken);
+        Assert.Equal(0, afterExitCode);
+        Assert.NotNull(afterOutput);
+        using (afterOutput)
+        {
+            Assert.Equal($"{sources};{libraryPacks.FullName}",
+                afterOutput.RootElement.GetProperty("Properties").GetProperty("RestoreAdditionalProjectSources").GetString());
+        }
+    }
+
+    [Theory]
     [InlineData(false, true, false, false)]
     [InlineData(true, true, false, false)]
     [InlineData(false, false, false, false)]

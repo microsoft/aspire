@@ -29,7 +29,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 foreach (var property in new[]
                 {
                     "RestoreConfigFile", "RestoreRootConfigDirectory", "RestoreSources",
-                    "RestoreAdditionalProjectSources", "_RestoreSourcesOverride", "NuGetRestoreTargets"
+                    "_RestoreSourcesOverride", "NuGetRestoreTargets"
                 })
                 {
                     data.Add(fileName, property, "stable", true);
@@ -192,19 +192,22 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", false, "daily", false, true)]
-    [InlineData("apphost.cs", false, "daily", false, true)]
-    [InlineData("AppHost.csproj", true, "daily", false, true)]
-    [InlineData("apphost.cs", true, "daily", false, true)]
-    [InlineData("AppHost.csproj", true, "staging", true, true)]
-    [InlineData("apphost.cs", true, "staging", true, true)]
-    [InlineData("AppHost.csproj", true, "different-channel", false, true)]
-    [InlineData("AppHost.csproj", true, "daily", false, false)]
-    [InlineData("apphost.cs", true, "staging", true, false)]
-    [InlineData("AppHost.csproj", true, "stable", false, true)]
-    [InlineData("apphost.cs", true, "stable", false, true)]
+    [InlineData("AppHost.csproj", false, "daily", false, true, false)]
+    [InlineData("apphost.cs", false, "daily", false, true, false)]
+    [InlineData("AppHost.csproj", true, "daily", false, true, false)]
+    [InlineData("apphost.cs", true, "daily", false, true, false)]
+    [InlineData("AppHost.csproj", true, "staging", true, true, false)]
+    [InlineData("apphost.cs", true, "staging", true, true, false)]
+    [InlineData("AppHost.csproj", true, "different-channel", false, true, false)]
+    [InlineData("AppHost.csproj", true, "daily", false, false, false)]
+    [InlineData("apphost.cs", true, "staging", true, false, false)]
+    [InlineData("AppHost.csproj", true, "stable", false, true, false)]
+    [InlineData("apphost.cs", true, "stable", false, true, false)]
+    [InlineData("AppHost.csproj", true, "daily", false, true, true)]
+    [InlineData("apphost.cs", true, "daily", false, true, true)]
     public async Task UpdateAsync_UnchangedPolicyUsesNativeDiscoveryWithoutWritingConfiguration(
-        string fileName, bool hasExplicitChannel, string channelName, bool configureCache, bool updateVersions)
+        string fileName, bool hasExplicitChannel, string channelName, bool configureCache, bool updateVersions,
+        bool hasAdditionalSources)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -219,6 +222,21 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
 
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
         runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        if (hasAdditionalSources)
+        {
+            runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, _, _) =>
+            {
+                if (!properties.Contains("RestoreConfigFile", StringComparer.Ordinal))
+                {
+                    return CreatePackageEvaluation();
+                }
+
+                using var output = TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties);
+                var json = JsonNode.Parse(output.RootElement.GetRawText())!.AsObject();
+                json["Properties"]!["RestoreAdditionalProjectSources"] = "https://additional.example/v3/index.json";
+                return (0, JsonDocument.Parse(json.ToJsonString()));
+            };
+        }
         runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, explicitConfig, _, _, _) =>
         {
             Assert.Equal(projectFile.DirectoryName, directory.FullName);

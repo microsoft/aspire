@@ -13,12 +13,13 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal static class DotNetRestoreConfiguration
 {
+    // RestoreAdditionalProjectSources is additive and still uses the native configuration
+    // hierarchy. Native restore retains those sources without overriding the candidate config.
     private static readonly string[] s_configurationProperties =
     [
         "RestoreConfigFile",
         "RestoreRootConfigDirectory",
         "RestoreSources",
-        "RestoreAdditionalProjectSources",
         "_RestoreSourcesOverride"
     ];
 

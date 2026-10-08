@@ -52,7 +52,6 @@ public class DotNetRestoreConfigurationTests(ITestOutputHelper outputHelper)
     [InlineData("RestoreConfigFile")]
     [InlineData("RestoreRootConfigDirectory")]
     [InlineData("RestoreSources")]
-    [InlineData("RestoreAdditionalProjectSources")]
     [InlineData("_RestoreSourcesOverride")]
     [InlineData("NuGetRestoreTargets")]
     public async Task ReadAsync_ReportsConfigurationOverride(string propertyName)
