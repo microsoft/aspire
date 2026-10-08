@@ -2316,15 +2316,29 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(0, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_SingleFileNoBuildUsingCliBundlePassesBundleEnvironmentToSafetyBuild()
+    [Theory]
+    [InlineData("13.6.0", false)]
+    [InlineData("17.0.0-preview.1", true)]
+    [InlineData("17.0.0", true)]
+    public async Task RunAsync_SingleFileNoBuildUsingCliBundlePassesBundleEnvironmentToSafetyBuild(string hostingVersion, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
-        var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: hostingVersion);
         var bundleRoot = CreateCliBundle(out var layout);
 
         var runner = new TestDotNetCliRunner
         {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = hostingVersion,
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                })),
             BuildAsyncWithEnvironmentCallback = (projectFile, noRestore, env, _, _) =>
             {
                 Assert.Equal(appHostFile.FullName, projectFile.FullName);
@@ -2341,8 +2355,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 Assert.False(watch);
                 Assert.True(noBuild);
                 Assert.True(noRestore);
-                Assert.Equal(layout.GetManagedPath(), env![BundleDiscovery.TerminalHostPathEnvVar]);
-                Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+                Assert.Equal(
+                    supportsDirectLaunch ? layout.GetTerminalHostPath() : layout.GetManagedPath(),
+                    env![BundleDiscovery.TerminalHostPathEnvVar]);
+                Assert.Equal(supportsDirectLaunch ? string.Empty : "terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
                 return Task.FromResult(0);
             }
         };

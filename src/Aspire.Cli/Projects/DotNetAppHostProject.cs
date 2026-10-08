@@ -1520,12 +1520,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         //    no per-RID NuGet ships the terminal host today. Skipping ResolveAspireCliBundle
         //    is fine for non-CliBundle AppHosts that don't use WithTerminal() — the lease
         //    is best-effort and a missing layout just means no terminal host env vars.
-        var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
-        var appHostInfo = canQueryCliBundleProperty
-            ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
-            : null;
-        var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo?.AspireHostingVersion);
+        // File-based AppHosts also complete a safety build for --no-build, so their
+        // Hosting version is available before selecting the terminal launch contract.
+        var appHostInfo = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
+        var injectDcpAndDashboard = appHostInfo.IsUsingCliBundle;
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo.AspireHostingVersion);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
