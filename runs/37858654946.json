@@ -1,0 +1,76 @@
+{
+  "run_id": 37858654946,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37858654946",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-08T23:55:04Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20820,
+    "title": "Graduate core Azure deployment APIs to stable",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-stable-azure-deployment-apis",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20820",
+    "merged_at": "2026-10-08T23:18:00Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d3784060b37d760f3f311b03c7ac75edb4936df8",
+    "failed_sha": "22c172e589870658e4e184f5ee4039e1131fdd22",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4932ff6cfde773b9861b06af2b1dbc060915e369",
+        "message": "Graduate core pipeline APIs to stable (#20809) ## Description Graduate the existing `ASPIREPIPELINES001` core pipeline API family to stable so C# AppHosts and integration authors can use it without experimental-warning suppressions. This is an attribute-only graduation, not an API redesign or removal. Re-enumerated current `main` at `a3f44d274fe0866724aa2293f9f7fedd96786a86`: **29 attributed source declarations**, comprising 23 public types, `IDistributedApplicationBuilder.Pipeline`, and five in",
+        "html_url": "https://github.com/microsoft/aspire/commit/4932ff6cfde773b9861b06af2b1dbc060915e369",
+        "pull_request": {
+          "number": 20809,
+          "title": "Graduate core pipeline APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20809",
+          "merged_at": "2026-10-08T22:40:01Z"
+        }
+      },
+      {
+        "sha": "22c172e589870658e4e184f5ee4039e1131fdd22",
+        "message": "Graduate core Azure deployment APIs to stable (#20820) ## Description Consumers should no longer need `ASPIREAZURE001` suppressions to use the long-standing core Azure deployment APIs. This is the explicitly authorized, attribute-only graduation of `AzurePublishingContext`, `AzureEnvironmentResource`, and `AzureEnvironmentResourceExtensions.AddAzureEnvironment`, `WithLocation`, and `WithResourceGroup` in `Aspire.Hosting.Azure`. Remove obsolete `ASPIREAZURE001` suppressions from consumers that us",
+        "html_url": "https://github.com/microsoft/aspire/commit/22c172e589870658e4e184f5ee4039e1131fdd22",
+        "pull_request": {
+          "number": 20820,
+          "title": "Graduate core Azure deployment APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20820",
+          "merged_at": "2026-10-08T23:18:00Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "id": 113589480070,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37858654946/job/113589480070",
+      "classification": "flaky-test",
+      "reason": "Single structured test failure (ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput) with a build-count race assertion mismatch (Expected: 2, Actual: 3) exactly matching a previously tracked flaky test with 6 prior occurrences; unrelated to the triggering PR's Azure deployment API graduation changes.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 2\nActual:   3",
+      "stack_trace": "at Aspire.Hosting.Tests.ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\ResourceCommandServiceTests.cs:line 1770\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Hosting.TestUtilities\\Workspace\\013fficb.lhn\n| [2026-10-08T23:25:40] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-08T23:25:40] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-08T23:25:40] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.TestUtilities\n| [2026-10-08T23:25:40] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-08T23:25:40] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-08T23:25:40] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-08T23:25:40] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAEWXpf4Wb.5408\n| [2026-10-08T23:25:40] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAEWXpf4Wb.5408\n| [2026-10-08T23:25:40] Aspire.Hosting.Dcp.DcpHost Warning: No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.\n| [2026-10-08T23:25:40] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpjhjyx45e.ycm\n| [2026-10-08T23:25:40] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 5408 --detach --kubeconfig \"C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpjhjyx45e.ycm\\kubeconfig\"\n| [2026-10-08T23:25:40] Aspire.Hosting.Dcp.DcpHost Debug: A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.\n| [2026-10-08T23:25:40] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-10-08T23:25:40] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource myProject/myProject-hsgxzdqt update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-08T23:25:40] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource myProject-rebuilder/myProject-rebuilder-zwgwabyz update published: ResourceType = Executable, CreationTimeStamp = (null), State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.parentName = myProject-hsgxzdqt }, HealthReports = {  }, Commands = {  }\n| [2026-10-08T23:25:40] Aspire.Hosting.Dcp.DcpExecutor Debug: Watching over DCP Endpoint resources.\n| [2026-10-08T23:25:40] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Converting relative endpoint URLs to absolute URLs for resource 'myProject-rebuilder'.\n| [2026-10-08T23:25:40] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Added total of 0 URLs to resource 'myProject-rebuilder'\n| [2026-10-08T23:25:40] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Resource myProject-rebuilder/myProject-rebuilder-zwgwabyz update skipped because the snapshot is unchanged.\n| [2026-10-08T23:25:40] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Converting relative endpoint URLs to absolute URLs for resource 'myProject'.\n| [2026-10-08T23:25:40] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Added total of 0 URLs to",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches known recurring race condition where the rebuild command's build-output line count is observed as 3 instead of the expected 2 on Windows; test is unrelated to the PR's Azure deployment API changes and has a documented history of 6 prior occurrences with the identical assertion and line number."
+    }
+  ],
+  "causes": [
+    "aspire-hosting-resourcecommandservice-rebuild-buildcount-race"
+  ]
+}
