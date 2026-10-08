@@ -18,6 +18,7 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _isDisposing;
 
     private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
@@ -160,25 +161,36 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             });
         }
 
-        var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
-        TimeProvider.SetBrowserTimeZone(result.TimeZone);
-        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
-        TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
-
-        var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
-        if (timeFormatResult.Success)
+        try
         {
-            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
-        }
+            var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
+            TimeProvider.SetBrowserTimeZone(result.TimeZone);
+            TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
+            TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
 
-        // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
-        var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
-        if (navExpandedResult.Success)
+            var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+            if (timeFormatResult.Success)
+            {
+                TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+            }
+
+            // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
+            var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
+            if (navExpandedResult.Success)
+            {
+                _isNavMenuExpanded = navExpandedResult.Value;
+            }
+
+            await DisplayUnsecuredEndpointsMessageAsync();
+        }
+        catch (JSDisconnectedException ex)
         {
-            _isNavMenuExpanded = navExpandedResult.Value;
+            Logger.LogDebug(ex, "Dashboard layout initialization stopped because the circuit disconnected.");
         }
-
-        await DisplayUnsecuredEndpointsMessageAsync();
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Dashboard layout initialization stopped because the layout was disposed.");
+        }
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -252,21 +264,37 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (_isDisposing)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}");
-            await ThemeManager.EnsureInitializedAsync();
-            await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
-            _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
-            _layoutReference = DotNetObjectReference.Create(this);
-            _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
-            ShortcutManager.AddGlobalKeydownListener(this);
+            return;
         }
 
-        if (_pendingReturnFocusElementId is { } elementId && _openPageDialog is null)
+        try
         {
-            _pendingReturnFocusElementId = null;
-            await JS.InvokeVoidAsync("focusElement", elementId);
+            if (firstRender)
+            {
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}");
+                await ThemeManager.EnsureInitializedAsync();
+                await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
+                _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
+                _layoutReference = DotNetObjectReference.Create(this);
+                _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
+                ShortcutManager.AddGlobalKeydownListener(this);
+            }
+
+            if (_pendingReturnFocusElementId is { } elementId && _openPageDialog is null)
+            {
+                _pendingReturnFocusElementId = null;
+                await JS.InvokeVoidAsync("focusElement", elementId);
+            }
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Dashboard layout rendering stopped because the circuit disconnected.");
+        }
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Dashboard layout rendering stopped because the layout was disposed.");
         }
     }
 
@@ -542,6 +570,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _isDisposing = true;
+
         _shortcutManagerReference?.Dispose();
         _layoutReference?.Dispose();
         _themeChangedSubscription?.Dispose();
@@ -551,15 +581,14 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
-            if (_keyboardHandlers is { } h)
+            if (_keyboardHandlers is { } keyboardHandlers)
             {
-                await JS.InvokeVoidAsync("window.unregisterGlobalKeydownListener", h);
+                await JS.InvokeVoidAsync("window.unregisterGlobalKeydownListener", keyboardHandlers);
             }
         }
-        catch (JSDisconnectedException)
+        catch (JSDisconnectedException ex)
         {
-            // Per https://learn.microsoft.com/aspnet/core/blazor/javascript-interoperability/?view=aspnetcore-7.0#javascript-interop-calls-without-a-circuit
-            // this is one of the calls that will fail if the circuit is disconnected, and we just need to catch the exception so it doesn't pollute the logs
+            Logger.LogDebug(ex, "Dashboard keyboard cleanup stopped because the circuit disconnected.");
         }
 
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
