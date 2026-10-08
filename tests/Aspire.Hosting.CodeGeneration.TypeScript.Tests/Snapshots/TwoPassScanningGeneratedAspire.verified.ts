@@ -15613,7 +15613,6 @@ export interface ContainerResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -16446,7 +16445,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -18560,7 +18558,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -19984,7 +19981,6 @@ export interface CSharpAppResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -20640,7 +20636,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -22325,7 +22320,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -23779,7 +23773,6 @@ export interface DotnetToolResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -24463,7 +24456,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -26238,7 +26230,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -27645,7 +27636,6 @@ export interface ExecutableResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -28290,7 +28280,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -29955,7 +29944,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -35495,7 +35483,6 @@ export interface ProjectResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -36151,7 +36138,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -37837,7 +37823,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -39435,7 +39420,6 @@ export interface TestDatabaseResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -40268,7 +40252,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -42381,7 +42364,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -43999,7 +43981,6 @@ export interface TestRedisResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -44916,7 +44897,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -47133,7 +47113,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -49028,7 +49007,6 @@ export interface TestVaultResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -49863,7 +49841,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -51978,7 +51955,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -55718,7 +55694,6 @@ export interface ResourceWithEndpoints {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -55820,7 +55795,6 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -56224,7 +56198,6 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise {
         const path = options?.path;
