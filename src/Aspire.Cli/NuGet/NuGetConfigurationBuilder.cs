@@ -67,6 +67,39 @@ internal static class NuGetConfigurationBuilder
         return new NuGetConfiguration(settings, [], overlay);
     }
 
+    public static NuGetConfiguration RepairAspireOnlyAppHostMappings(NuGetConfiguration configuration)
+    {
+        if (configuration.Overlay is not { PackageSourceMappings.Count: > 0 } overlay ||
+            configuration.Settings.PackageSourceMappings.Count == 0 ||
+            configuration.Settings.PackageSourceMappings.SelectMany(static mapping => mapping.Patterns)
+                .Any(static pattern => !pattern.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase)))
+        {
+            return configuration;
+        }
+
+        // Aspire-only mappings also exclude unrelated packages from inherited feeds.
+        // Repair only unmapped ambient sources for the existing AppHost write approval;
+        // dynamic restores and explicitly mapped user sources retain their restrictions.
+        // https://learn.microsoft.com/nuget/consume-packages/package-source-mapping
+        var excludedKeys = configuration.Settings.PackageSourceMappings.Select(static mapping => mapping.SourceKey)
+            .Concat(overlay.RetiredSourceKeys)
+            .Concat(overlay.DisabledPackageSourceKeys)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var fallbackMappings = configuration.Settings.Sources
+            .Where(source => source.IsEnabled && !source.IsCliManaged && !excludedKeys.Contains(source.Name))
+            .Select(static source => new NuGetPackageSourceMapping(source.Name, [PackageMapping.AllPackages]))
+            .ToArray();
+        if (fallbackMappings.Length == 0)
+        {
+            return configuration;
+        }
+
+        return new NuGetConfiguration(configuration.Settings, configuration.ConfigSources, overlay with
+        {
+            PackageSourceMappings = [.. overlay.PackageSourceMappings, .. fallbackMappings]
+        });
+    }
+
     public static NuGetConfiguration Build(
         NuGetSettingsInfo settings,
         string workloadId,

@@ -200,6 +200,36 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
             parser.ParseProject(new FileInfo(projectFile)));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ParseProject_ProjectReferences_ResolvesEitherDirectorySeparator(bool absolute, bool backslashes)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var appHostDirectory = workspace.CreateDirectory("AppHost");
+        var webDirectory = workspace.CreateDirectory("Web");
+        var referencedPath = Path.Combine(webDirectory.FullName, "Web.csproj");
+        var include = absolute ? referencedPath : Path.GetRelativePath(appHostDirectory.FullName, referencedPath);
+        include = backslashes ? include.Replace('/', '\\') : include.Replace('\\', '/');
+        var projectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, $$"""
+            <Project Sdk="Aspire.AppHost.Sdk/99.0.0-unresolvable">
+              <ItemGroup>
+                <ProjectReference Include="{{include}}" />
+              </ItemGroup>
+            </Project>
+            """);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        using var result = parser.ParseProject(projectFile);
+
+        var reference = Assert.Single(result.RootElement.GetProperty("Items").GetProperty("ProjectReference").EnumerateArray());
+        Assert.Equal(include, reference.GetProperty("Identity").GetString());
+        Assert.Equal(referencedPath, reference.GetProperty("FullPath").GetString());
+    }
+
     [Fact]
     public async Task ParseProject_SingleFileAppHost_ExtractsAspireAppHostSdk()
     {

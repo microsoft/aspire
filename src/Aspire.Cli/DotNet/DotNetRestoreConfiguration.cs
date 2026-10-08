@@ -28,6 +28,16 @@ internal static class DotNetRestoreConfiguration
         FileInfo projectFile,
         CancellationToken cancellationToken)
     {
+        return await TryReadAsync(runner, projectFile, cancellationToken) ??
+            throw new ProjectUpdaterException(
+                string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedFetchItemsAndPropertiesFormat, projectFile.FullName));
+    }
+
+    internal static async Task<DotNetRestoreSettings?> TryReadAsync(
+        IDotNetCliRunner runner,
+        FileInfo projectFile,
+        CancellationToken cancellationToken)
+    {
         var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
             items: [],
@@ -53,8 +63,8 @@ internal static class DotNetRestoreConfiguration
             cancellationToken);
         if (exitCode != 0 || output is null)
         {
-            throw new ProjectUpdaterException(
-                string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedFetchItemsAndPropertiesFormat, projectFile.FullName));
+            output?.Dispose();
+            return null;
         }
 
         using (output)

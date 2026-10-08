@@ -43,9 +43,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 await DotNetAppHostUpdateTransaction.ReadAsync(normalizedPath, cancellationToken));
         }
 
-        var restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(context, cancellationToken);
-        var configuration = context.HasExplicitChannel && channel.Type == PackageChannelType.Explicit &&
-            restoreConfiguration is { UsesAmbientConfiguration: true }
+        var restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(context, allowFailedEvaluation: true, cancellationToken);
+        var hasExplicitChannelPolicy = context.HasExplicitChannel && channel.Type == PackageChannelType.Explicit;
+        var restoreConfigurationDeferred = hasExplicitChannelPolicy && restoreConfiguration is null;
+        // An unresolved SDK permits discovery through a provisional policy, not permission to
+        // persist it. Reevaluate the real project after SDK repair inside the transaction.
+        var configuration = hasExplicitChannelPolicy
             ? channel.Name == PackageChannelNames.Stable && executionContext.NuGetServiceIndexOverride is null
                 ? NuGetConfigurationBuilder.BuildStableAppHostConfiguration(
                     ambientSettings, AppHostWorkloadId.Create(projectFile.DirectoryName!), channel)
@@ -57,6 +60,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     executionContext.NuGetServiceIndexOverride,
                     cancellationToken)
             : null;
+        if (configuration is not null)
+        {
+            configuration = NuGetConfigurationBuilder.RepairAspireOnlyAppHostMappings(configuration);
+        }
         if (configuration is { HasSourcePolicyChanges: false })
         {
             if (!channel.ConfigureGlobalPackagesFolder)
@@ -114,6 +121,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         if (updateSteps.Length == 0 && configuration is null)
         {
+            if (restoreConfigurationDeferred)
+            {
+                await ReadRestoreConfigurationForUpdateAsync(context, allowFailedEvaluation: false, cancellationToken);
+            }
             logger.LogInformation("No updates required for project: {ProjectFile}", projectFile.FullName);
             interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
             return new ProjectUpdateResult { UpdatedApplied = false };
@@ -232,12 +243,22 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         try
         {
             await transaction.VerifyAsync(cancellationToken);
-            using var restorePreview = configurationCandidate is null
+            using var restorePreview = configurationCandidate is null || restoreConfigurationDeferred
                 ? null
                 : await DotNetAppHostRestorePreview.CreateAsync(
                     nuGetService, configurationCandidate, restoreConfiguration!, projectFile,
                     updatePlan.ProjectRestoreTargets, cancellationToken);
-            var candidatePackageConfiguration = restorePreview?.RootConfiguration ?? preview;
+            // SDK acquisition needs the frozen candidate hierarchy but not evaluated MSBuild
+            // restore targets. Those are unavailable until the missing SDK has been repaired.
+            using var repairReplacement = restoreConfigurationDeferred && configurationCandidate is not null
+                ? await TemporaryNuGetConfigFile.CreatePreviewAsync(
+                    configurationCandidate.TargetFile, configurationCandidate.ProposedContent, cancellationToken)
+                : null;
+            using var repairConfiguration = repairReplacement is null
+                ? null
+                : await nuGetService.CreateConfigurationPreviewAsync(
+                    projectFile.Directory!, configurationCandidate!.TargetFile, repairReplacement.ConfigFile, cancellationToken);
+            var candidatePackageConfiguration = restorePreview?.RootConfiguration ?? repairConfiguration ?? preview;
             var candidateSteps = projectUpdateSteps.Where(static step => step is PackageUpdateStep).ToArray();
             var requiresRestore = candidateSteps.Length > 0 || configurationCandidate is not null;
 
@@ -257,6 +278,31 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     });
             }
 
+            var sdkRepairStep = restoreConfigurationDeferred
+                ? candidateSteps.OfType<PackageUpdateStep>().FirstOrDefault(static step => step.PackageId == "Aspire.AppHost.Sdk")
+                : null;
+            if (sdkRepairStep is not null)
+            {
+                await interactionService.ShowStatusAsync(
+                    UpdateCommandStrings.ApplyingUpdates,
+                    async () =>
+                    {
+                        interactionService.DisplaySubtleMessage(string.Format(
+                            CultureInfo.InvariantCulture, UpdateCommandStrings.ExecutingUpdateStepFormat, sdkRepairStep.Description));
+                        await transaction.ApplyAsync(sdkRepairStep.Files, sdkRepairStep.Callback, cancellationToken);
+                        return 0;
+                    });
+            }
+            if (restoreConfigurationDeferred)
+            {
+                restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(context, allowFailedEvaluation: false, cancellationToken);
+            }
+            using var repairedRestorePreview = restoreConfigurationDeferred && configurationCandidate is not null
+                ? await DotNetAppHostRestorePreview.CreateAsync(
+                    nuGetService, configurationCandidate, restoreConfiguration!, projectFile,
+                    updatePlan.ProjectRestoreTargets, cancellationToken)
+                : null;
+
             interactionService.DisplayEmptyLine();
             await interactionService.ShowStatusAsync(
                 UpdateCommandStrings.ApplyingUpdates,
@@ -264,6 +310,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 {
                     foreach (var updateStep in candidateSteps)
                     {
+                        if (ReferenceEquals(updateStep, sdkRepairStep))
+                        {
+                            continue;
+                        }
                         interactionService.DisplaySubtleMessage(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.ExecutingUpdateStepFormat, updateStep.Description));
                         await transaction.ApplyAsync(updateStep.Files, updateStep.Callback, cancellationToken);
                     }
@@ -281,7 +331,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                         await transaction.VerifyAsync(cancellationToken);
                         var restoreExitCode = await runner.RestoreAsync(projectFile, new()
                         {
-                            NuGetRestoreTargetsFile = restorePreview?.TargetsFile
+                            NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile
                         }, cancellationToken);
                         if (restoreExitCode != 0)
                         {
@@ -336,6 +386,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<DotNetRestoreSettings?> ReadRestoreConfigurationForUpdateAsync(
         UpdatePackagesContext context,
+        bool allowFailedEvaluation,
         CancellationToken cancellationToken)
     {
         if (!context.HasExplicitChannel || context.Channel.Type != PackageChannelType.Explicit)
@@ -343,7 +394,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return null;
         }
 
-        var settings = await DotNetRestoreConfiguration.ReadAsync(runner, context.AppHostFile, cancellationToken);
+        var settings = allowFailedEvaluation
+            ? await DotNetRestoreConfiguration.TryReadAsync(runner, context.AppHostFile, cancellationToken)
+            : await DotNetRestoreConfiguration.ReadAsync(runner, context.AppHostFile, cancellationToken);
+        if (settings is null)
+        {
+            logger.LogWarning(
+                "Could not evaluate restore policy for '{ProjectFile}'. Validation is deferred until the SDK is repaired.",
+                context.AppHostFile.FullName);
+            return null;
+        }
 
         if (!settings.UsesAmbientConfiguration)
         {
@@ -1695,6 +1755,25 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                         interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.MappingRetainedFormat, pattern));
                     }
                 }
+            }
+            interactionService.DisplayEmptyLine();
+        }
+
+        // A local mapping can reference an inherited feed without copying its URL or
+        // credentials. Include these mapping-only changes in the ordinary approval.
+        var displayedSourceKeys = changes.AddedFeeds.Concat(changes.RemovedFeeds).Concat(changes.RetainedFeeds)
+            .Select(static feed => feed.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var mappingChange in changes.MappingChanges.Where(change =>
+            !displayedSourceKeys.Contains(change.SourceKey) && changes.ProposedMappings.ContainsKey(change.SourceKey)))
+        {
+            interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.RetainedFeedFormat, mappingChange.SourceKey));
+            foreach (var pattern in mappingChange.AddedPatterns)
+            {
+                interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.MappingAddedFormat, pattern));
+            }
+            foreach (var pattern in mappingChange.RemovedPatterns)
+            {
+                interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.MappingRemovedFormat, pattern));
             }
             interactionService.DisplayEmptyLine();
         }
