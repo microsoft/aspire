@@ -3772,48 +3772,24 @@ const DockerfileBuilderPromiseImpl = $aspireCreateFluentPromiseClass<DockerfileB
 /** Provides context information for Dockerfile build callbacks. */
 export interface DockerfileBuilderCallbackContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the resource being built.
-     * @experimental
-     */
+    /** Gets the resource being built. */
     resource(): ResourcePromise;
-    /**
-     * Gets the Dockerfile builder instance.
-     * @experimental
-     */
+    /** Gets the Dockerfile builder instance. */
     builder(): DockerfileBuilderPromise;
-    /**
-     * Gets the service provider for dependency injection.
-     * @experimental
-     */
+    /** Gets the service provider for dependency injection. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the cancellation token to observe while waiting for the task to complete.
-     * @experimental
-     */
+    /** Gets the cancellation token to observe while waiting for the task to complete. */
     cancellationToken(): Promise<CancellationToken>;
 }
 
 export interface DockerfileBuilderCallbackContextPromise extends PromiseLike<DockerfileBuilderCallbackContext> {
-    /**
-     * Gets the resource being built.
-     * @experimental
-     */
+    /** Gets the resource being built. */
     resource(): ResourcePromise;
-    /**
-     * Gets the Dockerfile builder instance.
-     * @experimental
-     */
+    /** Gets the Dockerfile builder instance. */
     builder(): DockerfileBuilderPromise;
-    /**
-     * Gets the service provider for dependency injection.
-     * @experimental
-     */
+    /** Gets the service provider for dependency injection. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the cancellation token to observe while waiting for the task to complete.
-     * @experimental
-     */
+    /** Gets the cancellation token to observe while waiting for the task to complete. */
     cancellationToken(): Promise<CancellationToken>;
 }
 
@@ -9597,7 +9573,6 @@ export interface DistributedApplicationBuilder {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -9828,7 +9803,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -10201,7 +10175,6 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
         const stage = options?.stage;
@@ -12826,7 +12799,6 @@ export interface ContainerRegistryResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
@@ -13156,7 +13128,6 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
@@ -13520,7 +13491,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise {
         const buildImage = options?.buildImage;
@@ -15005,7 +14975,6 @@ export interface ContainerResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -15024,7 +14993,6 @@ export interface ContainerResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     /**
@@ -15835,7 +15803,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     /**
@@ -15854,7 +15821,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     /**
@@ -16969,7 +16935,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
         const stage = options?.stage;
@@ -17004,7 +16969,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise {
         const buildImage = options?.buildImage;
@@ -19378,7 +19342,6 @@ export interface CSharpAppResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
@@ -20031,7 +19994,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     /**
@@ -20718,7 +20680,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise {
         const buildImage = options?.buildImage;
@@ -23130,7 +23091,6 @@ export interface DotnetToolResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
@@ -23811,7 +23771,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     /**
@@ -24526,7 +24485,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise {
         const buildImage = options?.buildImage;
@@ -27026,7 +26984,6 @@ export interface ExecutableResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
@@ -27668,7 +27625,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /**
@@ -28351,7 +28307,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise {
         const buildImage = options?.buildImage;
@@ -30721,7 +30676,6 @@ export interface ExternalServiceResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
@@ -31056,7 +31010,6 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
     /**
@@ -31425,7 +31378,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise {
         const buildImage = options?.buildImage;
@@ -32768,7 +32720,6 @@ export interface ParameterResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
@@ -33111,7 +33062,6 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /**
@@ -33489,7 +33439,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise {
         const buildImage = options?.buildImage;
@@ -34850,7 +34799,6 @@ export interface ProjectResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
@@ -35503,7 +35451,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     /**
@@ -36191,7 +36138,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise {
         const buildImage = options?.buildImage;
@@ -38770,7 +38716,6 @@ export interface TestDatabaseResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     /**
@@ -38789,7 +38734,6 @@ export interface TestDatabaseResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     /**
@@ -39600,7 +39544,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     /**
@@ -39619,7 +39562,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     /**
@@ -40733,7 +40675,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
         const stage = options?.stage;
@@ -40768,7 +40709,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise {
         const buildImage = options?.buildImage;
@@ -43309,7 +43249,6 @@ export interface TestRedisResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     /**
@@ -43328,7 +43267,6 @@ export interface TestRedisResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     /**
@@ -44223,7 +44161,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     /**
@@ -44242,7 +44179,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     /**
@@ -45440,7 +45376,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
         const stage = options?.stage;
@@ -45475,7 +45410,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise {
         const buildImage = options?.buildImage;
@@ -48345,7 +48279,6 @@ export interface TestVaultResource {
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     /**
@@ -48364,7 +48297,6 @@ export interface TestVaultResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     /**
@@ -49177,7 +49109,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     /**
@@ -49196,7 +49127,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     /**
@@ -50312,7 +50242,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {
         const stage = options?.stage;
@@ -50347,7 +50276,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise {
         const buildImage = options?.buildImage;
@@ -53021,7 +52949,6 @@ export interface Resource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
@@ -53351,7 +53278,6 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
@@ -53716,7 +53642,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise {
         const buildImage = options?.buildImage;

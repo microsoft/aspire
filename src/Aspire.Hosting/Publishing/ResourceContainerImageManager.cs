@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREPROJECTS001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREEXTENSION001
 
 using System.Diagnostics.CodeAnalysis;
