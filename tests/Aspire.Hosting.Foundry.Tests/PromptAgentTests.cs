@@ -17,6 +17,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
+using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -24,6 +25,42 @@ namespace Aspire.Hosting.Foundry.Tests;
 
 public class PromptAgentTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task ToolResources_SerializeInPromptAgentDefinition()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account").AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+        var searchTool = project.AddAISearchTool("search-tool").WithReference(search);
+        searchTool.Resource.IndexName = "docs";
+        searchTool.Resource.Connection!.Outputs["id"] = "/connections/search";
+        var bingConnection = project.AddBingGroundingConnection("bing-connection", "/bing/resource");
+        bingConnection.Resource.Outputs["id"] = "/connections/bing";
+        var bingTool = project.AddBingGroundingTool("bing").WithReference(bingConnection);
+        var sharePoint = project.AddSharePointTool("sharepoint", "/connections/sharepoint");
+        var fabric = project.AddFabricTool("fabric", "/connections/fabric");
+        var function = project.AddAzureFunctionTool(
+            "function", "get_weather", "Get the weather.",
+            BinaryData.FromString("""{"type":"object","properties":{"city":{"type":"string"}}}"""),
+            "https://storage.queue.core.windows.net", "input",
+            "https://storage.queue.core.windows.net", "output");
+        var definition = new DeclarativeAgentDefinition("gpt-4.1")
+        {
+            Tools =
+            {
+                await searchTool.Resource.ToAgentToolAsync(),
+                await bingTool.Resource.ToAgentToolAsync(),
+                await sharePoint.Resource.ToAgentToolAsync(),
+                await fabric.Resource.ToAgentToolAsync(),
+                await function.Resource.ToAgentToolAsync()
+            }
+        };
+        var options = new ProjectsAgentVersionCreationOptions(definition);
+
+        await Verify(ModelReaderWriter.Write(
+            options, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default).ToString(), "json");
+    }
+
     [Fact]
     public void AddPromptAgent_CreatesResource()
     {

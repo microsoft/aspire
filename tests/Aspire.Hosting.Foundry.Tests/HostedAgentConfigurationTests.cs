@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable OPENAI001 // Responses tools are experimental.
+
 using System.ClientModel.Primitives;
 using System.Text.Json.Nodes;
 using Azure.AI.Projects.Agents;
+using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
@@ -76,6 +79,19 @@ public class HostedAgentConfigurationTests
 
         Assert.NotNull(options);
         Assert.Equal("Test agent", options.Description);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_PreservesCompatibilityToolsCollection()
+    {
+        var tool = ResponseTool.CreateWebSearchTool();
+        var config = new HostedAgentConfiguration("myimage:latest") { Tools = [tool] };
+        config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0"));
+
+        var options = config.ToProjectsAgentVersionCreationOptions("target");
+
+        var definition = Assert.IsType<HostedAgentDefinition>(options.Definition);
+        Assert.Same(tool, Assert.Single(definition.Tools));
     }
 
     [Fact]

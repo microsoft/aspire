@@ -5,6 +5,7 @@ using System.ClientModel.Primitives;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects.Agents;
 
 namespace Aspire.Hosting.Foundry;
@@ -398,34 +399,17 @@ internal sealed class FoundryToolboxAzureAISearchToolDefinition : FoundryToolbox
             IndexName = IndexName
         };
         var options = new AzureAISearchToolOptions([index]);
-        var unnamedTool = new AzureAISearchTool(options);
-        var unnamedJson = ModelReaderWriter.Write(
-            unnamedTool,
+        // Use the toolbox model directly: Responses tools can drop toolbox-specific fields
+        // during HTTP serialization. See https://github.com/microsoft/aspire/issues/20778.
+        var tool = new AzureAISearchToolboxTool(options)
+        {
+            Name = Name,
+            Description = Description
+        };
+        var json = ModelReaderWriter.Write(
+            tool,
             ModelReaderWriterOptions.Json,
             AzureAIProjectsAgentsContext.Default);
-        using var unnamedDocument = JsonDocument.Parse(unnamedJson);
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
-        {
-            writer.WriteStartObject();
-            foreach (var property in unnamedDocument.RootElement.EnumerateObject())
-            {
-                property.WriteTo(writer);
-            }
-            writer.WriteString("name", Name);
-            if (Description is not null)
-            {
-                writer.WriteString("description", Description);
-            }
-            writer.WriteEndObject();
-        }
-
-        var json = BinaryData.FromBytes(stream.ToArray());
-        var tool = ModelReaderWriter.Read<ToolboxTool>(
-            json,
-            ModelReaderWriterOptions.Json,
-            AzureAIProjectsAgentsContext.Default)!;
-
         return new ResolvedFoundryToolboxTool(Name, tool, json.ToString());
     }
 }

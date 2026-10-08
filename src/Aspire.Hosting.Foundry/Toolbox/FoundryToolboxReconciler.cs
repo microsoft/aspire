@@ -4,6 +4,7 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
 using System.IO.Hashing;
+using System.Reflection;
 using System.Text.Json;
 using Azure.AI.Projects.Agents;
 
@@ -106,7 +107,9 @@ internal sealed class FoundryToolboxDeploymentDefinition
             }
         }
 
-        var configurationHash = ComputeConfigurationHash(description, tools, metadata);
+        var hostingVersion = typeof(FoundryToolboxDeploymentDefinition).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        var configurationHash = ComputeConfigurationHash(description, tools, metadata, hostingVersion);
         return new(name, description, tools, metadata, configurationHash);
     }
 
@@ -122,15 +125,20 @@ internal sealed class FoundryToolboxDeploymentDefinition
         return metadata;
     }
 
-    private static string ComputeConfigurationHash(
+    internal static string ComputeConfigurationHash(
         string description,
         IReadOnlyList<ResolvedFoundryToolboxTool> tools,
-        IReadOnlyDictionary<string, string> metadata)
+        IReadOnlyDictionary<string, string> metadata,
+        string hostingVersion)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
             writer.WriteStartObject();
+            // Older SDKs could persist different tool fields despite the same intended configuration.
+            // Include the complete build identity (e.g. 17.0.0-preview.1+commit) so integration upgrades
+            // refresh those immutable versions. See https://github.com/microsoft/aspire/issues/20778.
+            writer.WriteString("hostingVersion", hostingVersion);
             writer.WriteString("description", description);
             writer.WriteStartObject("metadata");
             foreach (var item in metadata.OrderBy(item => item.Key, StringComparer.Ordinal))

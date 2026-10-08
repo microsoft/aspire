@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Azure.AI.Projects.Agents;
+using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -42,7 +43,7 @@ public partial class HostedAgentConfiguration(string image)
     /// Tools available to the hosted agent.
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ProjectsAgentTool> Tools { get; init; } = [];
+    public IList<ResponseTool> Tools { get; init; } = [];
 
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
@@ -121,16 +122,15 @@ public partial class HostedAgentConfiguration(string image)
         ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
         ValidateProtocolVersions(targetResourceName);
 
+        // The SDK's two-argument constructor leaves its compatibility Tools collection null.
+        // Use the protocol-aware constructor, which initializes all exposed collections.
         var def = new HostedAgentDefinition(
+            versions: ProtocolVersions,
             cpu: CpuString,
             memory: MemoryString)
         {
             ContainerConfiguration = new ContainerConfiguration(Image)
         };
-        foreach (var protocolVersion in ProtocolVersions)
-        {
-            def.Versions.Add(protocolVersion);
-        }
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
