@@ -412,6 +412,8 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             "daily", PackageChannelQuality.Both, [new("Aspire*", newFeed.FullName)],
             provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
 
+        // NUGET_PACKAGES can override the fixture's configured globalPackagesFolder.
+        var globalPackagesFolder = provider.GetRequiredService<BundleNuGetService>().GetGlobalPackagesFolder(appHostDirectory);
         var result = await provider.GetRequiredService<IProjectUpdater>().UpdateProjectAsync(
             CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
 
@@ -422,7 +424,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         using var parsedWeb = provider.GetRequiredService<FallbackProjectParser>().ParseProject(webProject);
         var package = Assert.Single(parsedWeb.RootElement.GetProperty("Items").GetProperty("PackageReference").EnumerateArray());
         Assert.Equal(newVersion, package.GetProperty("Version").GetString());
-        Assert.True(File.Exists(Path.Combine(packageCache.FullName, "aspire.apphost.sdk", newVersion, "Sdk", "Sdk.props")));
+        Assert.True(File.Exists(Path.Combine(globalPackagesFolder, "aspire.apphost.sdk", newVersion, "Sdk", "Sdk.props")));
         Assert.Equal([newFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, packageId));
     }
 
