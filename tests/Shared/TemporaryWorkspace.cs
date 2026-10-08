@@ -2,9 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Text;
 using Xunit;
 
 using IOPath = System.IO.Path;
@@ -19,113 +16,13 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
 
     public DirectoryInfo WorkspaceRoot => workspaceDirectory;
 
+    public ITestOutputHelper TestOutputHelper => outputHelper;
+
     public string Path => workspaceDirectory.FullName;
 
     public DirectoryInfo CreateDirectory(string name)
     {
         return workspaceDirectory.CreateSubdirectory(name);
-    }
-
-    public async Task InitializeGitAsync(CancellationToken cancellationToken = default)
-    {
-        outputHelper.WriteLine($"Initializing git repository at: {workspaceDirectory.FullName}");
-
-        await RunGitAsync(workspaceDirectory.FullName, outputHelper, ["init"], cancellationToken);
-    }
-
-    internal static async Task RunGitAsync(string workingDirectory, ITestOutputHelper outputHelper, string[] arguments, CancellationToken cancellationToken)
-    {
-        var command = $"git {string.Join(' ', arguments)}";
-        var stopwatch = Stopwatch.StartNew();
-        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] Starting '{command}' in '{workingDirectory}'");
-
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, TestContext.Current.CancellationToken, timeout.Token);
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo("git", arguments)
-            {
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        try
-        {
-            process.Start();
-        }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 2 && Directory.Exists(workingDirectory))
-        {
-            outputHelper.WriteLine($"Failed to start git: {ex}");
-            Assert.Skip("git is required for this test but was not found on PATH.");
-        }
-
-        outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' started with PID {process.Id} after {stopwatch.Elapsed}");
-
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
-
-        // Drain both pipes while Git runs: waiting for exit first can deadlock if either
-        // pipe fills. Log each line immediately so output survives a timeout.
-        var stdoutTask = ReadOutputAsync(process.StandardOutput, stdout, "stdout");
-        var stderrTask = ReadOutputAsync(process.StandardError, stderr, "stderr");
-
-        try
-        {
-            await Task.WhenAll(process.WaitForExitAsync(cancellation.Token), stdoutTask, stderrTask);
-        }
-        catch (OperationCanceledException)
-        {
-            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {(timeout.IsCancellationRequested ? "timed out" : "was canceled")} after {stopwatch.Elapsed}");
-
-            // Disposing Process does not stop it. Request tree termination and reap the root
-            // before workspace disposal. HasExited can change between the check and Kill.
-            try
-            {
-                if (!process.HasExited)
-                {
-                    process.Kill(entireProcessTree: true);
-                }
-            }
-            catch (Exception ex) when ((ex is InvalidOperationException or Win32Exception) && process.HasExited)
-            {
-                outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) exited during termination: {ex.Message}");
-            }
-
-            // WaitForExitAsync observes only the root, not every descendant. Tree cleanup is
-            // best-effort; strict containment would require process groups or Windows jobs.
-            // https://learn.microsoft.com/dotnet/api/system.diagnostics.process.kill#remarks
-            await process.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None);
-            if (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !TestContext.Current.CancellationToken.IsCancellationRequested)
-            {
-                throw new TimeoutException($"'{command}' in '{workingDirectory}' (PID {process.Id}) timed out after 30 seconds.");
-            }
-
-            throw;
-        }
-        finally
-        {
-            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) finished after {stopwatch.Elapsed}; exit code: {(process.HasExited ? process.ExitCode.ToString() : "still running")}");
-        }
-
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"'{command}' in '{workingDirectory}' failed with exit code {process.ExitCode}. stdout: {stdout}, stderr: {stderr}");
-        }
-
-        async Task ReadOutputAsync(StreamReader reader, StringBuilder capturedOutput, string streamName)
-        {
-            while (await reader.ReadLineAsync(cancellation.Token) is { } line)
-            {
-                capturedOutput.AppendLine(line);
-                outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {streamName}: {line}");
-            }
-
-            outputHelper.WriteLine($"[{DateTimeOffset.UtcNow:O}] '{command}' (PID {process.Id}) {streamName} closed");
-        }
     }
 
     public void Dispose()

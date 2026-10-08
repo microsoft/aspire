@@ -18,5 +18,5 @@ internal static class GitTestHelper
     }
 
     public static Task RunGitAsync(string workingDirectory, ITestOutputHelper outputHelper, params string[] arguments) =>
-        TemporaryWorkspace.RunGitAsync(workingDirectory, outputHelper, arguments, TestContext.Current.CancellationToken);
+        TemporaryWorkspaceGitExtensions.RunGitAsync(workingDirectory, outputHelper, arguments, TestContext.Current.CancellationToken);
 }
