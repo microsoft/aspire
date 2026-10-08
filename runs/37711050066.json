@@ -1,0 +1,131 @@
+{
+  "run_id": 37711050066,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37711050066",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-08T02:47:20Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20754,
+    "title": "Add SQL highlighting to the dashboard text visualizer",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "dashboard-sql-highlighting",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20754",
+    "merged_at": "2026-10-08T01:04:13Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "5fe0414b35947a218afd2017f24053d4cc5bc9cf",
+    "failed_sha": "5d7a8798a9cb901ea26fb9860cb1221a6f510880",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "d2b0c75dd0648beecb6d5f51e25b57930f370ac4",
+        "message": "ci: enforce actionlint for handwritten workflows (#20610) ## Description **Handwritten GitHub Actions workflow errors can currently merge without a blocking schema and expression check.** ### What the Actionlint gate does This adds Actionlint v1.7.12 directly to the main CI workflow. The job: - Runs on `ubuntu-latest` on every normal CI invocation, not only when workflow files change. - Lints all 59 handwritten top-level workflow files under `.github/workflows` through `lint-handwritten-workflow",
+        "html_url": "https://github.com/microsoft/aspire/commit/d2b0c75dd0648beecb6d5f51e25b57930f370ac4",
+        "pull_request": {
+          "number": 20610,
+          "title": "ci: enforce actionlint for handwritten workflows",
+          "url": "https://github.com/microsoft/aspire/pull/20610",
+          "merged_at": "2026-10-07T15:53:06Z"
+        }
+      },
+      {
+        "sha": "1bb4bd4a9180ad8c3da011a38a484778e993403a",
+        "message": "Update PackageValidationBaselineVersion to 13.6.1 (#20785) This PR updates the stable release baseline and first-party Nix flake manifest to Aspire CLI `13.6.1` after the release assets were uploaded to GitHub. ## Changes - Updated `src/Directory.Build.props` with the new package validation baseline version. - Updated `eng/nix/versions.json` to point at the versioned GitHub release archives. - Pinned the official `.sha512` checksum assets as Nix SRI hashes. --- *Created automatically by the rele",
+        "html_url": "https://github.com/microsoft/aspire/commit/1bb4bd4a9180ad8c3da011a38a484778e993403a",
+        "pull_request": {
+          "number": 20785,
+          "title": "Update PackageValidationBaselineVersion to 13.6.1",
+          "url": "https://github.com/microsoft/aspire/pull/20785",
+          "merged_at": "2026-10-07T17:52:20Z"
+        }
+      },
+      {
+        "sha": "6a47a8c7a1a3925cc3e6881226364ef7d02ed5d6",
+        "message": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension (#20789) Bumps [source-map-js](https://github.com/7rulnik/source-map-js) from 1.2.1 to 1.2.2. <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/7rulnik/source-map-js/releases\">source-map-js's releases</a>.</em></p> <blockquote> <h2>v1.2.2</h2> <ul> <li> <p>Fix crash when executing in browser with CSP script-src that don't permit unsafe-eval (<a href=\"https://redirect.github.com/7rulnik/source-map-js/pul",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a47a8c7a1a3925cc3e6881226364ef7d02ed5d6",
+        "pull_request": {
+          "number": 20789,
+          "title": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension",
+          "url": "https://github.com/microsoft/aspire/pull/20789",
+          "merged_at": "2026-10-07T18:05:14Z"
+        }
+      },
+      {
+        "sha": "e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+        "message": "Prepare VS Code extension release v1.24.0 (#20793) ## VS Code Extension Release v1.24.0 **Version bump:** 1.23.0 → 1.24.0 **Commit range:** [`41d7fa2`](https://github.com/microsoft/aspire/commit/41d7fa2c42761b63a694099fdca7eab49718ffd5)..[`d2b0c75`](https://github.com/microsoft/aspire/commit/d2b0c75dd0648beecb6d5f51e25b57930f370ac4) **Baseline:** VS Code Marketplace v1.23.0 (from the shipped VSIX `extension/.version`) ### Proposed release notes (deterministic fallback) The `extension-changelog` ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+        "pull_request": {
+          "number": 20793,
+          "title": "Prepare VS Code extension release v1.24.0",
+          "url": "https://github.com/microsoft/aspire/pull/20793",
+          "merged_at": "2026-10-07T18:36:13Z"
+        }
+      },
+      {
+        "sha": "92a66a541b19c5b6347d551ab76053177b7b1217",
+        "message": "Improve dev tunnel startup and lifecycle tracking (#20658) ## Description Dev tunnel resources can remain unready long after `devtunnel host` has established the tunnel. This makes dashboard status misleading and delays applications waiting for the tunnel's public endpoints. Restarting an existing tunnel also repeats unnecessary management operations before the host process can launch. This change observes the local host's console output to publish tunnel and port readiness promptly, while retai",
+        "html_url": "https://github.com/microsoft/aspire/commit/92a66a541b19c5b6347d551ab76053177b7b1217",
+        "pull_request": {
+          "number": 20658,
+          "title": "Improve dev tunnel startup and lifecycle tracking",
+          "url": "https://github.com/microsoft/aspire/pull/20658",
+          "merged_at": "2026-10-07T18:50:35Z"
+        }
+      },
+      {
+        "sha": "052b2a80dcc34ee7dd00b397ef915befd9c85742",
+        "message": "Bump proxy-addr from 2.0.7 to 2.0.8 in /extension (#20757) Bumps [proxy-addr](https://github.com/jshttp/proxy-addr) from 2.0.7 to 2.0.8. <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/jshttp/proxy-addr/releases\">proxy-addr's releases</a>.</em></p> <blockquote> <h2>2.0.8</h2> <h2>Important</h2> <ul> <li>Fix <a href=\"https://www.cve.org/CVERecord?id=CVE-2026-90711\">CVE-2026-90711</a> (<a href=\"https://github.com/jshttp/proxy-addr/security/advisories/GHSA",
+        "html_url": "https://github.com/microsoft/aspire/commit/052b2a80dcc34ee7dd00b397ef915befd9c85742",
+        "pull_request": {
+          "number": 20757,
+          "title": "Bump proxy-addr from 2.0.7 to 2.0.8 in /extension",
+          "url": "https://github.com/microsoft/aspire/pull/20757",
+          "merged_at": "2026-10-07T20:38:21Z"
+        }
+      },
+      {
+        "sha": "0a72207d7b6a11673236bcd37f3c8eb4e5a6206a",
+        "message": "Format dashboard record counts for the active culture (#20753)",
+        "html_url": "https://github.com/microsoft/aspire/commit/0a72207d7b6a11673236bcd37f3c8eb4e5a6206a",
+        "pull_request": {
+          "number": 20753,
+          "title": "Format dashboard record counts for the active culture",
+          "url": "https://github.com/microsoft/aspire/pull/20753",
+          "merged_at": "2026-10-08T00:08:53Z"
+        }
+      },
+      {
+        "sha": "5d7a8798a9cb901ea26fb9860cb1221a6f510880",
+        "message": "Add SQL highlighting to the dashboard text visualizer (#20754)",
+        "html_url": "https://github.com/microsoft/aspire/commit/5d7a8798a9cb901ea26fb9860cb1221a6f510880",
+        "pull_request": {
+          "number": 20754,
+          "title": "Add SQL highlighting to the dashboard text visualizer",
+          "url": "https://github.com/microsoft/aspire/pull/20754",
+          "merged_at": "2026-10-08T01:04:13Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 113114139315,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37711050066/job/113114139315",
+      "classification": "transient-infra",
+      "reason": "Test host process was killed with SIGKILL (exit code 137) during the macOS Aspire.Cli.Tests run; 1997/2017 tests succeeded, 20 skipped, 0 failed. This is an infrastructure-level process kill, not a test assertion failure, matching a recurring prior cause.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-sigkill-137"
+  ]
+}
