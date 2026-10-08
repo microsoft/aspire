@@ -9800,7 +9800,6 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @experimental
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10033,7 +10032,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @experimental
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10544,7 +10542,6 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
-     * @experimental
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;

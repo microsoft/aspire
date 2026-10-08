@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREEXTENSION001 // Debug support APIs are experimental.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
-#pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental.
 
 using System.Reflection;
 using System.Text.Json;

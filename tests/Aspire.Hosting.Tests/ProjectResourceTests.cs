@@ -5,7 +5,6 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIRECSHARPAPPS001
 #pragma warning disable ASPIREEXTENSION001
 
 using System.Text;

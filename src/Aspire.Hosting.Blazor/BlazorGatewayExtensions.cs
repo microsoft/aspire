@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
-#pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
 #pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject is experimental
 #pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental

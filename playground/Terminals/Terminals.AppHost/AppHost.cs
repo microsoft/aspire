@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-// This playground intentionally exercises the experimental terminal and file-based app APIs.
-#pragma warning disable ASPIRETERMINAL001, ASPIRECSHARPAPPS001
+// This playground intentionally exercises the experimental terminal APIs.
+#pragma warning disable ASPIRETERMINAL001
 
 using Terminals.AppHost;
 
