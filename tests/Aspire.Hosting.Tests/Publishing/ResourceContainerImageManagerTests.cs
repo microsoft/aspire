@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREPROJECTS001
 #pragma warning disable ASPIRECSHARPAPPS001
 
