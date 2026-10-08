@@ -10,8 +10,9 @@ package** as the unit that owns how a language's services are launched (run *and
 1. A new experimental **`Aspire.Hosting.Dotnet`** package — the C# peer of `Aspire.Hosting.Go`,
    `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`. It introduces a new **`ExecutableResource`-based**
    **`DotnetProjectResource`** + **`AddDotnetProject`** (a C# project or file-based app added **by path**,
-   polyglot-friendly). The shipped **`CSharpAppResource` + `AddCSharpApp`** in core `Aspire.Hosting` are
-   **left unchanged** and are out of scope for the watch work.
+   polyglot-friendly). The shipped **`CSharpAppResource` + `AddCSharpApp`** in core `Aspire.Hosting`
+   retain their existing runtime behavior and are out of scope for the watch work.
+   `AddCSharpApp` is obsolete in favor of `AddDotnetProject`, rather than experimental.
 2. **`aspire run --watch`** — a **sub-mode of `aspire run`**. In watch sub-mode the C# language
    integration package launches each `DotnetProjectResource` via the watch tool's **`resource`** command, coordinated
    by a hidden **watch `server`** system resource; the app host itself runs under the tool's **`host`**
@@ -248,7 +249,8 @@ working through the same generalized helpers unchanged.
   both as `buildTransitive` assets for C# AppHosts and beside the package assembly for package-backed polyglot
   AppHosts, which load integration assemblies directly without running the package's MSBuild targets.
 - Polyglot SDKs: the `addDotnetProject` export is **additive** in `Aspire.Hosting.Dotnet`; core
-  `addCSharpApp` is unchanged. The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
+  `addCSharpApp` retains its signature and runtime behavior but is obsolete in favor of `addDotnetProject`.
+  The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
   `DotnetProjectResource` overload with the distinct `withDotnetProjectBlazorClientApp` capability ID while
   retaining `withBlazorClientApp` as the generated method name on that resource type. Generated APIs compile in
   TypeScript, Go, Java, and Python; a package-backed TypeScript run verifies the gateway serves an attached Blazor
@@ -260,12 +262,13 @@ working through the same generalized helpers unchanged.
 
 > Sequential unless noted. Every session ends **green**: `./build.sh` clean + targeted tests, and (where
 > applicable) a manual run against a **TypeScript** app host first, then a C# app host. Keep all surface
-> `[Experimental]`. Do **not** hand-edit generated `api/*` files.
+> `[Experimental]`. Legacy `AddCSharpApp` carries `[Obsolete]` instead. Do **not** hand-edit generated `api/*` files.
 
 ### Session 1 — Scaffold `Aspire.Hosting.Dotnet`; add `DotnetProjectResource`/`AddDotnetProject`
 Create the package (mirror `Aspire.Hosting.Go`). Add `DotnetProjectResource` (`: ExecutableResource`) and
 `AddDotnetProject` (+ polyglot `addDotnetProject`); core
-`CSharpAppResource`/`AddCSharpApp` are untouched. Add the core project-defaults generalization (§5.4 —
+`CSharpAppResource`/`AddCSharpApp` retain their existing implementations; `AddCSharpApp` is obsolete
+in favor of `AddDotnetProject`. Add the core project-defaults generalization (§5.4 —
 `ProjectLaunchDefaultsAnnotation`). Reproduce **non-watch, non-debug** launch via `dotnet run --project …`
 args + generalized project defaults. Add the new `DotnetProjectResource`-backed Blazor gateway variant (§5.8);
 regenerate polyglot SDKs/api (additive). 
@@ -459,7 +462,8 @@ callbacks may need to run for build/closure even when a resource isn't "running"
 - **R7 — `--watch` vs `DefaultWatchEnabled` vs the old `dotnet watch`.** Reconcile UX/strings so the explicit
   flag, the feature flag, and the host-command behavior don't collide (Sessions 7–8).
 - **R8 — New polyglot capabilities.** `addDotnetProject` is a new capability in `Aspire.Hosting.Dotnet`
-  (additive; core `addCSharpApp` is unchanged). The Blazor package also adds
+  (additive; core `addCSharpApp` retains its runtime behavior but is obsolete in favor of `addDotnetProject`).
+  The Blazor package also adds
   `addDotnetProjectBlazorGateway` and `withDotnetProjectBlazorClientApp`; the latter keeps
   `withBlazorClientApp` as its generated method name on `DotnetProjectResource`. Confirm guest SDK
   regeneration picks them up in TypeScript, Go, Java, and Python.
