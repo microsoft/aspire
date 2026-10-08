@@ -1,0 +1,209 @@
+{
+  "run_id": 37782684700,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37782684700",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-08T15:07:02Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20813,
+    "title": "Graduate HTTP probe APIs to stable",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-stable-probe-apis",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20813",
+    "merged_at": "2026-10-08T13:13:31Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "5fe0414b35947a218afd2017f24053d4cc5bc9cf",
+    "failed_sha": "26b5ca7a51dd572d478316df8cf96755820754a5",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "d2b0c75dd0648beecb6d5f51e25b57930f370ac4",
+        "message": "ci: enforce actionlint for handwritten workflows (#20610) ## Description **Handwritten GitHub Actions workflow errors can currently merge without a blocking schema and expression check.** ### What the Actionlint gate does This adds Actionlint v1.7.12 directly to the main CI workflow. The job: - Runs on `ubuntu-latest` on every normal CI invocation, not only when workflow files change. - Lints all 59 handwritten top-level workflow files under `.github/workflows` through `lint-handwritten-workflow",
+        "html_url": "https://github.com/microsoft/aspire/commit/d2b0c75dd0648beecb6d5f51e25b57930f370ac4",
+        "pull_request": {
+          "number": 20610,
+          "title": "ci: enforce actionlint for handwritten workflows",
+          "url": "https://github.com/microsoft/aspire/pull/20610",
+          "merged_at": "2026-10-07T15:53:06Z"
+        }
+      },
+      {
+        "sha": "1bb4bd4a9180ad8c3da011a38a484778e993403a",
+        "message": "Update PackageValidationBaselineVersion to 13.6.1 (#20785) This PR updates the stable release baseline and first-party Nix flake manifest to Aspire CLI `13.6.1` after the release assets were uploaded to GitHub. ## Changes - Updated `src/Directory.Build.props` with the new package validation baseline version. - Updated `eng/nix/versions.json` to point at the versioned GitHub release archives. - Pinned the official `.sha512` checksum assets as Nix SRI hashes. --- *Created automatically by the rele",
+        "html_url": "https://github.com/microsoft/aspire/commit/1bb4bd4a9180ad8c3da011a38a484778e993403a",
+        "pull_request": {
+          "number": 20785,
+          "title": "Update PackageValidationBaselineVersion to 13.6.1",
+          "url": "https://github.com/microsoft/aspire/pull/20785",
+          "merged_at": "2026-10-07T17:52:20Z"
+        }
+      },
+      {
+        "sha": "6a47a8c7a1a3925cc3e6881226364ef7d02ed5d6",
+        "message": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension (#20789) Bumps [source-map-js](https://github.com/7rulnik/source-map-js) from 1.2.1 to 1.2.2. <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/7rulnik/source-map-js/releases\">source-map-js's releases</a>.</em></p> <blockquote> <h2>v1.2.2</h2> <ul> <li> <p>Fix crash when executing in browser with CSP script-src that don't permit unsafe-eval (<a href=\"https://redirect.github.com/7rulnik/source-map-js/pul",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a47a8c7a1a3925cc3e6881226364ef7d02ed5d6",
+        "pull_request": {
+          "number": 20789,
+          "title": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension",
+          "url": "https://github.com/microsoft/aspire/pull/20789",
+          "merged_at": "2026-10-07T18:05:14Z"
+        }
+      },
+      {
+        "sha": "e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+        "message": "Prepare VS Code extension release v1.24.0 (#20793) ## VS Code Extension Release v1.24.0 **Version bump:** 1.23.0 → 1.24.0 **Commit range:** [`41d7fa2`](https://github.com/microsoft/aspire/commit/41d7fa2c42761b63a694099fdca7eab49718ffd5)..[`d2b0c75`](https://github.com/microsoft/aspire/commit/d2b0c75dd0648beecb6d5f51e25b57930f370ac4) **Baseline:** VS Code Marketplace v1.23.0 (from the shipped VSIX `extension/.version`) ### Proposed release notes (deterministic fallback) The `extension-changelog` ",
+        "html_url": "https://github.com/microsoft/aspire/commit/e0dbfeba27c6fefd8e47e8d8ac90c923989da186",
+        "pull_request": {
+          "number": 20793,
+          "title": "Prepare VS Code extension release v1.24.0",
+          "url": "https://github.com/microsoft/aspire/pull/20793",
+          "merged_at": "2026-10-07T18:36:13Z"
+        }
+      },
+      {
+        "sha": "92a66a541b19c5b6347d551ab76053177b7b1217",
+        "message": "Improve dev tunnel startup and lifecycle tracking (#20658) ## Description Dev tunnel resources can remain unready long after `devtunnel host` has established the tunnel. This makes dashboard status misleading and delays applications waiting for the tunnel's public endpoints. Restarting an existing tunnel also repeats unnecessary management operations before the host process can launch. This change observes the local host's console output to publish tunnel and port readiness promptly, while retai",
+        "html_url": "https://github.com/microsoft/aspire/commit/92a66a541b19c5b6347d551ab76053177b7b1217",
+        "pull_request": {
+          "number": 20658,
+          "title": "Improve dev tunnel startup and lifecycle tracking",
+          "url": "https://github.com/microsoft/aspire/pull/20658",
+          "merged_at": "2026-10-07T18:50:35Z"
+        }
+      },
+      {
+        "sha": "052b2a80dcc34ee7dd00b397ef915befd9c85742",
+        "message": "Bump proxy-addr from 2.0.7 to 2.0.8 in /extension (#20757) Bumps [proxy-addr](https://github.com/jshttp/proxy-addr) from 2.0.7 to 2.0.8. <details> <summary>Release notes</summary> <p><em>Sourced from <a href=\"https://github.com/jshttp/proxy-addr/releases\">proxy-addr's releases</a>.</em></p> <blockquote> <h2>2.0.8</h2> <h2>Important</h2> <ul> <li>Fix <a href=\"https://www.cve.org/CVERecord?id=CVE-2026-90711\">CVE-2026-90711</a> (<a href=\"https://github.com/jshttp/proxy-addr/security/advisories/GHSA",
+        "html_url": "https://github.com/microsoft/aspire/commit/052b2a80dcc34ee7dd00b397ef915befd9c85742",
+        "pull_request": {
+          "number": 20757,
+          "title": "Bump proxy-addr from 2.0.7 to 2.0.8 in /extension",
+          "url": "https://github.com/microsoft/aspire/pull/20757",
+          "merged_at": "2026-10-07T20:38:21Z"
+        }
+      },
+      {
+        "sha": "0a72207d7b6a11673236bcd37f3c8eb4e5a6206a",
+        "message": "Format dashboard record counts for the active culture (#20753)",
+        "html_url": "https://github.com/microsoft/aspire/commit/0a72207d7b6a11673236bcd37f3c8eb4e5a6206a",
+        "pull_request": {
+          "number": 20753,
+          "title": "Format dashboard record counts for the active culture",
+          "url": "https://github.com/microsoft/aspire/pull/20753",
+          "merged_at": "2026-10-08T00:08:53Z"
+        }
+      },
+      {
+        "sha": "5d7a8798a9cb901ea26fb9860cb1221a6f510880",
+        "message": "Add SQL highlighting to the dashboard text visualizer (#20754)",
+        "html_url": "https://github.com/microsoft/aspire/commit/5d7a8798a9cb901ea26fb9860cb1221a6f510880",
+        "pull_request": {
+          "number": 20754,
+          "title": "Add SQL highlighting to the dashboard text visualizer",
+          "url": "https://github.com/microsoft/aspire/pull/20754",
+          "merged_at": "2026-10-08T01:04:13Z"
+        }
+      },
+      {
+        "sha": "e134c15a97e52a28cfed3c3741fa31bdf49c387c",
+        "message": "Disable sandbox .NET deployment test after endpoint authentication failure (#20779)",
+        "html_url": "https://github.com/microsoft/aspire/commit/e134c15a97e52a28cfed3c3741fa31bdf49c387c",
+        "pull_request": {
+          "number": 20779,
+          "title": "Disable sandbox .NET deployment test after endpoint authentication failure",
+          "url": "https://github.com/microsoft/aspire/pull/20779",
+          "merged_at": "2026-10-08T03:57:28Z"
+        }
+      },
+      {
+        "sha": "3e09b90e6b70dfd1d3e5a8cc6158a252d71b6455",
+        "message": "Disable Foundry toolbox deployment test (#20780)",
+        "html_url": "https://github.com/microsoft/aspire/commit/3e09b90e6b70dfd1d3e5a8cc6158a252d71b6455",
+        "pull_request": {
+          "number": 20780,
+          "title": "Disable Foundry toolbox deployment test",
+          "url": "https://github.com/microsoft/aspire/pull/20780",
+          "merged_at": "2026-10-08T03:58:00Z"
+        }
+      },
+      {
+        "sha": "c362181ebf78e58ed0150d2a65fa0702f37c2757",
+        "message": "Fix dashboard selection of shortened resource instance IDs (#20783)",
+        "html_url": "https://github.com/microsoft/aspire/commit/c362181ebf78e58ed0150d2a65fa0702f37c2757",
+        "pull_request": {
+          "number": 20783,
+          "title": "Fix dashboard selection of shortened resource instance IDs",
+          "url": "https://github.com/microsoft/aspire/pull/20783",
+          "merged_at": "2026-10-08T03:58:35Z"
+        }
+      },
+      {
+        "sha": "a3f44d274fe0866724aa2293f9f7fedd96786a86",
+        "message": "Improve Git test diagnostics and process cleanup (#20788)",
+        "html_url": "https://github.com/microsoft/aspire/commit/a3f44d274fe0866724aa2293f9f7fedd96786a86",
+        "pull_request": {
+          "number": 20788,
+          "title": "Improve Git test diagnostics and process cleanup",
+          "url": "https://github.com/microsoft/aspire/pull/20788",
+          "merged_at": "2026-10-08T04:04:15Z"
+        }
+      },
+      {
+        "sha": "19074afd4cbe8ce221c6d0e6b8a52983fd3f2572",
+        "message": "Graduate Azure Container Apps resource naming APIs to stable (#20806) ## Description Consumers can now call `WithUniqueResourceNaming()` and `WithCompactResourceNaming()` without suppressing experimental diagnostics. Both existing APIs retain their names, signatures, implementations, and opt-in defaults; existing deployments are not renamed by this change. Remove only the `ASPIREACANAMING002` and `ASPIREACANAMING001` experimental attributes, clean up their obsolete suppressions in unit tests and",
+        "html_url": "https://github.com/microsoft/aspire/commit/19074afd4cbe8ce221c6d0e6b8a52983fd3f2572",
+        "pull_request": {
+          "number": 20806,
+          "title": "Graduate Azure Container Apps resource naming APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20806",
+          "merged_at": "2026-10-08T13:11:22Z"
+        }
+      },
+      {
+        "sha": "cabbbb6a64177f8500d03d51d4b8102eae00221f",
+        "message": "Graduate filesystem APIs from experimental to stable (#20808) ## Description Consumers can use Aspire's filesystem services and temporary-file abstractions without suppressing `ASPIREFILESYSTEM001`. Remove experimental status from `IFileSystemService`, `ITempFileSystemService`, `TempDirectory`, `TempFile`, and `IDistributedApplicationBuilder.FileSystemService`. A checkout-wide search found no additional declarations under this diagnostic. Remove obsolete suppressions from repository consumers wh",
+        "html_url": "https://github.com/microsoft/aspire/commit/cabbbb6a64177f8500d03d51d4b8102eae00221f",
+        "pull_request": {
+          "number": 20808,
+          "title": "Graduate filesystem APIs from experimental to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20808",
+          "merged_at": "2026-10-08T13:11:53Z"
+        }
+      },
+      {
+        "sha": "26b5ca7a51dd572d478316df8cf96755820754a5",
+        "message": "Graduate HTTP probe APIs to stable (#20813) ## Description Graduates the existing HTTP probe APIs to stable so consumers no longer need to suppress `ASPIREPROBES001`. This is an attribute-only graduation, not API removal or redesign. Removes all eight actual source attributes: both public `WithHttpProbe` overloads, internal `WithHttpProbeExport`, private `WithProbe`, `ProbeType`, `ProbeAnnotation`, `EndpointProbeAnnotation`, and `IResourceWithProbes`. Removes all explicit suppressions of this di",
+        "html_url": "https://github.com/microsoft/aspire/commit/26b5ca7a51dd572d478316df8cf96755820754a5",
+        "pull_request": {
+          "number": 20813,
+          "title": "Graduate HTTP probe APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20813",
+          "merged_at": "2026-10-08T13:13:31Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, launch-profiles)",
+      "id": 113370048277,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37782684700/job/113370048277",
+      "classification": "transient-infra",
+      "reason": "Actual test step 'Run extension E2E tests' succeeded. Failure occurred in post-job 'Print E2E diagnostics links' and 'Post Checkout code' steps with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED), a known transient Windows runner process-initialization failure unrelated to repository code.",
+      "failed_steps": [
+        "Print E2E diagnostics links",
+        "Post Checkout code"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "windows-process-init-failure-0xc0000142"
+  ]
+}
