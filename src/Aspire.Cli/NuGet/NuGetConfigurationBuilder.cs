@@ -10,6 +10,63 @@ namespace Aspire.Cli.NuGet;
 /// </summary>
 internal static class NuGetConfigurationBuilder
 {
+    public static NuGetConfiguration BuildStableAppHostConfiguration(
+        NuGetSettingsInfo settings,
+        string workloadId,
+        PackageChannel channel)
+    {
+        var preservedSourceIdentities = (channel.Mappings ?? [])
+            .Select(mapping => NuGetSourceIdentity.Compute(mapping.Source, settings.SourceIdentityKey))
+            .Append(NuGetSourceIdentity.Compute(PackageSources.NuGetOrg, settings.SourceIdentityKey))
+            .ToHashSet(StringComparer.Ordinal);
+        var sourceKeyPrefix = $"aspire-{workloadId}";
+        // Shared .NET feeds are identified by their CLI aliases, including aliases left
+        // behind when an AppHost moves and its path-derived workload identifier changes.
+        var channelSourceKeys = settings.Sources
+            .Where(source => !preservedSourceIdentities.Contains(source.Identity) &&
+                (source.IsCliManaged ||
+                 string.Equals(source.Name, $"aspire-{PackageChannelNames.Daily}", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(source.Name, $"aspire-{PackageChannelNames.Staging}", StringComparison.OrdinalIgnoreCase) ||
+                 source.Name.StartsWith("aspire-pr-", StringComparison.OrdinalIgnoreCase) ||
+                 source.Name.StartsWith("aspire-apphost-", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(source.Name, sourceKeyPrefix, StringComparison.OrdinalIgnoreCase) ||
+                 source.Name.StartsWith($"{sourceKeyPrefix}-", StringComparison.OrdinalIgnoreCase)))
+            .Select(static source => source.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        // Stable returns to existing NuGet policy, not a prescribed public endpoint. Remove
+        // channel-owned Aspire mappings while retaining user feeds and unrelated mappings.
+        var mappings = ResolveAmbientMappingAliases(settings)
+            .Select(mapping => channelSourceKeys.Contains(mapping.SourceKey)
+                ? mapping with
+                {
+                    Patterns = [.. mapping.Patterns.Where(static pattern =>
+                        pattern != PackageMapping.AllPackages &&
+                        !PackageSourceOverrideMappings.CompetesWithAuthoritativePattern(
+                            pattern, PackageSourceOverrideMappings.DefaultPackagePattern))]
+                }
+                : mapping)
+            .Where(static mapping => mapping.Patterns.Count > 0)
+            .ToArray();
+        var retiredSourceKeys = channelSourceKeys
+            .Where(key => !mappings.Any(mapping =>
+                string.Equals(mapping.SourceKey, key, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+        var overlay = new NuGetConfigOverlay(
+            Sources: [],
+            PackageSourceMappings: mappings,
+            ClearDisabledPackageSources: retiredSourceKeys.Length > 0,
+            DisabledPackageSourceKeys: [.. settings.DisabledPackageSourceKeys
+                .Concat(retiredSourceKeys).Distinct(StringComparer.OrdinalIgnoreCase)],
+            GlobalPackagesFolder: null)
+        {
+            ClearPackageSourceMappings = true,
+            RetiredSourceKeys = retiredSourceKeys
+        };
+
+        return new NuGetConfiguration(settings, [], overlay);
+    }
+
     public static NuGetConfiguration Build(
         NuGetSettingsInfo settings,
         string workloadId,

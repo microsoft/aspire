@@ -46,13 +46,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(context, cancellationToken);
         var configuration = context.HasExplicitChannel && channel.Type == PackageChannelType.Explicit &&
             restoreConfiguration is { UsesAmbientConfiguration: true }
-            ? nuGetService.BuildChannelConfiguration(
-                projectFile.Directory!,
-                AppHostWorkloadId.Create(projectFile.DirectoryName!),
-                channel,
-                packageSourceOverride: null,
-                executionContext.NuGetServiceIndexOverride,
-                cancellationToken)
+            ? channel.Name == PackageChannelNames.Stable && executionContext.NuGetServiceIndexOverride is null
+                ? NuGetConfigurationBuilder.BuildStableAppHostConfiguration(
+                    ambientSettings, AppHostWorkloadId.Create(projectFile.DirectoryName!), channel)
+                : nuGetService.BuildChannelConfiguration(
+                    projectFile.Directory!,
+                    AppHostWorkloadId.Create(projectFile.DirectoryName!),
+                    channel,
+                    packageSourceOverride: null,
+                    executionContext.NuGetServiceIndexOverride,
+                    cancellationToken)
             : null;
         if (configuration is { HasSourcePolicyChanges: false })
         {

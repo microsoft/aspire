@@ -3956,7 +3956,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UpdateProjectFileAsync_StableChannel_UpdatesExistingNuGetConfig()
+    public async Task UpdateProjectFileAsync_StableChannel_PreservesExistingAmbientNuGetConfig()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -4014,10 +4014,6 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
 
-        // The update path writes/refreshes the config in the recommended directory, which falls
-        // back to the CLI working directory when only global configs are discovered (the default
-        // TestDotNetCliRunner behavior). Seed an existing config there with a private feed and no
-        // packageSourceMapping so the merge is a real change.
         var executionContext = provider.GetRequiredService<Aspire.Cli.CliExecutionContext>();
         var existingConfigFile = new FileInfo(Path.Combine(executionContext.WorkingDirectory.FullName, "nuget.config"));
         await File.WriteAllTextAsync(
@@ -4030,6 +4026,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
               </packageSources>
             </configuration>
             """);
+        var originalConfig = await File.ReadAllBytesAsync(existingConfigFile.FullName);
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -4040,13 +4037,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         Assert.True(updateResult.UpdatedApplied);
 
-        // Even though the stable channel never *creates* a config, an existing one is still
-        // refreshed so feeds left over from a previous channel get cleaned up (#18124). The merge
-        // preserves the user's feed and adds a packageSourceMapping that wasn't there before.
         Assert.True(existingConfigFile.Exists);
-        var updatedContent = await File.ReadAllTextAsync(existingConfigFile.FullName);
-        Assert.Contains("contoso", updatedContent, StringComparison.Ordinal);
-        Assert.Contains("packageSourceMapping", updatedContent, StringComparison.Ordinal);
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(existingConfigFile.FullName));
     }
 
     [Fact]
