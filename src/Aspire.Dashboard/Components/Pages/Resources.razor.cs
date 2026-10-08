@@ -417,6 +417,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             DialogService = DialogService,
             ValueDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)],
+            MarkdownDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription)],
             // Map the current model even while the graph's asynchronous initialization is pending.
             Value = ResourceGraphMermaidExporter.Export(GetResourceGraphResources()),
             DownloadFileName = "resources.mmd",
