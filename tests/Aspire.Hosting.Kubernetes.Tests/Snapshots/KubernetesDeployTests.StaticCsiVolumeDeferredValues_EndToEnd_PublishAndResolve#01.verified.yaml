@@ -1,0 +1,18 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolume"
+metadata:
+  name: "data-pv"
+spec:
+  storageClassName: "example-csi"
+  csi:
+    driver: "example.csi.test"
+    volumeHandle: "{{ .Values.config.data.storage_outputs_resourceGroupName }}#{{ .Values.config.data.storage_outputs_name }}#share"
+    volumeAttributes:
+      resourceGroup: "{{ .Values.config.data.storage_outputs_resourceGroupName }}"
+      account: "{{ .Values.config.data.storage_outputs_name }}"
+  accessModes:
+    - "ReadWriteMany"
+  capacity:
+    storage: "5Gi"
+  persistentVolumeReclaimPolicy: "Retain"

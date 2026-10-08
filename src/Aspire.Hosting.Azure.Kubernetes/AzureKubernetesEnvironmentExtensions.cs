@@ -606,6 +606,14 @@ public static class AzureKubernetesEnvironmentExtensions
             };
         }
 
+        if (aksResource.AzureFileStorageAccounts.Count > 0)
+        {
+            aks.StorageProfile = new ManagedClusterStorageProfile
+            {
+                IsFileCsiDriverEnabled = true
+            };
+        }
+
         // Private cluster
         if (aksResource.IsPrivateCluster)
         {
@@ -826,21 +834,34 @@ public static class AzureKubernetesEnvironmentExtensions
             // Dynamic (parameter-based) namespaces are not supported for federated
             // credentials since Azure AD needs a fixed subject at provision time.
             var nsFormat = nsAnnotation.Namespace.Format;
-            if (!string.IsNullOrEmpty(nsFormat) && !nsFormat.Contains('{'))
+            if (aksResource.WorkloadIdentities.Count > 0 &&
+                !string.IsNullOrEmpty(nsFormat) &&
+                nsFormat.Contains('{'))
+            {
+                throw new InvalidOperationException(
+                    "AKS workload identity requires a literal Kubernetes namespace because the federated identity subject is provisioned before deploy-time parameters are resolved.");
+            }
+
+            if (!string.IsNullOrEmpty(nsFormat))
             {
                 k8sNamespace = nsFormat;
             }
         }
 
-        foreach (var (resourceName, identityResource) in aksResource.WorkloadIdentities)
+        var precedingCredentialByIdentity = new Dictionary<IAppIdentityResource, FederatedIdentityCredential>(ReferenceEqualityComparer.Instance);
+        foreach (var (bindingKey, binding) in aksResource.WorkloadIdentities)
         {
-            var saName = $"{resourceName}-sa";
-            var sanitizedName = Infrastructure.NormalizeBicepIdentifier(resourceName);
+            // Aspire resource names cannot contain underscores, so the double underscore keeps
+            // the workload/volume boundary unambiguous after Bicep identifier normalization.
+            var bindingName = bindingKey.VolumeName is null
+                ? bindingKey.WorkloadName
+                : $"{bindingKey.WorkloadName}__{bindingKey.VolumeName}";
+            var sanitizedName = Infrastructure.NormalizeBicepIdentifier(bindingName);
             var identityParamName = $"identityName_{sanitizedName}";
 
             var identityNameParam = new ProvisioningParameter(identityParamName, typeof(string));
             infrastructure.Add(identityNameParam);
-            aksResource.Parameters[identityParamName] = identityResource.PrincipalName;
+            aksResource.Parameters[identityParamName] = binding.IdentityResource.PrincipalName;
 
             var existingIdentity = UserAssignedIdentity.FromExisting($"identity_{sanitizedName}");
             existingIdentity.Name = identityNameParam;
@@ -849,16 +870,22 @@ public static class AzureKubernetesEnvironmentExtensions
             var fedCred = new FederatedIdentityCredential($"fedcred_{sanitizedName}")
             {
                 Parent = existingIdentity,
-                Name = $"{resourceName}-fedcred",
+                Name = binding.FederatedCredentialName,
                 IssuerUri = new MemberExpression(
                     new MemberExpression(
                         new MemberExpression(new IdentifierExpression(aks.BicepIdentifier), "properties"),
                         "oidcIssuerProfile"),
                     "issuerURL"),
-                Subject = $"system:serviceaccount:{k8sNamespace}:{saName}",
+                Subject = $"system:serviceaccount:{k8sNamespace}:{binding.ServiceAccountName}",
                 Audiences = { "api://AzureADTokenExchange" }
             };
+            if (precedingCredentialByIdentity.TryGetValue(binding.IdentityResource, out var precedingCredential))
+            {
+                // ARM can reject concurrent child-resource writes against the same UAMI.
+                fedCred.DependsOn.Add(precedingCredential);
+            }
             infrastructure.Add(fedCred);
+            precedingCredentialByIdentity[binding.IdentityResource] = fedCred;
         }
     }
 

@@ -5,7 +5,7 @@ param my_own_storage_outputs_name string
 
 param principalId string
 
-resource my_own_storage 'Microsoft.Storage/storageAccounts@2024-01-01' existing = {
+resource my_own_storage 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: my_own_storage_outputs_name
 }
 
