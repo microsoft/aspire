@@ -9,7 +9,7 @@ on:
       configuration:
         required: false
         type: string
-        default: Debug
+        default: Release
       targets:
         description: >
           JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.

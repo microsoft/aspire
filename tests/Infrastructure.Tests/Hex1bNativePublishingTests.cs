@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
@@ -26,16 +27,16 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("Aspire.TerminalHost", "Debug", false, false, false)]
     [InlineData("Aspire.TerminalHost", "Debug", false, true, false)]
     [InlineData("Aspire.TerminalHost", "Debug", true, false, false)]
-    [InlineData("Aspire.TerminalHost", "Debug", true, true, true)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, true, false)]
     [InlineData("Aspire.TerminalHost", "Release", false, true, true)]
     [InlineData("Aspire.TerminalHost", "Release", true, true, true)]
     [InlineData("Aspire.Dashboard", "Debug", false, false, false)]
     [InlineData("Aspire.Dashboard", "Debug", false, true, false)]
     [InlineData("Aspire.Dashboard", "Debug", true, false, false)]
-    [InlineData("Aspire.Dashboard", "Debug", true, true, true)]
+    [InlineData("Aspire.Dashboard", "Debug", true, true, false)]
     [InlineData("Aspire.Dashboard", "Release", false, true, true)]
     [InlineData("Aspire.Dashboard", "Release", true, true, true)]
-    public async Task TerminalPipelinePreservesManagedBuildsAndOptimizesNativePublishing(
+    public async Task TerminalPipelineUsesConfigurationOptimizationDefaults(
         string projectName, string configuration, bool publishing, bool native, bool optimized)
     {
         var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
@@ -49,6 +50,40 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var properties = document.RootElement.GetProperty("Properties");
         Assert.Equal(optimized ? "true" : "false", properties.GetProperty("Optimize").GetString());
         Assert.Equal("true", properties.GetProperty("ServerGarbageCollection").GetString());
+    }
+
+    [Fact]
+    public async Task NativeArchivesDefaultToReleaseWithOptimizedComponents()
+    {
+        var yaml = new YamlStream();
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml"));
+        yaml.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var triggers = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("on")]);
+        var workflowCall = Assert.IsType<YamlMappingNode>(triggers.Children[new YamlScalarNode("workflow_call")]);
+        var inputs = Assert.IsType<YamlMappingNode>(workflowCall.Children[new YamlScalarNode("inputs")]);
+        var configurationInput = Assert.IsType<YamlMappingNode>(inputs.Children[new YamlScalarNode("configuration")]);
+        var configuration = configurationInput.Children[new YamlScalarNode("default")].ToString();
+        Assert.Equal("Release", configuration);
+
+        var bundle = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-getProperty:Configuration"]);
+        Assert.True(bundle.ExitCode == 0, bundle.Output);
+        Assert.Equal(configuration, bundle.Output.Trim());
+
+        foreach (var projectName in new[] { "Aspire.Cli", "Aspire.Dashboard", "Aspire.TerminalHost" })
+        {
+            var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
+            var result = await RunDotNetAsync(
+                ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
+                 "-p:_IsPublishing=true", "-p:RuntimeIdentifier=osx-arm64", "-getProperty:Optimize,PublishAot"]);
+            Assert.True(result.ExitCode == 0, result.Output);
+
+            using var document = JsonDocument.Parse(result.Output);
+            var properties = document.RootElement.GetProperty("Properties");
+            Assert.Equal("true", properties.GetProperty("PublishAot").GetString());
+            Assert.Equal("true", properties.GetProperty("Optimize").GetString());
+        }
     }
 
     [Theory]

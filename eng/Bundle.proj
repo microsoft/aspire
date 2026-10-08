@@ -26,7 +26,7 @@
 
   <PropertyGroup>
     <!-- Configuration -->
-    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
 
     <!-- Runtime ID for the bundle -->
     <TargetRid Condition="'$(TargetRid)' == '' and '$(TargetRids)' != ''">$(TargetRids)</TargetRid>

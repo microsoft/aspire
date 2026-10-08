@@ -713,9 +713,10 @@ DCP's ConPTY provider beside the configured terminal executable, which remains
 the managed shim for compatibility launches. These copies preserve the bundled
 OpenConsole provider and Kitty graphics support without embedding the terminal
 implementation in the managed executable.
-TerminalHost and Dashboard native publishes enable optimization even for Debug
-bundles: Native AOT cannot later JIT-optimize the relay, dashboard terminal mirror,
-or their dependencies. Both stages need sufficient throughput to prevent a slow
-dashboard consumer from exhausting the relay's bounded output queue and being
-disconnected. Ordinary managed Debug builds remain unoptimized. Both execution
-modes use server GC, matching the previous managed host.
+Native archive builds use Release configuration, which enables the SDK's default
+optimizations for the CLI, TerminalHost, Dashboard, and their dependencies.
+Native AOT cannot later JIT-optimize the relay or dashboard terminal mirror, so
+both stages need sufficient throughput to prevent a slow dashboard consumer from
+exhausting the relay's bounded output queue and being disconnected. Ordinary
+managed Debug builds remain unoptimized. Both execution modes use server GC,
+matching the previous managed host.

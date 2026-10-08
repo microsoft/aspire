@@ -335,7 +335,7 @@ The build sequence is:
 
 The assembled directories are under `artifacts/bundle/{rid}/`; the payload archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting CLI is in the CLI project's publish output, not in the payload directory.
 
-`Configuration` defaults to Debug. `SkipManagedBuild=true` reuses existing Managed **and Dashboard** publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
+`Configuration` defaults to Release, as does the GitHub Actions native-archive workflow. Ordinary managed development and test builds still use Debug. `SkipManagedBuild=true` reuses existing Managed, Dashboard, and TerminalHost publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
 
 ### CreateLayout
 
