@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREPERSISTENCE001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREPROJECTS001
 #pragma warning disable ASPIRECONTAINERRUNTIME001

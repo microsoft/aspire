@@ -1707,7 +1707,6 @@ ${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
     ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRETERMINAL001
 
 using Aspire.Hosting.Pipelines;

@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREACAEXPRESS001
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIRECOMPUTE002
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;

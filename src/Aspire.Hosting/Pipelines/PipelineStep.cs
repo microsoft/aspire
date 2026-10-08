@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Pipelines;
@@ -12,7 +9,6 @@ namespace Aspire.Hosting.Pipelines;
 /// <summary>
 /// Represents a step in the deployment pipeline.
 /// </summary>
-[Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [DebuggerDisplay("{DebuggerToString(),nq}")]
 [AspireExport(ExposeProperties = true)]
 public class PipelineStep

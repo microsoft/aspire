@@ -1,5 +1,4 @@
 #pragma warning disable ASPIREAZURE001
-#pragma warning disable ASPIREPIPELINES001
 
 using System.Diagnostics;
 using System.IO.Compression;

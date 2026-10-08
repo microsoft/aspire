@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <IsAspireHost>true</IsAspireHost>
     <UserSecretsId>d68298f4-6399-4962-8652-eb235651499b</UserSecretsId>
-    <NoWarn>$(NoWarn);ASPIRECOMPUTE001;ASPIREPIPELINES001;ASPIREAZURE001;ASPIREPIPELINES003</NoWarn>
+    <NoWarn>$(NoWarn);ASPIRECOMPUTE001;ASPIREAZURE001;ASPIREPIPELINES003</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

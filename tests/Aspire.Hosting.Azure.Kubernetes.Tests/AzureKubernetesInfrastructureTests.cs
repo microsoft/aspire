@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
