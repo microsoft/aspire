@@ -78,8 +78,12 @@ internal sealed class TelemetryManager : IDisposable
         // CI cannot rely on a later invocation to drain storage. Agent hooks retain their fast
         // persistence-before-uploader contract even in CI, rather than waiting on every tool call.
         // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/README.md#telemetry-delivery-on-shutdown
-        var mode = isAgentTelemetryInvocation ? ReportedTelemetryMode.Agent
-            : isCIEnvironment ? ReportedTelemetryMode.CI : ReportedTelemetryMode.Local;
+        var mode = (isAgentTelemetryInvocation, isCIEnvironment) switch
+        {
+            (true, _) => ReportedTelemetryMode.Agent,
+            (_, true) => ReportedTelemetryMode.CI,
+            _ => ReportedTelemetryMode.Local
+        };
         AppContext.SetSwitch(PersistOnForceFlushSwitchName, mode != ReportedTelemetryMode.CI);
         AppContext.SetSwitch(DisablePersistOnShutdownSwitchName, mode == ReportedTelemetryMode.CI);
         AppContext.SetData(ShutdownDrainBudgetKey, 0);
@@ -422,8 +426,12 @@ internal sealed class TelemetryManager : IDisposable
 
             var isLocalFailure = mode == ReportedTelemetryMode.Local &&
                 exitCode is not (CliExitCodes.Success or CliExitCodes.Cancelled);
-            var timeout = mode == ReportedTelemetryMode.CI ? ReportedCIShutdownTimeoutMilliseconds
-                : isLocalFailure ? ReportedFailureShutdownTimeoutMilliseconds : Timeout.Infinite;
+            var timeout = (mode, isLocalFailure) switch
+            {
+                (ReportedTelemetryMode.CI, _) => ReportedCIShutdownTimeoutMilliseconds,
+                (_, true) => ReportedFailureShutdownTimeoutMilliseconds,
+                _ => Timeout.Infinite
+            };
             var previousDrainBudget = AppContext.GetData(ShutdownDrainBudgetKey);
             if (isLocalFailure)
             {

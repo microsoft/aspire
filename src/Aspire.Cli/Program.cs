@@ -1103,7 +1103,7 @@ public class Program
 
         var reportedTelemetryMode = TelemetryManager.ConfigureExporterForProcess(
             AgentTelemetryInvocation.Matches(args),
-            new CIEnvironmentDetector(new HostEnvironment()).IsCIEnvironment());
+            CIEnvironmentDetector.IsCIEnvironment(new HostEnvironment()));
 
         // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
         // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
