@@ -41,7 +41,7 @@ internal static class Program
             var options = TrayOptions.Parse(args);
             if (options.SmokeSeconds is not null)
             {
-                throw new ArgumentException("Use the Linux private-bus smoke harness instead of --smoke-seconds.");
+                throw new ArgumentException("The Linux tray does not support --smoke-seconds.");
             }
             using var singleton = LinuxTrayRuntime.TryAcquire(LinuxTrayRuntime.DirectoryPath);
             if (singleton is null)

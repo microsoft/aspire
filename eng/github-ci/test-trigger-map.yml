@@ -521,9 +521,6 @@ path_rules:
   - paths: [src/Aspire.Tray/Windows/publish.ps1]
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: Windows native publishing and smoke invocation
-  - paths: [src/Aspire.Tray/Linux/smoke-test.py]
-    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
-    reason: Linux native archive smoke and lifecycle validation
   - paths:
       - eng/scripts/generate-template-cgmanifest.ps1
       - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj

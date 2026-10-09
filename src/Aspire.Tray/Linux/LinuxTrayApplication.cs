@@ -23,7 +23,8 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private nint _indicator;
     private nint _menu;
     private uint _timer;
-    private int _modalDepth;
+    private nint _dialog;
+    private int _quitRequested;
     private bool _quitting;
     private bool _connected;
     private bool _reportedConnected;
@@ -86,7 +87,7 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         await restored.Task.WaitAsync(token).ConfigureAwait(false);
     }
 
-    internal void RequestQuit() => _pending.Enqueue(Quit);
+    internal void RequestQuit() => Volatile.Write(ref _quitRequested, 1);
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void ConnectionChanged(nint indicator, int connected, nint data)
@@ -98,7 +99,17 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
     private void Quit()
     {
         _quitting = true;
-        Gtk.gtk_main_quit();
+        if (_dialog != 0)
+        {
+            // gtk_dialog_run owns a separate nested loop. Cancel it before quitting
+            // gtk_main so confirmations cannot commit actions during shutdown.
+            // https://docs.gtk.org/gtk3/method.Dialog.run.html
+            Gtk.gtk_dialog_response(_dialog, -6);
+        }
+        else
+        {
+            Gtk.gtk_main_quit();
+        }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -107,9 +118,13 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         var app = s_current!;
         try
         {
-            // GTK dialogs run a nested loop. Retain command identities and defer
-            // control/refresh until the user closes the modal confirmation.
-            if (app._modalDepth != 0)
+            if (app._quitting || Volatile.Read(ref app._quitRequested) != 0)
+            {
+                app.Quit();
+                return 1;
+            }
+            // Retain command identities during modal dialogs, but never defer shutdown.
+            if (app._dialog != 0)
             {
                 return 1;
             }
@@ -270,7 +285,8 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         var app = s_current!;
         try
         {
-            if (app._commands.TryGetValue(widget, out var item) && item.Enabled)
+            if (!app._quitting && app._dialog == 0
+                && app._commands.TryGetValue(widget, out var item) && item.Enabled)
             {
                 app.Execute(item);
             }
@@ -391,7 +407,11 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
 
     private int RunDialog(nint dialog)
     {
-        _modalDepth++;
+        if (_quitting)
+        {
+            return -6;
+        }
+        _dialog = dialog;
         try
         {
             Gtk.gtk_widget_show_all(dialog);
@@ -399,7 +419,11 @@ internal sealed class LinuxTrayApplication(TrayController controller, ITrayStart
         }
         finally
         {
-            _modalDepth--;
+            _dialog = 0;
+            if (_quitting)
+            {
+                Gtk.gtk_main_quit();
+            }
         }
     }
 

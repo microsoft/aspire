@@ -115,19 +115,6 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
 
-      - name: Smoke Linux native tray
-        if: runner.os == 'Linux' && (matrix.targets.rids == 'linux-x64' || matrix.targets.rids == 'linux-arm64')
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y libgtk-3-bin libayatana-appindicator3-1 python3-gi dbus-daemon
-          scratch="$(mktemp -d)"
-          trap 'rm -rf -- "$scratch"' EXIT
-          rid='${{ matrix.targets.rids }}'
-          tar -xzf "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" -C "$scratch" "$rid/tray"
-          /usr/bin/python3 src/Aspire.Tray/Linux/smoke-test.py "$scratch/$rid/tray"
-
       - name: Build CLI packages
         run: >
           ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}

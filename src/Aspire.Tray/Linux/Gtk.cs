@@ -77,6 +77,7 @@ internal static partial class Gtk
     [LibraryImport(GtkLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gtk_dialog_add_button(nint dialog, string label, int response);
     [LibraryImport(GtkLibrary)] internal static partial void gtk_dialog_set_default_response(nint dialog, int response);
     [LibraryImport(GtkLibrary)] internal static partial int gtk_dialog_run(nint dialog);
+    [LibraryImport(GtkLibrary)] internal static partial void gtk_dialog_response(nint dialog, int response);
     [LibraryImport(GtkLibrary, StringMarshalling = StringMarshalling.Utf8)] internal static partial nint gtk_check_button_new_with_label(string label);
     [LibraryImport(GtkLibrary)] internal static partial int gtk_toggle_button_get_active(nint button);
     [LibraryImport(GtkLibrary)] internal static partial nint gtk_clipboard_get(nint selection);

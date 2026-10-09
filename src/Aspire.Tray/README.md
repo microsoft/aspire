@@ -13,7 +13,7 @@ on the machine running the published app.
 - `src/Aspire.Tray/Common/`: shared protocol client, controller, and lifecycle code.
 - `src/Aspire.Tray/Mac/`: native AppKit frontend and macOS app packaging.
 - `src/Aspire.Tray/Windows/`: native Win32 frontend and Windows publishing.
-- `src/Aspire.Tray/Linux/`: native GTK/AppIndicator frontend and private-bus smoke.
+- `src/Aspire.Tray/Linux/`: native GTK/AppIndicator frontend.
 - `tests/Aspire.Tray.Tests/`: protocol, controller, and lifecycle tests in the normal test matrix.
 
 The platform projects and tests are included in `Aspire.slnx` and inherit the
@@ -110,6 +110,7 @@ dashboard launch, confirmed exact-instance stop, explicit start for offline
 projects, pinning, recent history, folder and clipboard actions, and VS Code when
 `code` is on PATH. Opening a submenu never starts a project. The dashboard opens
 in the default browser, not inside the popup. GTK confirmations default to Cancel.
+Stopping the tray cancels open dialogs without accepting their actions or saving settings.
 Settings include stop confirmation, version information, and opt-in login startup.
 Some GNOME AppIndicator extension versions omit icons on submenu headers, so
 AppHost health remains text-only there even though the icon is exported.
@@ -131,7 +132,7 @@ ready. The AppIndicator library re-registers after a watcher restart. Repeated
 start restores the existing item; stop shuts down only the tray and its discovery
 child. Settings/history use the shared Aspire configuration rules above.
 
-### Build and exercise Linux
+### Build and run on Linux
 
 After bootstrapping the repository SDK, publish on a matching Linux architecture:
 
@@ -148,21 +149,9 @@ artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish/aspire-tray \
     --cli /absolute/path/to/aspire
 ```
 
-The smoke harness requires system Python with PyGObject, `dbus-run-session`, GTK's
-`broadwayd`, and the AppIndicator runtime library:
-
-```bash
-/usr/bin/python3 src/Aspire.Tray/Linux/smoke-test.py \
-    artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish
-```
-
-It uses temporary HOME/XDG directories, a private session bus and Broadway display,
-a synthetic CLI, and a fake StatusNotifierWatcher. It exercises the published
-executable's registration, D-Bus menus/actions, health updates, offline pins,
-history privacy, watcher recovery, discovery cleanup, and packaged lifecycle.
-CI runs it against the extracted Linux archive, separately from shared unit tests.
-This does not establish live GNOME/KDE/Waybar acceptance, real AppHost connectivity,
-dialog focus/scaling, distribution compatibility, or official pipeline validation.
+CI builds and verifies the Linux native payload and runs the shared unit tests.
+Native desktop interactions, including dialog focus/scaling and live
+GNOME/KDE/Waybar behavior, require manual validation.
 
 ## Build and run on macOS
 
