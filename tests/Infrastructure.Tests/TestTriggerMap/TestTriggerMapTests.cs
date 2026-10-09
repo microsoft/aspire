@@ -720,6 +720,42 @@ public sealed class TestTriggerMapTests
             ["test:Aspire.Playground.Tests", "job:extension-e2e"]
         },
         {
+            "playground/TsIntegrationSpike/deno-api/deno.json",
+            ["test:Aspire.Playground.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/deno-integration/integration.ts",
+            ["test:Aspire.Playground.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/kafka-integration/host-runtime.ts",
+            ["test:Aspire.Playground.Tests", "test:Aspire.Cli.EndToEnd.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/TsIntegrationSpike/aspire.config.json",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "playground/TsKafkaLib/packages/aspire-kafka/src/index.ts",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "playground/TsKafkaLib/app/tsconfig.json",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "src/Aspire.Hosting.Nuxt/src/integration.ts",
+            ["job:polyglot", "job:typescript-sdk"]
+        },
+        {
+            "playground/NuxtApp/web/app/app.vue",
+            ["test:Aspire.Playground.Tests", "job:polyglot"]
+        },
+        {
+            "playground/NuxtApp/verify.mjs",
+            ["test:Aspire.Playground.Tests", "job:polyglot", "job:typescript-sdk"]
+        },
+        {
             ".gitignore",
             ["test:Infrastructure.Tests"]
         },
@@ -738,6 +774,23 @@ public sealed class TestTriggerMapTests
             .Concat(result.Jobs)
             .Order(StringComparer.Ordinal);
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/integration-host.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/transport.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/base.mts")]
+    [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/package.json")]
+    public void IntegrationRuntimeResourcesSelectLifetimeE2eConsumer(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Hosting.CodeGeneration.TypeScript");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains(result.TestCauses["Aspire.Cli.EndToEnd.Tests"],
+            cause => cause.Kind == CauseKind.PathRule && cause.Trigger == path);
+        Assert.Contains("job:typescript-sdk", result.Jobs);
     }
 
     [Fact]

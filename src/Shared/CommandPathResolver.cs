@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Cli.Utils;
+namespace Aspire.Shared;
 
 /// <summary>
 /// Resolves commands from PATH and produces actionable error messages when they are missing.
@@ -10,6 +10,7 @@ internal static class CommandPathResolver
 {
     private static readonly Dictionary<string, CommandMetadata> s_commandMetadata = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["node"] = new("Node.js", "https://nodejs.org/en/download"),
         ["npm"] = new("Node.js", "https://nodejs.org/en/download"),
         ["npx"] = new("Node.js", "https://nodejs.org/en/download"),
         ["bun"] = new("Bun", "https://bun.sh/docs/installation"),

@@ -1097,6 +1097,12 @@ public class Program
     {
         Console.OutputEncoding = Encoding.UTF8;
 
+        if (ProcessSupervisor.IsSupervisor)
+        {
+            await ProcessSupervisor.RunAsync().ConfigureAwait(false);
+            return Environment.ExitCode;
+        }
+
         if (CompletionInvocation.Matches(args))
         {
             return await InvokeCompletionAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
