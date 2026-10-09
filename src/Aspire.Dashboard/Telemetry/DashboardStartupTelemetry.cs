@@ -11,15 +11,18 @@ internal sealed class DashboardStartupTelemetry
 {
     private readonly DashboardTelemetryService _telemetry;
     private readonly string _launchContext;
-    private readonly long _startTimestamp = Stopwatch.GetTimestamp();
+    private readonly long _startTimestamp;
     private int _recorded;
 
-    public DashboardStartupTelemetry(DashboardTelemetryService telemetry, IConfiguration configuration)
+    public DashboardStartupTelemetry(DashboardTelemetryService telemetry, IConfiguration configuration, long startTimestamp)
     {
         _telemetry = telemetry;
+        _startTimestamp = startTimestamp;
         _launchContext = configuration[DashboardConfigNames.DashboardLaunchContextName.ConfigKey]?.Trim().ToLowerInvariant() switch
         {
-            { Length: > 0 } value => value,
+            KnownDashboardLaunchContexts.AppHost => KnownDashboardLaunchContexts.AppHost,
+            KnownDashboardLaunchContexts.Cli => KnownDashboardLaunchContexts.Cli,
+            KnownDashboardLaunchContexts.Container => KnownDashboardLaunchContexts.Container,
             _ => KnownDashboardLaunchContexts.Unknown
         };
     }

@@ -152,6 +152,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
     {
+        var startupTimestamp = Stopwatch.GetTimestamp();
+
         // Workaround MaxItemCount regression. In .NET 8 the value is set via AppContext.
         // The issue doesn't appear to impact .NET 8, but setting this value ensures the dashbaord is always run with a consistent MaxItemCount value.
         AppContext.SetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount", 10_000);
@@ -223,7 +225,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
-        builder.Services.TryAddSingleton<DashboardStartupTelemetry>();
+        builder.Services.TryAddSingleton(services => new DashboardStartupTelemetry(
+            services.GetRequiredService<DashboardTelemetryService>(),
+            services.GetRequiredService<IConfiguration>(),
+            startupTimestamp));
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));
         builder.Services.AddSingleton<DashboardTelemetryManager>();
@@ -1198,11 +1203,21 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         catch (Exception ex)
         {
-            RecordStartupFailure(ex is IOException && ContainsAddressInUse(ex)
-                ? KnownDashboardStartupFailureReasons.AddressInUse
-                : ex.GetType().FullName ?? ex.GetType().Name);
+            RecordStartupFailure(GetStartupFailureReason(ex, cancellationToken));
             throw;
         }
+    }
+
+    internal static string GetStartupFailureReason(Exception exception, CancellationToken cancellationToken)
+    {
+        if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            return KnownDashboardStartupFailureReasons.Canceled;
+        }
+
+        return exception is IOException && ContainsAddressInUse(exception)
+            ? KnownDashboardStartupFailureReasons.AddressInUse
+            : exception.GetType().FullName ?? exception.GetType().Name;
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)

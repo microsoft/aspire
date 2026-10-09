@@ -1136,6 +1136,19 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(DashboardWebApplication.ExitCodeValidationFailure, exitCode);
     }
 
+    [Fact]
+    public void GetStartupFailureReason_CanceledStartup_ReturnsCanceled()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var reason = DashboardWebApplication.GetStartupFailureReason(
+            new OperationCanceledException(cts.Token),
+            cts.Token);
+
+        Assert.Equal(KnownDashboardStartupFailureReasons.Canceled, reason);
+    }
+
     private static void RemoveEnvironmentVariableSources(WebApplicationBuilder builder)
     {
         var sources = ((IConfigurationBuilder)builder.Configuration).Sources;

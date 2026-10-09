@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -23,7 +24,8 @@ public class DashboardStartupTelemetryTests
                 [DashboardConfigNames.DashboardLaunchContextName.ConfigKey] = "AppHost"
             })
             .Build();
-        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, configuration);
+        var startupTimestamp = Stopwatch.GetTimestamp() - Stopwatch.Frequency;
+        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, configuration, startupTimestamp);
 
         if (success)
         {
@@ -41,7 +43,7 @@ public class DashboardStartupTelemetryTests
         var attributes = log.Attributes.ToDictionary(p => p.Key, p => p.Value);
         Assert.Equal(success, attributes[TelemetryPropertyKeys.StartupSuccess]);
         Assert.Equal(KnownDashboardLaunchContexts.AppHost, attributes[TelemetryPropertyKeys.StartupLaunchContext]);
-        Assert.True(Assert.IsType<double>(attributes[TelemetryPropertyKeys.StartupDurationMilliseconds]) >= 0);
+        Assert.True(Assert.IsType<double>(attributes[TelemetryPropertyKeys.StartupDurationMilliseconds]) >= 900);
         if (errorType is null)
         {
             Assert.False(attributes.ContainsKey(TelemetryPropertyKeys.ErrorType));
@@ -51,5 +53,28 @@ public class DashboardStartupTelemetryTests
             Assert.Equal(errorType, attributes[TelemetryPropertyKeys.ErrorType]);
         }
         Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
+    }
+
+    [Theory]
+    [InlineData("Container", KnownDashboardLaunchContexts.Container)]
+    [InlineData("custom-context", KnownDashboardLaunchContexts.Unknown)]
+    [InlineData("", KnownDashboardLaunchContexts.Unknown)]
+    [InlineData(null, KnownDashboardLaunchContexts.Unknown)]
+    public void Record_NormalizesLaunchContext(string? launchContext, string expected)
+    {
+        using var fixture = new DashboardTelemetryFixture();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardLaunchContextName.ConfigKey] = launchContext
+            })
+            .Build();
+        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, configuration, Stopwatch.GetTimestamp());
+
+        startupTelemetry.RecordSuccess();
+
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        var attributes = log.Attributes.ToDictionary(p => p.Key, p => p.Value);
+        Assert.Equal(expected, attributes[TelemetryPropertyKeys.StartupLaunchContext]);
     }
 }
