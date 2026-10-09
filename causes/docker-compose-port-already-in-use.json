@@ -42,6 +42,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
       "pr_number": 20230,
       "observed_at": "2026-09-18T11:35:10Z"
+    },
+    {
+      "run_id": 37988817606,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37988817606",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T21:49:50Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18719"

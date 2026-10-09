@@ -1,0 +1,98 @@
+{
+  "run_id": 37988817606,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37988817606",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-09T21:49:50Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20857,
+    "title": "Remove ASPIREAZURE003 from Azure role-assignment APIs",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-azure-networking-diagnostics",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20857",
+    "merged_at": "2026-10-09T20:42:47Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      },
+      {
+        "sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "message": "[WIP] Fix Go AppHost start timeout error (#20086) - [x] Identify the Go AppHost startup failure from logs and code. - [x] Implement a focused fix with regression coverage. - [x] Run targeted validation and review the final changes. <!-- START COPILOT CODING AGENT SUFFIX --> - Fixes #20056 --------- Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: David Pine <7679720+IEvangelist",
+        "html_url": "https://github.com/microsoft/aspire/commit/c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "pull_request": {
+          "number": 20086,
+          "title": "[WIP] Fix Go AppHost start timeout error",
+          "url": "https://github.com/microsoft/aspire/pull/20086",
+          "merged_at": "2026-10-09T20:10:35Z"
+        }
+      },
+      {
+        "sha": "ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "message": "Remove ASPIREAZURE003 from Azure role-assignment APIs (#20857) ## Description `AzureRoleAssignmentResource` is going stable: it is no longer experimental. Consumers can use this API without suppressing `ASPIREAZURE003`. Azure role assignments are not an Azure Networking feature, so the networking experimental diagnostic should not apply to this type. Remove its `Experimental` attribute and clean up obsolete suppressions in `RoleAssignmentResourceAnnotation`, the shared ACR pull identity helper, ",
+        "html_url": "https://github.com/microsoft/aspire/commit/ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "pull_request": {
+          "number": 20857,
+          "title": "Remove ASPIREAZURE003 from Azure role-assignment APIs",
+          "url": "https://github.com/microsoft/aspire/pull/20857",
+          "merged_at": "2026-10-09T20:42:47Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+      "id": 114018841885,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37988817606/job/114018841885",
+      "classification": "flaky-test",
+      "reason": "Test DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints failed because 'docker compose up' hit Docker Hub's unauthenticated pull rate limit (toomanyrequests), an environmental/infra condition unrelated to the merged PR which only touched Azure role-assignment experimental attributes.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Docker.Tests, Hosting.Docker, Hosting.Docker, tests/Asp... / Hosting.Docker (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Filter not matched in collection\nCollection: []",
+      "stack_trace": "at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 458\n   at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 498\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: /tmp/Aspire.Hosting.TestUtilities/Workspace/0pcccsad.q1s\nUsing random host port: 53937\n[CreateStep] validate-compute-environments\n[CreateStep] prepare-deployment-targets-env\n    [Information:prepare-deployment-targets-env] Creating Docker Compose resource for env-dashboard\n| [2026-10-09T20:48:52] Aspire.Hosting.Docker.DockerComposeEnvironmentResource Information: Creating Docker Compose resource for env-dashboard\n    [Information:prepare-deployment-targets-env] Creating Docker Compose resource for nginx\n| [2026-10-09T20:48:52] Aspire.Hosting.Docker.DockerComposeEnvironmentResource Information: Creating Docker Compose resource for nginx\n[CreateStep] validate-docker-compose\n[CreateStep] before-start\n| [2026-10-09T20:48:52] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n[CreateStep] pipeline-execution\n[CreateStep] build\n[CreateStep] publish-env\n    [Information:publish-env] Generating Compose output\n| [2026-10-09T20:48:52] Aspire.Hosting.Publishing.PipelineExecutor Information: Generating Compose output\n    [CreateTask:publish-env] Writing the Docker Compose file to the output path.\n[CreateStep] validate-compute-environments\n      [CompleteTask:Writing the Docker Compose file to the output path.] Docker Compose file written successfully to /tmp/Aspire.Hosting.TestUtilities/Workspace/0pcccsad.q1s/docker-compose.yaml. (State: Completed)\n[CreateStep] publish\n[CreateStep] prepare-env\n[CreateStep] docker-compose-up-env\n    [Information:docker-compose-up-env] Container runtime auto-detected: Docker (docker).\n| [2026-10-09T20:48:52] Aspire.Hosting.ContainerRuntime Information: Container runtime auto-detected: Docker (docker).\n    [CreateTask:docker-compose-up-env] Running compose up for **env** using **Docker**\n    [Information:docker-compose-up-env] Using container runtime 'docker' for compose operations.\n| [2026-10-09T20:48:52] Aspire.Hosting.Publishing.DockerContainerRuntime Information: Using container runtime 'docker' for compose operations.\n      [CompleteTask:Running compose up for **env** using **Docker**] Compose deployment failed (Docker): 'docker compose up' failed with exit code 1. Ensure 'docker' is installed and available on PATH. The container runtime was auto-detected as 'docker'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').\n env-dashboard Pulling \n nginx Pulling \n 4addc8e4151f Pulling fs layer \n f300cc6f3c98 Pulling fs layer \n e05594146dac Pulling fs layer \n 22a73cb055b8 Pulling fs layer \n a9c21782ed5a Pulling fs layer \n 22a73cb055b8 Waiting \n a9c21782ed5a Waiting \n 4addc8e4151f Downloading [>                                                  ]  31.96kB/1.878MB\n 4addc8e4151f Verifying Checksum \n 4addc8e4151f Download complete \n 4addc8e4151f Extracting [>                                                  ]  32.77kB/1.878MB\n f300cc6f3c98 Downloading [>                                                  ]  276.6kB/26.93MB\n e05594146dac Downloading [==================================================>]     120B/120B\n e05594146dac Verifying Checksum \n e05594146dac Download complete \n 4addc8e4151f Extracting [===========================================>       ]  1.638MB/1.878MB\n 22a73cb055b8 Downloading [==================================================>]      96B/96B\n 22a73cb055b8 Verifying Checksum \n 22a73cb055b8 Download complete \n f300cc6f3c98 Downloading [==================>                                ]  9.748MB/26.93MB\n a9c21782ed5a Downloading [>                                                  ]  391.3kB/37.83MB\n 4addc8e4151f Extracting [==============================================>    ]  1.737MB/1.878MB\n a9c21782ed5a Downloading [===================>                               ]  14.93MB/37.83MB\n f300cc6f3c98 Downloading [===============================================>   ]  25.35MB/26.93MB\n f300cc6f3c98 Verifying Checksum \n f300cc6f3c98 Download complete \n 4addc8e4151f Extracting [====================================",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "docker compose up failed because the Docker Hub unauthenticated pull rate limit (toomanyrequests) was hit while pulling nginx/dashboard images; this is an environmental condition unrelated to the merged PR's Azure role-assignment experimental attribute changes."
+    }
+  ],
+  "causes": [
+    "docker-compose-port-already-in-use"
+  ]
+}
