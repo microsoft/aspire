@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Net;
 using Azure.Core;
 using OpenTelemetry;
+using OpenTelemetry.Metrics;
 
 namespace Aspire.Components.TestUtilities;
 
@@ -48,6 +49,21 @@ internal sealed class FoundryTestActivityExporter : BaseExporter<Activity>
         foreach (var activity in batch)
         {
             Activities.Enqueue(activity);
+        }
+
+        return ExportResult.Success;
+    }
+}
+
+internal sealed class FoundryTestMetricExporter : BaseExporter<Metric>
+{
+    public ConcurrentQueue<Metric> Metrics { get; } = new();
+
+    public override ExportResult Export(in Batch<Metric> batch)
+    {
+        foreach (var metric in batch)
+        {
+            Metrics.Enqueue(metric);
         }
 
         return ExportResult.Success;

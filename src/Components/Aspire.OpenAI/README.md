@@ -114,6 +114,8 @@ builder.AddOpenAIClient("openai");
 
 ## Experimental Telemetry
 
+The `AddChatClient` and `AddEmbeddingGenerator` helpers enable Microsoft.Extensions.AI tracing and metrics. `DisableTracing` and `DisableMetrics` independently disable the corresponding OpenTelemetry subscriptions; disabling tracing alone retains metrics.
+
 OpenAI telemetry support is experimental, the shape of traces may change in the future without notice.
 It can be enabled by invoking
 

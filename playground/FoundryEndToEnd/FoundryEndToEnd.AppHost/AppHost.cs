@@ -23,7 +23,7 @@ var webstory = builder.AddProject<Projects.FoundryEndToEnd_WebStory>("webstory")
 if (!foundry.Resource.IsEmulator)
 {
     var project = foundry.AddProject("project");
-    webstory.WithReference(project);
+    webstory.WithReference(foundry).WithReference(project);
 }
 
 #if !SKIP_DASHBOARD_REFERENCE

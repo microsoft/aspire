@@ -234,42 +234,119 @@ public class AspireAzureProjectOpenAIExtensionsTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ChatClientUsesProjectEndpointAndOptionalTelemetry(bool enabled)
+    [InlineData(false, false, false, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, true, true)]
+    [InlineData(false, true, false, false)]
+    [InlineData(false, true, false, true)]
+    [InlineData(false, true, true, false)]
+    [InlineData(false, true, true, true)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, false, false, true)]
+    [InlineData(true, false, true, false)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, true, true, false)]
+    [InlineData(true, true, true, true)]
+    public async Task ModelClientsUseProjectEndpointAndIndependentTelemetry(bool keyed, bool embeddings, bool disableTracing, bool disableMetrics)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
-        using var handler = new FoundryTestHttpMessageHandler("""
+        using var handler = new FoundryTestHttpMessageHandler(embeddings ? """
+            {"object":"list","model":"embedding","data":[{"object":"embedding","index":0,"embedding":[1.0,2.0]}],
+             "usage":{"prompt_tokens":1,"total_tokens":1}}
+            """ : """
             {"id":"chatcmpl-test","object":"chat.completion","created":1,"model":"chat",
              "choices":[{"index":0,"message":{"role":"assistant","content":"Hello"},"finish_reason":"stop"}],
              "usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
             """);
         using var httpClient = new HttpClient(handler);
         using var exporter = new FoundryTestActivityExporter();
-        builder.AddAzureProjectOpenAIClient("project", settings =>
+        using var metricExporter = new FoundryTestMetricExporter();
+
+        void ConfigureSettings(AzureProjectOpenAISettings settings)
         {
             settings.Endpoint = new(Endpoint);
             settings.Credential = new FoundryTestTokenCredential();
-            settings.DisableTracing = !enabled;
-            settings.DisableMetrics = !enabled;
-        }, client => client.ConfigureOptions(options => options.Transport = new HttpClientPipelineTransport(httpClient)))
-            .AddChatClient("chat");
+            settings.DisableTracing = disableTracing;
+            settings.DisableMetrics = disableMetrics;
+        }
+
+        void ConfigureClient(IAzureClientBuilder<ProjectOpenAIClient, ProjectOpenAIClientOptions> client)
+            => client.ConfigureOptions(options => options.Transport = new HttpClientPipelineTransport(httpClient));
+
+        var clientBuilder = keyed
+            ? builder.AddKeyedAzureProjectOpenAIClient("project", ConfigureSettings, ConfigureClient)
+            : builder.AddAzureProjectOpenAIClient("project", ConfigureSettings, ConfigureClient);
+        Assert.Equal(disableTracing, clientBuilder.DisableTracing);
+        Assert.Equal(disableMetrics, clientBuilder.DisableMetrics);
+        if (keyed)
+        {
+            clientBuilder.AddKeyedChatClient("chat", "chat");
+            clientBuilder.AddKeyedEmbeddingGenerator("embeddings", "embedding");
+        }
+        else
+        {
+            clientBuilder.AddChatClient("chat");
+            clientBuilder.AddEmbeddingGenerator("embedding");
+        }
+
         builder.Services.AddOpenTelemetry().WithTracing(tracing => tracing.AddProcessor(new SimpleActivityExportProcessor(exporter)));
+        if (!disableMetrics)
+        {
+            builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics.AddReader(new BaseExportingMetricReader(metricExporter)));
+        }
+
         using var host = builder.Build();
         host.Services.GetRequiredService<TracerProvider>();
+        var meterProvider = host.Services.GetService<MeterProvider>();
+        Assert.Equal(!disableMetrics, meterProvider is not null);
 
-        var response = await host.Services.GetRequiredService<IChatClient>().GetResponseAsync("hello");
+        if (embeddings)
+        {
+            var generator = keyed
+                ? host.Services.GetRequiredKeyedService<IEmbeddingGenerator<string, Embedding<float>>>("embeddings")
+                : host.Services.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
+            Assert.Equal(disableTracing && disableMetrics, generator.GetService<OpenTelemetryEmbeddingGenerator<string, Embedding<float>>>() is null);
+            var vector = await generator.GenerateVectorAsync("hello");
+            Assert.Equal(new float[] { 1, 2 }, vector.ToArray());
+        }
+        else
+        {
+            var chatClient = keyed
+                ? host.Services.GetRequiredKeyedService<IChatClient>("chat")
+                : host.Services.GetRequiredService<IChatClient>();
+            Assert.Equal(disableTracing && disableMetrics, chatClient.GetService<OpenTelemetryChatClient>() is null);
+            var response = await chatClient.GetResponseAsync("hello");
+            Assert.Equal("Hello", response.Text);
+        }
 
-        Assert.Equal("Hello", response.Text);
-        Assert.Equal("/api/projects/test/openai/v1/chat/completions", Assert.Single(handler.Requests).Uri.AbsolutePath);
-        Assert.Equal(enabled, host.Services.GetService<MeterProvider>() is not null);
-        if (enabled)
+        Assert.Equal(embeddings ? "/api/projects/test/openai/v1/embeddings" : "/api/projects/test/openai/v1/chat/completions",
+            Assert.Single(handler.Requests).Uri.AbsolutePath);
+        if (!disableTracing)
         {
             Assert.Contains(exporter.Activities, activity => activity.Source.Name is "Experimental.Microsoft.Extensions.AI" or "Microsoft.Extensions.AI");
         }
         else
         {
             Assert.Empty(exporter.Activities);
+        }
+
+        if (!disableMetrics)
+        {
+            Assert.True(meterProvider!.ForceFlush());
+            var metric = Assert.Single(metricExporter.Metrics, metric => metric.Name == "gen_ai.client.token.usage");
+            long measurements = 0;
+            foreach (var point in metric.GetMetricPoints())
+            {
+                measurements += point.GetHistogramCount();
+            }
+            Assert.True(measurements > 0);
+        }
+        else
+        {
+            Assert.Empty(metricExporter.Metrics);
         }
     }
 

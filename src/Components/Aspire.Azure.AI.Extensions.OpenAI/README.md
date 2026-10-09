@@ -158,7 +158,7 @@ Register `builder.AddAzureProjectOpenAIClient("ai").AddChatClient("chat")` in `M
 
 Chat and embedding helpers register Microsoft.Extensions.AI telemetry. The activity sources and meters are `Experimental.Microsoft.Extensions.AI` and `Microsoft.Extensions.AI`; exporters come from the application's OpenTelemetry configuration.
 
-`DisableTracing` and `DisableMetrics` disable the respective subscriptions. `EnableSensitiveTelemetryData` controls capture of message content in the helpers; it defaults to false unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`. Direct SDK calls use the SDK's own diagnostic options, not the Microsoft.Extensions.AI wrappers.
+`DisableTracing` and `DisableMetrics` independently disable the respective subscriptions. The helpers retain the telemetry wrapper when either signal is enabled, so disabling tracing does not disable metrics. `EnableSensitiveTelemetryData` controls capture of message content in the helpers; it defaults to false unless `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`. Direct SDK calls use the SDK's own diagnostic options, not the Microsoft.Extensions.AI wrappers.
 
 No health check is registered: the integration does not make billable inference calls or require model-list permissions for a health probe.
 
