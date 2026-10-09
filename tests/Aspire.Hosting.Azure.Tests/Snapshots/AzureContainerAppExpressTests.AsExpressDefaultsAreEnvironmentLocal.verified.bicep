@@ -40,18 +40,11 @@ resource express_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
 
 resource express 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
   name: take('express${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: express_law.properties.customerId
-        sharedKey: express_law.listKeys().primarySharedKey
-      }
-    }
     environmentMode: 'Express'
   }
-  tags: tags
 }
 
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = express_law.name

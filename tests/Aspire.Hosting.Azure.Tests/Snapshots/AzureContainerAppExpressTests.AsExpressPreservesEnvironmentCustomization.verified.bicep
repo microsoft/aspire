@@ -40,24 +40,11 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
 
 resource env 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: env_law.properties.customerId
-        sharedKey: env_law.listKeys().primarySharedKey
-      }
-    }
-    workloadProfiles: [
-      {
-        name: 'custom'
-        workloadProfileType: 'Consumption'
-      }
-    ]
     environmentMode: 'Express'
   }
-  tags: tags
 }
 
 output AZURE_LOG_ANALYTICS_WORKSPACE_NAME string = env_law.name
