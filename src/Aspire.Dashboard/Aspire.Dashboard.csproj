@@ -357,6 +357,7 @@
     <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="Utils\IConfigurationExtensions.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownDashboardLaunchContexts.cs" Link="Utils\KnownDashboardLaunchContexts.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Utils\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Utils\BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Utils\HeldFileLease.cs" />

@@ -359,6 +359,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedEnv);
         Assert.Equal("Debug", capturedEnv["Logging__LogLevel__Default"]);
+        Assert.Equal(KnownDashboardLaunchContexts.Cli, capturedEnv[DashboardConfigNames.DashboardLaunchContextName.EnvVarName]);
     }
 
     [Fact]

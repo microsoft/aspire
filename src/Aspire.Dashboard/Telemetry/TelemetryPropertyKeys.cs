@@ -11,6 +11,12 @@ public static class TelemetryPropertyKeys
     public const string DashboardVersion = AspireDashboardPropertyPrefix + "Version";
     public const string DashboardBuildId = AspireDashboardPropertyPrefix + "BuildId";
 
+    // Startup properties
+    public const string StartupSuccess = AspireDashboardPropertyPrefix + "Startup.Success";
+    public const string StartupLaunchContext = AspireDashboardPropertyPrefix + "Startup.LaunchContext";
+    public const string StartupDurationMilliseconds = AspireDashboardPropertyPrefix + "Startup.DurationMilliseconds";
+    public const string ErrorType = "error.type";
+
     // IComponentWithTelemetry properties
     public const string DashboardComponentId = AspireDashboardPropertyPrefix + "ComponentId";
     public const string DashboardComponentType = AspireDashboardPropertyPrefix + "ComponentType";

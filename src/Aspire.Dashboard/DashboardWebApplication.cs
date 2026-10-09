@@ -219,6 +219,33 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<IPostConfigureOptions<DashboardOptions>, PostConfigureDashboardOptions>();
         builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
 
+        // Telemetry must be available before options validation so failed startup attempts
+        // can be recorded even though the host never starts.
+        builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
+        builder.Services.TryAddSingleton<DashboardTelemetryService>();
+        builder.Services.TryAddSingleton<DashboardStartupTelemetry>();
+        builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
+            services.GetRequiredService<IConfiguration>()));
+        builder.Services.AddSingleton<DashboardTelemetryManager>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
+        builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
+        builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
+        if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
+        {
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing
+                    // Diagnostic identity must not flow into product usage logs.
+                    .ConfigureResource(resource => resource
+                        .AddService(DefaultOtlpServiceName, autoGenerateServiceInstanceId: false)
+                        // Reapply the detector after the fallback so OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
+                        // from the application's IConfiguration retain their precedence.
+                        .AddEnvironmentVariableDetector())
+                    .AddAspNetCoreInstrumentation()
+                    .AddSource(DashboardActivitySource.ActivitySourceName)
+                    .AddSource(TracingSqliteConnection.ActivitySourceName)
+                    .AddOtlpExporter());
+        }
+
         if (!TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages))
         {
             // The options have validation failures. Write them out to the user and return a non-zero exit code.
@@ -339,31 +366,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddSingleton<PauseManager>();
 
-        // Telemetry
-        builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
-        builder.Services.TryAddSingleton<DashboardTelemetryService>();
-        builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
-            services.GetRequiredService<IConfiguration>()));
-        builder.Services.AddSingleton<DashboardTelemetryManager>();
-        builder.Services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
-        builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
-        builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
-        if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
-        {
-            builder.Services.AddOpenTelemetry()
-                .WithTracing(tracing => tracing
-                    // Diagnostic identity must not flow into product usage logs.
-                    .ConfigureResource(resource => resource
-                        .AddService(DefaultOtlpServiceName, autoGenerateServiceInstanceId: false)
-                        // Reapply the detector after the fallback so OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
-                        // from the application's IConfiguration retain their precedence.
-                        .AddEnvironmentVariableDetector())
-                    .AddAspNetCoreInstrumentation()
-                    .AddSource(DashboardActivitySource.ActivitySourceName)
-                    .AddSource(TracingSqliteConnection.ActivitySourceName)
-                    .AddOtlpExporter());
-        }
-
         // OTLP services.
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
@@ -459,6 +461,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.Lifetime.ApplicationStarted.Register(() =>
         {
+            Services.GetRequiredService<DashboardStartupTelemetry>().RecordSuccess();
+
             ResolvedEndpointInfo? frontendEndpointInfo = null;
             if (_frontendEndPointAccessor.Count > 0)
             {
@@ -1093,21 +1097,25 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     {
         if (_validationFailures.Count > 0)
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.ConfigurationValidation);
             return ExitCodeValidationFailure;
         }
 
         try
         {
-            _app.Run();
+            StartAsync().GetAwaiter().GetResult();
+            _app.WaitForShutdown();
             return 0;
         }
         catch (IOException ex) when (ContainsAddressInUse(ex))
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.AddressInUse);
             Console.Error.WriteLine($"Error: {ex.Message}");
             return ExitCodeAddressInUse;
         }
         catch (Exception ex)
         {
+            RecordStartupFailure(ex.GetType().FullName ?? ex.GetType().Name);
             // Include the full exception (type, stack trace, inner exceptions)
             // so that a "dashboard silently died" report has enough breadcrumbs
             // to find the root cause from the AppHost log alone, without
@@ -1127,28 +1135,31 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     {
         if (_validationFailures.Count > 0)
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.ConfigurationValidation);
             return ExitCodeValidationFailure;
         }
 
         try
         {
-            // Cast to IHost so this binds to the CancellationToken-aware HostingAbstractionsHostExtensions.RunAsync
-            // (WebApplication's own RunAsync only takes a URL). Cancelling the token stops the host gracefully.
-            await ((IHost)_app).RunAsync(cancellationToken).ConfigureAwait(false);
+            await StartAsync(cancellationToken).ConfigureAwait(false);
+            await _app.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
             return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Cancellation is the watchdog's normal shutdown signal (or a start-time race), not a failure.
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.Canceled);
             return 0;
         }
         catch (IOException ex) when (ContainsAddressInUse(ex))
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.AddressInUse);
             Console.Error.WriteLine($"Error: {ex.Message}");
             return ExitCodeAddressInUse;
         }
         catch (Exception ex)
         {
+            RecordStartupFailure(ex.GetType().FullName ?? ex.GetType().Name);
             // Include the full exception (type, stack trace, inner exceptions)
             // so that a "dashboard silently died" report has enough breadcrumbs
             // to find the root cause from the AppHost log alone, without
@@ -1172,10 +1183,26 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         return false;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken = default)
+    private void RecordStartupFailure(string errorType)
+    {
+        Services.GetRequiredService<DashboardTelemetryManager>().Initialize();
+        Services.GetRequiredService<DashboardStartupTelemetry>().RecordFailure(errorType);
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         Debug.Assert(_validationFailures.Count == 0, "Validation failures: " + Environment.NewLine + string.Join(Environment.NewLine, _validationFailures));
-        return _app.StartAsync(cancellationToken);
+        try
+        {
+            await _app.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            RecordStartupFailure(ex is IOException && ContainsAddressInUse(ex)
+                ? KnownDashboardStartupFailureReasons.AddressInUse
+                : ex.GetType().FullName ?? ex.GetType().Name);
+            throw;
+        }
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)

@@ -38,6 +38,7 @@
     <Compile Include="$(SharedDir)FileLock.cs" Link="Utils\FileLock.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownDashboardLaunchContexts.cs" Link="Utils\KnownDashboardLaunchContexts.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)DebugSessionInfoParser.cs" Link="Utils\DebugSessionInfoParser.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Publishing\ContainerRuntimeDetector.cs" />
