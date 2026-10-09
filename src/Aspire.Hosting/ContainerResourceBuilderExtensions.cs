@@ -1023,6 +1023,14 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// <para>
+    /// Use the callback's Dockerfile builder to define the image's stages and instructions.
+    /// </para>
+    /// <para>
+    /// The build context path is relative to the AppHost directory unless it is fully qualified.
+    /// </para>
+    /// </ats-remarks>
     [AspireExport]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null)
     {
@@ -1687,6 +1695,15 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// <para>
+    /// Calling this method multiple times composes callbacks, which are invoked in registration order
+    /// to build the final Dockerfile.
+    /// </para>
+    /// <para>
+    /// The build context path is relative to the AppHost directory unless it is fully qualified.
+    /// </para>
+    /// </ats-remarks>
     [AspireExport]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null) where T : ContainerResource
     {
@@ -1831,6 +1848,10 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// For multi-stage Dockerfiles, specify separate build and runtime base images.
+    /// Images that are not specified use the integration's defaults. At least one base image must be specified.
+    /// </ats-remarks>
     [AspireExport]
     public static IResourceBuilder<T> WithDockerfileBaseImage<T>(this IResourceBuilder<T> builder, string? buildImage = null, string? runtimeImage = null) where T : IResource
     {

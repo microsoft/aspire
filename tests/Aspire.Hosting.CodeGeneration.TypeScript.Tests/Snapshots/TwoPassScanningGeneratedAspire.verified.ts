@@ -9552,22 +9552,8 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddDockerfileBuilder("mycontainer", "path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Use the callback's Dockerfile builder to define the image's stages and instructions.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param name The name of the resource.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
@@ -9782,22 +9768,8 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddDockerfileBuilder("mycontainer", "path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Use the callback's Dockerfile builder to define the image's stages and instructions.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param name The name of the resource.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
@@ -10154,22 +10126,8 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddDockerfileBuilder("mycontainer", "path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Use the callback's Dockerfile builder to define the image's stages and instructions.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param name The name of the resource.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
@@ -12786,17 +12744,8 @@ export interface ContainerRegistryResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -13115,17 +13064,8 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -13478,17 +13418,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -14952,25 +14883,9 @@ export interface ContainerResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -14980,17 +14895,8 @@ export interface ContainerResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -15780,25 +15686,9 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -15808,17 +15698,8 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -16912,25 +16793,9 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -16956,17 +16821,8 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -19329,17 +19185,8 @@ export interface CSharpAppResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -19981,17 +19828,8 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -20667,17 +20505,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -23078,17 +22907,8 @@ export interface DotnetToolResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -23758,17 +23578,8 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -24472,17 +24283,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -26971,17 +26773,8 @@ export interface ExecutableResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -27612,17 +27405,8 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -28294,17 +28078,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -30663,17 +30438,8 @@ export interface ExternalServiceResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -30997,17 +30763,8 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -31365,17 +31122,8 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -32707,17 +32455,8 @@ export interface ParameterResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -33049,17 +32788,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -33426,17 +33156,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -34786,17 +34507,8 @@ export interface ProjectResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -35438,17 +35150,8 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -36125,17 +35828,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -38693,25 +38387,9 @@ export interface TestDatabaseResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -38721,17 +38399,8 @@ export interface TestDatabaseResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -39521,25 +39190,9 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -39549,17 +39202,8 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -40652,25 +40296,9 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -40696,17 +40324,8 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -43226,25 +42845,9 @@ export interface TestRedisResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -43254,17 +42857,8 @@ export interface TestRedisResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -44138,25 +43732,9 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -44166,17 +43744,8 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -45353,25 +44922,9 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -45397,17 +44950,8 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -48256,25 +47800,9 @@ export interface TestVaultResource {
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -48284,17 +47812,8 @@ export interface TestVaultResource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -49086,25 +48605,9 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -49114,17 +48617,8 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -50219,25 +49713,9 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures the resource to use a programmatically generated Dockerfile
      *
-     * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
-     * instead of string manipulation. Callbacks can be composed by calling this method multiple times - each callback will be invoked
-     * in order to build up the final Dockerfile.
-     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
-     * Creates a container with a programmatically built Dockerfile using fluent API:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddContainer("mycontainer", "myimage")
-     * .WithDockerfileBuilder("path/to/context", context =>
-     * {
-     * context.Builder.From("alpine:latest")
-     * .WorkDir("/app")
-     * .Run("apk add curl")
-     * .Copy(".", ".")
-     * .Cmd(["./myapp"]);
-     * return Task.CompletedTask;
-     * });
-     * builder.Build().Run();
-     * ```
+     * Calling this method multiple times composes callbacks, which are invoked in registration order
+     * to build the final Dockerfile.
+     * The build context path is relative to the AppHost directory unless it is fully qualified.
      * @param contextPath Path to be used as the context for the container image build.
      * @param callback A callback that uses the `DockerfileBuilder` API to construct the Dockerfile.
      * @param options Additional options.
@@ -50263,17 +49741,8 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -52936,17 +52405,8 @@ export interface Resource {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -53265,17 +52725,8 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -53629,17 +53080,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Configures custom base images for generated Dockerfiles.
      *
-     * This extension method allows customization of the base images used in generated Dockerfiles.
-     * For multi-stage Dockerfiles (e.g., Python with UV), you can specify separate build and runtime images.
-     * Specify custom base images for a Python application:
-     * ```
-     * var builder = DistributedApplication.CreateBuilder(args);
-     * builder.AddPythonApp("myapp", "path/to/app", "main.py")
-     * .WithDockerfileBaseImage(
-     * buildImage: "ghcr.io/astral-sh/uv:python3.12-bookworm-slim",
-     * runtimeImage: "python:3.12-slim-bookworm");
-     * builder.Build().Run();
-     * ```
+     * For multi-stage Dockerfiles, specify separate build and runtime base images.
+     * Images that are not specified use the integration's defaults. At least one base image must be specified.
      * @param options Additional options.
      * @returns The resource builder.
      */
