@@ -58,7 +58,9 @@ public static class FoundryToolboxBuilderExtensions
             new(FoundryResource.FoundryUserRoleDefinitionId, "Foundry User")
         };
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         toolbox.Annotations.Add(new ReferenceRoleAssignmentAnnotation(builder.Resource, roles));
+#pragma warning restore ASPIREAZURE003
 
         return builder.ApplicationBuilder.AddResource(toolbox)
             .WithIconName("Toolbox")

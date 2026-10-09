@@ -902,10 +902,12 @@ public class HostedAgentExtensionTests
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
         Assert.Same(account, annotation.Target);
         Assert.Contains(annotation.Roles, role =>
             string.Equals(role.Id, FoundryResource.FoundryUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
+#pragma warning restore ASPIREAZURE003
     }
 
     [Fact]
@@ -922,6 +924,7 @@ public class HostedAgentExtensionTests
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
         Assert.True(account.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults));
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
 
         // The implied grant is least-privilege: only "Foundry User" is required to invoke the agent.
@@ -935,6 +938,7 @@ public class HostedAgentExtensionTests
         {
             Assert.DoesNotContain(annotation.Roles, r => string.Equals(r.Id, defaultRole.Id, StringComparison.OrdinalIgnoreCase));
         }
+#pragma warning restore ASPIREAZURE003
     }
 
     [Fact]
@@ -957,12 +961,14 @@ public class HostedAgentExtensionTests
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>(), r => r.Name == "account");
         var account2 = Assert.Single(builder.Resources.OfType<FoundryResource>(), r => r.Name == "account2");
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         var targets = hostedAgents
             .Select(a => Assert.Single(a.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>()).Target)
             .ToList();
 
         Assert.Contains(account, targets);
         Assert.Contains(account2, targets);
+#pragma warning restore ASPIREAZURE003
     }
 
     private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string responseBody, string mediaType) : HttpMessageHandler
