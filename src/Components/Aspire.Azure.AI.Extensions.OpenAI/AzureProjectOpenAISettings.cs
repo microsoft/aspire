@@ -12,7 +12,7 @@ namespace Aspire.Azure.AI.Extensions.OpenAI;
 public sealed class AzureProjectOpenAISettings : IConnectionStringSettings
 {
     /// <summary>
-    /// Gets or sets the Foundry project endpoint, such as <c>https://account.services.ai.azure.com/api/projects/project</c>.
+    /// Gets or sets the HTTPS Foundry project endpoint, such as <c>https://account.services.ai.azure.com/api/projects/project</c>.
     /// </summary>
     public Uri? Endpoint { get; set; }
 

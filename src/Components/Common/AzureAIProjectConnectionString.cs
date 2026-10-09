@@ -33,9 +33,9 @@ internal static class AzureAIProjectConnectionString
 
     public static Uri ValidateEndpoint(Uri endpoint)
     {
-        if (!endpoint.IsAbsoluteUri || endpoint.Scheme is not ("http" or "https"))
+        if (!endpoint.IsAbsoluteUri || endpoint.Scheme != Uri.UriSchemeHttps)
         {
-            throw new ArgumentException("The Foundry project endpoint must be an absolute HTTP or HTTPS URI.", nameof(endpoint));
+            throw new ArgumentException("The Foundry project endpoint must be an absolute HTTPS URI.", nameof(endpoint));
         }
 
         return endpoint;

@@ -179,15 +179,63 @@ public class AspireAzureAIProjectsExtensionsTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("Endpoint=relative")]
-    [InlineData("Endpoint=https://test.services.ai.azure.com/api/projects/test;Key=secret")]
-    [InlineData("ftp://test/project")]
-    public void RejectsInvalidOrApiKeyConnectionStrings(string connectionString)
+    [InlineData(false, "")]
+    [InlineData(true, "")]
+    [InlineData(false, "Endpoint=relative")]
+    [InlineData(true, "Endpoint=relative")]
+    [InlineData(false, "Endpoint=https://test.services.ai.azure.com/api/projects/test;Key=secret")]
+    [InlineData(true, "Endpoint=https://test.services.ai.azure.com/api/projects/test;Key=secret")]
+    [InlineData(false, "ftp://test/project")]
+    [InlineData(true, "ftp://test/project")]
+    [InlineData(false, "http://test.services.ai.azure.com/api/projects/test")]
+    [InlineData(true, "http://test.services.ai.azure.com/api/projects/test")]
+    [InlineData(false, "Endpoint=http://test.services.ai.azure.com/api/projects/test")]
+    [InlineData(true, "Endpoint=http://test.services.ai.azure.com/api/projects/test")]
+    public void RejectsInvalidOrApiKeyConnectionStrings(bool keyed, string connectionString)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration["ConnectionStrings:project"] = connectionString;
-        Assert.Throws<ArgumentException>(() => builder.AddAzureAIProjectClient("project"));
+        Assert.Throws<ArgumentException>(() => Register(builder, keyed));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void RejectsHttpEndpointsFromSettings(bool keyed, bool configureSettings)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        var endpoint = new Uri("http://test.services.ai.azure.com/api/projects/test");
+        var credential = new FoundryTestTokenCredential();
+        if (!configureSettings)
+        {
+            builder.Configuration[keyed ? $"{Section}:project:Endpoint" : $"{Section}:Endpoint"] = endpoint.AbsoluteUri;
+        }
+
+        void ConfigureSettings(AzureAIProjectsSettings settings)
+        {
+            settings.Credential = credential;
+            if (configureSettings)
+            {
+                settings.Endpoint = endpoint;
+            }
+        }
+
+        if (keyed)
+        {
+            builder.AddKeyedAzureAIProjectClient("project", ConfigureSettings);
+        }
+        else
+        {
+            builder.AddAzureAIProjectClient("project", ConfigureSettings);
+        }
+
+        using var host = builder.Build();
+        var exception = Assert.Throws<ArgumentException>(() => Resolve(host.Services, keyed));
+        Assert.Equal(nameof(endpoint), exception.ParamName);
+        Assert.Contains("absolute HTTPS URI", exception.Message);
+        Assert.Empty(credential.RequestedScopes);
     }
 
     [Fact]

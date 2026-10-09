@@ -122,7 +122,7 @@
                         "Endpoint": {
                           "type": "string",
                           "format": "uri",
-                          "description": "Gets or sets the Foundry project endpoint, such as https://account.services.ai.azure.com/api/projects/project."
+                          "description": "Gets or sets the HTTPS Foundry project endpoint, such as https://account.services.ai.azure.com/api/projects/project."
                         }
                       },
                       "description": "Configures an Azure AI Project OpenAI client and its Microsoft.Extensions.AI telemetry."
