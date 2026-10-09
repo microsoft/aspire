@@ -8,7 +8,6 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
-using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
@@ -2187,20 +2186,7 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
-            processExecutionFactory: new TestProcessExecutionFactory
-            {
-                CreateExecutionFromStartInfoCallback = (startInfo, options) =>
-                {
-                    // This test's entry point is MTP, not the CLI. Re-enter the real CLI assembly
-                    // so dependency-install tests exercise the production guardian and containment.
-                    startInfo.FileName = PathLookupHelper.FindFullPathFromPath("dotnet")
-                        ?? throw new InvalidOperationException("The CLI guardian tests require dotnet.");
-                    startInfo.ArgumentList.Clear();
-                    startInfo.ArgumentList.Add(typeof(Program).Assembly.Location);
-                    return new ProcessExecutionFactory(effectiveEnvironment, NullLogger<ProcessExecutionFactory>.Instance)
-                        .CreateExecution(startInfo, options);
-                }
-            },
+            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(effectiveEnvironment),
             packagingService: new TestPackagingService(),
             configuration: effectiveConfiguration,
             features: new Features(effectiveConfiguration, NullLogger<Features>.Instance),

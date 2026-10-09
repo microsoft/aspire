@@ -53,8 +53,9 @@ internal sealed class IntegrationHostProcessLauncher(
             logger.LogInformation(
                 "Launching integration host '{Name}' [{Language}]: {Command} (entry: {EntryPoint}, cwd: {Directory}).",
                 descriptor.PackageName, descriptor.Language, command, descriptor.HostEntryPoint, startInfo.WorkingDirectory);
-            var execution = processFactory.Create(ProcessSupervisor.CreateStartInfo(startInfo, null, configuration.ShutdownTimeout), logger, new ChildProcessOptions
+            var execution = processFactory.Create(startInfo, logger, new ChildProcessOptions
             {
+                Lifetime = ChildProcessLifetime.OwnedTree,
                 TimeProvider = timeProvider,
                 TerminationTimeout = configuration.ShutdownTimeout,
                 OutputDrainIdleTimeout = configuration.OutputDrainIdleTimeout,

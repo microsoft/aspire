@@ -166,7 +166,8 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             // runtime's job also sets JOB_OBJECT_LIMIT_BREAKAWAY_OK, so DCP can outlive the CLI to
             // finish cleanup by spawning itself with CREATE_BREAKAWAY_FROM_JOB, provided no nested
             // job forbids breakaway (dotnet run's does, so DotNetAppHostProject opts out for it).
-            // Unix children rely on the cooperative parent-liveness watchdog instead (see LayoutProcessRunner).
+            // Ordinary owned helpers are wrapped in the shared guardian instead. This
+            // breakaway policy applies to AppHosts so DCP can finish container cleanup.
             startInfo.KillOnParentExit = options.KillOnParentExit;
             // Long-lived children must not keep unrelated inheritable CLI handles (sockets, other
             // children's pipes) open, so inherit only the standard handles.

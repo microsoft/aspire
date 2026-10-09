@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -48,6 +49,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly CliExecutionContext _executionContext;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IFeatures _features;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
@@ -58,7 +60,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
         ILogger<ScaffoldingService> logger,
         CliExecutionContext executionContext,
         ProfilingTelemetry profilingTelemetry,
-        IFeatures features)
+        IFeatures features,
+        IProcessExecutionFactory processExecutionFactory)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _serverSessionFactory = serverSessionFactory;
@@ -69,6 +72,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _executionContext = executionContext;
         _profilingTelemetry = profilingTelemetry;
         _features = features;
+        _processExecutionFactory = processExecutionFactory;
     }
 
     /// <inheritdoc />
@@ -438,7 +442,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry, _processExecutionFactory);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)

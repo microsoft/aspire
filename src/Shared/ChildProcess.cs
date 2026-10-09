@@ -4,6 +4,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 #if !NET11_0_OR_GREATER
@@ -37,6 +38,8 @@ internal partial class ChildProcess : IChildProcess
     private Task _outputDrained = Task.CompletedTask;
     private bool _disposed;
     private long _lastActivityTimestamp;
+    private DirectoryInfo? _completionDirectory;
+    private string? _completionPath;
 
     internal ChildProcess(
         ProcessStartInfo startInfo,
@@ -50,7 +53,13 @@ internal partial class ChildProcess : IChildProcess
         _logger = logger;
         _options = options;
         _isWindows = isWindows;
-        _isSupervisor = startInfo.Environment.ContainsKey(ProcessSupervisor.CommandVariable);
+        ArgumentException.ThrowIfNullOrEmpty(startInfo.FileName);
+        if (options.Detached && options.Lifetime == ChildProcessLifetime.OwnedTree)
+        {
+            throw new ArgumentException("A detached process cannot belong to its launcher's owned tree.", nameof(options));
+        }
+        _isSupervisor = options.Lifetime == ChildProcessLifetime.OwnedTree ||
+            startInfo.Environment.ContainsKey(ProcessSupervisor.CommandVariable);
         _lastActivityTimestamp = options.TimeProvider.GetTimestamp();
         EnvironmentVariables = new ReadOnlyDictionary<string, string?>(startInfo.Environment);
     }
@@ -79,7 +88,7 @@ internal partial class ChildProcess : IChildProcess
     public bool HasExited => Process.HasExited;
 
     /// <inheritdoc />
-    public int ExitCode => Process.ExitCode;
+    public int ExitCode => GetExitCode(Process);
 
     /// <inheritdoc />
     public DateTimeOffset? StartTime
@@ -109,17 +118,29 @@ internal partial class ChildProcess : IChildProcess
                 throw new InvalidOperationException($"{nameof(ChildProcess)} has already been started.");
             }
 
+            var startInfo = _startInfo;
+            if (_options.Lifetime == ChildProcessLifetime.OwnedTree)
+            {
+                _completionPath = _options.CompletionPath;
+                if (_completionPath is null)
+                {
+                    _completionDirectory = Directory.CreateTempSubdirectory("aspire-process-completion-");
+                    _completionPath = Path.Combine(_completionDirectory.FullName, "exit-code");
+                }
+                startInfo = _options.CreateSupervisorStartInfo(_startInfo, _completionPath, _options.TerminationTimeout);
+            }
+
             // Children never consume input from their owner. A null stdin makes tools such as
             // package-manager lifecycle scripts observe EOF instead of inheriting the TTY and blocking
             // indefinitely (https://github.com/microsoft/aspire/issues/16791). A detached child
             // outlives the CLI, so nothing would be left to drain redirected output either.
 #if NET11_0_OR_GREATER
             using var nullHandle = File.OpenNullHandle();
-            _startInfo.StandardInputHandle = nullHandle;
+            startInfo.StandardInputHandle = nullHandle;
             if (_options.Detached)
             {
-                _startInfo.StandardOutputHandle = nullHandle;
-                _startInfo.StandardErrorHandle = nullHandle;
+                startInfo.StandardOutputHandle = nullHandle;
+                startInfo.StandardErrorHandle = nullHandle;
             }
 #else
             // AppHost servers target net10, which does not expose standard-handle assignment.
@@ -128,11 +149,11 @@ internal partial class ChildProcess : IChildProcess
             {
                 throw new NotSupportedException("Detached process execution requires .NET 11.");
             }
-            _startInfo.RedirectStandardInput = true;
+            startInfo.RedirectStandardInput = true;
 #endif
 
             // Process.Start() only returns null for UseShellExecute, which is never used here.
-            process = Process.Start(_startInfo)
+            process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException($"Failed to start child process: {_startInfo.FileName}");
             _processId = process.Id;
             _startTime = GetStartTime(process);
@@ -144,7 +165,7 @@ internal partial class ChildProcess : IChildProcess
 #endif
 
             // Publish the process before reading output so callbacks can read ProcessId.
-            if (!_options.Detached && (_startInfo.RedirectStandardOutput || _startInfo.RedirectStandardError))
+            if (!_options.Detached && (startInfo.RedirectStandardOutput || startInfo.RedirectStandardError))
             {
                 _outputDrained = Task.Run(() => ReadOutputAsync(process), CancellationToken.None);
             }
@@ -226,7 +247,7 @@ internal partial class ChildProcess : IChildProcess
         var process = Process;
         await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
-        return process.ExitCode;
+        return GetExitCode(process);
     }
 
     /// <inheritdoc />
@@ -266,7 +287,12 @@ internal partial class ChildProcess : IChildProcess
             throw;
         }
 
-        _logger.LogDebug("{FileName}({ProcessId}) exited with code: {ExitCode}", FileName, _processId, process.ExitCode);
+        var exitCode = GetExitCode(process);
+        if (_isSupervisor)
+        {
+            await VerifyContainedTerminationAsync(process).ConfigureAwait(false);
+        }
+        _logger.LogDebug("{FileName}({ProcessId}) exited with code: {ExitCode}", FileName, _processId, exitCode);
 
         // Reset the idle window at exit so the drain budget is measured from "process gone", not
         // from the last line read. A consumer can block in a callback right up to exit and still
@@ -274,6 +300,25 @@ internal partial class ChildProcess : IChildProcess
         // ChildProcessTests.WaitForExitAsync_DrainsBufferedTailAfterLongIdlePeriod.
         RecordActivity();
         await DrainOutputAsync(cancellationToken).ConfigureAwait(false);
+
+        return exitCode;
+    }
+
+    private int GetExitCode(Process process)
+    {
+        if (_completionPath is null)
+        {
+            return process.ExitCode;
+        }
+        if (File.Exists(_completionPath))
+        {
+            return int.Parse(File.ReadAllText(_completionPath), CultureInfo.InvariantCulture);
+        }
+        if (process.ExitCode == 0)
+        {
+            _logger.LogError("Supervisor for {FileName}({ProcessId}) exited without reporting command completion.", FileName, _processId);
+            throw new InvalidOperationException($"Supervisor for '{FileName}' exited without reporting command completion.");
+        }
 
         return process.ExitCode;
     }
@@ -445,10 +490,9 @@ internal partial class ChildProcess : IChildProcess
 
     private void ForceKillChild(Process process)
     {
-        // Mirrors the force path: resolve "already gone?", issue a best-effort courtesy SIGTERM on Unix
-        // (so a SIGTERM-aware child can flush), then hard-kill. On Windows there is no graceful signal
-        // to send here — Ctrl+C delivery only happens on the signaler-backed graceful ladder — so we
-        // skip straight to the kill.
+        // Force-tree cleanup must not signal the root first: it could exit and reparent
+        // descendants before the tree walk. Root-only Unix cleanup retains its courtesy
+        // SIGTERM; graceful tree shutdown uses the separate signaler-backed ladder.
         var entireProcessTree = _options.KillEntireProcessTreeOnCancel;
         try
         {
@@ -458,8 +502,10 @@ internal partial class ChildProcess : IChildProcess
                 return;
             }
 
-            if (!_isWindows)
+            if (!_isWindows && !entireProcessTree)
             {
+                // A root-only courtesy signal can reparent workers before the subsequent tree
+                // walk. Force-tree cleanup must terminate descendants while their root is alive.
                 ProcessSignaler.RequestGracefulShutdown(process.Id, expectedStartTime: null, _logger);
 
                 if (process.HasExited)
@@ -514,12 +560,17 @@ internal partial class ChildProcess : IChildProcess
 
         if (process is null)
         {
+            _completionDirectory?.Delete(recursive: true);
             return;
         }
 
         try
         {
-            if (_isSupervisor)
+            if (_options.Lifetime == ChildProcessLifetime.OwnedTree && !process.HasExited)
+            {
+                await ShutdownOnCancelAsync(process).ConfigureAwait(false);
+            }
+            else if (_isSupervisor)
             {
                 // Contained commands can finish cooperatively before their group is retired.
                 // The same execution owns cleanup on cancellation, launch failure, and disposal.
@@ -543,6 +594,7 @@ internal partial class ChildProcess : IChildProcess
         finally
         {
             process.Dispose();
+            _completionDirectory?.Delete(recursive: true);
         }
     }
 

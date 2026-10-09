@@ -36,10 +36,14 @@ internal static partial class ProcessSupervisor
         {
             FileName = executable,
             WorkingDirectory = runtimeStartInfo.WorkingDirectory,
+            CreateNoWindow = runtimeStartInfo.CreateNoWindow,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
+#if NET11_0_OR_GREATER
+        startInfo.InheritedHandles = [];
+#endif
         // dotnet's managed argv[0] is the application DLL. Native apphosts have
         // the executable itself at argv[0], which must not be passed again.
         var isDotnet = Path.GetFileNameWithoutExtension(executable).Equals("dotnet", StringComparison.OrdinalIgnoreCase);
@@ -147,24 +151,51 @@ internal static partial class ProcessSupervisor
 
             logger.LogInformation("Started '{Command}' (runtime PID {Pid}, owner PID {OwnerPid}, cwd '{Directory}').",
                 command.FileName, process.ProcessId, parentId, Environment.CurrentDirectory);
-            var exited = process.WaitForRootExitAsync(CancellationToken.None);
-            if (await Task.WhenAny(exited, parentExited.Task).ConfigureAwait(false) != exited)
+            // The guardian must remain alive while a signalled runtime performs graceful
+            // cleanup. Unix signals target the guardian; Windows console events reach both.
+            using var sigterm = OperatingSystem.IsWindows() ? null : PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
             {
-                logger.LogWarning("Owner process {OwnerPid} exited; terminating its supervised process scope.", parentId);
-                return;
+                context.Cancel = true;
+                ProcessSignaler.RequestGracefulShutdown(process.ProcessId, process.StartTime, logger);
+            });
+            using var sigint = OperatingSystem.IsWindows() ? null : PosixSignalRegistration.Create(PosixSignal.SIGINT, context =>
+            {
+                context.Cancel = true;
+                ProcessSignaler.RequestGracefulShutdown(process.ProcessId, process.StartTime, logger);
+            });
+            ConsoleCancelEventHandler cancelHandler = (_, args) => args.Cancel = true;
+            if (OperatingSystem.IsWindows())
+            {
+                Console.CancelKeyPress += cancelHandler;
             }
+            try
+            {
+                var exited = process.WaitForRootExitAsync(CancellationToken.None);
+                if (await Task.WhenAny(exited, parentExited.Task).ConfigureAwait(false) != exited)
+                {
+                    logger.LogWarning("Owner process {OwnerPid} exited; terminating its supervised process scope.", parentId);
+                    return;
+                }
 
-            await exited.ConfigureAwait(false);
-            logger.Log(process.ExitCode == 0 ? LogLevel.Information : LogLevel.Warning,
-                "Supervised command '{Command}' exited with code {ExitCode}.", command.FileName, process.ExitCode);
-            if (exitCodePath is not null)
-            {
-                // Unix cleanup kills the guardian together with its group, so its OS exit status
-                // is not the command's status. Hand off the status privately before scope teardown;
-                // the owner must still verify cleanup before accepting a successful installation.
-                await File.WriteAllTextAsync(exitCodePath, process.ExitCode.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
+                await exited.ConfigureAwait(false);
+                logger.Log(process.ExitCode == 0 ? LogLevel.Information : LogLevel.Warning,
+                    "Supervised command '{Command}' exited with code {ExitCode}.", command.FileName, process.ExitCode);
+                if (exitCodePath is not null)
+                {
+                    // Unix cleanup kills the guardian together with its group, so its OS exit status
+                    // is not the command's status. Hand off the status privately before scope teardown;
+                    // the owner must still verify cleanup before accepting a successful installation.
+                    await File.WriteAllTextAsync(exitCodePath, process.ExitCode.ToString(CultureInfo.InvariantCulture)).ConfigureAwait(false);
+                }
+                Environment.ExitCode = process.ExitCode;
             }
-            Environment.ExitCode = process.ExitCode;
+            finally
+            {
+                if (OperatingSystem.IsWindows())
+                {
+                    Console.CancelKeyPress -= cancelHandler;
+                }
+            }
         }
         catch (Exception ex)
         {

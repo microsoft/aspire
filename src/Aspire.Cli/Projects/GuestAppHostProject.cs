@@ -1027,9 +1027,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var exitCodePath = Path.Combine(resultDirectory.FullName, "exit-code");
             var startInfo = NpmRunner.CreateNpmProcessStartInfo(npmPath, ["install"], hostDir, _environment, null);
             await using var execution = _processExecutionFactory.CreateExecution(
-                ProcessSupervisor.CreateStartInfo(startInfo, exitCodePath),
+                startInfo,
                 new ProcessInvocationOptions
                 {
+                    Lifetime = ChildProcessLifetime.OwnedTree,
+                    CompletionPath = exitCodePath,
                     StandardOutputCallback = line => _logger.LogInformation("[npm install: {Name}] {Line}", name, line),
                     StandardErrorCallback = line => _logger.LogWarning("[npm install: {Name}] {Line}", name, line)
                 });
@@ -2381,6 +2383,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _logger,
                 _environment,
                 _profilingTelemetry,
+                _processExecutionFactory,
                 _fileLoggerProvider,
                 installDependencies);
 

@@ -4,7 +4,6 @@
 extern alias RemoteHost;
 
 using System.Diagnostics;
-using System.Text.Json;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
 using Aspire.Shared;
@@ -104,10 +103,10 @@ public class IntegrationHostProcessLauncherTests(ITestOutputHelper output)
         Assert.Equal("test-socket", startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"]);
         Assert.Equal("test-token", startInfo.Environment[RemoteHostKnownConfigNames.RemoteAppHostToken]);
         Assert.Equal("attempt", startInfo.Environment[IntegrationHostLauncher.RegistrationIdVariable]);
-        var command = JsonSerializer.Deserialize(startInfo.Environment[ProcessSupervisor.CommandVariable]!, ProcessSupervisorJsonContext.Default.LaunchCommand)!;
-        Assert.Equal(Environment.ProcessPath, command.FileName);
-        Assert.Equal([entryPoint, "space argument"], command.ArgumentList);
+        Assert.Equal(Environment.ProcessPath, startInfo.FileName);
+        Assert.Equal([entryPoint, "space argument"], startInfo.ArgumentList);
         var options = Assert.IsType<ChildProcessOptions>(factory.Options);
+        Assert.Equal(ChildProcessLifetime.OwnedTree, options.Lifetime);
         Assert.Same(clock, options.TimeProvider);
         Assert.Equal(TimeSpan.FromSeconds(10), options.OutputDrainIdleTimeout);
         Assert.Equal(TimeSpan.FromSeconds(12), options.TerminationTimeout);

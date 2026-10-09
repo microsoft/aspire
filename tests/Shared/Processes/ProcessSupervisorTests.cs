@@ -1,14 +1,25 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#if !NET11_0_OR_GREATER
+extern alias RemoteHost;
+#endif
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Xunit;
+
+#if NET11_0_OR_GREATER
+using TestProcessStartInfoHelper = global::ProcessStartInfoHelper;
+#else
+using TestProcessStartInfoHelper = RemoteHost::ProcessStartInfoHelper;
+#endif
 
 namespace Aspire.Shared.Tests;
 
@@ -16,6 +27,40 @@ namespace Aspire.Shared.Tests;
 [Collection(ProcessTestCollection.Name)]
 public class ProcessSupervisorTests(ProcessTestFixture fixture)
 {
+    [Fact]
+    public async Task OwnedTree_WindowsBatchShim_PreservesFinalChildArguments()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows batch commands require cmd.exe.");
+        var directory = fixture.CreateDirectory().CreateSubdirectory("literal %TEMP%! with spaces");
+        var shim = Path.Combine(directory.FullName, "literal %PATH%! shim.cmd");
+        await File.WriteAllTextAsync(shim, """
+            @echo off
+            "%ASPIRE_TEST_DOTNET%" "%ASPIRE_TEST_HOST%" argv %*
+            """);
+        string[] arguments =
+        [
+            "literal %PATH%! & value", "", "a^b|c", "(group)>file<other",
+            "a \"quoted\" value", "quoted \"& text\" remains literal",
+            "backslash\\\"quote", @"C:\tools\trailing\"
+        ];
+        var startInfo = new ProcessStartInfo { WorkingDirectory = directory.FullName };
+        TestProcessStartInfoHelper.SetCommand(startInfo, shim, arguments, isWindows: true);
+        startInfo.Environment["ASPIRE_TEST_DOTNET"] = Path.Combine(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..", "dotnet.exe");
+        startInfo.Environment["ASPIRE_TEST_HOST"] = fixture.AssemblyPath;
+        var stdout = new ConcurrentQueue<string>();
+        await using var process = ProcessTestFixture.CreateProcess(startInfo, new ChildProcessOptions
+        {
+            Lifetime = ChildProcessLifetime.OwnedTree,
+            CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
+            StandardOutputCallback = stdout.Enqueue
+        });
+
+        await process.StartAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30)));
+        Assert.Equal(arguments, JsonSerializer.Deserialize<string[]>(Assert.Single(stdout)));
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(23)]

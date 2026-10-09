@@ -24,7 +24,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
-            processExecutionFactory: processExecutionFactory ?? new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
+            processExecutionFactory: processExecutionFactory ?? TestProcessExecutionFactory.CreateForCliGuardian(new TestEnvironment()));
 
     [Fact]
     public async Task LaunchAsync_WithIsolatedConsoleForGracefulShutdown_RequestsKillOnParentExit()

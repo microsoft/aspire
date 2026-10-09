@@ -16,8 +16,10 @@ using Xunit;
 
 #if NET11_0_OR_GREATER
 using TestProcessStartTimeHelper = global::ProcessStartTimeHelper;
+using TestProcessSignaler = global::ProcessSignaler;
 #else
 using TestProcessStartTimeHelper = RemoteHost::ProcessStartTimeHelper;
+using TestProcessSignaler = RemoteHost::ProcessSignaler;
 #endif
 
 namespace Aspire.Shared.Tests;
@@ -101,8 +103,11 @@ public sealed class ProcessTestFixture : IAsyncLifetime
     }
 
     internal ProcessStartInfo CreateSupervisorStartInfo(ProcessStartInfo command, string? completionPath = null)
+        => CreateSupervisorStartInfo(command, completionPath, TimeSpan.FromSeconds(5));
+
+    internal ProcessStartInfo CreateSupervisorStartInfo(ProcessStartInfo command, string? completionPath, TimeSpan terminationTimeout)
     {
-        var startInfo = ProcessSupervisor.CreateStartInfo(command, completionPath);
+        var startInfo = ProcessSupervisor.CreateStartInfo(command, completionPath, terminationTimeout);
         // Keep the production command handoff and owner identity, replacing only MTP's
         // executable/argv with the standalone guardian entry point.
         startInfo.FileName = "dotnet";
@@ -111,6 +116,11 @@ public sealed class ProcessTestFixture : IAsyncLifetime
 
         return startInfo;
     }
+
+    internal string AssemblyPath => _assemblyPath;
+
+    internal static void RequestGracefulShutdown(int processId) =>
+        TestProcessSignaler.RequestGracefulShutdown(processId, expectedStartTime: null, NullLogger.Instance);
 
     internal static ChildProcess CreateProcess(ProcessStartInfo startInfo, ChildProcessOptions options) =>
         CreateProcess(startInfo, NullLogger.Instance, options);
@@ -213,6 +223,8 @@ public sealed class ProcessTestFixture : IAsyncLifetime
         using System.Diagnostics;
         using System.Globalization;
         using System.IO.Pipes;
+        using System.Runtime.InteropServices;
+        using System.Text.Json;
         using Aspire.Shared;
         using Microsoft.Extensions.Logging.Abstractions;
 
@@ -255,6 +267,9 @@ public sealed class ProcessTestFixture : IAsyncLifetime
 
         switch (args[0])
         {
+            case "argv":
+                Console.WriteLine(JsonSerializer.Serialize(args[1..]));
+                break;
             case "output":
                 Console.WriteLine($"runtime:{Environment.Version.Major}");
                 Console.WriteLine($"stdin:{(await Console.In.ReadToEndAsync()).Length}");
@@ -276,10 +291,17 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                 break;
             case "tree":
             case "tree-exit":
+            case "tree-graceful":
                 using (var started = new NamedPipeServerStream($"{args[1]}-started", PipeDirection.In,
                     1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
                 using (var worker = Process.Start(Command("worker", args[1]))!)
                 {
+                    var shutdown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    using var sigterm = args[0] == "tree-graceful" ? PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+                    {
+                        context.Cancel = true;
+                        shutdown.TrySetResult();
+                    }) : null;
                     await started.WaitForConnectionAsync().WaitAsync(TimeSpan.FromSeconds(30));
                     using var reader = new StreamReader(started);
                     await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(30));
@@ -287,6 +309,11 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                     if (args[0] == "tree-exit")
                     {
                         Environment.ExitCode = int.Parse(args[2], CultureInfo.InvariantCulture);
+                    }
+                    else if (args[0] == "tree-graceful")
+                    {
+                        await shutdown.Task;
+                        Environment.ExitCode = 23;
                     }
                     else
                     {
@@ -296,8 +323,8 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                 break;
             case "owner":
                 await using (var guardian = new ChildProcess(
-                    ProcessSupervisor.CreateStartInfo(Command("tree", args[1])),
-                    NullLogger.Instance, new ChildProcessOptions(), OperatingSystem.IsWindows()))
+                    Command("tree", args[1]),
+                    NullLogger.Instance, new ChildProcessOptions { Lifetime = ChildProcessLifetime.OwnedTree }, OperatingSystem.IsWindows()))
                 {
                     await guardian.StartAsync(CancellationToken.None);
                     await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test owner");

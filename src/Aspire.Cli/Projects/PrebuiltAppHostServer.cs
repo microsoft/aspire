@@ -1351,6 +1351,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
             KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             KillEntireProcessTreeOnCancel = !_environment.IsWindows(),

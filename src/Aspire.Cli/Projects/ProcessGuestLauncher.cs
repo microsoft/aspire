@@ -131,6 +131,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             // matching hard-kill safety net if the launching CLI is terminated before graceful cleanup.
             IsolateConsole = isolateConsoleForGracefulShutdown,
             KillOnParentExit = isolateConsoleForGracefulShutdown,
+            Lifetime = ChildProcessLifetime.OwnedTree,
             GracefulShutdownSignaler = options?.GracefulShutdownSignaler,
             ShutdownService = options?.ShutdownService,
             // The guest is the AppHost's primary process; always tree-kill on escalation so no

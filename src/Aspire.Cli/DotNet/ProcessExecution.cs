@@ -22,6 +22,11 @@ internal sealed class ProcessExecution : ChildProcess, IProcessExecution
             StandardOutputCallback = line => options.StandardOutputCallback?.Invoke(line),
             StandardErrorCallback = line => options.StandardErrorCallback?.Invoke(line),
             KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
+            Lifetime = options.KillOnParentExit && options.Lifetime != ChildProcessLifetime.AppHost
+                ? ChildProcessLifetime.OwnedTree
+                : options.Lifetime,
+            CompletionPath = options.CompletionPath,
+            CreateSupervisorStartInfo = options.CreateSupervisorStartInfo,
             Detached = options.Detached,
             BeginGracefulShutdown = options.GracefulShutdownSignaler is not null && options.ShutdownService is { } shutdownService
                 ? () =>

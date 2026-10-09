@@ -1559,6 +1559,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // from escaping the CLI job to finish resource cleanup. Direct launches have no
             // intervening job and opt back into the CLI job below.
             KillOnParentExit = false,
+            Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
             // The bundled AppHost run hook delegates dotnet run to aspire run. The SDK passes

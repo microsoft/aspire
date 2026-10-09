@@ -144,11 +144,125 @@ public class ChildProcessTests(ProcessTestFixture fixture)
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task Shutdown_UsesSharedGracefulBudgetAndEscalates(bool dispose, bool signalFailure)
+    [InlineData(0)]
+    [InlineData(23)]
+    public async Task OwnedTree_CommandExitPreservesStatusAndReapsOrphanedWorkers(int exitCode)
+    {
+        using var readiness = new ProcessTestReadiness();
+        await using var process = ProcessTestFixture.CreateProcess(
+            fixture.CreateStartInfo("tree-exit", readiness.Name, exitCode.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new ChildProcessOptions
+            {
+                Lifetime = ChildProcessLifetime.OwnedTree,
+                CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo
+            });
+        ProcessTestIdentity[] identities = [];
+        try
+        {
+            await process.StartAsync(TestContext.Current.CancellationToken);
+            identities = await readiness.ReadTreeAsync();
+
+            Assert.Equal(exitCode, await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30)));
+            await process.DisposeAsync();
+            await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
+        }
+        finally
+        {
+            foreach (var identity in identities)
+            {
+                ProcessTestFixture.KillIfRunning(identity);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OwnedTree_ShutdownReapsWorkersWhenRootExitsBeforeThem(bool dispose)
+    {
+        using var readiness = new ProcessTestReadiness();
+        ProcessTestIdentity[] identities = [];
+        await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("tree", readiness.Name),
+            new ChildProcessOptions
+            {
+                Lifetime = ChildProcessLifetime.OwnedTree,
+                CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
+                BeginGracefulShutdown = () => CancellationToken.None,
+                RequestGracefulShutdownAsync = async (pid, token) =>
+                {
+                    Assert.NotEqual(pid, identities[0].ProcessId);
+                    using var root = Process.GetProcessById(identities[0].ProcessId);
+                    root.Kill(entireProcessTree: false);
+                    await root.WaitForExitAsync(token);
+                }
+            });
+        try
+        {
+            await process.StartAsync(TestContext.Current.CancellationToken);
+            identities = await readiness.ReadTreeAsync();
+            using var cancellation = new CancellationTokenSource();
+            cancellation.Cancel();
+
+            if (dispose)
+            {
+                await process.DisposeAsync();
+            }
+            else
+            {
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => process.WaitForExitAsync(cancellation.Token));
+            }
+            await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
+        }
+        finally
+        {
+            foreach (var identity in identities)
+            {
+                ProcessTestFixture.KillIfRunning(identity);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task OwnedTree_ForwardsGracefulSignalAndReapsWorkersAfterRuntimeExit()
+    {
+        Assert.SkipUnless(!OperatingSystem.IsWindows(), "POSIX signals require Unix.");
+        using var readiness = new ProcessTestReadiness();
+        await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("tree-graceful", readiness.Name),
+            new ChildProcessOptions
+            {
+                Lifetime = ChildProcessLifetime.OwnedTree,
+                CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo
+            });
+        ProcessTestIdentity[] identities = [];
+        try
+        {
+            await process.StartAsync(TestContext.Current.CancellationToken);
+            identities = await readiness.ReadTreeAsync();
+
+            ProcessTestFixture.RequestGracefulShutdown(process.ProcessId);
+
+            Assert.Equal(23, await process.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30)));
+            await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
+        }
+        finally
+        {
+            foreach (var identity in identities)
+            {
+                ProcessTestFixture.KillIfRunning(identity);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, true)]
+    public async Task Shutdown_UsesSharedGracefulBudgetAndEscalates(bool dispose, bool signalFailure, bool ownedTree)
     {
         using var readiness = new ProcessTestReadiness();
         using var gracefulBudget = new CancellationTokenSource();
@@ -159,10 +273,12 @@ public class ChildProcessTests(ProcessTestFixture fixture)
         var budgetCount = 0;
         var signaledPid = 0;
         var signalToken = CancellationToken.None;
-        await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("wait", readiness.Name),
+        await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo(ownedTree ? "tree" : "wait", readiness.Name),
             new TestLogger("shared shutdown", sink, enabled: true),
             new ChildProcessOptions
             {
+                Lifetime = ownedTree ? ChildProcessLifetime.OwnedTree : ChildProcessLifetime.CallerManaged,
+                CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
                 BeginGracefulShutdown = () =>
                 {
                     Interlocked.Increment(ref budgetCount);
@@ -180,7 +296,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
                 }
             });
         await process.StartAsync(TestContext.Current.CancellationToken);
-        var identity = await readiness.ReadRuntimeAsync();
+        ProcessTestIdentity[] identities = ownedTree ? await readiness.ReadTreeAsync() : [await readiness.ReadRuntimeAsync()];
         cancellation.Cancel();
         var shutdown = dispose
             ? process.DisposeAsync().AsTask()
@@ -191,7 +307,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             Assert.False(shutdown.IsCompleted);
             Assert.Equal(1, budgetCount);
             Assert.Equal(1, signalCount);
-            Assert.Equal(identity.ProcessId, signaledPid);
+            Assert.Equal(process.ProcessId, signaledPid);
             Assert.Equal(gracefulBudget.Token, signalToken);
         }
         finally
@@ -199,7 +315,7 @@ public class ChildProcessTests(ProcessTestFixture fixture)
             gracefulBudget.Cancel();
         }
         await shutdown.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
-        await ProcessTestFixture.AssertExitedAsync(identity);
+        await Task.WhenAll(identities.Select(ProcessTestFixture.AssertExitedAsync));
         if (signalFailure)
         {
             var entry = Assert.Single(sink.Writes, entry => entry.Exception?.Message == "test signal failure");

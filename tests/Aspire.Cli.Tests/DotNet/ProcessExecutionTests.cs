@@ -182,10 +182,12 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
     [SupportedOSPlatform("windows")]
-    public async Task StartAsync_OnWindows_IsolateConsole_ChildReceivesCtrlCThroughItsOwnConsole(bool killOnParentExit)
+    public async Task StartAsync_OnWindows_IsolateConsole_ChildReceivesCtrlCThroughItsOwnConsole(bool killOnParentExit, bool ownedTree)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-only test.");
 
@@ -195,7 +197,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, add: false);
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var execution = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance).CreateExecution(
+        await using var execution = TestProcessExecutionFactory.CreateForCliGuardian(new TestEnvironment()).CreateExecution(
             "ping.exe",
             ["-n", "120", "127.0.0.1"],
             env: null,
@@ -204,6 +206,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             {
                 IsolateConsole = true,
                 KillOnParentExit = killOnParentExit,
+                Lifetime = ownedTree ? Aspire.Shared.ChildProcessLifetime.OwnedTree : Aspire.Shared.ChildProcessLifetime.AppHost,
                 StandardOutputCallback = _ => started.TrySetResult()
             });
 
