@@ -46,7 +46,7 @@ function createFetch(responses, urls) {
     };
 }
 
-function createGitHub(request, created) {
+function createGitHub(request, created, comparisons = []) {
     const notFound = () => Object.assign(new Error('Not Found'), { status: 404 });
     const fail = phase => {
         if (request.approvalFailure === phase) {
@@ -84,6 +84,9 @@ function createGitHub(request, created) {
                 if (request.liveBaseRef && getCalls.get(pullNumber) > 1) {
                     pr.base_ref = request.liveBaseRef;
                 }
+                if (request.liveBaseSha && getCalls.get(pullNumber) > 1) {
+                    pr.base_sha = request.liveBaseSha;
+                }
                 if (request.liveDraft && getCalls.get(pullNumber) > 1) {
                     pr.draft = true;
                 }
@@ -94,7 +97,7 @@ function createGitHub(request, created) {
                         draft: pr.draft ?? false,
                         user: { login: pr.user_login ?? 'dependabot[bot]' },
                         head: { sha: pr.head_sha, ref: pr.head_ref, repo: { full_name: pr.head_repo ?? 'microsoft/aspire' } },
-                        base: { sha: 'base0000000000000000000000000000000000000', ref: pr.base_ref ?? 'main' },
+                        base: { sha: pr.base_sha ?? 'b'.repeat(40), ref: pr.base_ref ?? 'main' },
                         title: pr.title,
                         body: pr.body,
                     },
@@ -112,6 +115,12 @@ function createGitHub(request, created) {
         },
         checks: { listForRef: pages.checks },
         repos: {
+            compareCommitsWithBasehead: async args => {
+                comparisons.push(args);
+                fail(comparisons.length > 1 ? 'live-ancestry' : 'ancestry');
+                const response = request.comparisonResponses?.[comparisons.length - 1];
+                return { data: response ?? { status: 'ahead', merge_base_commit: { sha: args.basehead.split('...')[0] } } };
+            },
             getContent: async ({ path: filePath, ref }) => {
                 const key = `${filePath}@${ref === request.pr.head_sha ? 'head' : 'base'}`;
                 if (!(key in (request.contents ?? {}))) {
@@ -240,6 +249,7 @@ async function main() {
         }
         case 'approve': {
             const reviews = [];
+            const comparisons = [];
             const info = [];
             const warnings = [];
             const failures = [];
@@ -263,7 +273,7 @@ async function main() {
             };
             try {
                 const value = await gate.runApprovalJob({
-                    github: createGitHub(request, []),
+                    github: createGitHub(request, [], comparisons),
                     approver: createGitHub(request, reviews),
                     context: { repo: { owner: 'microsoft', repo: 'aspire' } },
                     core,
@@ -276,7 +286,7 @@ async function main() {
                     fetchImpl: createFetch(request.responses, []),
                     now: new Date(request.now),
                 });
-                result = { value, reviews, summary, info, warnings, failures };
+                result = { value, reviews, comparisons, summary, info, warnings, failures };
             } finally {
                 fs.rmSync(outputDir, { recursive: true, force: true });
             }

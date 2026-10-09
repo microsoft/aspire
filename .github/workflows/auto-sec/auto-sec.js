@@ -1385,6 +1385,9 @@ function evaluateApprovalGates(input) {
     if (pr.base_ref !== BASE_BRANCH) {
         reasons.push('wrong-base-branch');
     }
+    if (input.baseIsAncestor !== true) {
+        reasons.push('base-not-in-head');
+    }
 
     const ecosystem = ecosystemFromBranch(pr.head_ref);
     if (!ecosystem) {
@@ -1725,6 +1728,18 @@ function normalizeAlert(alert) {
     };
 }
 
+// Only an ancestor base makes headContents a proof of the merge result. Otherwise a
+// vulnerable occurrence introduced on main can survive a merge despite a patched head.
+// Compare immutable SHAs rather than refs that can move during the request.
+// https://docs.github.com/rest/commits/commits#compare-two-commits
+async function baseIsAncestorOfHead(github, owner, repo, baseSha, headSha) {
+    if (!/^[0-9a-f]{40}$/.test(baseSha ?? '') || !/^[0-9a-f]{40}$/.test(headSha ?? '')) {
+        return false;
+    }
+    const { data } = await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${baseSha}...${headSha}` });
+    return ['ahead', 'identical'].includes(data.status) && data.merge_base_commit?.sha === baseSha;
+}
+
 async function collectGateInput(github, owner, repo, request, { fetchImpl, now, botLogin, lookupCache = new Map() }) {
     const { data: pull } = await github.rest.pulls.get({ owner, repo, pull_number: request.prNumber });
     const pr = {
@@ -1739,6 +1754,7 @@ async function collectGateInput(github, owner, repo, request, { fetchImpl, now, 
         title: pull.title ?? '',
         body: pull.body ?? '',
     };
+    const baseIsAncestor = await baseIsAncestorOfHead(github, owner, repo, pr.base_sha, pr.head_sha);
 
     const files = (await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: pr.number, per_page: 100 }))
         .map(file => ({ filename: file.filename, status: file.status }));
@@ -1810,7 +1826,7 @@ async function collectGateInput(github, owner, repo, request, { fetchImpl, now, 
         }
     }
 
-    return { pr, expectedHeadSha: request.headSha, files, commits, alerts, checkRuns, statuses, sourceChanges, headContents, baseContents, versionChanges, packageInfo, reviews, now, botLogin };
+    return { pr, baseIsAncestor, expectedHeadSha: request.headSha, files, commits, alerts, checkRuns, statuses, sourceChanges, headContents, baseContents, versionChanges, packageInfo, reviews, now, botLogin };
 }
 
 /**
@@ -1871,6 +1887,10 @@ async function executeApprovalJob({ github, approver = github, context, core, fs
                     result = { ...result, decision: 'skip', reasons: ['not-open'] };
                 } else if (live.base?.ref !== BASE_BRANCH) {
                     result = { ...result, decision: 'skip', reasons: ['wrong-base-branch'] };
+                } else if (live.base?.sha !== input.pr.base_sha) {
+                    // A moved base invalidates the contents used for the alert proof, even
+                    // if it happens to remain an ancestor. Re-evaluate on the next run.
+                    result = { ...result, decision: 'skip', reasons: ['base-sha-mismatch'] };
                 } else {
                     // CI was read before the registry lookups; a re-run or late status can turn
                     // the same SHA pending or red in the meantime, so read it again right before
@@ -1879,6 +1899,8 @@ async function executeApprovalJob({ github, approver = github, context, core, fs
                     const ci = ciReasons(liveCi.checkRuns, liveCi.statuses);
                     if (ci.length > 0) {
                         result = { ...result, decision: 'skip', reasons: ci };
+                    } else if (!await baseIsAncestorOfHead(github, owner, repo, live.base.sha, request.headSha)) {
+                        result = { ...result, decision: 'skip', reasons: ['base-not-in-head'] };
                     }
                 }
             }

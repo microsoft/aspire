@@ -155,6 +155,8 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     [InlineData("live-pr")]
     [InlineData("live-checks")]
     [InlineData("live-statuses")]
+    [InlineData("ancestry")]
+    [InlineData("live-ancestry")]
     [InlineData("submission")]
     [InlineData("submission-after-accept")]
     [InlineData("parse-output")]
@@ -186,6 +188,66 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         Assert.Equal(phase is "summary" or "submission-after-accept" ? 1 : 0, result["reviews"]!.AsArray().Count);
         Assert.Equal(phase is "parse-output" or "read-output" ? [] : [$"#101: {(phase == "summary" ? "approve " : $"skip {reason}")}"],
             result["info"]!.AsArray().Select(n => n!.GetValue<string>()));
+    }
+
+    [Theory]
+    [RequiresTools(["node"])]
+    [InlineData("ahead", true)]
+    [InlineData("identical", true)]
+    [InlineData("behind", false)]
+    [InlineData("diverged", false)]
+    [InlineData("missing-merge-base", false)]
+    [InlineData("wrong-merge-base", false)]
+    [InlineData("unknown-status", false)]
+    [InlineData("live-diverged", false)]
+    [InlineData("base-moved", false)]
+    [InlineData("missing-base", false)]
+    public async Task ApprovalRequiresCurrentBaseAncestry(string state, bool allowed)
+    {
+        var scenario = CreateApprovalScenario();
+        var valid = new JsonObject { ["status"] = "ahead", ["merge_base_commit"] = new JsonObject { ["sha"] = new string('b', 40) } };
+        var comparison = valid.DeepClone().AsObject();
+        comparison["status"] = state;
+        if (state == "missing-merge-base")
+        {
+            comparison.Remove("merge_base_commit");
+        }
+        else if (state == "wrong-merge-base")
+        {
+            comparison["status"] = "ahead";
+            comparison["merge_base_commit"]!["sha"] = new string('c', 40);
+        }
+        if (state == "live-diverged")
+        {
+            comparison["status"] = "diverged";
+            scenario["comparisonResponses"] = new JsonArray(valid, comparison);
+        }
+        else if (state == "base-moved")
+        {
+            scenario["liveBaseSha"] = new string('c', 40);
+        }
+        else if (state == "missing-base")
+        {
+            scenario["pr"]!["base_sha"] = "";
+        }
+        else
+        {
+            scenario["comparisonResponses"] = new JsonArray(comparison);
+        }
+        // The stale head omits a vulnerable installed occurrence introduced on main.
+        scenario["contents"]!["extension/yarn.lock@base"] =
+            YarnLockEntry("lodash", "4.17.20") + YarnLockEntry("lodash", "4.17.19");
+
+        var result = await RunHarnessAsync(scenario);
+
+        var decision = Assert.Single(result["value"]!.AsArray());
+        Assert.Equal(allowed ? "approve" : "skip", decision!["decision"]!.GetValue<string>());
+        Assert.Equal(allowed ? [] : [state == "base-moved" ? "base-sha-mismatch" : "base-not-in-head"],
+            decision["reasons"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal(allowed ? 1 : 0, result["reviews"]!.AsArray().Count);
+        var comparisons = result["comparisons"]!.AsArray();
+        Assert.Equal(state == "missing-base" ? 0 : allowed || state == "live-diverged" ? 2 : 1, comparisons.Count);
+        Assert.All(comparisons, comparison => Assert.Equal($"{new string('b', 40)}...{HeadSha}", comparison!["basehead"]!.GetValue<string>()));
     }
 
     [Theory]

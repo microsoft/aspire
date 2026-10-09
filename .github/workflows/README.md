@@ -181,6 +181,10 @@ contents stop reconciliation before the agent can propose a duplicate fix.
   binding are checked before public artifact upload, not just before application.
   Patch transport also rejects opaque preambles, dates, diffstat text, metadata,
   and newline markers; hunk context labels must originate in the trusted base.
+  Dependabot approval requires the current base commit to be an ancestor of the
+  requested head, so the patched head proves the merge result rather than omitting
+  newer base-side occurrences. The base SHA and ancestry are rechecked before
+  submission; API failures or a moved base prevent approval.
   Changed yarn/pnpm fields must occupy supported schema locations in the rebuilt
   file; version-shaped scalars in arbitrary fields and changed duplicate keys
   cannot authorize publication. Unsupported legacy fields may remain unchanged
