@@ -1,8 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -21,6 +20,14 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class RoleAssignmentTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(typeof(AzureRoleAssignmentResource))]
+    [InlineData(typeof(ReferenceRoleAssignmentAnnotation))]
+    public void RoleAssignmentApisAreStable(Type type)
+    {
+        Assert.Empty(type.GetCustomAttributes(typeof(ExperimentalAttribute), inherit: false));
+    }
+
     [Fact]
     public Task ServiceBusSupport()
     {

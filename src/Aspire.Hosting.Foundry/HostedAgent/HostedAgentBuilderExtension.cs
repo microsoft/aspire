@@ -558,9 +558,7 @@ public static class HostedAgentResourceBuilderExtensions
             new(FoundryResource.FoundryUserRoleDefinitionId, "Foundry User")
         };
 
-#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         target.Annotations.Add(new ReferenceRoleAssignmentAnnotation(account, roles));
-#pragma warning restore ASPIREAZURE003
     }
 
     private static void EnsureDefaultHostedAgentEndpoint<T>(IResourceBuilder<T> builder, IResourceWithEnvironment target)
