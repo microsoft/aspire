@@ -263,7 +263,7 @@ public sealed partial class Terminals : ComponentBase, IAsyncDisposable, ICompon
                 EventCallback.Factory.Create(this, () => NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(resource: resource.Name))),
                 EventCallback.Factory.Create<CommandViewModel>(this, ExecuteResourceCommandAsync),
                 (r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name),
-                showViewDetails: true, showConsoleLogsItem: true, showUrls: true);
+                showViewDetails: true, showTerminalItem: false, showConsoleLogsItem: true, showUrls: true);
         }
     }
 

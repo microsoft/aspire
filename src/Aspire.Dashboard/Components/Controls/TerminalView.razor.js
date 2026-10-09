@@ -42,15 +42,6 @@ const SIZE_PRESETS = [
     { value: "132x50", label: "132×50", cols: 132, rows: 50 },
 ];
 
-function scrollbarTrackColor(palette) {
-    const foreground = palette.foreground;
-    const background = palette.background;
-    return "#" + [1, 3, 5].map(offset =>
-        Math.round((parseInt(foreground.slice(offset, offset + 2), 16) +
-            parseInt(background.slice(offset, offset + 2), 16)) / 2).toString(16).padStart(2, "0")
-    ).join("");
-}
-
 function scrollbarConfiguration(state) {
     // Resolve variables/system colors to concrete canvas colors before passing
     // them to the snapshotted built-in painter.
@@ -75,12 +66,12 @@ function scrollbarConfiguration(state) {
         };
         const renderScrollbar = createDefaultScrollbarRenderer({
             track: {
-                // Hex1b 0.171 uses a fixed default; derive the track from the active palette.
-                color: forced ? color("Canvas") : scrollbarTrackColor(palette),
+                // Omitted colors follow the terminal palette in each upstream renderer frame.
+                color: forced ? color("Canvas") : undefined,
                 opacity: forced || state.moreContrast.matches ? 1 : 0.35,
             },
             thumb: {
-                color: forced ? color("CanvasText") : palette.foreground,
+                color: forced ? color("CanvasText") : undefined,
             },
             markers: {
                 // Markers sit on the terminal palette, which can differ from the Dashboard theme.
@@ -665,9 +656,9 @@ async function mountClient(state, generation, controller) {
                     return;
                 }
                 if (state.client?.connected) {
-                    console.warn("Dashboard terminal status error.", message);
-                    state.error = "input-failed";
-                    notifyToolbar(state);
+                    // Local action/inspection failures do not break the connection.
+                    // Fatal renderer and transport failures disconnect before reporting status.
+                    console.log("Dashboard terminal status error.", message);
                 } else {
                     connectionFailed(state, generation, message);
                 }

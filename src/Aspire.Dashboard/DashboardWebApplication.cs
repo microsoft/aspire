@@ -342,18 +342,22 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
-        builder.Services.TryAddSingleton<IDashboardTelemetrySender, DashboardTelemetrySender>();
+        builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
+            services.GetRequiredService<IConfiguration>()));
+        builder.Services.AddSingleton<DashboardTelemetryManager>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
         builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
         builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
         if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
         {
             builder.Services.AddOpenTelemetry()
-                .ConfigureResource(resource => resource
-                    .AddService(DefaultOtlpServiceName, autoGenerateServiceInstanceId: false)
-                    // Reapply the detector after the fallback so OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
-                    // from the application's IConfiguration retain their precedence.
-                    .AddEnvironmentVariableDetector())
                 .WithTracing(tracing => tracing
+                    // Diagnostic identity must not flow into product usage logs.
+                    .ConfigureResource(resource => resource
+                        .AddService(DefaultOtlpServiceName, autoGenerateServiceInstanceId: false)
+                        // Reapply the detector after the fallback so OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
+                        // from the application's IConfiguration retain their precedence.
+                        .AddEnvironmentVariableDetector())
                     .AddAspNetCoreInstrumentation()
                     .AddSource(DashboardActivitySource.ActivitySourceName)
                     .AddSource(TracingSqliteConnection.ActivitySourceName)
@@ -506,19 +510,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
             PrintSummary(frontendEndpointInfo);
 
-            // One-off async initialization of telemetry service.
-            var telemetryService = _app.Services.GetRequiredService<DashboardTelemetryService>();
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await telemetryService.InitializeAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error initializing telemetry service.");
-                }
-            });
         });
 
         // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.

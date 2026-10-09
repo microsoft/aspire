@@ -92,6 +92,8 @@ jobs:
       - name: Smoke test installed CLI (aspire new + restore)
         if: ${{ inputs.installer == 'winget' }}
         shell: pwsh
+        env:
+          NUGET_PACKAGES: ${{ format('{0}/.nuget/packages', github.workspace) }}
         run: |
           $ErrorActionPreference = 'Stop'
           # winget added the shim under %LOCALAPPDATA%\Microsoft\WinGet\Links during the

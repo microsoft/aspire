@@ -74,7 +74,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             ["go.mod"] = """
                 module apphost/modules/aspire
 
-                go 1.23
+                go 1.26
                 """,
             ["transport.go"] = GetEmbeddedResource("transport.go"),
             ["base.go"] = GetEmbeddedResource("base.go"),

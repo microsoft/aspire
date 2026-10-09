@@ -252,41 +252,76 @@ public sealed class ExtensionWorkflowTests
     }
 
     [Fact]
-    public void CiRunsSelectorDrivenTestsAndStabilizationForEveryRequiredPr()
+    public void CiRunsSelectorDrivenTestsForEveryRequiredPr()
     {
         var normalTests = Mapping(s_ciJobs, "tests");
         Assert.Equal("./.github/workflows/tests.yml", Scalar(normalTests, "uses"));
         Assert.Equal(
             "${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}",
             Scalar(normalTests, "if"));
-
-        Assert.Equal(
-            "${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}",
-            Scalar(Mapping(s_ciJobs, "stabilization_check"), "if"));
     }
 
     [Fact]
-    public void FinalResultsRequireSelectorDrivenTestsAndStabilization()
+    public void StabilizationJobUsesOneEnableSwitchAndRunsOnlyOnPrs()
+    {
+        var outputs = Mapping(Mapping(s_ciJobs, "prepare_for_ci"), "outputs");
+        Assert.Contains(Scalar(outputs, "STABILIZATION_ENABLED"), new[] { "true", "false" });
+
+        var job = Mapping(s_ciJobs, "stabilization_check");
+        Assert.Equal(
+            "${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
+            "github.event_name == 'pull_request' && needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' }}",
+            Scalar(job, "if"));
+        Assert.False(job.Children.ContainsKey(new YamlScalarNode("env")));
+
+        var steps = Steps(job);
+        Assert.Equal(
+            [
+                "Checkout code",
+                "Build + pack with StabilizePackageVersion=true",
+                "Run version-sensitive Aspire.Cli.Tests classes under stabilization",
+                "aspire init + restore smoke against stable local feed",
+                "Upload logs",
+            ],
+            steps.Select(step => Scalar(step, "name")));
+        Assert.All(steps, step =>
+        {
+            if (Scalar(step, "name") == "Upload logs")
+            {
+                Assert.Equal("${{ always() }}", Scalar(step, "if"));
+            }
+            else
+            {
+                Assert.False(step.Children.ContainsKey(new YamlScalarNode("if")));
+            }
+        });
+    }
+
+    [Fact]
+    public void FinalResultsRequireStabilizationOnlyWhenEnabledForPrs()
     {
         var results = Mapping(s_ciJobs, "results");
         Assert.Equal(
-            ["prepare_for_ci", "tests", "stabilization_check"],
+            ["actionlint", "prepare_for_ci", "tests", "stabilization_check"],
             SequenceScalars(results, "needs"));
 
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any of the dependent jobs failed");
         Assert.Equal(
-            "${{ always() && needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
+            "${{ always() && (needs.actionlint.result != 'success' || " +
+            "(needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
             "(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || " +
-            "needs.tests.result != 'success' || needs.stabilization_check.result != 'success') }}",
+            "needs.tests.result != 'success' || " +
+            "(needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' && " +
+            "github.event_name == 'pull_request' && needs.stabilization_check.result != 'success')))) }}",
             CollapseWhitespace(Scalar(failureStep, "if")));
     }
 
     [Fact]
-    public void CiFailureTrackerPushResultContractIsUnchanged()
+    public void CiFailureTrackerDoesNotRequirePrOnlyStabilizationOnPush()
     {
         var tracker = Mapping(s_ciJobs, "ci_failure_tracker");
 
-        Assert.Equal(["prepare_for_ci", "tests", "stabilization_check"], SequenceScalars(tracker, "needs"));
+        Assert.Equal(["actionlint", "prepare_for_ci", "tests", "stabilization_check"], SequenceScalars(tracker, "needs"));
         Assert.Equal(
             "${{ always() && github.event_name == 'push' && github.repository == 'microsoft/aspire' }}",
             Scalar(tracker, "if"));
@@ -295,7 +330,8 @@ public sealed class ExtensionWorkflowTests
         var environment = Mapping(scriptStep, "env");
         Assert.Equal("${{ contains(needs.*.result, 'failure') }}", Scalar(environment, "CI_RED"));
         Assert.Equal(
-            "${{ needs.prepare_for_ci.result == 'success' && needs.tests.result == 'success' && needs.stabilization_check.result == 'success' }}",
+            "${{ needs.actionlint.result == 'success' && needs.prepare_for_ci.result == 'success' && " +
+            "needs.tests.result == 'success' }}",
             CollapseWhitespace(Scalar(environment, "CI_GREEN")));
     }
 

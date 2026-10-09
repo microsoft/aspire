@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -19,19 +19,19 @@ namespace Aspire.Dashboard.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Login {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Login() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Authorized User.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("AuthorizedUser", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} dashboard.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("Header", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Screenshot of example console output showing where to find the dashboard frontend token. A red box highlights the token at the end of a url. The token is the value of a query parameter named &apos;t&apos;..
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HelpScreenshotAltText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Invalid token. Please try again.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InvalidTokenErrorMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Logged in as:.
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("LoggedInAs", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Log in.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("LogInButtonText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to More information.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MoreInfoLinkText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} login.
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SignOut", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Enter token to log in....
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TextFieldPlaceholder", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Copy the highlighted token from the console to the login page and log in..
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TokenHelpTextLine1", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Alternatively, click on the console link to automatically log in. The address might not be correct when the dashboard is running in a container and the external port is mapped to a different value..
         /// </summary>
@@ -167,7 +167,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TokenHelpTextLine2", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Token is required.
         /// </summary>
@@ -176,7 +176,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TokenRequiredErrorMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Unexpected error when validating the token.
         /// </summary>
@@ -185,7 +185,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("UnexpectedValidationError", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Where do I find the token?.
         /// </summary>

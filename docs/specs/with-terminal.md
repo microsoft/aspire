@@ -21,6 +21,13 @@ exposes the same session as `aspire terminal agent --replica 0`.
 All terminal APIs share the experimental diagnostic `ASPIRETERMINAL001`,
 including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
 
+Per-replica terminal host resources are hidden by default. Use **Show hidden
+resources** in the dashboard to inspect their state and console logs. They
+export diagnostic logs, metrics, and traces to the configured dashboard OTLP
+endpoint independently of their visibility.
+When `DistributedApplicationOptions.DisableDashboard` is `true`, terminal host
+telemetry is disabled, even if an explicit OTLP collector endpoint is configured.
+
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use
@@ -341,14 +348,15 @@ it does not lock the terminal, its creator's automation, or other viewers.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.171.0`. HWT1 is experimental state transfer
+exactly `0.172.0`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
 Aspire. Upgrade both together. The vendored runtime consists of one bundled
 JavaScript file for the client and both workers, a font, and two licenses.
 Worker roles use fragments on the bundled file URL rather than separate worker
 modules; the dashboard references the standalone vendored bundle for both.
-The 0.171 producer retains at most 200 command marks even when older backing
-text is still present; scrollback text is retained independently.
+The 0.172 producer retains command marks for the lifetime of their backing text
+by default, rather than evicting them after 200 entries. Explicit producer
+capacity and transport limits still apply.
 
 The dashboard uses the package's automatic renderer selection: WebGPU is
 preferred, with WebGL2 used when WebGPU capabilities or device acquisition are
@@ -417,6 +425,11 @@ when all terminals are hidden, View options offers Show hidden resources.
 When no terminal resources remain, the navigation entry disappears and page
 visits redirect to `/`. Terminals are unavailable without the resource service
 or when viewing a historical, read-only run.
+
+Press <kbd>E</kbd>, without modifiers, to open the Terminals page. The shortcut
+is active and listed under **Page navigation** in shortcut help only while the
+Terminals navigation entry is available. Like other page navigation shortcuts,
+it is suppressed while a terminal or text input has focus.
 
 Console logs always displays the standard log stream, including pre-PTY hosting
 messages and post-PTY exit output. Its options menu no longer switches views.

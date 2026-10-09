@@ -3,8 +3,6 @@
   "name": "Aspire の空のアプリ",
   "description": "空の Aspire アプリを作成するためのプロジェクト テンプレート。",
   "symbols/Framework/description": "プロジェクトのターゲット フレームワークです。",
-  "symbols/Framework/choices/net8.0/description": "ターゲット net8.0",
-  "symbols/Framework/choices/net9.0/description": "ターゲット net9.0",
   "symbols/Framework/choices/net10.0/description": "ターゲット net10.0",
   "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/AspireVersion/description": "使用する Aspire のバージョン。",

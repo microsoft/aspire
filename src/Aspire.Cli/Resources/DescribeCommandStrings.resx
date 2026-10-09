@@ -124,10 +124,13 @@
     <value>Continuously stream resource state changes</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
-    <value>Output format (Table or Json)</value>
+    <value>Output format (Table, Json, or Mermaid)</value>
   </data>
   <data name="NoAppHostFound" xml:space="preserve">
     <value>No AppHost project found.</value>
+  </data>
+  <data name="MermaidFollowNotSupported" xml:space="preserve">
+    <value>The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
     <value>The name of the resource to display. If not specified, all resources are shown.</value>

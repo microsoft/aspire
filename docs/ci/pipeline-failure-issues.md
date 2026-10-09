@@ -1,7 +1,8 @@
-# Nightly-pipeline failure issues (deployment E2E & daily smoke)
+# Scheduled-pipeline failure issues (deployment E2E, daily smoke & actionlint updater)
 
-The scheduled `Deployment E2E Tests` (`deployment-tests.yml`) and
-`Daily CLI Smoke Tests` (`tests-daily-smoke.yml`) workflows run unattended and
+The scheduled `Deployment E2E Tests` (`deployment-tests.yml`),
+`Daily CLI Smoke Tests` (`tests-daily-smoke.yml`), and weekly `Update actionlint`
+(`update-actionlint.yml`) workflows run unattended and
 otherwise fail silently — GitHub only emails whoever last edited the workflow
 file. Each workflow files a GitHub issue when a **scheduled** run fails.
 
@@ -11,7 +12,7 @@ This is a consumer of the shared, repo-agnostic tracking-issue engine
 [specialized-test failure reporter](specialized-test-failure-issues.md), and the
 [red-main CI reporter](ci-failure-issues.md). Like the
 specialized reporter it runs *inside* the pipeline (so it has the run context),
-but unlike it, a failure here is **not** classified into test-vs-infra: a nightly
+but unlike it, a failure here is **not** classified into test-vs-infra: a scheduled
 deployment/smoke failure can be either, and these pipelines do not inspect results
 to tell them apart. The issue just records "the scheduled run failed" with a link
 to the run.
@@ -20,10 +21,11 @@ to the run.
 
 When a scheduled run fails:
 
-- **Title:** `Nightly run failing: <display name>`
+- **Title:** `Scheduled run failing: <display name>`
 - **Labels:** the workflow's existing labels **plus** `automation-broken`:
   - deployment: `automation-broken`, `area-testing`, `deployment-e2e`
   - smoke: `automation-broken`, `area-cli`, `failing-test`
+  - actionlint updater: `automation-broken`, `area-engineering-systems`
 - **Body marker:** a hidden HTML comment `<!-- ci-failure:<workflow-file>:scheduled -->`
   on the first line, used for dedup.
 

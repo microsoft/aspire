@@ -7,13 +7,7 @@ using Aspire;
 using Aspire.Azure.Npgsql.EntityFrameworkCore.PostgreSQL;
 using Aspire.Npgsql.EntityFrameworkCore.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
-using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
-
-#if NET9_0_OR_GREATER
 using Microsoft.Extensions.DependencyInjection;
-#else
-using Npgsql;
-#endif
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -83,14 +77,7 @@ public static partial class AspireAzureEFPostgreSqlExtensions
         // Enrich should always call ConfigureSettings
         Debug.Assert(azureSettings != null);
 
-#if NET9_0_OR_GREATER
         builder.Services.ConfigureDbContext<TContext>(dbContextOptionsBuilder => ConfigureDbContextOptionsBuilder(azureSettings, dbContextOptionsBuilder));
-#else
-        builder.PatchServiceDescriptor<TContext>(dbContextOptionsBuilder =>
-        {
-            ConfigureDbContextOptionsBuilder(azureSettings, dbContextOptionsBuilder);
-        });
-#endif
     }
 
     private static AzureNpgsqlEntityFrameworkCorePostgreSQLSettings ConfigureSettings(Action<AzureNpgsqlEntityFrameworkCorePostgreSQLSettings>? userConfigureSettings, NpgsqlEntityFrameworkCorePostgreSQLSettings settings)
@@ -121,25 +108,9 @@ public static partial class AspireAzureEFPostgreSqlExtensions
 
     private static void ConfigureDbContextOptionsBuilder(AzureNpgsqlEntityFrameworkCorePostgreSQLSettings settings, DbContextOptionsBuilder dbContextOptionsBuilder)
     {
-#pragma warning disable EF1001 // Internal EF Core API usage.
-
-        // Get the connection string from the Npgsql options extension in case it was set using UseNpgsql(connStr) and Enrich()
-        var connectionString = settings.ConnectionString ?? dbContextOptionsBuilder.Options.GetExtension<NpgsqlOptionsExtension>()?.ConnectionString;
-
-#pragma warning restore EF1001 // Internal EF Core API usage.
-
-#if NET9_0_OR_GREATER
         dbContextOptionsBuilder.UseNpgsql(options =>
         {
             options.ConfigureDataSource(dataSourceBuilder => dataSourceBuilder.ConfigureEntraIdAuthentication(settings.Credential));
         });
-#else
-        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-
-        if (dataSourceBuilder.ConfigureEntraIdAuthentication(settings.Credential))
-        {
-            dbContextOptionsBuilder.UseNpgsql(dataSourceBuilder.Build());
-        }
-#endif
     }
 }

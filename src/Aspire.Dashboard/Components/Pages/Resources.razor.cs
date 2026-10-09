@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
@@ -401,9 +402,26 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return;
         }
 
+        await _jsModule.InvokeVoidAsync("updateResourcesGraph", GetResourceGraphResources());
+    }
+
+    private List<ResourceDto> GetResourceGraphResources()
+    {
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
-        await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
+        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
+    }
+
+    private Task ExportResourceGraphAsync()
+    {
+        return TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = DialogService,
+            ValueDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)],
+            // Map the current model even while the graph's asynchronous initialization is pending.
+            Value = ResourceGraphMermaidExporter.Export(GetResourceGraphResources()),
+            DownloadFileName = "resources.mmd",
+            FixedFormat = DashboardUIHelpers.PlaintextFormat
+        });
     }
 
     private class ResourcesInterop(Resources resources)
@@ -646,6 +664,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 EventCallback.Factory.Create<CommandViewModel>(this, (command) => ExecuteResourceCommandAsync(resource, command)),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
                 showViewDetails: true,
+                showTerminalItem: true,
                 showConsoleLogsItem: true,
                 showUrls: true);
 
@@ -1016,8 +1035,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         var properties = new List<ComponentTelemetryProperty>
         {
-            new(TelemetryPropertyKeys.ResourceView, new AspireTelemetryProperty(PageViewModel.SelectedViewKind.ToString(), AspireTelemetryPropertyType.UserSetting)),
-            new(TelemetryPropertyKeys.ResourceTypes, new AspireTelemetryProperty(_resourceByName.Values.Select(r => TelemetryPropertyValues.GetResourceTypeTelemetryValue(r.ResourceType, r.SupportsDetailedTelemetry)).OrderBy(t => t).ToList()))
+            new(TelemetryPropertyKeys.ResourceView, new AspireTelemetryProperty(PageViewModel.SelectedViewKind.ToString(), AspireTelemetryPropertyType.UserSetting))
         };
 
         TelemetryContext.UpdateTelemetryProperties(properties.ToArray(), Logger);

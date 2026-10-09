@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
@@ -41,29 +42,24 @@ public sealed class DashboardCommandExecutor(
             _executingCommands.Add(executingCommandKey);
         }
 
-        var startEvent = telemetryService.StartOperation(TelemetryEventKeys.ExecuteCommand,
-            new Dictionary<string, AspireTelemetryProperty>
-            {
-                { TelemetryPropertyKeys.ResourceType, new AspireTelemetryProperty(TelemetryPropertyValues.GetResourceTypeTelemetryValue(resource.ResourceType, resource.SupportsDetailedTelemetry)) },
-                { TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty(TelemetryPropertyValues.GetCommandNameTelemetryValue(command.Name)) },
-            });
-
-        var operationId = startEvent.Properties.FirstOrDefault();
-
         try
         {
-            await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+            // End command telemetry before the UI's recovery delay in the finally block.
+            using var activity = telemetryService.StartOperation(TelemetryEventKeys.ExecuteCommand,
+                new Dictionary<string, AspireTelemetryProperty>
+                {
+                    { TelemetryPropertyKeys.ResourceType, new AspireTelemetryProperty(TelemetryPropertyValues.GetResourceTypeTelemetryValue(resource.ResourceType, resource.SupportsDetailedTelemetry)) },
+                    { TelemetryPropertyKeys.CommandName, new AspireTelemetryProperty(TelemetryPropertyValues.GetCommandNameTelemetryValue(command.Name)) },
+                });
 
-            if (operationId is not null)
+            try
             {
-                telemetryService.EndOperation(operationId, TelemetryResult.Success);
+                await ExecuteAsyncCore(resource, command, getResourceName).ConfigureAwait(false);
+                telemetryService.SetOperationStatus(activity, ActivityStatusCode.Ok);
             }
-        }
-        catch (Exception ex)
-        {
-            if (operationId is not null)
+            catch (Exception)
             {
-                telemetryService.EndOperation(operationId, TelemetryResult.Failure, ex.Message);
+                telemetryService.SetOperationStatus(activity, ActivityStatusCode.Error);
             }
         }
         finally

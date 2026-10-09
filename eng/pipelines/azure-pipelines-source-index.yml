@@ -50,4 +50,7 @@ extends:
           sourceIndexParams:
             # Use the repository wrapper so standalone restore receives its NuGet
             # audit warning policy; Arcade's default command bypasses that wrapper.
-            sourceIndexBuildCommand: .\build.cmd -restore -build -binarylog -ci
+            # Index every managed project, including Dashboard, CLI, tests and playground.
+            # Disable only native Dashboard publishing/packaging and browser provisioning;
+            # SkipNativeBuild would also remove native CLI work.
+            sourceIndexBuildCommand: .\build.cmd -restore -build -binarylog -ci /p:CanPublishDashboardNativeAot=false /p:InstallBrowsersForPlaywright=false

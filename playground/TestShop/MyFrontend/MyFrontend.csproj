@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ContainerRepository>my-frontend</ContainerRepository>
-    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:8.0</ContainerBaseImage>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
     <!-- Razor tooling sometimes raises this warning. Don't make it an error. -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);RZ10012;RZ10021</WarningsNotAsErrors>
     <!-- Razor tooling incorrectly reports this warning -->
