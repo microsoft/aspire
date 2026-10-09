@@ -420,6 +420,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("null", "13.2.0")]
     [InlineData("\" 9.2.0 \"", "9.2.0")]
+    [InlineData("""{ "source": "nuget" }""", "13.2.0")]
+    [InlineData("""{ "source": "nuget", "version": null }""", "13.2.0")]
+    [InlineData("""{ "source": "nuget", "version": " " }""", "13.2.0")]
     [InlineData("""{ "source": "nuget", "version": " 9.2.0 " }""", "9.2.0")]
     public void Load_NormalizesNugetVersions(string packageValue, string expectedVersion)
     {
@@ -446,6 +449,71 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
         Assert.Equal(config.Packages!["Aspire.Hosting.Redis"].Version, reloaded.Packages!["Aspire.Hosting.Redis"].Version);
+    }
+
+    [Theory]
+    [InlineData("""{ "source": 42 }""")]
+    [InlineData("""{ "source": true }""")]
+    [InlineData("""{ "source": false }""")]
+    [InlineData("""{ "source": {} }""")]
+    [InlineData("""{ "source": [] }""")]
+    [InlineData("""{ "source": null }""")]
+    [InlineData("""{ "source": "nuget", "version": 42 }""")]
+    [InlineData("""{ "source": "nuget", "version": true }""")]
+    [InlineData("""{ "source": "nuget", "version": false }""")]
+    [InlineData("""{ "source": "nuget", "version": {} }""")]
+    [InlineData("""{ "source": "nuget", "version": [] }""")]
+    [InlineData("""{ "source": "npm", "path": 42 }""")]
+    [InlineData("""{ "source": "npm", "path": true }""")]
+    [InlineData("""{ "source": "npm", "path": false }""")]
+    [InlineData("""{ "source": "npm", "path": {} }""")]
+    [InlineData("""{ "source": "npm", "path": [] }""")]
+    [InlineData("""{ "source": "npm", "path": null }""")]
+    [InlineData("""{ "source": "project", "path": null }""")]
+    public void Load_ThrowsJsonException_WithFilePath_WhenPackageObjectIsInvalid(string packageValue)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, $$"""
+            {
+              "packages": {
+                "Test": {{packageValue}}
+              }
+            }
+            """);
+
+        var ex = Assert.Throws<JsonException>(() => AspireConfigFile.Load(workspace.WorkspaceRoot.FullName));
+
+        Assert.Contains(configPath, ex.Message);
+        Assert.Equal("$.packages.Test", ex.Path);
+        Assert.IsType<JsonException>(ex.InnerException);
+    }
+
+    [Fact]
+    public void Load_IgnoresUnknownPackageFields()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Test": {
+                  "unknown": { "source": 42, "nested": [true, null, {}] },
+                  "source": "npm",
+                  "path": "./host.ts"
+                }
+              }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(config);
+        var package = Assert.Single(config.Packages!);
+        Assert.Equal("Test", package.Key);
+        Assert.Equal(IntegrationSource.Npm, package.Value.Source);
+        Assert.Equal("./host.ts", package.Value.Path);
+        Assert.Null(package.Value.Version);
     }
 
     [Fact]
