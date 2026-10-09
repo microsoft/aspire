@@ -5,6 +5,7 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="../../src/Aspire.Dashboard/Aspire.Dashboard.csproj" />
+  <Project Path="ActivityGenerator/ActivityGenerator.csproj" />
   <Project Path="ApiGateway/ApiGateway.csproj" />
   <Project Path="BasketService/BasketService.csproj" />
   <Project Path="CatalogDb/CatalogDb.csproj" />

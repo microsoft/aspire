@@ -436,6 +436,7 @@
     <Project Path="playground/Testing/Testing.Tests/Testing.Tests.csproj" />
   </Folder>
   <Folder Name="/playground/TestShop/">
+    <Project Path="playground/TestShop/ActivityGenerator/ActivityGenerator.csproj" />
     <Project Path="playground/TestShop/BasketService/BasketService.csproj" />
     <Project Path="playground/TestShop/CatalogDb/CatalogDb.csproj" />
     <Project Path="playground/TestShop/CatalogModel/CatalogModel.csproj" />

@@ -104,15 +104,14 @@ builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName:
     .WithReference(messaging)
     .WaitFor(messaging);
 
+var yarp = builder.AddYarp("apigateway");
 #if YARP_USE_CONFIG_FILE
-builder.AddYarp("apigateway")
-    .WithConfigFile("yarp.json")
+yarp.WithConfigFile("yarp.json")
     .WithReference(basketService)
     .WaitFor(basketService)
     .WithReference(catalogService)
     .WaitFor(catalogService);
 #else
-var yarp = builder.AddYarp("apigateway");
 yarp.WithReference(basketService)
     .WaitFor(basketService)
     .WithReference(catalogService)
@@ -128,6 +127,16 @@ yarp.WithConfiguration(builder =>
            .WithTransformPathRemovePrefix("/basket");
 });
 #endif
+
+builder.AddProject<Projects.ActivityGenerator>("activity-generator")
+    .WithReference(frontend)
+    .WaitFor(frontend)
+    .WithReference(yarp)
+    .WaitFor(yarp)
+    .WithReference(catalogService)
+    .WaitFor(catalogService)
+    .WithExplicitStart()
+    .ExcludeFromManifest();
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
