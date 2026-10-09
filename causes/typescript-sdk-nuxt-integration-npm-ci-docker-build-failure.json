@@ -1,0 +1,15 @@
+{
+  "id": "typescript-sdk-nuxt-integration-npm-ci-docker-build-failure",
+  "type": "main-repository-breakage",
+  "title": "TypeScript SDK Validation Nuxt integration Docker build fails deterministically at 'RUN npm ci'",
+  "error_pattern": "ERROR: failed to solve: process \"/bin/sh -c npm ci\" did not complete successfully: exit code: 1 (Dockerfile step 6: RUN npm run build, step 5: COPY . .). Occurs building the generated Nuxt 'web' publish image after the TypeScript validation AppHosts themselves pass (59/59) and the Nuxt integration test (test-nuxt-integration.sh, playground/NuxtApp) runs its 'aspire publish' + docker build step.",
+  "occurrences": [
+    {
+      "run_id": 37997402988,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37997402988",
+      "job": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x), Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T23:31:50Z"
+    }
+  ]
+}

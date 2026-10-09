@@ -1,0 +1,154 @@
+{
+  "run_id": 37997402988,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37997402988",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-09T23:31:50Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20830,
+    "title": "fix(java): update Log4j in Spring Boot samples and starter",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "java-logging-security-updates",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20830",
+    "merged_at": "2026-10-09T22:06:46Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "ee444aedc1edcd4d832fe39bf0365e22585add1d",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      },
+      {
+        "sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "message": "[WIP] Fix Go AppHost start timeout error (#20086) - [x] Identify the Go AppHost startup failure from logs and code. - [x] Implement a focused fix with regression coverage. - [x] Run targeted validation and review the final changes. <!-- START COPILOT CODING AGENT SUFFIX --> - Fixes #20056 --------- Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: David Pine <7679720+IEvangelist",
+        "html_url": "https://github.com/microsoft/aspire/commit/c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "pull_request": {
+          "number": 20086,
+          "title": "[WIP] Fix Go AppHost start timeout error",
+          "url": "https://github.com/microsoft/aspire/pull/20086",
+          "merged_at": "2026-10-09T20:10:35Z"
+        }
+      },
+      {
+        "sha": "ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "message": "Remove ASPIREAZURE003 from Azure role-assignment APIs (#20857) ## Description `AzureRoleAssignmentResource` is going stable: it is no longer experimental. Consumers can use this API without suppressing `ASPIREAZURE003`. Azure role assignments are not an Azure Networking feature, so the networking experimental diagnostic should not apply to this type. Remove its `Experimental` attribute and clean up obsolete suppressions in `RoleAssignmentResourceAnnotation`, the shared ACR pull identity helper, ",
+        "html_url": "https://github.com/microsoft/aspire/commit/ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "pull_request": {
+          "number": 20857,
+          "title": "Remove ASPIREAZURE003 from Azure role-assignment APIs",
+          "url": "https://github.com/microsoft/aspire/pull/20857",
+          "merged_at": "2026-10-09T20:42:47Z"
+        }
+      },
+      {
+        "sha": "517d566279e2c1ceded7788930197e5f6667bbb0",
+        "message": "Add polyglot hosting integrations through ATS projection (#16110) ## Description Part of #16220. Adds support for hosting integrations authored outside .NET through Aspire's ATS metadata, SDK generation, and runtime dispatch pipeline. A consuming AppHost gets normal generated builder methods, while the integration executes in its own runtime and configures the same .NET resource model as a managed integration. Integration-host ownership belongs to the AppHost server rather than the CLI. The CLI ",
+        "html_url": "https://github.com/microsoft/aspire/commit/517d566279e2c1ceded7788930197e5f6667bbb0",
+        "pull_request": {
+          "number": 16110,
+          "title": "Add polyglot hosting integrations through ATS projection",
+          "url": "https://github.com/microsoft/aspire/pull/16110",
+          "merged_at": "2026-10-09T21:41:12Z"
+        }
+      },
+      {
+        "sha": "ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "message": "fix(java): update Log4j in Spring Boot samples and starter (#20830) ## Description The Spring Boot catalog and orders playground services, and the CLI's Java starter API, resolve Log4j API 2.24.3. That version is affected by [CVE-2026-49844](https://logging.apache.org/security.html#CVE-2026-49844): `MapMessage` can serialize non-finite floating-point values as invalid JSON, disrupting downstream log parsing when the affected logging path is used. Spring Boot's dependency management still imports",
+        "html_url": "https://github.com/microsoft/aspire/commit/ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "pull_request": {
+          "number": 20830,
+          "title": "fix(java): update Log4j in Spring Boot samples and starter",
+          "url": "https://github.com/microsoft/aspire/pull/20830",
+          "merged_at": "2026-10-09T22:06:46Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 114054966196,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37997402988/job/114054966196",
+      "classification": "flaky-test",
+      "reason": "Two known-flaky CLI xunit tests failed: a NuGetPackagePrefetcherTests timeout and a TrayWatchStreamTests reconciliation-count mismatch, both matching pre-existing flaky-test causes unrelated to any candidate merge.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x)",
+      "id": 114057926993,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37997402988/job/114057926993",
+      "classification": "main-repository-breakage",
+      "reason": "The newly added Nuxt integration validation (test-nuxt-integration.sh, playground/NuxtApp) introduced by PR #16110 fails deterministically: 'docker build' for the Nuxt web image fails at 'RUN npm ci' with exit code 1, after the TypeScript validation AppHosts themselves passed (59/59).",
+      "failed_steps": [
+        "Run TypeScript SDK validation"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 114060955266,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37997402988/job/114060955266",
+      "classification": "main-repository-breakage",
+      "reason": "Downstream aggregation job deterministically fails its 'Check validation results' step because the TypeScript SDK validation job it depends on reported failure.",
+      "failed_steps": [
+        "Check validation results"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:175 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 180\n   at Aspire.Cli.Tests.NuGet.NuGetPackagePrefetcherTests.PrefetchingCancellationDueToShutdownLogsCleanMessage() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/NuGet/NuGetPackagePrefetcherTests.cs:line 175\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause cli-nuget-prefetcher-shutdown-timeout (6 prior occurrences); a 30s timeout in CI, unrelated to any candidate merge in this run."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(removeFirst: True, brokenPipe: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   7",
+      "stack_trace": "at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 925\n   at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 940\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior recurring cause aspire-cli-tests-backchannel-traywatchstream-stalled-flaky (4 prior occurrences, same exact assertion/line), a known race condition unrelated to any candidate merge."
+    }
+  ],
+  "causes": [
+    "cli-nuget-prefetcher-shutdown-timeout",
+    "aspire-cli-tests-backchannel-traywatchstream-stalled-flaky",
+    "typescript-sdk-nuxt-integration-npm-ci-docker-build-failure"
+  ]
+}
