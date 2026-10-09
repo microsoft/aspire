@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -62,6 +63,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateProjectFileAsync_DoesAttemptToUpdateIfNoUpdatesRequired()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        new AspireConfigFile { SdkVersion = "9.4.1" }.Save(workspace.Path);
 
         var srcFolder = workspace.CreateDirectory("src");
 
@@ -78,7 +80,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             appHostProjectFile.FullName,
             $$"""
             <Project Sdk="Microsoft.NET.Sdk">
-                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.1-preview.1" />
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
             </Project>
             """);
 
@@ -610,9 +612,10 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             }
         );
 
-        var updatedConfig = await File.ReadAllTextAsync(aspireConfigFile.FullName);
-        using var configDoc = JsonDocument.Parse(updatedConfig);
-        Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
+        var updatedConfig = AspireConfigFile.Load(appHostFolder.FullName);
+        Assert.NotNull(updatedConfig);
+        Assert.Null(updatedConfig.Channel);
+        Assert.Equal("9.4.1", updatedConfig.SdkVersion);
     }
 
     [Fact]
@@ -1110,6 +1113,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task UpdateProjectFileAsync_CentralPackageManagement_PackageNotInDirectoryPackagesProps()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        new AspireConfigFile { SdkVersion = "9.5.0" }.Save(workspace.Path);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
@@ -1121,7 +1125,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             appHostProjectFile.FullName,
             $$"""
             <Project Sdk="Microsoft.NET.Sdk">
-                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.1" />
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
                 <ItemGroup>
                     <PackageReference Include="Aspire.Hosting.Redis" />
                 </ItemGroup>
@@ -2585,6 +2589,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public async Task NormalMode_NoFallback()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        new AspireConfigFile { SdkVersion = "9.4.1" }.Save(workspace.Path);
 
         var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
         var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));

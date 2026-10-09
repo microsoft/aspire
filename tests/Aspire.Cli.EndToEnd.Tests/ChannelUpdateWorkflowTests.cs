@@ -17,7 +17,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 ///   <item><description><c>aspire add</c> a package and verify the recorded version is non-stable.</description></item>
 ///   <item><description><c>aspire start</c>, assert a wired resource exists, then <c>aspire stop</c>.</description></item>
 ///   <item><description><c>aspire update --channel stable</c> and verify that it previews
-///     stable package updates without enqueuing an <c>aspire.config.json#channel</c> rewrite.</description></item>
+///     stable package updates.</description></item>
 ///   <item><description>Decline the previewed updates, then verify the existing non-stable
 ///     channel and package versions are preserved.</description></item>
 ///   <item><description><c>aspire add</c> a second package and verify it still resolves to a non-stable version
@@ -29,8 +29,9 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <see href="https://github.com/microsoft/aspire/issues/17295"/>: each scaffolds an AppHost via one of
 /// the four supported create paths (<c>aspire init</c> C#, <c>aspire new aspire-empty</c> C#,
 /// <c>aspire init --language typescript</c>, plus the TypeScript <c>aspire new</c> case already
-/// covered by the deep test above) and asserts that <c>aspire update --channel stable</c> does not
-/// rewrite <c>aspire.config.json#channel</c>. Package-version assertions are intentionally scoped to
+/// covered by the deep test above) and asserts that declining <c>aspire update --channel stable</c>
+/// leaves the configuration unchanged. C# previews also include removal of the existing channel pin.
+/// Package-version assertions are intentionally scoped to
 /// the polyglot deep test only: for C# projects, <c>aspire add</c> on PR/CI hives prefers the package
 /// version that matches the running CLI build (the <c>VersionHelper.TryGetCurrentCliVersionMatch</c>
 /// branch in <c>AddCommand</c>), which deliberately overrides the channel choice for build coherence
@@ -157,11 +158,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
         try
         {
-            // Step 8: Preview a stable-channel update. The stable channel is intentionally not
-            // persisted, so decline the package updates here: applying stable package versions while
-            // preserving the existing PR/local channel would leave the TypeScript SDK restore with
-            // package versions that are not available from the preserved channel's source mapping.
-            await PreviewStableUpdateAndDeclineAsync(auto, counter, expectedPackageInPlan: "Aspire.Hosting.Redis");
+            // Declining must preserve both package versions and the channel that can restore them.
+            await PreviewStableUpdateAndDeclineAsync(auto, counter, aspireConfigPath,
+                expectConfigUpdatePreview: false, expectedPackageInPlan: "Aspire.Hosting.Redis");
 
             // Step 9: Verify the existing channel and Redis package version were preserved.
             var channelAfter = ReadAspireConfigChannel(aspireConfigPath);
@@ -219,8 +218,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
     //   - TS `aspire new aspire-ts-empty` (project-mode)               -> already covered by the
     //                                                                     deep test above.
     //
-    // Each test asserts the stable-channel invariant: `aspire update --channel stable` should not
-    // enqueue an aspire.config.json#channel rewrite, so the existing channel value is preserved.
+    // Each test asserts that declining a stable update preserves the original configuration.
     // Package version assertions are intentionally not duplicated here — see the class docstring.
     // ----------------------------------------------------------------------------------
 
@@ -264,7 +262,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(projectPath, localChannel.SdkVersion);
         }
 
-        await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
+        await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter,
+            Path.Combine(projectPath, "aspire.config.json"), expectConfigUpdatePreview: true);
     }
 
     [Fact]
@@ -304,7 +303,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
-        await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
+        await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter,
+            Path.Combine(projectPath, "aspire.config.json"), expectConfigUpdatePreview: true);
     }
 
     [Fact]
@@ -350,7 +350,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(projectPath, localChannel.SdkVersion);
         }
 
-        await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
+        await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter,
+            Path.Combine(projectPath, "aspire.config.json"), expectConfigUpdatePreview: false);
     }
 
     /// <summary>
@@ -383,7 +384,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
     private static async Task RunStableChannelUpdateAndAssertChannelPreservedAsync(
         Hex1bTerminalAutomator auto,
         SequenceCounter counter,
-        string aspireConfigPath)
+        string aspireConfigPath,
+        bool expectConfigUpdatePreview)
     {
         var initialChannel = ReadAspireConfigChannel(aspireConfigPath);
         if (string.IsNullOrEmpty(initialChannel) ||
@@ -400,7 +402,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await PreviewStableUpdateAndDeclineAsync(auto, counter);
+        await PreviewStableUpdateAndDeclineAsync(auto, counter, aspireConfigPath, expectConfigUpdatePreview);
 
         var channelAfter = ReadAspireConfigChannel(aspireConfigPath);
         Assert.Equal(initialChannel, channelAfter);
@@ -409,8 +411,11 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
     private static async Task PreviewStableUpdateAndDeclineAsync(
         Hex1bTerminalAutomator auto,
         SequenceCounter counter,
+        string aspireConfigPath,
+        bool expectConfigUpdatePreview,
         string? expectedPackageInPlan = null)
     {
+        var originalConfig = await File.ReadAllBytesAsync(aspireConfigPath);
         var updatePrompt = new CellPatternSearcher().Find("Perform updates?");
         var upToDateMessage = new CellPatternSearcher().Find("Project is up to date! (no updates necessary)");
         var channelUpdateLine = new CellPatternSearcher().Find("aspire.config.json#channel");
@@ -458,7 +463,10 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             await WaitForStableUpdatePreviewAsync(allowCliUpdatePrompt: false);
         }
 
-        Assert.False(sawChannelUpdateLine, "Stable channel updates should not enqueue an aspire.config.json#channel rewrite.");
+        if (expectConfigUpdatePreview)
+        {
+            Assert.True(sawChannelUpdateLine, "The stable update preview should include channel-pin removal.");
+        }
         Assert.True(sawExpectedPackageLine, $"Expected the stable update preview to include '{expectedPackageInPlan}'.");
 
         if (sawUpdatePrompt)
@@ -473,6 +481,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         await auto.WaitForSuccessPromptAsync(counter);
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(aspireConfigPath));
     }
 
     /// <summary>
