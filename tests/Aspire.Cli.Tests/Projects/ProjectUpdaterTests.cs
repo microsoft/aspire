@@ -1813,6 +1813,22 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ProjectConfigUpdateStep_GetFormattedDisplayText_ClearsChannelPin()
+    {
+        var step = new ProjectConfigUpdateStep(
+            "Return to ambient channel policy",
+            () => Task.CompletedTask,
+            CurrentChannel: "daily",
+            NewChannel: null,
+            CurrentSdkVersion: "13.5.0-preview.1",
+            NewSdkVersion: "13.4.3");
+
+        Assert.Equal(
+            "[bold yellow]aspire.config.json#channel[/] [bold green]daily[/] to [grey](none)[/], [bold yellow]aspire.config.json#sdk.version[/] [bold green]13.5.0-preview.1[/] to [bold green]13.4.3[/]",
+            step.GetFormattedDisplayText());
+    }
+
+    [Fact]
     public void ProjectConfigUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenValuesAbsent()
     {
         var step = new ProjectConfigUpdateStep(

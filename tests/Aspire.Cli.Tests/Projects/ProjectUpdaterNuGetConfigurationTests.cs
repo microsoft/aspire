@@ -151,6 +151,84 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
+    [InlineData("AppHost.csproj", "stable", false, "success")]
+    [InlineData("apphost.cs", "stable", false, "success")]
+    [InlineData("AppHost.csproj", "stable", true, "success")]
+    [InlineData("apphost.cs", "stable", true, "success")]
+    [InlineData("AppHost.csproj", "stable", false, "decline")]
+    [InlineData("apphost.cs", "stable", false, "decline")]
+    [InlineData("AppHost.csproj", "stable", false, "restore")]
+    [InlineData("apphost.cs", "stable", false, "restore")]
+    [InlineData("AppHost.csproj", "default", false, "success")]
+    [InlineData("apphost.cs", "default", false, "success")]
+    public async Task UpdateAsync_AmbientChannelsSynchronizeSdkMetadataAfterSuccessfulRestore(
+        string fileName, string channelName, bool sdkAlreadyCurrent, string outcome)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = await CreateAppHostAsync(workspace, fileName);
+        projectFile.MoveTo(Path.Combine(workspace.CreateDirectory("AppHost").FullName, fileName));
+        var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
+        var configPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        const string originalConfig = """{ "channel": "daily", "sdk": { "version": "9.4.0-preview.1" } }""";
+        await File.WriteAllTextAsync(configPath, originalConfig);
+        var targetVersion = sdkAlreadyCurrent ? "9.4.1" : "9.4.2";
+        var restoreCount = 0;
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, _, _, _, _) =>
+        {
+            Assert.Equal(projectFile.DirectoryName, directory.FullName);
+            return (0, [new NuGetPackageCli { Id = query, Version = targetVersion, Source = PackageSources.NuGetOrg }]);
+        };
+        runner.AddPackageAsyncCallback = (file, _, version, _, noRestore, _, _) =>
+        {
+            Assert.True(noRestore);
+            File.WriteAllText(file.FullName, File.ReadAllText(file.FullName).Replace("9.4.1", version, StringComparison.Ordinal));
+            return 0;
+        };
+        runner.RestoreAsyncCallback = (_, _, _) =>
+        {
+            Assert.Equal(originalConfig, File.ReadAllText(configPath));
+            restoreCount++;
+            return outcome == "restore" ? 1 : 0;
+        };
+        using var provider = CreateServices(workspace, runner).BuildServiceProvider();
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        interaction.ConfirmCallback = (_, _) => outcome != "decline";
+        var context = await CreateContextAsync(provider, projectFile, channelName, hasExplicitChannel: channelName == "stable");
+        var updater = provider.GetRequiredService<IProjectUpdater>();
+        if (outcome == "restore")
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
+        }
+        else
+        {
+            var result = await updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken);
+            Assert.Equal(outcome == "success", result.UpdatedApplied);
+        }
+
+        if (outcome == "success")
+        {
+            var config = AspireConfigFile.Load(workspace.Path);
+            Assert.NotNull(config);
+            Assert.Equal(targetVersion, config.SdkVersion);
+            Assert.Equal(channelName == "stable" ? null : "daily", config.Channel);
+            using var parsed = provider.GetRequiredService<FallbackProjectParser>().ParseProject(projectFile);
+            Assert.Equal(targetVersion, parsed.RootElement.GetProperty("Properties").GetProperty("AspireHostingSDKVersion").GetString());
+        }
+        else
+        {
+            Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
+            Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
+        }
+        Assert.Equal(outcome == "decline" || sdkAlreadyCurrent ? 0 : 1, restoreCount);
+        Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt],
+            interaction.BooleanPromptCalls.Select(static call => call.PromptText));
+        Assert.Empty(interaction.FilePathPromptCalls);
+    }
+
+    [Theory]
     [InlineData("AppHost.csproj", "success")]
     [InlineData("apphost.cs", "success")]
     [InlineData("AppHost.csproj", "evaluation")]

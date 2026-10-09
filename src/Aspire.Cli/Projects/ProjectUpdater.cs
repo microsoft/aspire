@@ -486,7 +486,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // can live above a nested AppHost, so use the nearest config rather than only checking the
         // project directory. If no config is present, skip the rewrite: creating one is the
         // responsibility of `aspire init`.
-        if (channel.ShouldPersistChannelName() && projectFile.Directory is { } projectDirectory)
+        if (projectFile.Directory is { } projectDirectory)
         {
             var configPath = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory);
             var targetSdkVersion = context.TargetSdkVersion;
@@ -496,7 +496,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 var existingChannel = existingConfig["channel"];
                 var existingSdkVersion = existingConfig["sdk:version"] ?? existingConfig["sdkVersion"];
-                var channelChanged = !string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput);
+                // Explicit stable returns to ambient policy; an implicit update does not
+                // change the user's channel selection. Both still synchronize SDK metadata.
+                var targetChannel = channel.Type is PackageChannelType.Implicit
+                    ? existingChannel
+                    : channel.ShouldPersistChannelName() ? channel.Name : null;
+                var channelChanged = !string.Equals(existingChannel, targetChannel, StringComparisons.CliInputOrOutput);
                 var sdkVersionChanged = !string.Equals(existingSdkVersion, targetSdkVersion, StringComparison.OrdinalIgnoreCase);
 
                 if (channelChanged || sdkVersionChanged)
@@ -508,7 +513,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             CultureInfo.InvariantCulture,
                             UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
                             existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
-                            channel.Name));
+                            targetChannel ?? UpdateCommandStrings.ChannelNonePlaceholder));
                     }
                     if (sdkVersionChanged)
                     {
@@ -538,13 +543,13 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             // Keep that root frozen rather than editing a newly discovered config.
                             // LoadOrCreate migrates legacy .aspire/settings.json during commit.
                             var configToSave = AspireConfigFile.LoadOrCreate(configRoot.FullName);
-                            configToSave.Channel = channel.Name;
+                            configToSave.Channel = targetChannel;
                             configToSave.SdkVersion = targetSdkVersion;
                             configToSave.Save(configRoot.FullName);
                             return Task.CompletedTask;
                         },
                         existingChannel,
-                        channel.Name,
+                        targetChannel,
                         existingSdkVersion,
                         targetSdkVersion)
                     {
@@ -1853,7 +1858,7 @@ internal record ProjectConfigUpdateStep(
     string Description,
     Func<Task> Callback,
     string? CurrentChannel,
-    string NewChannel,
+    string? NewChannel,
     string? CurrentSdkVersion,
     string NewSdkVersion) : UpdateStep(Description, Callback)
 {
@@ -1865,7 +1870,10 @@ internal record ProjectConfigUpdateStep(
             var currentChannel = string.IsNullOrEmpty(CurrentChannel)
                 ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
                 : $"[bold green]{CurrentChannel.EscapeMarkup()}[/]";
-            changes.Add($"[bold yellow]aspire.config.json#channel[/] {currentChannel} to [bold green]{NewChannel.EscapeMarkup()}[/]");
+            var newChannel = string.IsNullOrEmpty(NewChannel)
+                ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
+                : $"[bold green]{NewChannel.EscapeMarkup()}[/]";
+            changes.Add($"[bold yellow]aspire.config.json#channel[/] {currentChannel} to {newChannel}");
         }
 
         if (!string.Equals(CurrentSdkVersion, NewSdkVersion, StringComparison.OrdinalIgnoreCase))
