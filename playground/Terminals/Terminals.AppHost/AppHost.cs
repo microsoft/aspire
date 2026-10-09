@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-// This playground intentionally exercises the experimental terminal and file-based app APIs.
-#pragma warning disable ASPIRETERMINAL001, ASPIRECSHARPAPPS001
+// This playground intentionally exercises the experimental terminal APIs.
+#pragma warning disable ASPIRETERMINAL001
 
 using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+#pragma warning disable CS0618 // Exercise terminal support for legacy CSharpApp resources.
 builder.AddCSharpApp("palette-test", "Scripts/palette-test.cs")
     .WithTerminal(options =>
     {
@@ -21,6 +22,7 @@ builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
         options.Columns = 120;
         options.Rows = 32;
     });
+#pragma warning restore CS0618
 
 builder.AddPostgres("postgres").WithRepl();
 builder.AddRedis("redis").WithRepl();

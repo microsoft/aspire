@@ -1210,7 +1210,7 @@ public class SigstoreNpmProvenanceCheckerTests
         var checker = new SigstoreNpmProvenanceChecker(
             httpClient,
             NullLogger<SigstoreNpmProvenanceChecker>.Instance,
-            (_, _, _, _, _) => Task.FromResult((true, (VerificationResult?)verificationResult)));
+            (_, _, _, _) => Task.FromResult((true, (VerificationResult?)verificationResult)));
 
         return await checker.VerifyProvenanceAsync(
             "@playwright/cli",

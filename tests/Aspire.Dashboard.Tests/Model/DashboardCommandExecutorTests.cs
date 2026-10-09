@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Reflection;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Model;
@@ -24,6 +25,66 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardCommandExecutorTests
 {
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task ExecuteAsync_RecordsScopedTelemetryAndRestoresExecutionState(bool telemetryEnabled, bool commandThrows)
+    {
+        using var fixture = new DashboardTelemetryFixture(reportedTelemetryEnabled: telemetryEnabled);
+        var telemetryService = fixture.Telemetry;
+
+        Activity? commandActivity = null;
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            executeResourceCommand: (_, _, _, _, _) =>
+            {
+                commandActivity = Activity.Current;
+                return commandThrows
+                    ? Task.FromException<ResourceCommandResponseViewModel>(new InvalidOperationException("secret command error"))
+                    : Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            });
+        var executor = CreateExecutor(dashboardClient, telemetryService, out _, out _);
+        var command = CreateCommand();
+        var resource = ModelTestHelpers.CreateResource(resourceName: "api", commands: [command]);
+        bool? isExecutingAtActivityStop = null;
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == fixture.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = _ => isExecutingAtActivityStop = executor.IsExecuting(resource.Name, command.Name)
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var parent = new Activity("parent").Start();
+        var stopwatch = Stopwatch.StartNew();
+
+        await executor.ExecuteAsync(resource, command, r => r.DisplayName).WaitAsync(TimeSpan.FromSeconds(10));
+        stopwatch.Stop();
+
+        Assert.False(executor.IsExecuting(resource.Name, command.Name));
+        Assert.Same(parent, Activity.Current);
+        if (telemetryEnabled)
+        {
+            Assert.True(fixture.ActivityChannel.Reader.TryRead(out var activity));
+            Assert.Same(commandActivity, activity);
+            Assert.Equal(TelemetryEventKeys.ExecuteCommand, activity.OperationName);
+            Assert.True(activity.IsStopped);
+            Assert.True(isExecutingAtActivityStop);
+            // Allow timer granularity while ensuring the one-second UI delay isn't part of the activity.
+            Assert.True(stopwatch.Elapsed - activity.Duration >= TimeSpan.FromMilliseconds(900));
+            Assert.Equal(commandThrows ? ActivityStatusCode.Error : ActivityStatusCode.Ok, activity.Status);
+            Assert.Equal(commandThrows ? "Failure" : "Success", activity.GetTagItem("aspire.dashboard.result"));
+            Assert.Null(activity.StatusDescription);
+        }
+        else
+        {
+            Assert.Same(parent, commandActivity);
+            Assert.Null(isExecutingAtActivityStop);
+        }
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
+    }
+
     [Fact]
     public async Task ExecuteAsyncCore_CancelNotificationAction_CancelsCommandAndUpdatesNotification()
     {
@@ -186,6 +247,14 @@ public sealed class DashboardCommandExecutorTests
     }
     private static DashboardCommandExecutor CreateExecutor(TestDashboardClient dashboardClient, out Aspire.Dashboard.Model.INotificationService notificationService, out TestNotificationService toastService)
     {
+        var telemetryService = new DashboardTelemetryService(NullLogger<DashboardTelemetryService>.Instance,
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
+
+        return CreateExecutor(dashboardClient, telemetryService, out notificationService, out toastService);
+    }
+
+    private static DashboardCommandExecutor CreateExecutor(TestDashboardClient dashboardClient, DashboardTelemetryService telemetryService, out Aspire.Dashboard.Model.INotificationService notificationService, out TestNotificationService toastService)
+    {
         var dimensionManager = new DimensionManager();
         dimensionManager.InvokeOnViewportInformationChanged(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         var dialogService = new DashboardDialogService(
@@ -194,8 +263,6 @@ public sealed class DashboardCommandExecutorTests
             dimensionManager);
         toastService = new TestNotificationService();
         notificationService = new DashboardNotificationService(TimeProvider.System);
-        var telemetryService = new DashboardTelemetryService(NullLogger<DashboardTelemetryService>.Instance, new TestDashboardTelemetrySender());
-
         return new DashboardCommandExecutor(
             dashboardClient,
             dialogService,

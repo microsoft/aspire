@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 
 using System.Diagnostics.CodeAnalysis;
@@ -947,5 +945,4 @@ public static class RustHostingExtensions
 }
 
 #pragma warning restore ASPIREEXTENSION001
-#pragma warning restore ASPIREDOCKERFILEBUILDER001
 #pragma warning restore ASPIREPIPELINES003

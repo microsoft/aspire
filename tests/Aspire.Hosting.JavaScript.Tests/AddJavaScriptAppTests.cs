@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;

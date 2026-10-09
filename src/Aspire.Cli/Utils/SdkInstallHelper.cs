@@ -42,9 +42,12 @@ internal static class SdkInstallHelper
 
         var checkResult = success ? SdkCheckResult.AlreadyInstalled : SdkCheckResult.NotInstalled;
 
-        activity?.SetTag(TelemetryConstants.Tags.SdkDetectedVersion, detectedVersion);
-        activity?.SetTag(TelemetryConstants.Tags.SdkMinimumRequiredVersion, minimumRequiredVersion.ToString());
-        activity?.SetTag(TelemetryConstants.Tags.SdkCheckResult, ToTelemetryString(checkResult));
+        telemetry.SetActivityProperties(activity,
+        [
+            new(TelemetryConstants.Tags.SdkDetectedVersion, detectedVersion),
+            new(TelemetryConstants.Tags.SdkMinimumRequiredVersion, minimumRequiredVersion.ToString()),
+            new(TelemetryConstants.Tags.SdkCheckResult, ToTelemetryString(checkResult))
+        ]);
 
         if (!success && displayError)
         {

@@ -10,8 +10,8 @@ recompiling:
 gh extension upgrade aw
 gh aw version
 gh aw fix
-gh aw compile --force-refresh-action-pins
-gh aw compile
+gh aw compile --force-refresh-action-pins --schedule-seed microsoft/aspire
+gh aw compile --schedule-seed microsoft/aspire
 ```
 
 `gh aw fix` is a dry run unless `--write` is supplied. Its write mode also refreshes
@@ -26,6 +26,14 @@ their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generat
 by the same full compilation despite not having a `.lock.yml` suffix. Do not edit
 generated workflows manually. The second compilation should produce no further
 changes.
+
+Always pass `--schedule-seed microsoft/aspire` when generating workflows for this
+repository. The literal `microsoft/aspire` string and each workflow's identifier
+deterministically select a time for flexible schedules such as `daily around 9am`.
+Without an explicit seed, gh-aw derives the repository identity from Git remotes;
+forks or checkouts without a remote can generate a different cron expression than
+CI. Two compilations in the same checkout can agree while still differing from CI.
+The explicit seed preserves the canonical schedule regardless of checkout context.
 
 `validate-agentic-workflows.yml` recompiles with the pinned gh-aw version, checks
 for generated-file drift, runs `gh aw lint --shellcheck` as a blocking lint gate,

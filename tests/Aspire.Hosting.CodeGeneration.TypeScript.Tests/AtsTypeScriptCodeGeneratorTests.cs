@@ -2275,6 +2275,9 @@ public class AtsTypeScriptCodeGeneratorTests
         var legacyTypeId = AtsTypeMapping.DeriveTypeId(typeof(ProjectResourceOptions));
         Assert.Single(context.HandleTypes, type => type.AtsTypeId == legacyTypeId);
         var addCSharpApp = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addCSharpApp");
+        Assert.True(addCSharpApp.IsObsolete);
+        Assert.False(addCSharpApp.IsExperimental);
+        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", addCSharpApp.ObsoleteMessage);
         var legacyOptions = Assert.Single(addCSharpApp.Parameters, parameter => parameter.Name == "options");
         Assert.NotNull(legacyOptions.Type);
         Assert.Equal(AtsTypeCategory.Handle, legacyOptions.Type.Category);

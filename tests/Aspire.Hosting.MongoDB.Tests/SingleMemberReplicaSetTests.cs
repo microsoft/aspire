@@ -11,7 +11,6 @@ using MongoDB.Driver;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREMONGODB001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
