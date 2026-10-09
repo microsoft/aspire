@@ -5,10 +5,6 @@
     <add key="companyfeed" value="https://companyfeed/v3/index.json" />
     <add key="aspire-test" value="{PR_HIVE}/packages" />
   </packageSources>
-  <disabledPackageSources>
-    <clear />
-    <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="true" />
-  </disabledPackageSources>
   <packageSourceMapping>
     <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">

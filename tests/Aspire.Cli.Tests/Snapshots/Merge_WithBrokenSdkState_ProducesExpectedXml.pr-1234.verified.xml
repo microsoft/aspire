@@ -5,10 +5,6 @@
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
     <add key="aspire-test" value="{PR_HIVE}/packages" />
   </packageSources>
-  <disabledPackageSources>
-    <clear />
-    <add key="{STALE_PR_HIVE}" value="true" />
-  </disabledPackageSources>
   <packageSourceMapping>
     <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">
