@@ -1,0 +1,16 @@
+{
+  "id": "hosting-javascript-denotelemetryfixture-denoapp-invalidaddress",
+  "type": "flaky-test",
+  "title": "Flaky: DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard fixture InitializeAsync fails with 'denoapp' endpoint not allocated",
+  "test_name": "Aspire.Hosting.JavaScript.Tests.DenoTelemetryFunctionalTests.VerifyDenoAppExportsNativeTelemetryToDashboard",
+  "error_pattern": "Class fixture type 'Aspire.Hosting.JavaScript.Tests.DenoTelemetryFixture' threw in InitializeAsync\n---- System.IO.InvalidDataException : Service denoapp should have valid address at this point\n   at Aspire.Hosting.Dcp.DcpModelUtilities.TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, Boolean allowPending, Nullable`1 fallbackPort) in DcpModelUtilities.cs:line 186",
+  "occurrences": [
+    {
+      "run_id": 37888997819,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37888997819",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.JavaScript.Tests, Hosting.JavaScript, Hosting.JavaScrip... / Hosting.JavaScript (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T06:10:34Z"
+    }
+  ]
+}
