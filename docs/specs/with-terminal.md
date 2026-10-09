@@ -21,6 +21,13 @@ exposes the same session as `aspire terminal agent --replica 0`.
 All terminal APIs share the experimental diagnostic `ASPIRETERMINAL001`,
 including `WithTerminal()`, AppHost-owned terminals, and terminal interactions.
 
+Per-replica terminal host resources are hidden by default. Use **Show hidden
+resources** in the dashboard to inspect their state and console logs. They
+export diagnostic logs, metrics, and traces to the configured dashboard OTLP
+endpoint independently of their visibility.
+When `DistributedApplicationOptions.DisableDashboard` is `true`, terminal host
+telemetry is disabled, even if an explicit OTLP collector endpoint is configured.
+
 ## AppHost-owned terminals
 
 For processes that the AppHost launches directly rather than as resources, use
@@ -215,6 +222,11 @@ Three actors and three socket roles:
 The producer/consumer split lets multiple consumers (dashboard + multiple CLI
 sessions) attach simultaneously without coupling DCP to consumer counts.
 
+The control socket uses StreamJsonRpc for `getSession`, `getInfo`, and `shutdown`.
+Both the AppHost client and terminal host listener use the shared
+`TerminalHostControlJsonSerializerContext` for source-generated JSON serialization,
+preserving the default property names and null handling of `SystemTextJsonFormatter`.
+
 ## Wire protocol
 
 We do **not** define a custom protocol. The terminal traffic uses
@@ -267,21 +279,21 @@ emitted by the dashboard service carries four properties:
 The consumer UDS path is marked `IsSensitive=true` so the dashboard UI masks
 the value in the property list. The path still rides the gRPC stream because
 the dashboard's WebSocket proxy needs it server-side to resolve
-`?resource=&replica=` query parameters into a real socket; the path is never
+the `?resource=<instance-name>` query parameter into a real socket; the path is never
 echoed back to the browser.
 
 ## Dashboard `/api/terminal` WebSocket endpoint
 
 Authenticated (`RequireAuthorization(FrontendAuthorizationDefaults.PolicyName)`)
-endpoint at `/api/terminal?resource=<displayName>&replica=<index>`.
+endpoint at `/api/terminal?resource=<instance-name>`. The resource parameter
+matches `ResourceViewModel.Name`, including the generated instance suffix.
 
 `TerminalWebSocketProxy` resolves the connection entirely server-side:
 
 1. The same-origin WebSocket gate rejects missing or cross-origin `Origin`
    headers before resolving a resource, in addition to frontend authorization.
-2. `ITerminalConnectionResolver.ConnectAsync(resourceName, replicaIndex, ct)`
-   walks `IDashboardClient.GetResources()`, matches by `DisplayName` +
-   `TryGetTerminalReplicaInfo`, and connects via
+2. `ITerminalConnectionResolver.ConnectAsync(resourceName, ct)`
+   looks up `IDashboardClient.GetResource(resourceName)` and connects via
    `Hmp1Transports.ConnectUnixSocket(consumerUdsPath, ct)`.
 3. The handler connects a public `Hmp1WorkloadAdapter`, attaches a per-view
    terminal and `Hwt1PresentationAdapter`, and runs the two transport pumps.
@@ -336,10 +348,15 @@ it does not lock the terminal, its creator's automation, or other viewers.
 ### Browser requirements and package pairing
 
 The dashboard uses `@hex1b/web-terminal` and the `Hex1b` NuGet package at
-exactly `0.168.0`. HWT1 is experimental state transfer
+exactly `0.172.0`. HWT1 is experimental state transfer
 between these paired packages, not a stable wire contract implemented by
-Aspire. Upgrade both together. The full npm `dist` tree is vendored, including
-module workers, relative imports, fonts and licenses.
+Aspire. Upgrade both together. The vendored runtime consists of one bundled
+JavaScript file for the client and both workers, a font, and two licenses.
+Worker roles use fragments on the bundled file URL rather than separate worker
+modules; the dashboard references the standalone vendored bundle for both.
+The 0.172 producer retains command marks for the lifetime of their backing text
+by default, rather than evicting them after 200 entries. Explicit producer
+capacity and transport limits still apply.
 
 The dashboard uses the package's automatic renderer selection: WebGPU is
 preferred, with WebGL2 used when WebGPU capabilities or device acquisition are
@@ -376,34 +393,51 @@ The package handles Ctrl/Cmd+click on authoritative OSC 8 hyperlinks in live
 output and history. HMP state replay preserves link destinations across late
 attachment and reconnect. It only opens absolute HTTP, HTTPS and mailto destinations
 with `noopener,noreferrer`; plain clicks and drags retain selection/application
-behavior. Aspire adds no custom opener or plain-text URL detection. See the
+behavior. Aspire also enables Hex1b's per-view plain-text HTTP/HTTPS URL detector
+with dashed underlines and a Ctrl/Cmd-click action that opens a new tab with
+`noopener,noreferrer`. Remote file paths and custom URI schemes are not enabled.
+See the
 [hyperlink PR](https://github.com/mitchdenny/hex1b/pull/489),
 [renderer PR](https://github.com/mitchdenny/hex1b/pull/491), and
 [hyperlink replay fix](https://github.com/mitchdenny/hex1b/pull/493).
 
-### Console / Terminal view toggle
+### Terminals page
 
-For a terminal-enabled resource the dashboard `ConsoleLogs` page mounts
-**both** `LogViewer` (the resource's standard log stream) and
-`TerminalView` (the interactive Hex1b web terminal) at the same time and
-flips between them via a pair of **Console logs** / **Terminal** items
-rendered inside the toolbar's options (⋯) `AspireMenuButton`:
+Resource terminals are displayed on the **Terminals** page at `/terminals`,
+after Metrics as the final page link in desktop and mobile navigation. Its resource
+selector contains only terminal-enabled resources, with individual replicas
+selectable and no All option. Replica index and count metadata are not required
+for terminal availability or selection. The page restores the last
+selected resource from browser session storage, otherwise defaulting to
+**(None)**, even when only one terminal resource is available. Without a selected
+resource, the page displays a terminal icon and "Select a resource to view its
+terminal"; on mobile, the message opens the resource selector. An explicit
+`/terminals/resource/{resourceName}` URL takes precedence. A selection that is no
+longer available falls back to **(None)**. URLs and saved selections use the
+resource display name for a singleton and the instance name for replicas,
+matching Console logs. Existing singleton links and saved selections containing
+an instance name are still accepted and canonicalized to the display name.
 
-- The page defaults to **Console** on resource selection so any pre-PTY
-  hosting messages — `WaitFor` notifications, startup failures, image
-  pull progress — are visible immediately.
-- The view is purely user-controlled: the page never auto-switches
-  between Console and Terminal. The user picks the view from the ⋯
-  menu and the page stays on that view until they pick the other one,
-  or a different resource is selected (which resets to Console).
-- Both views stay mounted across flips (visibility is toggled with
-  `display:none` on a wrapper `<div>`); the log subscription and the
-  Hex1b/HMP1 consumer session are kept alive so neither view loses
-  scrollback or has to re-handshake on toggle. After a `display:none →
-  visible` transition the page calls `refreshLayout` on the JS terminal
-  to fit the terminal to the new available space.
+The selector follows Console logs for ordering, state labels and the shared
+Show hidden resources setting. Waiting and stopped terminal resources remain
+selectable. Hidden terminal resources count toward navigation availability;
+when all terminals are hidden, View options offers Show hidden resources.
+When no terminal resources remain, the navigation entry disappears and page
+visits redirect to `/`. Terminals are unavailable without the resource service
+or when viewing a historical, read-only run.
 
-The resource Terminal view offers an icon-only **Open in new window** button
+Press <kbd>E</kbd>, without modifiers, to open the Terminals page. The shortcut
+is active and listed under **Page navigation** in shortcut help only while the
+Terminals navigation entry is available. Like other page navigation shortcuts,
+it is suppressed while a terminal or text input has focus.
+
+Console logs always displays the standard log stream, including pre-PTY hosting
+messages and post-PTY exit output. Its options menu no longer switches views.
+Navigating away from Terminals disposes the inline consumer, not the producer;
+returning attaches a new viewer and synchronizes producer-backed history.
+The AppHost terminal dock and interaction terminals remain separate surfaces.
+
+The resource terminal offers an icon-only **Open in new window** button
 at the right of its title bar, not in the page's Options menu or Console view.
 The dock keeps its detach button in the tab strip; dialogs and detached windows
 do not offer another launch button. Launch buttons stay disabled until their
@@ -450,7 +484,46 @@ input to the footer controls; <kbd>Shift+F6</kbd> moves focus to the preceding
 dashboard control. Hiding the hint preserves its space so focus changes do not
 resize the terminal or move the footer controls.
 
-Dock tabs share the Resources/Parameters tab styling. The dock resize handle
+Outside the dock, terminal headers keep a fixed icon slot before the workload title. Active progress
+uses a ring with the percentage in its tooltip, not inline text; otherwise the
+resource page and detached resource windows show the resource icon when its
+metadata is available, and other surfaces use a terminal icon. Detached windows
+wait for the initial resource snapshot to be received and persisted before looking
+up the matching resource replica once when opened. The Terminals page also waits
+for that snapshot before restoring its selection or deciding that terminals are
+unavailable. Detached windows do not carry icons in their URLs or subscribe to resource
+updates. Their route is `/terminal-window/resource/{resourceName}`, using the
+same canonical name as the Terminals page: a stable display name for a singleton
+or an instance name for replicas and display-name collisions. The window key uses
+that same name. Reloading a singleton window after a dashboard restart resolves
+the current instance even if its generated name has changed. A window selects its
+terminal once at startup; opening another terminal uses a new window.
+The window uses resource metadata for the display name and icon; the WebSocket
+connection still uses the resolved instance name, without a numeric replica index.
+An unavailable resource or ambiguous display name shows the ended-terminal
+message instead of attaching to a different replica.
+Error and warning progress retain their accessible labels and theme colors.
+Working directories shorten in the middle when space is limited; UNC paths keep
+their server and share together or show no path if even the root cannot fit.
+The terminal's Light/Dark palette is an explicit browser preference, independent
+of the Dashboard theme. It defaults to Dark and can be changed in the terminal
+footer; Dashboard chrome still follows Settings theme changes.
+
+Dock tabs use the titles supplied when the terminals are created, not live workload
+titles. The dock does not show a separate workload title, icon, progress, or working
+directory alongside the tabs.
+
+Dock tabs share the Resources/Parameters tab styling. Drag a tab to reorder it,
+or focus its title and press Alt+Shift+Left/Right. Reordering keeps the active
+terminal and mounted viewers unchanged. The order is local to the dashboard
+session and survives recovery snapshots; newly discovered terminals append.
+Tabs stay on one row, with horizontal scrolling. Left/right buttons remain
+visible beside **Open in window**, disabled when there are no more tabs in
+that direction. A thin line between tabs indicates the drop position.
+Activating a tab brings its title and close button into view,
+and dragging near either edge scrolls the strip to reach off-screen tabs.
+
+The dock resize handle
 uses the dashboard's Fluent splitter styling, including neutral gray hover,
 drag and keyboard-focus feedback.
 
@@ -461,10 +534,9 @@ The shortcut is suppressed while a terminal or text input has focus so it
 does not consume typed input. Press <kbd>F6</kbd> first to move from terminal input
 to its footer controls before toggling the dock.
 
-The desktop header also has a terminal toggle button. On mobile, open the
-navigation menu and select **Terminal** to open, collapse, or reopen the
-dock without a keyboard. Both controls are available only for writable live runs
-with the resource service enabled, and are hidden while switching runs.
+On both desktop and mobile layouts, use the backtick shortcut to open or reopen
+the dock. There is no terminal entry point in the desktop header or mobile
+navigation menu.
 
 When the dock is empty, it lists links to terminal-enabled resources on their
 resource pages. Resource terminals remain separate from AppHost-owned dock tabs.
@@ -502,7 +574,7 @@ text down to fit.
 
 The console log stream is now subscribed to for terminal-enabled
 resources too (previously it was suppressed), which is what makes the
-Console view non-empty for a `WithTerminal()` resource.
+Console logs page non-empty for a `WithTerminal()` resource.
 
 ## CLI
 
@@ -605,7 +677,7 @@ container before attaching, so one-time startup output, including terminal capab
 queries, can be lost. See the [DCP startup ordering](https://github.com/microsoft/dcp/blob/v0.25.13/controllers/container_controller.go#L1843-L1855).
 
 The `notcurses` resource in `playground/Terminals` installs Ubuntu's `notcurses-bin`
-package and starts an interactive Bash shell. Open its dashboard Terminal view, then
+package and starts an interactive Bash shell. Open its dashboard Terminals page, then
 run `notcurses-demo` to exercise graphics, color and Unicode rendering. Starting the
 demo from the attached shell avoids losing its initial capability queries. Press
 `q` to return to the shell; run the command again to repeat the stress workload.

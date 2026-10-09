@@ -10,7 +10,7 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
+
 
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
@@ -23,11 +23,11 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Layout {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Layout() {
         }
@@ -61,15 +61,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Live view and recordings.
-        /// </summary>
-        public static string DashboardRunSelectTitle {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Recordings, viewing {0}.
         /// </summary>
         public static string DashboardRunSelectAccessibleLabel {
@@ -88,51 +79,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No existing recordings.
-        /// </summary>
-        public static string DashboardRunSelectNoRecordings {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectNoRecordings", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to a moment ago.
-        /// </summary>
-        public static string DashboardRunSelectMomentAgo {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectMomentAgo", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to 1 minute ago.
-        /// </summary>
-        public static string DashboardRunSelectMinuteAgo {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectMinuteAgo", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0} minutes ago.
-        /// </summary>
-        public static string DashboardRunSelectMinutesAgo {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectMinutesAgo", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0}h ago.
-        /// </summary>
-        public static string DashboardRunSelectHoursAgo {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectHoursAgo", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to 1 day ago.
         /// </summary>
         public static string DashboardRunSelectDayAgo {
@@ -140,49 +86,13 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DashboardRunSelectDayAgo", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} days ago.
         /// </summary>
         public static string DashboardRunSelectDaysAgo {
             get {
                 return ResourceManager.GetString("DashboardRunSelectDaysAgo", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Past recordings.
-        /// </summary>
-        public static string DashboardRunSelectRecordings {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectRecordings", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Protect from deletion.
-        /// </summary>
-        public static string DashboardRunSelectPin {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Allow deletion.
-        /// </summary>
-        public static string DashboardRunSelectUnpin {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to This recording can't be viewed because it was created by an incompatible version of the dashboard..
-        /// </summary>
-        public static string DashboardRunSelectIncompatibleTooltip {
-            get {
-                return ResourceManager.GetString("DashboardRunSelectIncompatibleTooltip", resourceCulture);
             }
         }
 
@@ -205,6 +115,96 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to {0}h ago.
+        /// </summary>
+        public static string DashboardRunSelectHoursAgo {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectHoursAgo", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This recording can't be viewed because it was created by an incompatible version of the dashboard..
+        /// </summary>
+        public static string DashboardRunSelectIncompatibleTooltip {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectIncompatibleTooltip", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to 1 minute ago.
+        /// </summary>
+        public static string DashboardRunSelectMinuteAgo {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectMinuteAgo", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} minutes ago.
+        /// </summary>
+        public static string DashboardRunSelectMinutesAgo {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectMinutesAgo", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to a moment ago.
+        /// </summary>
+        public static string DashboardRunSelectMomentAgo {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectMomentAgo", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No existing recordings.
+        /// </summary>
+        public static string DashboardRunSelectNoRecordings {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectNoRecordings", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Protect from deletion.
+        /// </summary>
+        public static string DashboardRunSelectPin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectPin", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Past recordings.
+        /// </summary>
+        public static string DashboardRunSelectRecordings {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectRecordings", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Live view and recordings.
+        /// </summary>
+        public static string DashboardRunSelectTitle {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Allow deletion.
+        /// </summary>
+        public static string DashboardRunSelectUnpin {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectUnpin", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Extend the dashboard with views and tools for your app..
         /// </summary>
         public static string ExtensionsPageDescription {
@@ -212,7 +212,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ExtensionsPageDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
@@ -221,7 +221,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspire", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Help.
         /// </summary>
@@ -230,7 +230,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspireDashboardHelpLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire repo.
         /// </summary>
@@ -239,16 +239,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutAspireRepoLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Settings.
+        ///   Looks up a localized string similar to AI agents.
         /// </summary>
-        public static string MainLayoutLaunchSettings {
+        public static string MainLayoutLaunchAIAgents {
             get {
-                return ResourceManager.GetString("MainLayoutLaunchSettings", resourceCulture);
+                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Notifications.
         /// </summary>
@@ -257,7 +257,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutLaunchNotifications", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Settings.
+        /// </summary>
+        public static string MainLayoutLaunchSettings {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchSettings", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Notifications.
         /// </summary>
@@ -266,7 +275,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutNotificationCenterTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
@@ -275,7 +284,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutSettingsDialogClose", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Settings.
         /// </summary>
@@ -284,7 +293,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutSettingsDialogTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to An unhandled error has occurred..
         /// </summary>
@@ -293,7 +302,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutUnhandledErrorMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Reload.
         /// </summary>
@@ -302,16 +311,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MainLayoutUnhandledErrorReload", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to More information.
-        /// </summary>
-        public static string MessageUnsecuredEndpointLink {
-            get {
-                return ResourceManager.GetString("MessageUnsecuredEndpointLink", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Untrusted apps can access telemetry data via the API..
         /// </summary>
@@ -320,7 +320,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageUnsecuredEndpointApiBody", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to More information.
+        /// </summary>
+        public static string MessageUnsecuredEndpointLink {
+            get {
+                return ResourceManager.GetString("MessageUnsecuredEndpointLink", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Untrusted apps can send telemetry to the dashboard..
         /// </summary>
@@ -329,7 +338,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageUnsecuredEndpointTelemetryBody", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Endpoint is unsecured.
         /// </summary>
@@ -338,7 +347,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageUnsecuredEndpointTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Console.
         /// </summary>
@@ -347,7 +356,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuConsoleLogsTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Extensions.
         /// </summary>
@@ -356,13 +365,49 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuExtensionsTab", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Graph.
+        /// </summary>
+        public static string NavMenuGraphTab {
+            get {
+                return ResourceManager.GetString("NavMenuGraphTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Home.
+        /// </summary>
+        public static string NavMenuHomeTab {
+            get {
+                return ResourceManager.GetString("NavMenuHomeTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Main navigation.
+        /// </summary>
+        public static string NavMenuLandmark {
+            get {
+                return ResourceManager.GetString("NavMenuLandmark", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Metrics.
         /// </summary>
         public static string NavMenuMetricsTab {
             get {
                 return ResourceManager.GetString("NavMenuMetricsTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Parameters.
+        /// </summary>
+        public static string NavMenuParametersTab {
+            get {
+                return ResourceManager.GetString("NavMenuParametersTab", resourceCulture);
             }
         }
 
@@ -374,7 +419,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuResourcesTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Structured.
         /// </summary>
@@ -383,7 +428,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuStructuredLogsTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Tags.
         /// </summary>
@@ -392,7 +437,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuTagsTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Terminals.
         /// </summary>
@@ -401,7 +446,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuTerminalsTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Traces.
         /// </summary>
@@ -410,7 +455,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("NavMenuTracesTab", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to View filters.
         /// </summary>
@@ -419,52 +464,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("PageLayoutViewFilters", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to AI agents.
-        /// </summary>
-        public static string MainLayoutLaunchAIAgents {
-            get {
-                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Main navigation.
-        /// </summary>
-        public static string NavMenuLandmark {
-            get {
-                return ResourceManager.GetString("NavMenuLandmark", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Home.
-        /// </summary>
-        public static string NavMenuHomeTab {
-            get {
-                return ResourceManager.GetString("NavMenuHomeTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Parameters.
-        /// </summary>
-        public static string NavMenuParametersTab {
-            get {
-                return ResourceManager.GetString("NavMenuParametersTab", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Graph.
-        /// </summary>
-        public static string NavMenuGraphTab {
-            get {
-                return ResourceManager.GetString("NavMenuGraphTab", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Coming soon.
         /// </summary>
@@ -473,169 +473,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("PlaceholderPageComingSoon", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Resources.
-        /// </summary>
-        public static string ResourcePaneLandmark {
-            get {
-                return ResourceManager.GetString("ResourcePaneLandmark", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Expand resource list.
-        /// </summary>
-        public static string ResourcePaneExpand {
-            get {
-                return ResourceManager.GetString("ResourcePaneExpand", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Collapse resource list.
-        /// </summary>
-        public static string ResourcePaneCollapse {
-            get {
-                return ResourceManager.GetString("ResourcePaneCollapse", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Add tags to a resource from its overview to group related resources here..
-        /// </summary>
-        public static string ResourcePaneNoTagsDescription {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoTagsDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No tags yet.
-        /// </summary>
-        public static string ResourcePaneNoTagsTitle {
-            get {
-                return ResourceManager.GetString("ResourcePaneNoTagsTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Show resource list.
-        /// </summary>
-        public static string ResourcePaneOpen {
-            get {
-                return ResourceManager.GetString("ResourcePaneOpen", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Hide resource list.
-        /// </summary>
-        public static string ResourcePaneClose {
-            get {
-                return ResourceManager.GetString("ResourcePaneClose", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Filter by state.
-        /// </summary>
-        public static string ResourcePaneStateFilters {
-            get {
-                return ResourceManager.GetString("ResourcePaneStateFilters", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0}, {1}.
-        /// </summary>
-        public static string ResourcePaneTagGroupLabel {
-            get {
-                return ResourceManager.GetString("ResourcePaneTagGroupLabel", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Expand or collapse {0}.
-        /// </summary>
-        public static string ResourcePaneTagGroupToggle {
-            get {
-                return ResourceManager.GetString("ResourcePaneTagGroupToggle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Untagged.
-        /// </summary>
-        public static string ResourcePaneUntaggedGroup {
-            get {
-                return ResourceManager.GetString("ResourcePaneUntaggedGroup", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0} unviewed error logs.
-        /// </summary>
-        public static string ResourcePaneUnviewedErrors {
-            get {
-                return ResourceManager.GetString("ResourcePaneUnviewedErrors", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Telemetry only.
-        /// </summary>
-        public static string ResourcePaneTelemetryOnlyGroup {
-            get {
-                return ResourceManager.GetString("ResourcePaneTelemetryOnlyGroup", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Sends telemetry, not part of the app model.
-        /// </summary>
-        public static string ResourcePaneTelemetryOnly {
-            get {
-                return ResourceManager.GetString("ResourcePaneTelemetryOnly", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0} resource.
-        /// </summary>
-        public static string ResourcePaneCountSingular {
-            get {
-                return ResourceManager.GetString("ResourcePaneCountSingular", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to {0} resources.
-        /// </summary>
-        public static string ResourcePaneCountPlural {
-            get {
-                return ResourceManager.GetString("ResourcePaneCountPlural", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Started.
-        /// </summary>
-        public static string ResourceHeaderStarted {
-            get {
-                return ResourceManager.GetString("ResourceHeaderStarted", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Resource not found.
-        /// </summary>
-        public static string ResourceHeaderNotFound {
-            get {
-                return ResourceManager.GetString("ResourceHeaderNotFound", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to All resources.
         /// </summary>
@@ -644,7 +482,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceHeaderAllResources", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to No resource is selected, so data from every resource is shown. Select resources in the list to filter it..
         /// </summary>
@@ -653,34 +491,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceHeaderAllResourcesDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Resource views.
+        ///   Looks up a localized string similar to Resource not found.
         /// </summary>
-        public static string ResourceTabsLandmark {
+        public static string ResourceHeaderNotFound {
             get {
-                return ResourceManager.GetString("ResourceTabsLandmark", resourceCulture);
+                return ResourceManager.GetString("ResourceHeaderNotFound", resourceCulture);
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Not available for this resource.
-        /// </summary>
-        public static string ResourceTabUnavailable {
-            get {
-                return ResourceManager.GetString("ResourceTabUnavailable", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Overview.
-        /// </summary>
-        public static string ResourceTabOverview {
-            get {
-                return ResourceManager.GetString("ResourceTabOverview", resourceCulture);
-            }
-        }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} selected resources.
         /// </summary>
@@ -689,7 +509,97 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceHeaderSelectedResources", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Started.
+        /// </summary>
+        public static string ResourceHeaderStarted {
+            get {
+                return ResourceManager.GetString("ResourceHeaderStarted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Hide resource list.
+        /// </summary>
+        public static string ResourcePaneClose {
+            get {
+                return ResourceManager.GetString("ResourcePaneClose", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Collapse resource list.
+        /// </summary>
+        public static string ResourcePaneCollapse {
+            get {
+                return ResourceManager.GetString("ResourcePaneCollapse", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} resources.
+        /// </summary>
+        public static string ResourcePaneCountPlural {
+            get {
+                return ResourceManager.GetString("ResourcePaneCountPlural", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} resource.
+        /// </summary>
+        public static string ResourcePaneCountSingular {
+            get {
+                return ResourceManager.GetString("ResourcePaneCountSingular", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expand resource list.
+        /// </summary>
+        public static string ResourcePaneExpand {
+            get {
+                return ResourceManager.GetString("ResourcePaneExpand", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resources.
+        /// </summary>
+        public static string ResourcePaneLandmark {
+            get {
+                return ResourceManager.GetString("ResourcePaneLandmark", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Add tags to a resource from its overview to group related resources here..
+        /// </summary>
+        public static string ResourcePaneNoTagsDescription {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoTagsDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No tags yet.
+        /// </summary>
+        public static string ResourcePaneNoTagsTitle {
+            get {
+                return ResourceManager.GetString("ResourcePaneNoTagsTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Show resource list.
+        /// </summary>
+        public static string ResourcePaneOpen {
+            get {
+                return ResourceManager.GetString("ResourcePaneOpen", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Resize resource list.
         /// </summary>
@@ -698,7 +608,97 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcePaneResize", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Filter by state.
+        /// </summary>
+        public static string ResourcePaneStateFilters {
+            get {
+                return ResourceManager.GetString("ResourcePaneStateFilters", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0}, {1}.
+        /// </summary>
+        public static string ResourcePaneTagGroupLabel {
+            get {
+                return ResourceManager.GetString("ResourcePaneTagGroupLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expand or collapse {0}.
+        /// </summary>
+        public static string ResourcePaneTagGroupToggle {
+            get {
+                return ResourceManager.GetString("ResourcePaneTagGroupToggle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Sends telemetry, not part of the app model.
+        /// </summary>
+        public static string ResourcePaneTelemetryOnly {
+            get {
+                return ResourceManager.GetString("ResourcePaneTelemetryOnly", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Telemetry only.
+        /// </summary>
+        public static string ResourcePaneTelemetryOnlyGroup {
+            get {
+                return ResourceManager.GetString("ResourcePaneTelemetryOnlyGroup", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Untagged.
+        /// </summary>
+        public static string ResourcePaneUntaggedGroup {
+            get {
+                return ResourceManager.GetString("ResourcePaneUntaggedGroup", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} unviewed error logs.
+        /// </summary>
+        public static string ResourcePaneUnviewedErrors {
+            get {
+                return ResourceManager.GetString("ResourcePaneUnviewedErrors", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Overview.
+        /// </summary>
+        public static string ResourceTabOverview {
+            get {
+                return ResourceManager.GetString("ResourceTabOverview", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Not available for this resource.
+        /// </summary>
+        public static string ResourceTabUnavailable {
+            get {
+                return ResourceManager.GetString("ResourceTabUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource views.
+        /// </summary>
+        public static string ResourceTabsLandmark {
+            get {
+                return ResourceManager.GetString("ResourceTabsLandmark", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Open and switch between the terminals of your resources from one place..
         /// </summary>

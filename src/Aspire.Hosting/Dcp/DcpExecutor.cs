@@ -1318,6 +1318,8 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         ForgetCachedCallbackResults(resource.ModelResource);
         ForgetConnectionStringAvailableEvent(resource.ModelResource);
 
+        // The delete watch can clear its observation while the API deletion is still being polled.
+        string? deletedUid = null;
         var result = await DeleteResourceRetryPipeline.ExecuteAsync(async (resourceName, attemptCancellationToken) =>
         {
             string? uid = null;
@@ -1329,6 +1331,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             {
                 var r = await _kubernetesService.DeleteAsync<T>(resourceName, cancellationToken: attemptCancellationToken).ConfigureAwait(false);
                 uid = r.Uid();
+                deletedUid = uid;
 
                 _logger.LogDebug("Delete request for '{ResourceName}' successfully completed. Resource to delete has UID '{Uid}'.", resourceName, uid);
             }
@@ -1366,6 +1369,9 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
         {
             throw new DistributedApplicationException($"Failed to delete '{resource.DcpResourceName}' successfully before restart.");
         }
+
+        // Do not suppress updates from an object whose deletion failed.
+        _resourceWatcher.MarkPreviousIncarnationSuperseded(T.ObjectKind, resource.DcpResourceName, deletedUid);
     }
 
     /// <summary>

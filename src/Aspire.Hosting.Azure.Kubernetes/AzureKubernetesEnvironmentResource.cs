@@ -2,9 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREAZURE001
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;

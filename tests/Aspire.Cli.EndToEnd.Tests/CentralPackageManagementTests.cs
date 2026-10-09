@@ -54,7 +54,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />
                 <PropertyGroup>
                     <OutputType>Exe</OutputType>
-                    <TargetFramework>net9.0</TargetFramework>
+                    <TargetFramework>net10.0</TargetFramework>
                     <IsAspireHost>true</IsAspireHost>
                 </PropertyGroup>
                 <ItemGroup>
@@ -168,7 +168,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
                 <Sdk Name="Aspire.AppHost.Sdk" Version="9.1.0" />
                 <PropertyGroup>
                     <OutputType>Exe</OutputType>
-                    <TargetFramework>net9.0</TargetFramework>
+                    <TargetFramework>net10.0</TargetFramework>
                     <IsAspireHost>true</IsAspireHost>
                 </PropertyGroup>
             </Project>
@@ -288,7 +288,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
             <Project Sdk="Aspire.AppHost.Sdk/13.1.2">
                 <PropertyGroup>
                     <OutputType>Exe</OutputType>
-                    <TargetFramework>net9.0</TargetFramework>
+                    <TargetFramework>net10.0</TargetFramework>
                     <IsAspireHost>true</IsAspireHost>
                 </PropertyGroup>
             </Project>

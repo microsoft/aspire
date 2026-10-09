@@ -95,10 +95,19 @@
     --offset-x: -5px;
     --offset-y: 4px;
     --strokeWidthThin: 0;
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0;
     background-color: var(--colorNeutralBackgroundInverted);
     color: var(--colorNeutralForegroundInverted);
     font-weight: var(--fontWeightRegular);
     pointer-events: none;
+}
+
+::deep.layout > header .notification-counter-badge-overflow {
+    width: 22px;
+    min-width: 22px;
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar {

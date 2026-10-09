@@ -102,6 +102,8 @@ ignore:
   # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
   - eng/scripts/verify-cli-npm-package.ps1
   - eng/scripts/verify-cli-tool-nupkg.ps1
+  # SDK registration diagnostics run with the unconditional native Windows archive smoke.
+  - eng/scripts/tray-registration-control/**
   # The stabilization job invokes this script independently of the tests selector.
   - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
@@ -134,6 +136,7 @@ path_rules:
 
   - paths:
       - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
+      - src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js
       - src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js
       - src/Aspire.Dashboard/wwwroot/js/app.js
       - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
@@ -208,9 +211,10 @@ path_rules:
   # the blast radius is not precise enough, keep the conservative full-matrix target.
   - paths:
       - .github/actions/check-changed-files/**
+      - .github/actions/create-pull-request/**
       - .github/actions/select-tests/**
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates the changed-file gate and selector action behavior
+    reason: Infrastructure.Tests validates these composite actions' behavior
   - paths:
       - .github/actions/enumerate-tests/**
     targets: [DOTNET_TESTS]
@@ -240,6 +244,11 @@ path_rules:
       - .github/workflows/run-tests.yml
     targets: [ALL]
     reason: matrix, enumeration, and runner infrastructure can affect any regular PR test lane
+
+  - paths:
+      - .github/workflows/normalize-mtp-exit-code.*
+    targets: [ALL, job:deployment-e2e]
+    reason: shared MTP exit normalization is consumed by regular test lanes and Deployment E2E
 
   - paths:
       - .github/workflows/build-packages.yml
@@ -300,8 +309,9 @@ path_rules:
       - .vscode/tasks.json
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
       - .github/workflows/extension-unit-tests.yml
+      - .github/workflows/extension-e2e-tests.yml
     targets: [job:extension-unit]
-    reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
+    reason: extension tests validate workspace wiring and the E2E workflow contract; bootstrap builds validate the E2E bridge VSIX
   - paths:
       - extension/**
       - src/Aspire.AppHost.Sdk/**
@@ -330,6 +340,7 @@ path_rules:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
+      - .github/workflows/run-deployment-test.sh
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in affected_project_rules
   - paths:
@@ -408,13 +419,10 @@ path_rules:
     targets: [test:Infrastructure.Tests]
     reason: Infrastructure.Tests/Pipelines/NpmCliPackageTests renders this template and verifies the packaged README
   - paths:
+      - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package.json
       - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json
     targets: [test:Aspire.Cli.Tests]
-    reason: >-
-      Cli.Tests/Templating/TemplatePackageLockTests.ProjectTemplateFrontendPackageLock_UsesPublicNpmRegistry
-      reads this shipped lockfile to guard its registry host. Additive with the src/Aspire.ProjectTemplates/**
-      -> Aspire.Templates.Tests rule below, which does NOT build Aspire.Cli.Tests, so a lockfile-only edit here
-      would otherwise skip the guard.
+    reason: TemplatePackageLockTests reads the shipped frontend manifest and lockfile to guard dependency versions and registry hosts.
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
@@ -501,6 +509,7 @@ path_rules:
   - paths:
       - .github/workflows/**
       - .github/actionlint.yaml
+      - .github/actionlint-version.json
       - eng/pipelines/**
       - eng/Signing.props
       - eng/Publishing.props
@@ -509,8 +518,16 @@ path_rules:
   - paths:
       - eng/Bundle.proj
       - tools/CreateLayout/**
-    targets: [CLI_BUNDLE]
-    reason: CreateLayout assembles the CLI bundle consumed by CLI e2e, extension e2e, and installers
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: assembles and validates native CLI bundle payloads
+  - paths: [src/Aspire.Tray/Windows/publish.ps1]
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: Windows native publishing and smoke invocation
+  - paths:
+      - eng/scripts/generate-template-cgmanifest.ps1
+      - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
+    targets: [test:Infrastructure.Tests]
+    reason: template manifest wrapper and restore workspace cleanup coverage
 
 # Project rules: an affected production/non-test project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
@@ -521,6 +538,12 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
+  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+    targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
+    reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
+  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+    targets: [CLI_BUNDLE]
+    reason: native tray payloads are embedded in the CLI bundle
   - projects: [CreateLayout]
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs

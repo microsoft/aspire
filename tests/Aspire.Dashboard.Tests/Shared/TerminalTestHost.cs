@@ -55,7 +55,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
     public int DisposedAttachments => Volatile.Read(ref _disposedAttachments);
     public StatusCode? AttachmentFailureStatus { get; init; }
     public bool FailAttachmentDuringHandshake { get; init; }
-    private string Endpoint => _useGrpc ? "/api/apphost-terminal?terminalId=test" : "/api/terminal?resource=test&replica=0";
+    private string Endpoint => _useGrpc ? "/api/apphost-terminal?terminalId=test" : "/api/terminal?resource=test";
 
     public Task StartAsync(CancellationToken cancellationToken) => _app.StartAsync(cancellationToken);
 
@@ -100,7 +100,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
             {
                 Scheme = "ws",
                 Path = _useGrpc ? "/api/apphost-terminal" : "/api/terminal",
-                Query = (_useGrpc ? "terminalId=test" : "resource=test&replica=0") +
+                Query = (_useGrpc ? "terminalId=test" : "resource=test") +
                     (viewId is null ? string.Empty : $"&viewId={viewId}")
             }.Uri, cancellationToken);
             return socket;
@@ -112,9 +112,10 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
         }
     }
 
-    public Task<Stream?> ConnectAsync(string resourceName, int replicaIndex, CancellationToken cancellationToken)
+    public Task<Stream?> ConnectAsync(string resourceName, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        Assert.Equal("test", resourceName);
         return Task.FromResult<Stream?>(_producer.Connect());
     }
 
@@ -133,7 +134,7 @@ internal sealed class TerminalTestHost : ITerminalConnectionResolver, IAsyncDisp
         // producer or returning any HMP handshake bytes.
         var connection = failure is not null || Volatile.Read(ref _terminalEnded) != 0
             ? Stream.Null
-            : (await ConnectAsync(terminalId, 0, cancellationToken))!;
+            : (await ConnectAsync(terminalId, cancellationToken))!;
         var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _attachmentDisposals.Add(disposed.Task);
         var call = new AsyncDuplexStreamingCall<TerminalClientFrame, TerminalServerFrame>(

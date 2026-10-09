@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREUSERSECRETS001
 
 using System.Diagnostics.CodeAnalysis;
@@ -143,7 +141,6 @@ public interface IDistributedApplicationBuilder
     /// The pipeline allows adding custom deployment steps that execute during the deploy process.
     /// Steps can declare dependencies on other steps to control execution order.
     /// </remarks>
-    [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IDistributedApplicationPipeline Pipeline { get; }
 
     /// <summary>
@@ -160,7 +157,6 @@ public interface IDistributedApplicationBuilder
     /// consistent directory management across the application.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IFileSystemService FileSystemService => throw new NotImplementedException();
 
     /// <summary>

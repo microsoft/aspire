@@ -731,6 +731,7 @@ internal sealed class BundleService(
                 Dcp = BundleDiscovery.DcpDirectoryName,
                 Dashboard = BundleDiscovery.DashboardDirectoryName,
                 Managed = BundleDiscovery.ManagedDirectoryName,
+                Tray = LayoutDiscovery.FindTrayRelativePath(versionDirectory, ""),
             }
         };
     }

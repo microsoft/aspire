@@ -5171,7 +5171,6 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts. The parameter name 'type' is a reserved keyword in Go and Rust.</para>
     /// </remarks>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the ATS export stub with renamed probeType parameter instead.")]
     public static IResourceBuilder<T> WithHttpProbe<T>(this IResourceBuilder<T> builder, ProbeType type, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null, string? endpointName = null)
         where T : IResourceWithEndpoints, IResourceWithProbes
@@ -5190,7 +5189,6 @@ public static class ResourceBuilderExtensions
     /// with renamed parameter to avoid reserved keyword conflicts in Go and Rust.
     /// </summary>
     /// <ats-summary>Adds an HTTP health probe to the resource</ats-summary>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withHttpProbe")]
     internal static IResourceBuilder<T> WithHttpProbeExport<T>(this IResourceBuilder<T> builder, ProbeType probeType, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null, string? endpointName = null)
         where T : IResourceWithEndpoints, IResourceWithProbes
@@ -5231,7 +5229,6 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts. Use the endpointName-based overload instead.</para>
     /// </remarks>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Func<EndpointReference> delegate — not ATS-compatible.")]
     public static IResourceBuilder<T> WithHttpProbe<T>(this IResourceBuilder<T> builder, ProbeType type, Func<EndpointReference>? endpointSelector, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null)
         where T : IResourceWithEndpoints, IResourceWithProbes
@@ -5263,7 +5260,6 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">Resource builder.</param>
     /// <param name="probeAnnotation">Probe annotation to add to resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<T> WithProbe<T>(this IResourceBuilder<T> builder, ProbeAnnotation probeAnnotation) where T : IResourceWithProbes
     {
         // Replace existing annotation with the same type

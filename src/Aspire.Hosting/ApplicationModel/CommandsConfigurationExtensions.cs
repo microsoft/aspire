@@ -8,6 +8,7 @@ using System.Text;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -100,9 +101,10 @@ internal static class CommandsConfigurationExtensions
             executeCommand: async context =>
             {
                 var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
+                var cancellationToken = GetCommandCancellationToken(context, resource);
 
-                await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                await orchestrator.StopResourceAsync(context.ResourceName, cancellationToken).ConfigureAwait(false);
+                await orchestrator.StartResourceAsync(context.ResourceName, cancellationToken).ConfigureAwait(false);
                 return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
@@ -195,6 +197,7 @@ internal static class CommandsConfigurationExtensions
         var resourceNotificationService = context.Services.GetRequiredService<ResourceNotificationService>();
         var loggerService = context.Services.GetRequiredService<ResourceLoggerService>();
         var model = context.Services.GetRequiredService<DistributedApplicationModel>();
+        var cancellationToken = GetCommandCancellationToken(context, projectResource);
 
         var rebuilderResource = model.Resources.OfType<ProjectRebuilderResource>().FirstOrDefault(r => r.Parent == projectResource);
         if (rebuilderResource is null)
@@ -224,7 +227,7 @@ internal static class CommandsConfigurationExtensions
             || state != KnownResourceStates.Waiting);
 
         LogBuildInformation(mainLogger, buildOutput, "Stopping resource for rebuild...");
-        await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, context.CancellationToken))).ConfigureAwait(false);
+        await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, cancellationToken))).ConfigureAwait(false);
 
         // Set state to Building after replicas are stopped. Leave Waiting replicas in their
         // current state — changing their state text would unblock WaitForInBeforeResourceStartedEvent,
@@ -236,7 +239,7 @@ internal static class CommandsConfigurationExtensions
         ).ConfigureAwait(false);
 
         // Start forwarding logs from the rebuilder to the main resource's console.
-        using var logCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+        using var logCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var rebuilderInstanceName = rebuilderResource.GetResolvedResourceNames()[0];
         var logForwardTask = ForwardLogsAsync(loggerService, rebuilderInstanceName, mainLogger, buildOutput, logCts.Token);
         var logForwardingStopped = false;
@@ -254,28 +257,37 @@ internal static class CommandsConfigurationExtensions
 
         try
         {
-            // Start the rebuilder resource (runs dotnet build).
-            LogBuildInformation(mainLogger, buildOutput, "Building project...");
-            await orchestrator.StartResourceAsync(rebuilderInstanceName, context.CancellationToken).ConfigureAwait(false);
-
-            // Wait for the rebuilder to reach a terminal state, with a timeout.
             int? exitCode = null;
-            using var buildTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+            using var buildTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             buildTimeoutCts.CancelAfter(TimeSpan.FromMinutes(10));
 
             try
             {
-                await foreach (var evt in resourceNotificationService.WatchAsync(buildTimeoutCts.Token).ConfigureAwait(false))
+                LogBuildInformation(mainLogger, buildOutput, "Building project...");
+                await orchestrator.StartResourceAsync(rebuilderInstanceName, cancellationToken).ConfigureAwait(false);
+
+                // StartResourceAsync publishes Starting before returning, replacing the previous
+                // build's terminal snapshot. WatchAsync then replays either that state or the
+                // new build's terminal state if it exited before this subscription.
+                // The DCP watcher ignores late events from the deleted executable's UID.
+                var terminalEvent = await resourceNotificationService.WaitForResourceAsync(rebuilderResource.Name,
+                    evt => IsRebuildComplete(evt, rebuilderInstanceName),
+                    buildTimeoutCts.Token).ConfigureAwait(false);
+
+                if (terminalEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart)
                 {
-                    if (evt.Resource == rebuilderResource &&
-                        KnownResourceStates.TerminalStates.Contains(evt.Snapshot.State?.Text))
+                    const string failureMessage = "Build failed to start.";
+                    LogBuildError(mainLogger, buildOutput, failureMessage);
+                    await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
                     {
-                        exitCode = evt.Snapshot.ExitCode;
-                        break;
-                    }
+                        State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
+                    }).ConfigureAwait(false);
+                    return await FinishAsync(new ExecuteCommandResult { Success = false, Message = failureMessage }).ConfigureAwait(false);
                 }
+
+                exitCode = terminalEvent.Snapshot.ExitCode;
             }
-            catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 // Build timed out.
                 LogBuildError(mainLogger, buildOutput, "Build timed out.");
@@ -318,7 +330,7 @@ internal static class CommandsConfigurationExtensions
                             State = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
                         }).ConfigureAwait(false);
 
-                        await orchestrator.StartResourceAsync(name, context.CancellationToken).ConfigureAwait(false);
+                        await orchestrator.StartResourceAsync(name, cancellationToken).ConfigureAwait(false);
                     }
                 }
 
@@ -353,7 +365,7 @@ internal static class CommandsConfigurationExtensions
                 return await FinishAsync(new ExecuteCommandResult { Success = false, Message = failureMessage }).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The command was cancelled (e.g. user navigated away or the dashboard closed).
             // The replicas were already stopped for the rebuild, so set them to Exited.
@@ -371,6 +383,30 @@ internal static class CommandsConfigurationExtensions
                 await StopLogForwardingAsync(logCts, logForwardTask).ConfigureAwait(false);
             }
         }
+    }
+
+    internal static bool IsRebuildComplete(ResourceEvent resourceEvent, string rebuilderInstanceName)
+    {
+        var state = resourceEvent.Snapshot.State?.Text;
+        return resourceEvent.ResourceId == rebuilderInstanceName &&
+            (state == KnownResourceStates.FailedToStart ||
+             (KnownResourceStates.TerminalStates.Contains(state) && resourceEvent.Snapshot.ExitCode is not null));
+    }
+
+    internal static CancellationToken GetCommandCancellationToken(ExecuteCommandContext context, IResource resource)
+    {
+        // When the dashboard initiates its own restart or rebuild, stopping its project closes
+        // the connection that carries the command. That cancels context.CancellationToken before
+        // the dashboard can be started again. Use the AppHost shutdown token so the command
+        // survives this expected disconnect, but still stops when the AppHost shuts down.
+        // Other resources leave the dashboard connected and retain request cancellation.
+        if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) &&
+            resource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>())
+        {
+            return context.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+        }
+
+        return context.CancellationToken;
     }
 
     private static ExecuteCommandResult AttachBuildOutput(ExecuteCommandResult result, string output)

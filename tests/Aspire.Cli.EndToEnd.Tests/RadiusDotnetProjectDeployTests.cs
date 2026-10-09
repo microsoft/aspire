@@ -46,7 +46,6 @@ public sealed class RadiusDotnetProjectDeployTests(ITestOutputHelper output)
             await auto.InstallRadiusControlPlaneAsync(counter, clusterName);
 
             var appHostCode = $$"""
-                #pragma warning disable ASPIREDOTNETPROJECT001
                 #pragma warning disable ASPIRERADIUS057
                 using Aspire.Hosting;
 

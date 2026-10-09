@@ -28,12 +28,8 @@
     [CascadingParameter]
     public HttpContext? HttpContext { get; set; }
 
-    @*#if (Framework == 'net10.0' || Framework == 'net11.0')
     [PersistentState]
     public string? RequestId { get; set; }
-    ##else
-    private string? RequestId { get; set; }
-    ##endif*@
 
     private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
 

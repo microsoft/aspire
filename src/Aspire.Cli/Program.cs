@@ -469,14 +469,15 @@ public class Program
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
-        // Windows-only crash-time safety net for interactive children spawned by
-        // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
-        // job created on first isolated spawn. The OS closes the job handle automatically on
-        // process exit, firing KILL_ON_JOB_CLOSE on any assigned children that haven't already
-        // exited (e.g. orphaned tsx after the CLI crashes). On non-Windows, process-group
-        // reparenting + ordinary signal delivery cover the same case, so nothing is needed.
+        // Windows-only crash-time safety net for interactive children spawned by ProcessExecution
+        // is ProcessStartInfo.KillOnParentExit: the runtime assigns them to a kill-on-close job that
+        // the OS closes on process exit, terminating children that haven't already exited (e.g.
+        // orphaned tsx after the CLI crashes). On non-Windows, process-group reparenting + ordinary
+        // signal delivery cover the same case, so nothing is needed.
         builder.Services.AddTransient<LayoutProcessRunner>();
         builder.Services.AddTransient<ProcessTreeGracefulShutdownService>();
+        builder.Services.AddSingleton<IProcessIdentityProvider, ProcessIdentityProvider>();
+        builder.Services.AddSingleton(_ => TrayProtocolOutput.CreateStandardOutput());
         // Forward the interface to the existing concrete service so consumers can depend on the
         // abstraction (used by AppHostServerSession + GuestLaunchOptions in the aspire run path).
         builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
@@ -530,6 +531,7 @@ public class Program
         builder.Services.AddSingleton<IPackagingService, PackagingService>();
         builder.Services.AddSingleton<IBundlePayloadProvider, EmbeddedBundlePayloadProvider>();
         builder.Services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        builder.Services.AddSingleton<InstallSourceDetector>();
         builder.Services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
         builder.Services.AddSingleton<IInstallationCandidateSource, PathInstallationCandidateSource>();
         builder.Services.AddSingleton<IInstallationCandidateSource, ReleasePrefixInstallationCandidateSource>();
@@ -639,6 +641,7 @@ public class Program
         // Commands.
         builder.Services.AddSingleton<CommonCommandServices>();
         builder.Services.AddSingleton<ResourceWaitService>();
+        builder.Services.AddSingleton<AppHostConfigurationProjector>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<DcpWorkloadCleanupService>();
         builder.Services.AddTransient<NewCommand>();
@@ -673,6 +676,10 @@ public class Program
         builder.Services.AddTransient<DoctorCommand>();
         builder.Services.AddTransient<DashboardCommand>();
         builder.Services.AddTransient<DashboardRunCommand>();
+        builder.Services.AddTransient<TrayCommand>();
+        builder.Services.AddTransient<TrayStartCommand>();
+        builder.Services.AddTransient<TrayStopCommand>();
+        builder.Services.AddTransient<TrayLifecycleService>();
         builder.Services.AddTransient<UpdateCommand>();
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DestroyCommand>();
@@ -857,7 +864,7 @@ public class Program
         // Show banner if explicitly requested OR on first run (unless suppressed by noLogo).
         // Always require interactive output support — the animated banner uses Spectre.Console's Live display
         // which manipulates the cursor and fails when console handles are invalid (e.g., stdout is redirected).
-        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput)
+        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput && !HasProtocolOutput(args))
         {
             var bannerService = serviceProvider.GetRequiredService<IBannerService>();
             await bannerService.DisplayBannerAsync(cancellationToken);
@@ -939,6 +946,11 @@ public class Program
     // accidentally suppress the first-run experience.
     private static bool HasMachineReadableOutput(string[] args)
     {
+        if (HasProtocolOutput(args))
+        {
+            return true;
+        }
+
         if (IsLegacyExtensionGetAppHostsCommand(args))
         {
             return true;
@@ -952,7 +964,8 @@ public class Program
                 return false;
             }
 
-            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--format=mermaid", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -970,7 +983,29 @@ public class Program
 
             if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length
-                && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+                && (args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase) ||
+                    args[i + 1].Equals("mermaid", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasProtocolOutput(string[] args)
+    {
+        if (ContainsRootOption(args, arg => arg == "--protocol-version" || arg.StartsWith("--protocol-version=", StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        var isPs = false;
+        for (var i = 0; i < args.Length && args[i] != "--"; i++)
+        {
+            isPs |= args[i] == "ps";
+            if (isPs && (args[i].Equals("--output=snapshot", StringComparison.OrdinalIgnoreCase)
+                || (args[i] == "--output" && i + 1 < args.Length && args[i + 1].Equals("snapshot", StringComparison.OrdinalIgnoreCase))))
             {
                 return true;
             }
@@ -1164,16 +1199,8 @@ public class Program
         // Agent events must not also count as ordinary CLI invocations.
         using var mainActivity = isAgentTelemetryInvocation
             ? null
-            : telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
+            : StartMainActivity(telemetry, app.Services.GetRequiredService<InstallSourceDetector>());
         ProfileCaptureService.ProfileCaptureSession? profileCaptureSession = null;
-
-        if (mainActivity != null)
-        {
-            var currentProcess = Process.GetCurrentProcess();
-            mainActivity.SetStartTime(currentProcess.StartTime);
-            mainActivity.AddTag(TelemetryConstants.Tags.ProcessPid, currentProcess.Id);
-            mainActivity.AddTag(TelemetryConstants.Tags.ProcessExecutableName, "aspire");
-        }
 
         try
         {
@@ -1296,6 +1323,21 @@ public class Program
             await app.StopAsync().ConfigureAwait(false);
             await shutdownTelemetryTask;
         }
+    }
+
+    internal static Activity? StartMainActivity(AspireCliTelemetry telemetry, InstallSourceDetector installSourceDetector)
+    {
+        var activity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
+        if (activity is not null)
+        {
+            using var currentProcess = Process.GetCurrentProcess();
+            activity.SetStartTime(currentProcess.StartTime);
+            activity.AddTag(TelemetryConstants.Tags.ProcessPid, currentProcess.Id);
+            activity.AddTag(TelemetryConstants.Tags.ProcessExecutableName, "aspire");
+            activity.SetTag(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect());
+        }
+
+        return activity;
     }
 
     internal static void InitializeCommandTelemetry(Command command, TelemetryManager manager, AspireCliTelemetry telemetry)

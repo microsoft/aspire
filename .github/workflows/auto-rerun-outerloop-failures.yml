@@ -7,6 +7,7 @@ name: Auto rerun outerloop failures
 
 on:
   workflow_run:
+    # zizmor: ignore[dangerous-triggers] - the job excludes PR runs and operates only on existing runs in microsoft/aspire
     workflows: ["Outerloop Tests"]
     types:
       - completed

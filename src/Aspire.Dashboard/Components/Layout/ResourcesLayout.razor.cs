@@ -927,6 +927,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             EventCallback.Factory.Create<CommandViewModel>(this, command => ExecuteResourceCommandAsync(resource, command)),
             (r, command) => DashboardCommandExecutor.IsExecuting(r.Name, command.Name),
             showViewDetails: false,
+            showTerminalItem: true,
             showConsoleLogsItem: false,
             showUrls: false);
     }

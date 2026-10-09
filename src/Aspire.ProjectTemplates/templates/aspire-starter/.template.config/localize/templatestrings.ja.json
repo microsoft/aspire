@@ -3,8 +3,6 @@
   "name": "Aspire スターター アプリ (ASP.NET Core/Blazor)",
   "description": "Blazor Web フロントエンドと Web API バックエンド サービスを使用して Aspire アプリを作成するためのプロジェクト テンプレート。必要に応じて、Redis キャッシュを使用します。",
   "symbols/Framework/description": "プロジェクトのターゲット フレームワークです。",
-  "symbols/Framework/choices/net8.0/description": "ターゲット net8.0",
-  "symbols/Framework/choices/net9.0/description": "ターゲット net9.0",
   "symbols/Framework/choices/net10.0/description": "ターゲット net10.0",
   "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "キャッシュ用に Redis を使用する (サポートされているコンテナー ランタイムが必要) (_U)",

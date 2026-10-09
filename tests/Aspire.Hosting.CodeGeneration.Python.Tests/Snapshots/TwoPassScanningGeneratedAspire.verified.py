@@ -2052,6 +2052,7 @@ class ResourceUrlAnnotation(typing.TypedDict, total=False):
     Url: str
     DisplayText: str | None
     Endpoint: EndpointReference
+    DisplayOrder: int | None
     DisplayLocation: UrlDisplayLocation
 
 class RunConfiguration(typing.TypedDict, total=False):

@@ -54,6 +54,12 @@ public sealed class TypeScriptBlazorGatewayTests(ITestOutputHelper output)
             TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.RunCommandAsync(
+            "curl -fsSL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh && " +
+            "bash /tmp/dotnet-install.sh --version 11.0.100-rc.1.26425.128 --install-dir /usr/share/dotnet --no-path && " +
+            "rm /tmp/dotnet-install.sh",
+            counter,
+            TimeSpan.FromMinutes(5));
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.RunCommandAsync(
             "aspire init --language typescript --non-interactive --suppress-agent-init",

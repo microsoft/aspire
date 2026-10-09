@@ -1,4 +1,5 @@
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -197,6 +198,28 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Single(dashboardResource.Annotations.OfType<ExcludeLifecycleCommandsAnnotation>());
         Assert.Empty(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
+    }
+
+    [Fact]
+    public async Task BeforeStartAsync_ProjectDashboard_IncludesProjectLifecycleCommands()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration);
+        var dashboardResource = new ProjectResource(KnownResourceNames.AspireDashboard);
+        dashboardResource.Annotations.Add(new ProjectLaunchDefaultsAnnotation());
+        var model = new DistributedApplicationModel(new ResourceCollection([dashboardResource]));
+
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+        dashboardResource.AddLifeCycleCommands();
+
+        Assert.Collection(
+            dashboardResource.Annotations.OfType<ResourceCommandAnnotation>(),
+            command => Assert.Equal(KnownResourceCommands.StartCommand, command.Name),
+            command => Assert.Equal(KnownResourceCommands.StopCommand, command.Name),
+            command => Assert.Equal(KnownResourceCommands.RestartCommand, command.Name),
+            command => Assert.Equal(KnownResourceCommands.RebuildCommand, command.Name));
     }
 
     [Theory]

@@ -165,6 +165,23 @@ public sealed class DashboardOptionsTests
 
     #region Frontend options
 
+    [Theory]
+    [InlineData("{}", false)]
+    [InlineData("""{"Dashboard":{"Frontend":{"DisableWebSocketCompression":false}}}""", false)]
+    [InlineData("""{"Dashboard":{"Frontend":{"DisableWebSocketCompression":true}}}""", true)]
+    public void FrontendOptions_DisableWebSocketCompression_BindsFromJson(string json, bool expected)
+    {
+        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var configuration = new ConfigurationBuilder()
+            .AddJsonStream(stream)
+            .Build();
+        var options = new DashboardOptions();
+
+        configuration.GetSection("Dashboard").Bind(options);
+
+        Assert.Equal(expected, options.Frontend.DisableWebSocketCompression);
+    }
+
     [Fact]
     public void FrontendOptions_EmptyEndpointUrl()
     {

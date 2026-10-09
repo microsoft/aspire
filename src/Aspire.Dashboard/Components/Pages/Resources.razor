@@ -199,6 +199,13 @@
                                     </svg>
                                     <div class="resource-graph-controls">
                                         <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                      Class="aspire-icon-button graph-export"
+                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                                      OnClick="@ExportResourceGraphAsync">
+                                            <FluentIcon Value="new Icons.Regular.Size24.ArrowDownload()" Color="Color.Primary" />
+                                        </FluentButton>
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="aspire-icon-button graph-zoom-in"
                                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">

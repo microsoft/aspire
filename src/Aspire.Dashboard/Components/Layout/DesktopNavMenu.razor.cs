@@ -54,6 +54,9 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         active ? new Icons.Filled.Size24.SlideText()
                   : new Icons.Regular.Size24.SlideText();
 
+    [Parameter]
+    public bool HasResourceTerminals { get; set; }
+
     internal static Icon StructuredLogsIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.SlideTextSparkle()
                   : new Icons.Regular.Size24.SlideTextSparkle();
@@ -121,12 +124,15 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             {
                 yield return new NavItem(NavSection.Graph, DashboardUrls.GraphUrl(), Loc[nameof(Resources.Layout.NavMenuGraphTab)], GraphIcon(), GraphIcon(active: true));
             }
-            yield return new NavItem(NavSection.Terminals, DashboardUrls.TerminalsUrl(), Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], TerminalsIcon(), TerminalsIcon(active: true));
+            if (HasResourceTerminals)
+            {
+                yield return new NavItem(NavSection.Terminals, DashboardUrls.TerminalsUrl(), Loc[nameof(Resources.Layout.NavMenuTerminalsTab)], TerminalsIcon(), TerminalsIcon(active: true));
+            }
             yield return new NavItem(NavSection.Extensions, DashboardUrls.ExtensionsUrl(), Loc[nameof(Resources.Layout.NavMenuExtensionsTab)], ExtensionsIcon(), ExtensionsIcon(active: true));
         }
         else
         {
-            yield return new NavItem(NavSection.StructuredLogs, DashboardUrls.StructuredLogsUrl(), StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)], StructuredLogsIcon(), StructuredLogsIcon(active: true));
+            yield return new NavItem(NavSection.StructuredLogs, DashboardUrls.StructuredLogsUrl(), Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)], StructuredLogsIcon(), StructuredLogsIcon(active: true));
             yield return new NavItem(NavSection.Traces, DashboardUrls.TracesUrl(), Loc[nameof(Resources.Layout.NavMenuTracesTab)], TracesIcon(), TracesIcon(active: true));
             yield return new NavItem(NavSection.Metrics, DashboardUrls.MetricsUrl(), Loc[nameof(Resources.Layout.NavMenuMetricsTab)], MetricsIcon(), MetricsIcon(active: true));
         }

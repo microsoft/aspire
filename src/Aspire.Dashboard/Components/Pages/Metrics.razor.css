@@ -152,7 +152,8 @@
     background-color: var(--colorBrandBackground);
 }
 
-::deep .fluent-multi-splitter-pane:has(> .metrics-content) {
+::deep .fluent-multi-splitter-pane:has(> .metrics-content),
+::deep .fluent-multi-splitter-pane:has(> .metrics-tree) {
     overflow: auto;
 }
 

@@ -6,6 +6,7 @@ name: Auto rerun transient CI failures
 
 on:
   workflow_run:
+    # zizmor: ignore[dangerous-triggers] - the job validates the source CI run before requesting narrowly scoped reruns
     workflows: ["CI"]
     types:
       - completed

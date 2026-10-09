@@ -61,7 +61,6 @@ public sealed class DockerComposeDeployWithVolumeTests(ITestOutputHelper output)
         // whole point of the overload: the same source works in run mode (where the path is an
         // Aspire store directory on the host) and after publish (where it is MountPath).
         var appHostCode = $$"""
-            #pragma warning disable ASPIREDOTNETPROJECT001
             #pragma warning disable ASPIREPIPELINES003
             using Aspire.Hosting;
 

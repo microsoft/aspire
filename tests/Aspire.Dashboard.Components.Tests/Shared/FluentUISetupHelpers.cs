@@ -92,7 +92,7 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentKeyCode(BunitContext context)
     {
-        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true);
+        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true).SetResult("test-keycode");
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.KeyCode.UnregisterKeyCode", _ => true).SetVoidResult();
     }
 

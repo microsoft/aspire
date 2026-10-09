@@ -13,4 +13,9 @@ internal static class SqlServerContainerImageTags
 
     /// <remarks>2022-latest</remarks>
     public const string Tag = "2022-latest";
+
+    // Keep the default REPL client aligned with the tools installed in the default image.
+    // https://learn.microsoft.com/sql/linux/quickstart-install-connect-docker
+    // This file is linked into projects without a reference to Aspire.Hosting.SqlServer.
+    public const string ReplCommand = "/opt/mssql-tools18/bin/sqlcmd";
 }

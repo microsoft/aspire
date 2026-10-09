@@ -18,6 +18,6 @@
   },
   "overrides": {
     "esbuild": "0.28.2",
-    "brace-expansion": "5.0.9"
+    "brace-expansion": "5.0.12"
   }
 }

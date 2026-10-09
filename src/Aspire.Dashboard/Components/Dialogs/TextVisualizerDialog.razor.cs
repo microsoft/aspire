@@ -60,6 +60,7 @@ public partial class TextVisualizerDialog : ComponentBase
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.MarkdownFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogMarkdownFormat)] },
+            new SelectViewModel<string> { Id = DashboardUIHelpers.SqlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogSqlFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.JsonFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogJsonFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
         ];
@@ -80,7 +81,7 @@ public partial class TextVisualizerDialog : ComponentBase
         }
         else
         {
-            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true);
+            TextVisualizerViewModel = new TextVisualizerViewModel(Content.Text, indentText: true, knownFormat: Content.InitialFormat);
 
             if (TextVisualizerViewModel.FormatKind == DashboardUIHelpers.JsonFormat)
             {
@@ -92,9 +93,10 @@ public partial class TextVisualizerDialog : ComponentBase
             }
             else
             {
-                // Markdown can't be reliably detected from content, so enable it when the format is
-                // unknown to let users switch to markdown rendering if they want.
+                // Markdown and SQL can't be reliably detected from content, so enable them
+                // when the content isn't JSON or XML to let users choose how to render it.
                 EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
+                EnabledOptions.Add(DashboardUIHelpers.SqlFormat);
             }
         }
 
@@ -140,7 +142,7 @@ public partial class TextVisualizerDialog : ComponentBase
         };
 
         return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
-            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat), parameters);
+            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.InitialFormat), parameters);
     }
 
     private async Task DownloadAsync()

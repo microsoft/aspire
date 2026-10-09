@@ -12,6 +12,7 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Toolchains.InProcess.NoEmit;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -23,7 +24,6 @@ using OpenTelemetry.Proto.Resource.V1;
 namespace Aspire.Dashboard.Benchmarks;
 
 [MemoryDiagnoser]
-[ThreadingDiagnoser]
 [Config(typeof(Config))]
 public class TelemetryRepositoryMetricsBenchmarks
 {
@@ -31,6 +31,7 @@ public class TelemetryRepositoryMetricsBenchmarks
     private const string MetricMeterName = "benchmark-meter";
     private const string MetricInstrumentName = "benchmark.metric";
     private const string HistogramMetricInstrumentName = "benchmark.histogram";
+    private static readonly double[] s_histogramObservations = [5, 25, 75, 150];
     private static readonly TimeSpan s_metricDataDuration = TimeSpan.FromHours(6);
     private static readonly TimeSpan s_metricDisplayDuration = TimeSpan.FromHours(6);
     private static readonly TimeSpan s_metricInterval = TimeSpan.FromSeconds(2);
@@ -43,6 +44,8 @@ public class TelemetryRepositoryMetricsBenchmarks
     private DashboardSqliteDatabase _database = null!;
     private SqliteTelemetryRepository _queryRepository = null!;
     private IReadOnlyList<MetricDimensionCursor> _incrementalCursors = null!;
+    private RepeatedField<ResourceMetrics> _ingestionMetrics = null!;
+    private HistogramDataPoint[] _ingestionPoints = null!;
 
     [Params(1, 5)]
     public int DimensionCount { get; set; }
@@ -65,13 +68,50 @@ public class TelemetryRepositoryMetricsBenchmarks
     [GlobalSetup(Target = nameof(GetHistogramMetricsIncrementalRollup))]
     public Task SetupHistogramMetricsIncrementalRollup() => SetupIncrementalAsync(isHistogram: true, HistogramMetricInstrumentName);
 
-    private async Task SetupAsync(bool isHistogram)
+    [GlobalSetup(Target = nameof(AddHistogramMetricsAtCapacity))]
+    public async Task SetupHistogramMetricsIngestion()
+    {
+        await InitializeRepositoryAsync();
+        var retainedPointCount = new TelemetryLimitOptions().MaxMetricsCount;
+        var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var exemplars = s_histogramObservations.Select(value => CreateMetricExemplar(startTime, value)).ToArray();
+        var context = new AddContext();
+        foreach (var batch in CreateLongDurationMetricBatches(DimensionCount, isHistogram: true, retainedPointCount))
+        {
+            foreach (var point in batch[0].ScopeMetrics[0].Metrics[0].Histogram.DataPoints)
+            {
+                // Cumulative reservoirs replay unrefreshed exemplars. Include them in every export to
+                // exercise point eviction and its cascading exemplar deletes in a long-running app.
+                point.Exemplars.Clear();
+                point.Exemplars.Add(exemplars);
+            }
+            await _queryRepository.AddMetricsAsync(context, batch);
+            _ingestionMetrics = batch;
+        }
+        if (context.FailureCount > 0)
+        {
+            throw new InvalidOperationException($"Failed to add {context.FailureCount} benchmark metric points.");
+        }
+
+        var points = _ingestionMetrics[0].ScopeMetrics[0].Metrics[0].Histogram.DataPoints;
+        _ingestionPoints = points.TakeLast(DimensionCount).ToArray();
+        points.Clear();
+        points.Add(_ingestionPoints);
+    }
+
+    private async Task InitializeRepositoryAsync()
     {
         _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-metrics-benchmark-").FullName;
         _database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "query.db"));
+        await _database.InitializeSchemaAsync(CancellationToken.None);
         _queryRepository = CreateRepository(_database);
+    }
+
+    private async Task SetupAsync(bool isHistogram)
+    {
+        await InitializeRepositoryAsync();
         var addContext = new AddContext();
-        foreach (var batch in CreateLongDurationMetricBatches(DimensionCount, isHistogram))
+        foreach (var batch in CreateLongDurationMetricBatches(DimensionCount, isHistogram, (int)(s_metricDataDuration / s_metricInterval)))
         {
             await _queryRepository.AddMetricsAsync(addContext, batch);
         }
@@ -84,7 +124,7 @@ public class TelemetryRepositoryMetricsBenchmarks
     private async Task SetupIncrementalAsync(bool isHistogram, string instrumentName)
     {
         await SetupAsync(isHistogram);
-        var instrument = GetLongDurationInstrument(instrumentName, s_metricDataPointInterval);
+        var instrument = await GetLongDurationInstrumentAsync(instrumentName, s_metricDataPointInterval);
         _incrementalCursors = instrument.Dimensions.Select(dimension =>
         {
             var latestValue = dimension.Values[^1];
@@ -106,57 +146,78 @@ public class TelemetryRepositoryMetricsBenchmarks
     }
 
     [Benchmark(Description = "TelemetryRepository: query 6h metrics display")]
-    public int GetMetricsLongDuration()
+    public async Task<int> GetMetricsLongDuration()
     {
-        var instrument = GetLongDurationInstrument(MetricInstrumentName);
+        var instrument = await GetLongDurationInstrumentAsync(MetricInstrumentName);
 
         return instrument.Dimensions.Sum(dimension => dimension.Values.Count);
     }
 
     [Benchmark(Description = "TelemetryRepository: query 6h histogram metrics display")]
-    public int GetHistogramMetricsLongDuration()
+    public async Task<int> GetHistogramMetricsLongDuration()
     {
-        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName);
+        var instrument = await GetLongDurationInstrumentAsync(HistogramMetricInstrumentName);
 
         return instrument.Dimensions.Sum(dimension =>
             dimension.Values.Count + dimension.Values.Sum(value => value.Exemplars.Count));
     }
 
     [Benchmark(Description = "TelemetryRepository: query 6h metrics with dashboard rollup")]
-    public int GetMetricsLongDurationRollup()
+    public async Task<int> GetMetricsLongDurationRollup()
     {
-        var instrument = GetLongDurationInstrument(MetricInstrumentName, s_metricDataPointInterval);
+        var instrument = await GetLongDurationInstrumentAsync(MetricInstrumentName, s_metricDataPointInterval);
 
         return instrument.Dimensions.Sum(dimension => dimension.Values.Count);
     }
 
     [Benchmark(Description = "TelemetryRepository: query 6h histogram metrics with dashboard rollup")]
-    public int GetHistogramMetricsLongDurationRollup()
+    public async Task<int> GetHistogramMetricsLongDurationRollup()
     {
-        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName, s_metricDataPointInterval);
+        var instrument = await GetLongDurationInstrumentAsync(HistogramMetricInstrumentName, s_metricDataPointInterval);
 
         return instrument.Dimensions.Sum(dimension =>
             dimension.Values.Count + dimension.Values.Sum(value => value.Exemplars.Count));
     }
 
     [Benchmark(Description = "TelemetryRepository: query incremental metrics with dashboard rollup")]
-    public int GetMetricsIncrementalRollup()
+    public async Task<int> GetMetricsIncrementalRollup()
     {
-        var instrument = GetLongDurationInstrument(MetricInstrumentName, s_metricDataPointInterval, _incrementalCursors);
+        var instrument = await GetLongDurationInstrumentAsync(MetricInstrumentName, s_metricDataPointInterval, _incrementalCursors);
 
         return instrument.Dimensions.Sum(dimension => dimension.Values.Count);
     }
 
     [Benchmark(Description = "TelemetryRepository: query incremental histogram metrics with dashboard rollup")]
-    public int GetHistogramMetricsIncrementalRollup()
+    public async Task<int> GetHistogramMetricsIncrementalRollup()
     {
-        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName, s_metricDataPointInterval, _incrementalCursors);
+        var instrument = await GetLongDurationInstrumentAsync(HistogramMetricInstrumentName, s_metricDataPointInterval, _incrementalCursors);
 
         return instrument.Dimensions.Sum(dimension =>
             dimension.Values.Count + dimension.Values.Sum(value => value.Exemplars.Count));
     }
 
-    private OtlpInstrumentData GetLongDurationInstrument(
+    [Benchmark(Description = "TelemetryRepository: ingest histogram metrics at retention capacity")]
+    public async Task<int> AddHistogramMetricsAtCapacity()
+    {
+        foreach (var point in _ingestionPoints)
+        {
+            point.Count++;
+            point.Sum += s_histogramObservations[0];
+            point.BucketCounts[0]++;
+            point.TimeUnixNano += (ulong)s_metricInterval.Ticks * 100;
+        }
+
+        var context = new AddContext();
+        await _queryRepository.AddMetricsAsync(context, _ingestionMetrics);
+        if (context.SuccessCount != DimensionCount || context.FailureCount > 0)
+        {
+            throw new InvalidOperationException($"Expected {DimensionCount} benchmark metric points, added {context.SuccessCount} and rejected {context.FailureCount}.");
+        }
+
+        return context.SuccessCount;
+    }
+
+    private async Task<OtlpInstrumentData> GetLongDurationInstrumentAsync(
         string instrumentName,
         TimeSpan? dataPointInterval = null,
         IReadOnlyList<MetricDimensionCursor>? dimensionCursors = null)
@@ -165,7 +226,7 @@ public class TelemetryRepositoryMetricsBenchmarks
             ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}' end time.");
 
         // Match the dashboard metrics display query, which includes one preceding rollup for histogram calculations.
-        return _queryRepository.GetInstrument(new GetInstrumentRequest
+        return await _queryRepository.GetInstrumentAsync(new GetInstrumentRequest
         {
             ResourceKey = s_metricResourceKey,
             MeterName = MetricMeterName,
@@ -175,7 +236,7 @@ public class TelemetryRepositoryMetricsBenchmarks
             DataPointInterval = dataPointInterval,
             PopulateExemplarAttributes = false,
             DimensionCursors = dimensionCursors ?? []
-        }) ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}'.");
+        }, cancellationToken: CancellationToken.None) ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}'.");
     }
 
     private static SqliteTelemetryRepository CreateRepository(DashboardSqliteDatabase database)
@@ -189,13 +250,12 @@ public class TelemetryRepositoryMetricsBenchmarks
             []);
     }
 
-    private static IEnumerable<RepeatedField<ResourceMetrics>> CreateLongDurationMetricBatches(int dimensionCount, bool isHistogram)
+    private static IEnumerable<RepeatedField<ResourceMetrics>> CreateLongDurationMetricBatches(int dimensionCount, bool isHistogram, int totalSampleCount)
     {
         var startTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        double[] observations = [5, 25, 75, 150];
+        var observations = s_histogramObservations;
         var bucketCounts = Enumerable.Range(0, dimensionCount).Select(_ => new ulong[observations.Length]).ToArray();
         var sums = new double[dimensionCount];
-        var totalSampleCount = (int)(s_metricDataDuration / s_metricInterval);
 
         for (var firstSampleIndex = 0; firstSampleIndex < totalSampleCount; firstSampleIndex += MetricSamplesPerBatch)
         {
@@ -386,7 +446,7 @@ public class TelemetryRepositoryMetricsBenchmarks
     {
         public Config()
         {
-            AddJob(Job.Dry);
+            AddJob(Job.Dry.WithToolchain(InProcessNoEmitToolchain.Instance).DontEnforcePowerPlan());
 
             AddDiagnoser(MemoryDiagnoser.Default);
         }

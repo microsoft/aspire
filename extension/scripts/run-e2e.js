@@ -332,9 +332,21 @@ function shouldUseShellForCommand(command) {
 }
 
 function assertSpecMatches(spec) {
-  if (matchedTestSpecs.length === 0) {
-    throw new Error(`E2E spec '${spec}' did not match any compiled test files under ${path.relative(extensionRoot, path.join(extensionRoot, 'out', 'test-e2e'))}. Run corepack yarn@1.22.22 compile-e2e and check ASPIRE_EXTENSION_E2E_SPEC.`);
+  const alternatives = expandSpecAlternatives(spec);
+  const missingAlternatives = alternatives.filter(alternative => findSpecMatches(alternative).length === 0);
+  if (missingAlternatives.length > 0) {
+    throw new Error(`E2E spec '${spec}' did not match compiled test files for: ${missingAlternatives.join(', ')} under ${path.relative(extensionRoot, path.join(extensionRoot, 'out', 'test-e2e'))}. Run corepack yarn@1.22.22 compile-e2e and check ASPIRE_EXTENSION_E2E_SPEC.`);
   }
+}
+
+function expandSpecAlternatives(spec) {
+  const match = /^([^{}]*)\{([^{}]*)\}(.*)$/.exec(spec);
+  if (!match) {
+    return [spec];
+  }
+
+  return match[2].split(',').flatMap(alternative =>
+    expandSpecAlternatives(`${match[1]}${alternative}${match[3]}`));
 }
 
 function logE2eConfiguration() {
@@ -1695,7 +1707,7 @@ ${winUiProjectReference}${azureFunctionsPackageReference}  </ItemGroup>
     ? 'builder.AddProject<Projects.AspireE2E_WinUI>("e2e-winui", launchProfileName: "E2E");\n\n'
     : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
 #pragma warning disable ASPIRETERMINAL001
 
 using Aspire.Hosting.Pipelines;

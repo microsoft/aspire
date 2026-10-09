@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREDOTNETPROJECT001
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -366,6 +365,25 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         await Verify(firstContent, "env")
             .AppendContentAsFile(secondContent, "env");
+    }
+
+    [Fact]
+    public async Task DockerComposePreservesMultilineEnvValuesOnPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
+        File.WriteAllLines(envFilePath, ["BANNER='hello", "world'", "TAIL=preserved"]);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose");
+        var parameter = builder.AddParameter("param1");
+        builder.AddContainer("app", "busybox").WithEnvironment("param1", parameter);
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(File.ReadAllText(envFilePath), "env");
     }
 
     [Fact]

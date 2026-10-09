@@ -51,7 +51,6 @@ public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output
                 File.ReadLines(appHostFile).Where(line => line.StartsWith("#:", StringComparison.Ordinal)));
             File.WriteAllText(appHostFile, $$"""
                 {{directives}}
-                #pragma warning disable ASPIREDOTNETPROJECT001
                 using Aspire.Hosting.Foundry;
 
                 var builder = DistributedApplication.CreateBuilder(args);

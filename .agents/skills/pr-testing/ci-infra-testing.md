@@ -693,7 +693,7 @@ branch rules, dry-run validation of publish/release-only changes, and the
 reduce-to-one-job technique. Load it and follow it for those. The
 **validation process** for an infra change — capture a baseline, iterate
 cheaply, watch for contributor-branch skips, and prove no regression — is
-the loop below; the skill doesn't duplicate it. This section is the routing
+the loop below. This section is the routing
 and the must-not-skip validation bar.
 
 ## Which AzDO pipeline?
@@ -701,6 +701,7 @@ and the must-not-skip validation bar.
 | Pipeline | Definition / trigger | When a change here needs a run |
 |----------|----------------------|--------------------------------|
 | **Internal build** `eng/pipelines/azure-pipelines.yml` | def **1602**, `dnceng/internal` mirror | Most `eng/pipelines/**`, `eng/common/**`, signing/packaging/version/asset-manifest changes. **This is the default target** — run it via the `azdo-internal` skill. |
+| **Source indexing** `eng/pipelines/azure-pipelines-source-index.yml` | def **1693**, daily on `main` + manual | Indexing YAML, build-command, or inherited indexing-template changes. The indexing job defaults to `main` only; a green personal-branch run can skip it. Follow the skill's indexing validation limits. |
 | **Unofficial** `azure-pipelines-unofficial.yml` | dev/unofficial build | Changes scoped to that pipeline. |
 | **Release** `release-publish-nuget.yml` | separate definition; consumes def-1602 artifacts | Publish / NuGet / installer-promotion logic. Side-effecting — read the skill's dry-run caveats. |
 | **Public / Helix** `azure-pipelines-public.yml` | weekly + `/azp run aspire-tests` | Helix test routing / test execution. Different pipeline, different breakage patterns — see `docs/ci/azdo-public-pipeline.md`; out of scope for the internal skill. |
@@ -713,14 +714,30 @@ and the must-not-skip validation bar.
 2. **Discover the mirror remote by URL** (`…/dnceng/internal/_git/microsoft-aspire`)
    — the local remote name is whatever you chose; don't assume one. Add it if
    missing.
-3. **Capture a baseline** from a recent good def-1602 run on `main`: `buildId`,
-   result, stages/jobs that ran, and the artifact set produced.
+3. **Capture a baseline** from a recent good run of the selected definition on `main`: `buildId`,
+   result, stages/jobs that ran, and the artifact set produced. For performance
+   changes, record wall-clock time too.
 4. **Push the branch to the mirror** under a personal `<alias>/` branch (never
    `main` / `release/*` / `internal/release/*`).
-5. **Trigger + monitor** def 1602 on that branch (mind auto-trigger-on-push and
-   the `az pipelines run` HTTP-timeout caveat — the build usually queued anyway).
+5. **Trigger + monitor** the selected definition on that branch (check the YAML's
+   push triggers and reconcile existing runs after a queue timeout). For source
+   indexing, record the expected main-only job skip as unvalidated; do not bypass
+   the upload gate to force a personal-branch run.
 6. **Validate the change took effect** — see the bar below.
 7. **Prove no regression** vs. the baseline, and record both `buildId`s in the PR.
+
+## Iterate without live side effects
+
+For script logic, prefer behavioral tests under `tests/Infrastructure.Tests`
+or a local dry-run before spending an internal build. Extract non-trivial YAML
+logic into a script when that makes failure paths testable; keep wiring and
+agent-capability validation in the real pipeline. A reduced scratch job proves
+its isolated mechanics, not the full producer/consumer graph.
+
+Dry-run success does not prove credentials, service-connection access, or
+publishing permissions. Report those as unvalidated rather than performing
+live publishing to test them. See the `azdo-internal` skill for release dry-run
+and source-index upload limits.
 
 ## Validate the run did what the change intended (green ≠ validated)
 
@@ -735,9 +752,9 @@ change must produce the **same artifact set** as the baseline. What is
 - **Read the timeline, not the headline result.** The headline `result` hides
   per-task outcomes; query the build *timeline* for failed records
   (`az devops invoke --area build --resource Timeline --route-parameters project=internal buildId=<BUILD_ID> --org https://dev.azure.com/dnceng`,
-  then filter `result=='failed'`). An empty
-  list means green-enough even when the header says `partiallySucceeded`
-  (SDL/Component-Detection noise). Pull the specific task log to find your
+  then inspect failures, warnings, cancellations, and skips). An empty failed
+  list is not sufficient: the intended job must have run, and warnings may
+  represent real security findings. Pull the specific task log to find your
   change's marker.
 - **Dependencies chain via `dependsOn` and across pipelines.** Artifacts flow
   `PublishBuildArtifacts`/`PublishPipelineArtifact` (producer) →

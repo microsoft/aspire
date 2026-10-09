@@ -64,7 +64,7 @@ internal static class TerminalHostControlClient
             {
                 await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).ConfigureAwait(false);
                 var stream = new NetworkStream(socket, ownsSocket: true);
-                var formatter = new SystemTextJsonFormatter();
+                var formatter = TerminalHostControlJsonSerializerContext.CreateRpcMessageFormatter();
                 var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
                 var rpc = new JsonRpc(handler);
                 rpc.StartListening();

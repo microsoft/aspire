@@ -279,6 +279,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
                         Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
                         Dashboard = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DashboardDirectoryName),
                         Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                        Tray = FindTrayRelativePath(layoutPath, BundleDiscovery.BundleDirectoryName),
                     }
                 };
             }
@@ -319,8 +320,21 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         return new LayoutConfiguration
         {
             LayoutPath = layoutPath,
-            Components = new LayoutComponents()
+            Components = new LayoutComponents
+            {
+                Tray = FindTrayRelativePath(layoutPath, "")
+            }
         };
+    }
+
+    /// <summary>
+    /// Finds the optional tray in either an installation root or a leased version directory.
+    /// </summary>
+    internal static string? FindTrayRelativePath(string layoutPath, string bundleDirectory)
+    {
+        var relativePath = Path.Combine(bundleDirectory, OperatingSystem.IsWindows()
+            ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
+        return File.Exists(Path.Combine(layoutPath, relativePath)) ? relativePath : null;
     }
 
     private LayoutConfiguration LogEnvironmentOverrides(LayoutConfiguration config)

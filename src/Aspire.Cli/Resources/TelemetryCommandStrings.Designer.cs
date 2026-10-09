@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class TelemetryCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal TelemetryCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,142 +59,205 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to View telemetry data (logs, spans, traces) from a running Aspire application..
+        ///   Looks up a localized string similar to API key for authenticating with the dashboard (optional, for dashboards with API key authentication).
         /// </summary>
-        internal static string Description {
+        internal static string ApiKeyOptionDescription {
             get {
-                return ResourceManager.GetString("Description", resourceCulture);
+                return ResourceManager.GetString("ApiKeyOptionDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to View structured logs from the Dashboard telemetry API..
+        ///   Looks up a localized string similar to the configured dashboard.
         /// </summary>
-        internal static string LogsDescription {
+        internal static string ConfiguredDashboardDisplayValue {
             get {
-                return ResourceManager.GetString("LogsDescription", resourceCulture);
+                return ResourceManager.GetString("ConfiguredDashboardDisplayValue", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to View spans from the Dashboard telemetry API..
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. The dashboard at &apos;{0}&apos; does not have the telemetry API enabled..
         /// </summary>
-        internal static string SpansDescription {
+        internal static string DashboardApiNotEnabled {
             get {
-                return ResourceManager.GetString("SpansDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardApiNotEnabled", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to View traces from the Dashboard telemetry API..
+        ///   Looks up a localized string similar to Start the dashboard with &apos;aspire dashboard run&apos; or set Dashboard:Api:Enabled to true..
         /// </summary>
-        internal static string TracesDescription {
+        internal static string DashboardApiNotEnabledHint {
             get {
-                return ResourceManager.GetString("TracesDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardApiNotEnabledHint", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Filter by resource name..
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. Authentication failed..
         /// </summary>
-        internal static string ResourceArgumentDescription {
+        internal static string DashboardAuthFailed {
             get {
-                return ResourceManager.GetString("ResourceArgumentDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardAuthFailed", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Stream telemetry in real-time as it arrives..
+        ///   Looks up a localized string similar to Alternatively, allow anonymous access with &apos;aspire dashboard run --allow-anonymous&apos; or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true..
         /// </summary>
-        internal static string FollowOptionDescription {
+        internal static string DashboardAuthFailedAnonymousHint {
             get {
-                return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardAuthFailedAnonymousHint", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Output format (Table or Json)..
+        ///   Looks up a localized string similar to Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard&apos;s configured API key..
         /// </summary>
-        internal static string FormatOptionDescription {
+        internal static string DashboardAuthFailedHint {
             get {
-                return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardAuthFailedHint", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Maximum number of items to return..
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. Unable to connect to &apos;{0}&apos;..
         /// </summary>
-        internal static string LimitOptionDescription {
+        internal static string DashboardConnectionFailed {
             get {
-                return ResourceManager.GetString("LimitOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardConnectionFailed", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Filter by trace ID..
+        ///   Looks up a localized string similar to Verify the dashboard is running and the URL is correct..
         /// </summary>
-        internal static string TraceIdOptionDescription {
+        internal static string DashboardConnectionFailedHint {
             get {
-                return ResourceManager.GetString("TraceIdOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardConnectionFailedHint", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to The trace ID to view. If not specified, lists all traces..
+        ///   Looks up a localized string similar to The connection to the dashboard was lost..
         /// </summary>
-        internal static string TraceIdArgumentDescription {
+        internal static string DashboardConnectionLost {
             get {
-                return ResourceManager.GetString("TraceIdArgumentDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardConnectionLost", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical)..
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired..
         /// </summary>
-        internal static string SeverityOptionDescription {
+        internal static string DashboardLoginTokenFailed {
             get {
-                return ResourceManager.GetString("SeverityOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardLoginTokenFailed", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Filter by error status (true to show only errors, false to exclude errors)..
+        ///   Looks up a localized string similar to Alternatively, allow anonymous access with &apos;aspire dashboard run --allow-anonymous&apos; or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true..
         /// </summary>
-        internal static string HasErrorOptionDescription {
+        internal static string DashboardLoginTokenFailedAnonymousHint {
             get {
-                return ResourceManager.GetString("HasErrorOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardLoginTokenFailedAnonymousHint", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs.
+        ///   Looks up a localized string similar to Ensure you are using the login URL from the currently running dashboard instance..
         /// </summary>
-        internal static string SearchOptionDescription {
+        internal static string DashboardLoginTokenFailedHint {
             get {
-                return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
+                return ResourceManager.GetString("DashboardLoginTokenFailedHint", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to The --limit value must be a positive number..
-        /// </summary>
-        internal static string LimitMustBePositive {
-            get {
-                return ResourceManager.GetString("LimitMustBePositive", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard API is not available. Ensure the apphost is running with Dashboard enabled..
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. The dashboard is not available..
         /// </summary>
         internal static string DashboardNotAvailable {
             get {
                 return ResourceManager.GetString("DashboardNotAvailable", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Ensure the AppHost is running with the dashboard enabled..
+        /// </summary>
+        internal static string DashboardNotAvailableHint {
+            get {
+                return ResourceManager.GetString("DashboardNotAvailableHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --dashboard-url and --apphost options cannot be used together. Specify one or the other..
+        /// </summary>
+        internal static string DashboardUrlAndAppHostExclusive {
+            get {
+                return ResourceManager.GetString("DashboardUrlAndAppHostExclusive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. The value &apos;{0}&apos; is not a valid URL..
+        /// </summary>
+        internal static string DashboardUrlInvalid {
+            get {
+                return ResourceManager.GetString("DashboardUrlInvalid", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Specify an absolute URL like &apos;http://localhost:18888&apos;..
+        /// </summary>
+        internal static string DashboardUrlInvalidHint {
+            get {
+                return ResourceManager.GetString("DashboardUrlInvalidHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not fetch telemetry data from the dashboard. The specified URL &apos;{0}&apos; does not appear to be a valid dashboard address..
+        /// </summary>
+        internal static string DashboardUrlNotReachable {
+            get {
+                return ResourceManager.GetString("DashboardUrlNotReachable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Verify the URL is correct..
+        /// </summary>
+        internal static string DashboardUrlNotReachableHint {
+            get {
+                return ResourceManager.GetString("DashboardUrlNotReachableHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized..
+        /// </summary>
+        internal static string DashboardUrlOptionDescription {
+            get {
+                return ResourceManager.GetString("DashboardUrlOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to View OpenTelemetry data (logs, spans, traces) from a running AppHost.
+        /// </summary>
+        internal static string Description {
+            get {
+                return ResourceManager.GetString("Description", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Failed to fetch telemetry: {0}.
         /// </summary>
@@ -203,166 +266,202 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToFetchTelemetry", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Trace with ID '{0}' was not found..
+        ///   Looks up a localized string similar to Stream telemetry in real-time as it arrives.
         /// </summary>
-        internal static string TraceNotFound {
+        internal static string FollowOptionDescription {
             get {
-                return ResourceManager.GetString("TraceNotFound", resourceCulture);
+                return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard API returned unexpected content type '{0}'. Expected JSON response..
+        ///   Looks up a localized string similar to Output format (Table or Json).
         /// </summary>
-        internal static string UnexpectedContentType {
+        internal static string FormatOptionDescription {
             get {
-                return ResourceManager.GetString("UnexpectedContentType", resourceCulture);
+                return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
             }
         }
 
-        internal static string SelectAppHostAction {
+        /// <summary>
+        ///   Looks up a localized string similar to Filter by error status (true to show only errors, false to exclude errors).
+        /// </summary>
+        internal static string HasErrorOptionDescription {
             get {
-                return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
+                return ResourceManager.GetString("HasErrorOptionDescription", resourceCulture);
             }
         }
 
-        internal static string HeaderTimestamp {
-            get {
-                return ResourceManager.GetString("HeaderTimestamp", resourceCulture);
-            }
-        }
-
-        internal static string HeaderName {
-            get {
-                return ResourceManager.GetString("HeaderName", resourceCulture);
-            }
-        }
-
+        /// <summary>
+        ///   Looks up a localized string similar to Duration.
+        /// </summary>
         internal static string HeaderDuration {
             get {
                 return ResourceManager.GetString("HeaderDuration", resourceCulture);
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to Name.
+        /// </summary>
+        internal static string HeaderName {
+            get {
+                return ResourceManager.GetString("HeaderName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Spans.
+        /// </summary>
         internal static string HeaderSpans {
             get {
                 return ResourceManager.GetString("HeaderSpans", resourceCulture);
             }
         }
 
+        /// <summary>
+        ///   Looks up a localized string similar to Status.
+        /// </summary>
         internal static string HeaderStatus {
             get {
                 return ResourceManager.GetString("HeaderStatus", resourceCulture);
             }
         }
 
-        internal static string DashboardUrlOptionDescription {
+        /// <summary>
+        ///   Looks up a localized string similar to Timestamp.
+        /// </summary>
+        internal static string HeaderTimestamp {
             get {
-                return ResourceManager.GetString("DashboardUrlOptionDescription", resourceCulture);
+                return ResourceManager.GetString("HeaderTimestamp", resourceCulture);
             }
         }
 
-        internal static string ApiKeyOptionDescription {
+        /// <summary>
+        ///   Looks up a localized string similar to not an absolute HTTP(S) URL.
+        /// </summary>
+        internal static string InvalidDashboardUrlDisplayValue {
             get {
-                return ResourceManager.GetString("ApiKeyOptionDescription", resourceCulture);
+                return ResourceManager.GetString("InvalidDashboardUrlDisplayValue", resourceCulture);
             }
         }
 
-        internal static string DashboardUrlAndAppHostExclusive {
+        /// <summary>
+        ///   Looks up a localized string similar to The --limit value must be a positive number..
+        /// </summary>
+        internal static string LimitMustBePositive {
             get {
-                return ResourceManager.GetString("DashboardUrlAndAppHostExclusive", resourceCulture);
+                return ResourceManager.GetString("LimitMustBePositive", resourceCulture);
             }
         }
 
-        internal static string DashboardAuthFailed {
+        /// <summary>
+        ///   Looks up a localized string similar to Maximum number of items to return.
+        /// </summary>
+        internal static string LimitOptionDescription {
             get {
-                return ResourceManager.GetString("DashboardAuthFailed", resourceCulture);
+                return ResourceManager.GetString("LimitOptionDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardUrlNotReachable {
+        /// <summary>
+        ///   Looks up a localized string similar to View structured logs from the Dashboard telemetry API.
+        /// </summary>
+        internal static string LogsDescription {
             get {
-                return ResourceManager.GetString("DashboardUrlNotReachable", resourceCulture);
+                return ResourceManager.GetString("LogsDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardApiNotEnabled {
+        /// <summary>
+        ///   Looks up a localized string similar to Filter by resource name.
+        /// </summary>
+        internal static string ResourceArgumentDescription {
             get {
-                return ResourceManager.GetString("DashboardApiNotEnabled", resourceCulture);
+                return ResourceManager.GetString("ResourceArgumentDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardConnectionFailed {
+        /// <summary>
+        ///   Looks up a localized string similar to Search and filter telemetry fields such as log messages, attribute values, names, source, and IDs. Supports full-text search and field filters. See https://aka.ms/aspire/cli-search for more details.
+        /// </summary>
+        internal static string SearchOptionDescription {
             get {
-                return ResourceManager.GetString("DashboardConnectionFailed", resourceCulture);
+                return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardConnectionFailedHint {
+        /// <summary>
+        ///   Looks up a localized string similar to view telemetry for.
+        /// </summary>
+        internal static string SelectAppHostAction {
             get {
-                return ResourceManager.GetString("DashboardConnectionFailedHint", resourceCulture);
+                return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
         }
 
-        internal static string DashboardUrlInvalid {
+        /// <summary>
+        ///   Looks up a localized string similar to Filter logs by minimum severity (Trace, Debug, Information, Warning, Error, Critical).
+        /// </summary>
+        internal static string SeverityOptionDescription {
             get {
-                return ResourceManager.GetString("DashboardUrlInvalid", resourceCulture);
+                return ResourceManager.GetString("SeverityOptionDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardUrlInvalidHint {
+        /// <summary>
+        ///   Looks up a localized string similar to View spans from the Dashboard telemetry API.
+        /// </summary>
+        internal static string SpansDescription {
             get {
-                return ResourceManager.GetString("DashboardUrlInvalidHint", resourceCulture);
+                return ResourceManager.GetString("SpansDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardLoginTokenFailed {
+        /// <summary>
+        ///   Looks up a localized string similar to The trace ID to view. If not specified, lists all traces..
+        /// </summary>
+        internal static string TraceIdArgumentDescription {
             get {
-                return ResourceManager.GetString("DashboardLoginTokenFailed", resourceCulture);
+                return ResourceManager.GetString("TraceIdArgumentDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardLoginTokenFailedHint {
+        /// <summary>
+        ///   Looks up a localized string similar to Filter by trace ID.
+        /// </summary>
+        internal static string TraceIdOptionDescription {
             get {
-                return ResourceManager.GetString("DashboardLoginTokenFailedHint", resourceCulture);
+                return ResourceManager.GetString("TraceIdOptionDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardLoginTokenFailedAnonymousHint {
+        /// <summary>
+        ///   Looks up a localized string similar to Trace with ID &apos;{0}&apos; was not found..
+        /// </summary>
+        internal static string TraceNotFound {
             get {
-                return ResourceManager.GetString("DashboardLoginTokenFailedAnonymousHint", resourceCulture);
+                return ResourceManager.GetString("TraceNotFound", resourceCulture);
             }
         }
 
-        internal static string DashboardNotAvailableHint {
+        /// <summary>
+        ///   Looks up a localized string similar to View traces from the Dashboard telemetry API.
+        /// </summary>
+        internal static string TracesDescription {
             get {
-                return ResourceManager.GetString("DashboardNotAvailableHint", resourceCulture);
+                return ResourceManager.GetString("TracesDescription", resourceCulture);
             }
         }
 
-        internal static string DashboardAuthFailedHint {
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard API returned unexpected content type &apos;{0}&apos;. Expected JSON response..
+        /// </summary>
+        internal static string UnexpectedContentType {
             get {
-                return ResourceManager.GetString("DashboardAuthFailedHint", resourceCulture);
-            }
-        }
-
-        internal static string DashboardAuthFailedAnonymousHint {
-            get {
-                return ResourceManager.GetString("DashboardAuthFailedAnonymousHint", resourceCulture);
-            }
-        }
-
-        internal static string DashboardUrlNotReachableHint {
-            get {
-                return ResourceManager.GetString("DashboardUrlNotReachableHint", resourceCulture);
-            }
-        }
-
-        internal static string DashboardApiNotEnabledHint {
-            get {
-                return ResourceManager.GetString("DashboardApiNotEnabledHint", resourceCulture);
+                return ResourceManager.GetString("UnexpectedContentType", resourceCulture);
             }
         }
     }

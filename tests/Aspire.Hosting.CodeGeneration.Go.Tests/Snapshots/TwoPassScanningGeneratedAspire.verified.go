@@ -1040,6 +1040,7 @@ type ResourceUrlAnnotation struct {
 	Url string `json:"Url,omitempty"`
 	DisplayText *string `json:"DisplayText,omitempty"`
 	Endpoint *EndpointReference `json:"Endpoint,omitempty"`
+	DisplayOrder *float64 `json:"DisplayOrder,omitempty"`
 	DisplayLocation UrlDisplayLocation `json:"DisplayLocation,omitempty"`
 }
 
@@ -1049,6 +1050,7 @@ func (d *ResourceUrlAnnotation) ToMap() map[string]any {
 	m["Url"] = serializeValue(d.Url)
 	if d.DisplayText != nil { m["DisplayText"] = serializeValue(d.DisplayText) }
 	if d.Endpoint != nil { m["Endpoint"] = serializeValue(d.Endpoint) }
+	if d.DisplayOrder != nil { m["DisplayOrder"] = serializeValue(d.DisplayOrder) }
 	m["DisplayLocation"] = serializeValue(d.DisplayLocation)
 	return m
 }

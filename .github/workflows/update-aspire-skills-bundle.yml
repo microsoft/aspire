@@ -20,6 +20,8 @@ jobs:
     if: ${{ github.repository_owner == 'microsoft' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Generate GitHub App Token for bundle update
         id: update-token
@@ -27,6 +29,10 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # metadata explicitly restricts the token instead of inheriting every App permission.
+          # The script reads releases, contents, and attestations from the public aspire-skills repository,
+          # so those cross-repository operations require no repository-content permission.
+          permission-metadata: read
 
       - name: Update embedded Aspire skills bundle
         shell: pwsh
@@ -63,6 +69,10 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the bundle-update branch; pull-requests creates or updates
+          # the bundle pull request and applies its labels.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Create or update pull request
         uses: ./.github/actions/create-pull-request

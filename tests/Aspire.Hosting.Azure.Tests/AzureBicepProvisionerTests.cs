@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREFILESYSTEM001
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;

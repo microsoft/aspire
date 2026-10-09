@@ -163,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NavMenuConsoleLogsTab">
-        <source>Console</source>
-        <target state="translated">控制台</target>
+        <source>Console logs</source>
+        <target state="needs-review-translation">控制台</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuExtensionsTab">
@@ -203,18 +203,18 @@
         <note />
       </trans-unit>
       <trans-unit id="NavMenuStructuredLogsTab">
-        <source>Structured</source>
-        <target state="translated">结构化</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="NavMenuTagsTab">
-        <source>Tags</source>
-        <target state="new">Tags</target>
+        <source>Structured logs</source>
+        <target state="needs-review-translation">结构化</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTerminalsTab">
         <source>Terminals</source>
         <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuTagsTab">
+        <source>Tags</source>
+        <target state="new">Tags</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTracesTab">

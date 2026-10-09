@@ -17,6 +17,21 @@
         <target state="translated">開發通道 '{0}' 處於作用中，擁有 {1} 個主機連線和 {2} 個連接埠。</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevTunnelHostDisconnected">
+        <source>The local host for dev tunnel '{0}' is disconnected.</source>
+        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevTunnelHostHealthy">
+        <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
+        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevTunnelHostNotReady">
+        <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
+        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
         <source>Dev tunnel port '{0}' on dev tunnel '{1}' is active.</source>
         <target state="translated">開發通道 '{1}' 上的開發通道埠 '{0}' 處於作用中。</target>

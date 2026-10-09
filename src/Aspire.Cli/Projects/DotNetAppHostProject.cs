@@ -54,6 +54,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
+    private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -85,6 +86,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         IDotNetSdkInstaller sdkInstaller,
         IBundleService bundleService,
         IEnvironment environment,
+        AppHostConfigurationProjector appHostConfigurationProjector,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
@@ -105,6 +107,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         _sdkInstaller = sdkInstaller;
         _bundleService = bundleService;
         _environment = environment;
+        _appHostConfigurationProjector = appHostConfigurationProjector;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
@@ -1612,8 +1615,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
 
             using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, noRestore);
+            var appHostDirectory = effectiveAppHostFile.Directory ?? _executionContext.WorkingDirectory;
             if (directRun is not null)
             {
+                await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, appHostDirectory, cancellationToken);
+
                 // The direct command line has no "--" separator, so the forwarded-argument boundary
                 // has to be carried alongside it for logging. Clone rather than mutate because the
                 // caller may reuse runOptions for other invocations.
@@ -1631,6 +1637,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     directRunOptions,
                     cancellationToken);
             }
+
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
 
             return await _runner.RunAsync(
                 effectiveAppHostFile,

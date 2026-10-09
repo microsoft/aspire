@@ -29,18 +29,14 @@ public class TemplatePackageLockTests
     }
 
     [Theory]
-    [InlineData("ts-starter")]
-    [InlineData("py-starter")]
-    [InlineData("java-starter")]
-    public void StarterFrontendPackageJson_UsesNpm10CompatibleBraceExpansionOverride(string templateName)
+    [InlineData("Aspire.Cli", "ts-starter")]
+    [InlineData("Aspire.Cli", "py-starter")]
+    [InlineData("Aspire.Cli", "java-starter")]
+    [InlineData("Aspire.ProjectTemplates", "aspire-ts-cs-starter")]
+    public void StarterFrontendPackageJson_UsesNpm10CompatibleBraceExpansionOverride(string projectName, string templateName)
     {
         var filePath = Path.Combine(
-            GetRepoRoot(),
-            "src",
-            "Aspire.Cli",
-            "Templating",
-            "Templates",
-            templateName,
+            GetTemplateDirectory(projectName, templateName),
             "frontend",
             "package.json");
 
@@ -49,9 +45,44 @@ public class TemplatePackageLockTests
 
         Assert.True(overrides.TryGetProperty("minimatch@3.1.5", out var minimatchOverride));
         Assert.Equal(
-            "2.1.4",
+            "2.1.7",
             minimatchOverride.GetProperty("brace-expansion").GetString());
+        Assert.Equal("5.0.12", overrides.GetProperty("brace-expansion@>=5").GetString());
         Assert.False(overrides.TryGetProperty("brace-expansion@1", out _));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Cli", "ts-starter", "frontend")]
+    [InlineData("Aspire.Cli", "py-starter", "frontend")]
+    [InlineData("Aspire.Cli", "java-starter", "frontend")]
+    [InlineData("Aspire.Cli", "ts-starter", "")]
+    [InlineData("Aspire.Cli", "py-starter", "")]
+    [InlineData("Aspire.ProjectTemplates", "aspire-ts-cs-starter", "frontend")]
+    public void StarterPackageLock_UsesPatchedBraceExpansion(string projectName, string templateName, string subdirectory)
+    {
+        var filePath = Path.Combine(
+            GetTemplateDirectory(projectName, templateName),
+            subdirectory,
+            "package-lock.json");
+
+        using var packageLock = JsonDocument.Parse(File.ReadAllText(filePath));
+        var packages = packageLock.RootElement.GetProperty("packages").EnumerateObject()
+            .Where(package => package.Name.EndsWith("/brace-expansion", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(packages);
+        Assert.All(packages, package =>
+        {
+            var version = Version.Parse(package.Value.GetProperty("version").GetString()!);
+            var minimum = version.Major switch
+            {
+                2 => new Version(2, 1, 6),
+                5 => new Version(5, 0, 11),
+                _ => throw new InvalidOperationException($"Unexpected brace-expansion major version: {version}")
+            };
+
+            Assert.True(version >= minimum, $"brace-expansion {version} predates the security fixes in {minimum}.");
+        });
     }
 
     [Theory]
@@ -158,6 +189,14 @@ public class TemplatePackageLockTests
 
         Assert.Equal(["registry.npmjs.org"], registryHosts);
     }
+
+    private static string GetTemplateDirectory(string projectName, string templateName)
+        => projectName switch
+        {
+            "Aspire.Cli" => Path.Combine(GetRepoRoot(), "src", projectName, "Templating", "Templates", templateName),
+            "Aspire.ProjectTemplates" => Path.Combine(GetRepoRoot(), "src", projectName, "templates", templateName),
+            _ => throw new ArgumentException($"Unexpected template project: {projectName}", nameof(projectName))
+        };
 
     private static string GetRepoRoot()
         => Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));

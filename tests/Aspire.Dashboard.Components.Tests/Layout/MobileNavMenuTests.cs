@@ -16,10 +16,46 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class MobileNavMenuTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TerminalsNavigation_IsConditional(bool hasTerminals)
+    {
+        var cut = RenderMobileNavMenu("/terminals/resource/shell", hasResourceTerminals: hasTerminals);
+        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("title")).Take(hasTerminals ? 8 : 7);
+        var expected = new List<string>
+        {
+            Resources.Layout.NavMenuHomeTab,
+            Resources.Layout.NavMenuResourcesTab,
+            Resources.Layout.NavMenuTagsTab,
+            Resources.Layout.NavMenuParametersTab,
+            Resources.Layout.NavMenuGraphTab
+        };
+        if (hasTerminals)
+        {
+            expected.Add(Resources.Layout.NavMenuTerminalsTab);
+        }
+        expected.Add(Resources.Layout.NavMenuExtensionsTab);
+        expected.Add(Resources.Layout.MainLayoutAspireRepoLink);
+        Assert.Equal(expected, titles);
+        if (hasTerminals)
+        {
+            AssertMenuItemIsActive(cut, Resources.Layout.NavMenuTerminalsTab);
+        }
+    }
+
     [Fact]
     public void Render_OpenMenu_TelemetryPageWithQueryStringSelectsResourcesEntry()
     {
         var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl(logLevel: "warning"));
+
+        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuResourcesTab);
+    }
+
+    [Fact]
+    public void Render_OpenMenu_TelemetryPageSelectsResourcesEntry()
+    {
+        var cut = RenderMobileNavMenu(DashboardUrls.StructuredLogsUrl());
 
         AssertMenuItemIsActive(cut, Resources.Layout.NavMenuResourcesTab);
     }
@@ -111,7 +147,7 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(MainLayout.NavigationButtonId, argument);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true)
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -127,12 +163,11 @@ public class MobileNavMenuTests : DashboardTestContext
         return Render<MobileNavMenu>(builder =>
         {
             builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
+            builder.Add(p => p.HasResourceTerminals, hasResourceTerminals);
             builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);
-            builder.Add(p => p.IsTerminalDockEnabled, false);
-            builder.Add(p => p.ToggleTerminalDockAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchNotificationsAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchSettingsAsync, () => Task.CompletedTask);
         });

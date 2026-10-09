@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/runtime:9.0
+FROM mcr.microsoft.com/dotnet/runtime:10.0
 
 # Create a directory for the bind mount
 RUN mkdir -p /data

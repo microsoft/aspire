@@ -9,10 +9,8 @@
 @namespace Aspire.Dashboard.Components.Pages
 
 <PageTitle>
-    <ApplicationName
-        AdditionalText="@PageViewModel.SelectedResource.Id?.ReplicaSetName"
-        ResourceName="@nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle)"
-        Loc="@Loc"/>
+    <ApplicationName AdditionalText="@PageViewModel.SelectedResource.Id?.ReplicaSetName"
+                     ResourceName="@nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle)" Loc="@Loc"/>
 </PageTitle>
 
 @{
@@ -41,66 +39,28 @@
         <ToolbarSection>
             @((RenderFragment)RenderToolbar)
         </ToolbarSection>
-
         <MobilePageTitleToolbarSection>
-            @if (_activeView == ConsoleLogsView.Console)
-            {
-                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
-                    @if (PageViewModel.SelectedResource?.Id is not null)
-                    {
-                        @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
-                    }
-                    else
-                    {
-                        @PageViewModel.Status
-                    }
-                </FluentLabel>
-            }
+            <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
+                @if (PageViewModel.SelectedResource.Id is not null)
+                {
+                    @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
+                }
+                else
+                {
+                    @PageViewModel.Status
+                }
+            </FluentLabel>
         </MobilePageTitleToolbarSection>
-
         <MainSection>
-            @* For terminal-enabled resources we keep BOTH views mounted and
-               flip visibility via CSS. Unmounting TerminalView on every flip
-               would tear down the Hex1b client and WebSocket, forcing a
-               new producer-backed history sync on every toggle. Unmounting LogViewer
-               would drop the rendered log buffer for the same reason.
-               `display:none` keeps the DOM, JS state, and Blazor component
-               state alive while only one view is visible at a time. *@
-            @if (_selectedResourceHasTerminal && _terminalResourceName is not null)
-            {
-                <div style="@(_activeView == ConsoleLogsView.Console ? "display: contents;" : "display: none;")">
-                    <LogViewer
-                        @ref="_logViewerRef"
-                        LogEntries="@_logEntries"
-                        FilterText="@_logFilter"
-                        ShowTimestamp="@_showTimestamp"
-                        IsTimestampUtc="@_isTimestampUtc"
-                        NoWrapLogs="@_noWrapLogs"
-                        ShowNoLogsMessage="@_showNoLogsMessage"
-                        NoLogsMessage="@GetNoLogsMessage()"
-                        ShowResourcePrefix="@_isSubscribedToAll"/>
-                </div>
-                <div style="@(_activeView == ConsoleLogsView.Terminal ? "display: contents;" : "display: none;")">
-                    <TerminalView
-                        @ref="_terminalViewRef"
-                        ShowOpenInWindow="@(_activeView == ConsoleLogsView.Terminal)"
-                        ResourceName="@_terminalResourceName"
-                        ReplicaIndex="@_terminalReplicaIndex" />
-                </div>
-            }
-            else
-            {
-                <LogViewer
-                    @ref="_logViewerRef"
-                    LogEntries="@_logEntries"
-                    FilterText="@_logFilter"
-                    ShowTimestamp="@_showTimestamp"
-                    IsTimestampUtc="@_isTimestampUtc"
-                    NoWrapLogs="@_noWrapLogs"
-                    ShowNoLogsMessage="@_showNoLogsMessage"
-                    NoLogsMessage="@GetNoLogsMessage()"
-                    ShowResourcePrefix="@_isSubscribedToAll"/>
-            }
+            <LogViewer @ref="_logViewerRef"
+                       LogEntries="@_logEntries"
+                       FilterText="@_logFilter"
+                       ShowTimestamp="@_showTimestamp"
+                       IsTimestampUtc="@_isTimestampUtc"
+                       NoWrapLogs="@_noWrapLogs"
+                       ShowNoLogsMessage="@_showNoLogsMessage"
+                       NoLogsMessage="@GetNoLogsMessage()"
+                       ShowResourcePrefix="@_isSubscribedToAll"/>
         </MainSection>
         <FooterSection>
             @if (PauseText is not null)
@@ -125,13 +85,10 @@
                         LabelClass="toolbar-left" />
     }
 
-    @if (_activeView == ConsoleLogsView.Console)
-    {
-        <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
-                              IsPaused="@PauseManager.ConsoleLogsPaused"
-                              OnPausedChanged="@OnPausedChanged"
-                              SelectedResource="@PageViewModel.SelectedResource" />
-    }
+    <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
+                           IsPaused="@PauseManager.ConsoleLogsPaused"
+                           OnPausedChanged="@OnPausedChanged"
+                           SelectedResource="@PageViewModel.SelectedResource" />
 
     @if (ResourcesLayout is null && PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
     {
@@ -165,57 +122,39 @@
     @if (ViewportInformation.IsDesktop)
     {
         <div class="toolbar-end">
-            @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
-            {
-                @if (_activeView == ConsoleLogsView.Console)
-                {
-                <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
-                              Class="toolbar-search"
-                              Name="console-logs-search"
-                              AutoComplete="off"
-                              Immediate="true"
-                              ImmediateDelay="@FluentUIExtensions.InputDelay"
-                              Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                              title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
-                    <StartTemplate>
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
-                    </StartTemplate>
-                </FluentTextInput>
-                }
-
-                <AspireMenuButton
-                    ButtonAppearance="ButtonAppearance.Default"
-                    ButtonClass="toolbar-button"
-                    Icon="@(new Icons.Regular.Size20.Options())"
-                    ItemsProvider="@(() => _logsMenuItems)"
-                    Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
-            }
-        </div>
-    }
-    else if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
-    {
-        @if (_activeView == ConsoleLogsView.Console)
-        {
             <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
-                          Class="toolbar-search"
-                          Name="console-logs-search"
-                          AutoComplete="off"
-                          Immediate="true"
-                          ImmediateDelay="@FluentUIExtensions.InputDelay"
-                          Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
-                          title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                             Class="toolbar-search" Name="console-logs-search"
+                             AutoComplete="off" Immediate="true"
+                             ImmediateDelay="@FluentUIExtensions.InputDelay"
+                             Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                             title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
                 <StartTemplate>
                     <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                 </StartTemplate>
             </FluentTextInput>
-        }
-
-        <AspireMenuButton
-            Icon="@(new Icons.Regular.Size20.Options())"
-            ItemsProvider="@(() => _logsMenuItems)"
-            Text="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="toolbar-button"
+                              Icon="@(new Icons.Regular.Size20.Options())"
+                              ItemsProvider="@(() => _logsMenuItems)"
+                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
+        </div>
     }
-
+    else
+    {
+        <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
+                         Class="toolbar-search" Name="console-logs-search"
+                         AutoComplete="off" Immediate="true"
+                         ImmediateDelay="@FluentUIExtensions.InputDelay"
+                         Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                         Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
+                         title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+            <StartTemplate>
+                <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+            </StartTemplate>
+        </FluentTextInput>
+        <AspireMenuButton Icon="@(new Icons.Regular.Size20.Options())"
+                          ItemsProvider="@(() => _logsMenuItems)"
+                          Text="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
+    }
     }
 }

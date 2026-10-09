@@ -2,9 +2,17 @@
 
 This sample demonstrates how to integrate a **standalone Blazor WebAssembly** application with Aspire, enabling full observability (logs, traces) and service discovery without requiring a hosted Blazor Server backend.
 
+During local development, the gateway runs from the official .NET tool and requires the .NET 11 SDK or later. The sample workloads target .NET 11, and the standalone client enables the SDK's `StaticWebAssetSpaFallbackEnabled` fallback generation. Publishing continues to use the generated file-based gateway.
+
+## Requirements
+
+- Development requires the .NET 11 SDK or later to run `Microsoft.AspNetCore.Components.Gateway.Cli`.
+- Publishing supports a Blazor WebAssembly client that targets one framework from .NET 8 through .NET 11. Multi-targeted clients and clients targeting .NET 12 or later aren't supported by the current publish image.
+- The AppHost and client projects must be under a common ancestor directory containing a `.sln` or `.slnx` file. Aspire uses that directory as the Docker build context.
+
 ## Overview
 
-For **standalone** Blazor WebAssembly applications, there is no server-side Blazor host. This sample uses the `Aspire.Hosting.Blazor` package to automatically generate a **Gateway** (an ASP.NET Core + YARP reverse proxy) that:
+For **standalone** Blazor WebAssembly applications, there is no server-side Blazor host. This sample uses the `Aspire.Hosting.Blazor` package to run the official Blazor **Gateway** (an ASP.NET Core + YARP reverse proxy) that:
 
 - Serves the WASM static files under a path prefix (e.g., `/app/`)
 - Exposes a `/_blazor/_configuration` endpoint with service URLs and OTLP settings
@@ -62,11 +70,11 @@ var gateway = builder.AddBlazorGateway("gateway")
 builder.Build().Run();
 ```
 
-At startup, the hosting layer:
+During development startup, the hosting layer:
 1. Reads the WASM project's `staticwebassets.build.json` manifest to locate static files
-2. Generates a `Gateway.cs` script that configures YARP routes for each WASM client
+2. Configures the official `Microsoft.AspNetCore.Components.Gateway.Cli` tool for each WASM client
 3. Builds a client configuration JSON with service URLs and OTLP settings
-4. Launches the gateway as a project resource
+4. Launches the gateway CLI while preserving the gateway's project resource in the Aspire dashboard
 
 ### Step 2: Gateway Exposes Configuration Endpoint
 
@@ -172,7 +180,7 @@ await host.RunAsync();
 ```text
 BlazorStandalone/
 ├── BlazorStandalone.AppHost/           # Aspire orchestrator
-│   └── Program.cs                                # AddBlazorWasmProject + AddBlazorGateway
+│   └── AppHost.cs                                # AddBlazorWasmProject + AddBlazorGateway
 │
 ├── BlazorStandalone/                   # Standalone Blazor WASM client
 │   ├── Program.cs                                # AddEnvironmentVariables() + service discovery

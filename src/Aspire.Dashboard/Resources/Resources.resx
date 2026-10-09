@@ -306,6 +306,10 @@
   <data name="ResourcesGraphResetButton" xml:space="preserve">
     <value>Reset</value>
   </data>
+  <data name="ResourcesGraphExportMermaidButton" xml:space="preserve">
+    <value>Export as Mermaid</value>
+    <comment>Opens a dialog showing the currently visible resource graph as Mermaid source, with separate actions to copy the source or download it as a .mmd file.</comment>
+  </data>
   <data name="ResourcesGraphResourceActionsButton" xml:space="preserve">
     <value>Resource actions for {0}</value>
     <comment>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</comment>

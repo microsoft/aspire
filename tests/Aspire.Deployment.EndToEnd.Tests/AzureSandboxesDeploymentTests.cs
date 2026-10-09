@@ -475,8 +475,6 @@ public sealed class AzureSandboxesDeploymentTests(ITestOutputHelper output)
         File.WriteAllText(appHostFilePath, $$"""
             {{appHostDirectives}}
 
-            #pragma warning disable ASPIREDOTNETPROJECT001
-
             using Aspire.Hosting.Azure;
 
             var builder = DistributedApplication.CreateBuilder(args);

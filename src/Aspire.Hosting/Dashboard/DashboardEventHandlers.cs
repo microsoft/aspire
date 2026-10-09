@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -186,9 +187,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     private void ConfigureAspireDashboardResource(IResource dashboardResource)
     {
-        // The dashboard resource can be visible during development. We don't want people to be able to stop the dashboard from inside the dashboard.
-        // Exclude the lifecycle commands from the dashboard resource so they're not accidently clicked during development.
-        dashboardResource.Annotations.Add(new ExcludeLifecycleCommandsAnnotation());
+        // The built-in dashboard can be visible during development. Prevent it from stopping itself,
+        // but preserve lifecycle and rebuild commands when the dashboard is supplied as a .NET project.
+        if (!dashboardResource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>())
+        {
+            dashboardResource.Annotations.Add(new ExcludeLifecycleCommandsAnnotation());
+        }
 
         // Add the ContentView icon to the dashboard resource
         dashboardResource.Annotations.Add(new ResourceIconAnnotation("ContentView"));
@@ -305,9 +309,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                         // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
                         // Order these before non-browser usable endpoints.
                         url.DisplayText = $"Dashboard ({endpoint.EndpointName})";
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set for compatibility.
                         url.DisplayOrder = 1;
-#pragma warning restore CS0618
 
                         // Append the browser token to the URL as a query string parameter if token is configured
                         if (!string.IsNullOrEmpty(browserToken))

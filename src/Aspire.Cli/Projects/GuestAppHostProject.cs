@@ -56,6 +56,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IGracefulShutdownWindow _shutdownService;
     private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly IEnvironment _environment;
+    private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -80,6 +81,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
         IEnvironment environment,
+        AppHostConfigurationProjector appHostConfigurationProjector,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
@@ -100,6 +102,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
         _environment = environment;
+        _appHostConfigurationProjector = appHostConfigurationProjector;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _profilingTelemetry = profilingTelemetry;
@@ -462,6 +465,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
@@ -1351,11 +1355,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _logger.LogDebug("Connected to AppHost server backchannel at {SocketPath}", socketPath);
                 return;
             }
-            // Route HasExited / ExitCode through the session so the isolated Windows spawn path
-            // (which surfaces Process via Process.GetProcessById, whose status getters are
-            // unreliable for processes the BCL did not itself start) goes through the
-            // IsolatedProcess wrapper's GetExitCodeProcess-backed accessors instead.
-            // See https://github.com/dotnet/runtime/issues/45003.
             catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
                 var exitCode = serverSession.TryGetServerExitCode();
@@ -1803,10 +1802,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     }
 
     /// <summary>
-    /// Emits a single pre-flight warning when the installed CLI version doesn't match the SDK
-    /// version pinned in <c>aspire.config.json</c>. This is a best-effort heuristic — we keep it
-    /// purely informational and let code-generation try first so that benign skew (e.g. a
-    /// daily-build CLI against a stable SDK) doesn't block valid scenarios.
+    /// Emits an informational pre-flight warning when the installed CLI is older than the
+    /// SDK used for code generation, or when unparseable versions differ.
     /// </summary>
     private void WarnIfCliSdkVersionSkew(string appPath, string? targetSdkVersion = null)
     {
@@ -1814,22 +1811,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             var cliVersion = _executionContext.IdentitySdkVersion;
 
-            // When the caller is actively updating TO a version that matches the CLI,
-            // the on-disk config is stale and about to be overwritten — skip the warning.
-            if (targetSdkVersion is not null && !IsKnownIncompatibleSkew(cliVersion, targetSdkVersion))
+            // During an update the on-disk config is stale. Compare against the SDK that
+            // code generation will actually use, not the version about to be overwritten.
+            var sdkVersion = targetSdkVersion;
+            if (sdkVersion is null)
+            {
+                var configDir = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
+                sdkVersion = AspireConfigFile.Load(configDir.FullName)?.SdkVersion;
+            }
+
+            if (string.IsNullOrWhiteSpace(sdkVersion))
             {
                 return;
             }
 
-            var configDir = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
-            var config = AspireConfigFile.Load(configDir.FullName);
-            var configuredSdkVersion = config?.SdkVersion;
-            if (string.IsNullOrWhiteSpace(configuredSdkVersion))
-            {
-                return;
-            }
-
-            if (!IsKnownIncompatibleSkew(cliVersion, configuredSdkVersion))
+            if (!ShouldWarnAboutCliSdkVersionSkew(cliVersion, sdkVersion))
             {
                 return;
             }
@@ -1838,7 +1834,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 System.Globalization.CultureInfo.CurrentCulture,
                 ErrorStrings.CodegenVersionSkewWarning,
                 cliVersion,
-                configuredSdkVersion);
+                sdkVersion);
             _interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{Markup.Escape(message)}[/]", allowMarkup: true);
         }
         catch (Exception ex)
@@ -1848,21 +1844,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     }
 
     /// <summary>
-    /// Returns <see langword="true"/> when the supplied CLI and SDK versions look mismatched in a
-    /// way that is worth warning about. We deliberately tolerate metadata-only differences
-    /// (build suffixes, +commit hashes) and only flag a skew when the parsed major/minor/patch
-    /// numbers disagree.
+    /// Returns <see langword="true"/> when the CLI has lower SemVer precedence than the SDK,
+    /// ignoring build metadata. Unparseable versions fall back to case-insensitive inequality.
     /// </summary>
-    /// <summary>
-    /// Returns <see langword="true"/> when the supplied CLI and SDK versions differ in a way that
-    /// is known to produce ABI incompatibilities — specifically when they differ in
-    /// <see cref="SemVersion.Major"/>, <see cref="SemVersion.Minor"/>, <see cref="SemVersion.Patch"/>,
-    /// or in their prerelease identifiers (e.g. <c>13.4.0-preview.1.26218.1</c> vs
-    /// <c>13.4.0-preview.1.26227.1</c>, which was the exact reproduction case in
-    /// <see href="https://github.com/microsoft/aspire/issues/16709"/>). Build metadata
-    /// (everything after <c>+</c>) is ignored per the SemVer spec.
-    /// </summary>
-    internal static bool IsKnownIncompatibleSkew(string cliVersion, string sdkVersion)
+    internal static bool ShouldWarnAboutCliSdkVersionSkew(string cliVersion, string sdkVersion)
     {
         if (!SemVersion.TryParse(NormalizeVersion(cliVersion), SemVersionStyles.Any, out var cli) ||
             !SemVersion.TryParse(NormalizeVersion(sdkVersion), SemVersionStyles.Any, out var sdk))
@@ -1870,10 +1855,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return !string.Equals(cliVersion, sdkVersion, StringComparison.OrdinalIgnoreCase);
         }
 
-        // Compare full precedence, which covers Major/Minor/Patch *and* prerelease identifiers
-        // but (per the SemVer spec) ignores build metadata. NormalizeVersion already strips '+'
-        // suffixes defensively for parsers that include them in precedence.
-        return SemVersion.ComparePrecedence(cli, sdk) != 0;
+        return SemVersion.ComparePrecedence(cli, sdk) < 0;
     }
 
     internal static string NormalizeVersion(string version)
