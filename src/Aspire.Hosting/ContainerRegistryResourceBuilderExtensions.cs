@@ -3,8 +3,10 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Publishing;
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES003
 
 namespace Aspire.Hosting;
 
@@ -59,7 +61,7 @@ public static class ContainerRegistryResourceBuilderExtensions
 
         SubscribeToAddRegistryTargetAnnotations(builder, resource);
 
-        return resourceBuilder;
+        return resourceBuilder.WithManifestPublishingCallback(context => WriteManifestAsync(context, resource));
     }
 
     /// <summary>
@@ -112,7 +114,7 @@ public static class ContainerRegistryResourceBuilderExtensions
 
         SubscribeToAddRegistryTargetAnnotations(builder, resource);
 
-        return resourceBuilder;
+        return resourceBuilder.WithManifestPublishingCallback(context => WriteManifestAsync(context, resource));
     }
 
     /// <summary>
@@ -160,6 +162,20 @@ public static class ContainerRegistryResourceBuilderExtensions
         });
     }
 
+    private static Task WriteManifestAsync(ManifestPublishingContext context, IContainerRegistry registry)
+    {
+        context.Writer.WriteString("type", "containerregistry.v0");
+        context.Writer.WriteString("endpoint", registry.Endpoint.ValueExpression);
+        context.TryAddDependentResources(registry.Endpoint);
+        if (registry.Repository is not null)
+        {
+            context.Writer.WriteString("repository", registry.Repository.ValueExpression);
+            context.TryAddDependentResources(registry.Repository);
+        }
+
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// Configures the resource to use the specified container registry for container image operations.
     /// </summary>
@@ -190,6 +206,10 @@ public static class ContainerRegistryResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(registry);
+        if (builder.Resource is ContainerImageResource or DestinationImageResource)
+        {
+            throw new InvalidOperationException("Create an image publication destination with registry.AddImage(name, image).");
+        }
 
         return builder.WithAnnotation(new ContainerRegistryReferenceAnnotation(registry.Resource));
     }

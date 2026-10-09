@@ -1,0 +1,13 @@
+﻿{
+  PublishedReference: registry.example.com/published@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+  State: {"schemaVersion":1,"sourceImage":"docker.io/library/busybox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","destinationImage":"registry.example.com/published@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","publicationTag":"registry.example.com/published:aspire-deploy-<execution>"},
+  Summary: {
+    Items: [
+      {
+        Key: Image published,
+        Value: registry.example.com/published@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+        EnableMarkdown: false
+      }
+    ]
+  }
+}

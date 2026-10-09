@@ -9,6 +9,7 @@ using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -720,6 +721,12 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     pipelineActivity.SetError(ex);
                     throw;
                 }
+            }
+            if (execContext.IsPublishMode)
+            {
+                // Providers can remove or replace generated registries during preparation.
+                // Resolve defaults before publish-time step factories inspect image associations.
+                ContainerImageRegistryResolver.Resolve(appModel);
             }
         }
         catch (Exception ex)

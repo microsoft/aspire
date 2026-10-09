@@ -6,6 +6,7 @@
 #pragma warning disable ASPIRECOMPUTE002
 
 using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Azure;
@@ -14,6 +15,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
+using Aspire.TestUtilities;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.AppService;
 
@@ -22,6 +24,184 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 public class AtsTypeScriptCodeGeneratorTests
 {
     private readonly AtsTypeScriptCodeGenerator _generator = new();
+
+    [Fact]
+    [RequiresTools(["node", "npm"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Invokes the Unix npm executable.")]
+    public async Task GeneratedDestinationImage_CanBePassedToEnvironmentAndReference()
+    {
+        var scanned = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly).ToAtsContext();
+        var context = new AtsContext
+        {
+            Capabilities = scanned.Capabilities.Where(capability => capability.CapabilityId is
+                "Aspire.Hosting/addContainerImage" or "Aspire.Hosting/withContainerImageSource" or
+                "Aspire.Hosting/addContainerRegistry" or "Aspire.Hosting/addRegistryImage" or
+                "Aspire.Hosting/addContainer" or "Aspire.Hosting/withEnvironment" or
+                "Aspire.Hosting/withReference" or "Aspire.Hosting/withContainerBuildOptions" or
+                "Aspire.Hosting/withContainerImageDockerfile" or "Aspire.Hosting/withContainerImageDockerfileBuilder" or
+                "Aspire.Hosting/withContainerImageBuildArg" or "Aspire.Hosting/withContainerImageBuildSecret" or
+                "Aspire.Hosting/withContainerImageBuildOptions" ||
+                capability.CapabilityId.StartsWith("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.", StringComparison.Ordinal) ||
+                capability.CapabilityId.StartsWith("Aspire.Hosting.ApplicationModel/DestinationImageResource.", StringComparison.Ordinal)).ToList(),
+            HandleTypes = scanned.HandleTypes,
+            DtoTypes = scanned.DtoTypes.Where(dto => dto.Name is "AddContainerOptions" or "CreateBuilderOptions").ToList(),
+            EnumTypes = scanned.EnumTypes,
+            ExportedValues = scanned.ExportedValues,
+            Diagnostics = scanned.Diagnostics
+        };
+        var files = _generator.GenerateDistributedApplication(context);
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content);
+            }
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "package.json"), EmbeddedResources.Read("package.json"));
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "consumer.mts"),
+                """
+                import assert from 'node:assert/strict';
+                import type { DistributedApplicationBuilder } from './aspire.mjs';
+                import { ContainerTargetPlatform, type ParameterResource } from './aspire.mjs';
+                import { Handle, AspireClient, wrapIfHandle } from './transport.mjs';
+                import './aspire.mjs';
+
+                const client = new AspireClient('unused');
+                const calls: Array<{ id: string, args: Record<string, unknown> }> = [];
+                const types: Record<string, string> = {
+                    addContainerImage: 'ContainerImageResource',
+                    addContainerRegistry: 'ContainerRegistryResource',
+                    addRegistryImage: 'DestinationImageResource',
+                    addContainer: 'ContainerResource'
+                };
+                client.invokeCapability = async <TResult,>(id: string, args: Record<string, unknown> = {}): Promise<TResult> => {
+                    calls.push({ id, args });
+                    const method = id.split('/').at(-1)!;
+                    const type = types[method] ??
+                        (method.startsWith('DestinationImageResource.') ? 'ReferenceExpression' : undefined);
+                    return (type
+                        ? new Handle({ $handle: String(args.name ?? method), $type: `Aspire.Hosting/Aspire.Hosting.ApplicationModel.${type}` })
+                        : args.builder) as TResult;
+                };
+                const builder = wrapIfHandle({
+                    $handle: 'builder',
+                    $type: 'Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder'
+                }, client) as DistributedApplicationBuilder;
+                const source = builder.addContainerImage('tools').withImageSource('busybox:v1');
+                const registry = builder.addContainerRegistry('registry', 'registry.example.com');
+                const destination = registry.addImage('published', source);
+                const consumer = builder.addContainer('consumer', 'busybox');
+                await consumer
+                    .withEnvironment('IMAGE_NAME', destination)
+                    .withReference(destination, { name: 'sandbox' });
+                const serialized = JSON.parse(JSON.stringify(calls));
+                assert.deepEqual(serialized.map((call: { id: string }) => call.id).sort(), [
+                    'Aspire.Hosting/addContainer',
+                    'Aspire.Hosting/addContainerImage',
+                    'Aspire.Hosting/withContainerImageSource',
+                    'Aspire.Hosting/addContainerRegistry',
+                    'Aspire.Hosting/addRegistryImage',
+                    'Aspire.Hosting/withEnvironment',
+                    'Aspire.Hosting/withReference'
+                ].sort());
+                const expectedImage = {
+                    $handle: 'published',
+                    $type: 'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DestinationImageResource'
+                };
+                assert.deepEqual(serialized.at(-2).args.value, expectedImage);
+                assert.deepEqual(serialized.at(-1).args.source, expectedImage);
+                assert.equal(serialized.at(-1).args.name, 'sandbox');
+
+                const properties = [
+                    ['IMAGE', await destination.imageExpression()],
+                    ['TAG', await destination.tagExpression()],
+                    ['SHA256', await destination.sha256Expression()],
+                    ['REGISTRY', await destination.registryExpression()],
+                    ['REPOSITORY', await destination.repositoryExpression()]
+                ] as const;
+                for (const [name, expression] of properties) {
+                    await consumer.withEnvironment(`CUSTOM_${name}`, expression);
+                }
+                const propertyCalls = JSON.parse(JSON.stringify(calls.slice(serialized.length)));
+                assert.deepEqual(propertyCalls.slice(0, 5).map((call: { id: string }) => call.id), [
+                    'Aspire.Hosting.ApplicationModel/DestinationImageResource.imageExpression',
+                    'Aspire.Hosting.ApplicationModel/DestinationImageResource.tagExpression',
+                    'Aspire.Hosting.ApplicationModel/DestinationImageResource.sha256Expression',
+                    'Aspire.Hosting.ApplicationModel/DestinationImageResource.registryExpression',
+                    'Aspire.Hosting.ApplicationModel/DestinationImageResource.repositoryExpression'
+                ]);
+                assert.deepEqual(propertyCalls.slice(5).map((call: { args: { value: unknown } }) => call.args.value),
+                    propertyCalls.slice(0, 5).map((call: { id: string }) => ({
+                        $handle: call.id.split('/').at(-1)!,
+                        $type: 'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'
+                    })));
+
+                const buildStart = calls.length;
+                const token = wrapIfHandle({
+                    $handle: 'token',
+                    $type: 'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource'
+                }, client) as ParameterResource;
+                await builder.addContainerImage('dockerfile')
+                    .withDockerfile('./tools', { dockerfilePath: 'Tools.Dockerfile', stage: 'release' })
+                    .withBuildArg('VERSION', 'v1')
+                    .withBuildSecret('TOKEN', token)
+                    .withContainerBuildOptions(async context => {
+                        await context.targetPlatform.set(ContainerTargetPlatform.AllLinux);
+                    })
+                    .withDockerfileBuilder('./tools', async (_context) => {});
+                const buildCalls = JSON.parse(JSON.stringify(calls.slice(buildStart)));
+                assert.deepEqual(buildCalls.map((call: { id: string }) => call.id), [
+                    'Aspire.Hosting/addContainerImage',
+                    'Aspire.Hosting/withContainerImageDockerfile',
+                    'Aspire.Hosting/withContainerImageBuildArg',
+                    'Aspire.Hosting/withContainerImageBuildSecret',
+                    'Aspire.Hosting/withContainerImageBuildOptions',
+                    'Aspire.Hosting/withContainerImageDockerfileBuilder'
+                ]);
+                assert.equal(buildCalls[1].args.contextPath, './tools');
+                assert.equal(buildCalls[1].args.dockerfilePath, 'Tools.Dockerfile');
+                assert.equal(buildCalls[1].args.stage, 'release');
+                assert.equal(buildCalls[2].args.value, 'v1');
+                assert.equal(buildCalls[3].args.value.$handle, 'token');
+                assert.equal(typeof buildCalls[4].args.callback, 'string');
+                assert.equal(typeof buildCalls[5].args.callback, 'string');
+                """);
+
+            // Restore the generated SDK's own dependency manifest, then compile a real consumer:
+            // accepting a snapshot alone does not prove fluent destination builders are assignable.
+            await RunGeneratedConsumerToolAsync("npm", directory.FullName, "install", "--include=dev", "--ignore-scripts", "--no-audit", "--no-fund");
+            await RunGeneratedConsumerToolAsync("npm", directory.FullName, "exec", "--", "tsc",
+                "--module", "nodenext", "--target", "ES2022", "--types", "node", "--strict", "--skipLibCheck", "consumer.mts");
+            await RunGeneratedConsumerToolAsync("node", directory.FullName, "consumer.mjs");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    private static async Task RunGeneratedConsumerToolAsync(string executable, string directory, params string[] arguments)
+    {
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo(executable)
+            {
+                WorkingDirectory = directory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+        process.Start();
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        Assert.True(process.ExitCode == 0, $"{executable} failed.{Environment.NewLine}{await output}{await error}");
+    }
 
     [Fact]
     public void Language_ReturnsTypeScript()

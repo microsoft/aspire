@@ -1,0 +1,23 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "api-containerapp.module.bicep",
+  "params": {
+    "env_outputs_azure_container_apps_environment_default_domain": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+    "env_outputs_azure_container_apps_environment_id": "{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+    "env_outputs_azure_container_registry_endpoint": "{env.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+    "env_outputs_azure_container_registry_managed_identity_id": "{env.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+    "api_containerimage": "{api.containerImage}",
+    "api_identity_outputs_id": "{api-identity.outputs.id}",
+    "published_image": "{published.image}",
+    "published_tag": "{published.tag}",
+    "published_sha256": "{published.sha256}",
+    "published_registryendpoint": "{published.registryEndpoint}",
+    "published_repository": "{published.repository}",
+    "second_image": "{second.image}",
+    "second_tag": "{second.tag}",
+    "second_sha256": "{second.sha256}",
+    "second_registryendpoint": "{second.registryEndpoint}",
+    "second_repository": "{second.repository}",
+    "api_identity_outputs_clientid": "{api-identity.outputs.clientId}"
+  }
+}

@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure;
 
@@ -39,6 +40,25 @@ public class AzureContainerRegistryResource : AzureProvisioningResource, IAzureC
 
         Annotations.Add(new PipelineConfigurationAnnotation((context) =>
         {
+            if (context.Services.GetRequiredService<DistributedApplicationExecutionContext>().IsPublishMode)
+            {
+                foreach (var image in context.Model.Resources.OfType<DestinationImageResource>()
+                    .Where(image => ReferenceEquals(image.Parent, this) && !image.IsExcludedFromPublish() && !image.Source.IsExcludedFromPublish()))
+                {
+                    if (!image.Annotations.OfType<ReferenceRoleAssignmentAnnotation>()
+                        .Any(annotation => ReferenceEquals(annotation.Target, this) &&
+                            annotation.Roles.Any(role => role.Id == ContainerRegistryBuiltInRole.AcrPull.ToString())))
+                    {
+                        // Scope the implied role to image consumers, not every reference to registry outputs.
+                        image.Annotations.Add(new ReferenceRoleAssignmentAnnotation(this,
+                            new HashSet<RoleDefinition>
+                            {
+                                new(ContainerRegistryBuiltInRole.AcrPull.ToString(), nameof(ContainerRegistryBuiltInRole.AcrPull))
+                            }));
+                    }
+                }
+            }
+
             var loginSteps = context.GetSteps(this, "acr-login");
             var provisionSteps = context.GetSteps(this, WellKnownPipelineTags.ProvisionInfrastructure);
 

@@ -19,6 +19,83 @@ public class AtsPythonCodeGeneratorTests
     private const string TestTypesAssemblyName = "Aspire.Hosting.CodeGeneration.Python.Tests";
 
     [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public async Task GeneratedDestinationImage_CanBePassedToEnvironmentAndReference()
+    {
+        var files = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies());
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "aspire_app.py"), files["aspire_app.py"]);
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "consumer.py"),
+                """
+                import aspire_app
+
+                client = aspire_app.AspireClient("unused")
+                calls = []
+                types = {
+                    "addContainerImage": "ContainerImageResource",
+                    "addContainerRegistry": "ContainerRegistryResource",
+                    "addRegistryImage": "DestinationImageResource",
+                    "addContainer": "ContainerResource",
+                }
+                def invoke(capability_id, args, kwargs=None):
+                    calls.append((capability_id, args))
+                    type_name = types.get(capability_id.rsplit("/", 1)[-1])
+                    if type_name:
+                        return aspire_app._wrap_if_handle({
+                            "$handle": args["name"],
+                            "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel." + type_name
+                        }, client)
+                    return args["builder"]
+                client.invoke_capability = invoke
+                builder = aspire_app.DistributedApplicationBuilder(client, {})
+                builder._handle = aspire_app.Handle({
+                    "$handle": "builder",
+                    "$type": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+                })
+                source = builder.add_container_image("tools").with_image_source("busybox:v1")
+                registry = builder.add_container_registry("registry", "registry.example.com")
+                destination = registry.add_image("published", source)
+                builder.add_container("consumer", "busybox").with_env("IMAGE_NAME", destination).with_reference(destination)
+                assert [call[0] for call in calls] == [
+                    "Aspire.Hosting/addContainerImage",
+                    "Aspire.Hosting/withContainerImageSource",
+                    "Aspire.Hosting/addContainerRegistry",
+                    "Aspire.Hosting/addRegistryImage",
+                    "Aspire.Hosting/addContainer",
+                    "Aspire.Hosting/withEnvironment",
+                    "Aspire.Hosting/withReference",
+                ]
+                assert calls[-2][1]["value"] is destination
+                assert calls[-1][1]["source"] is destination
+                assert isinstance(destination, aspire_app.DestinationImageResource)
+                """);
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo("python3")
+                {
+                    WorkingDirectory = directory.FullName,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                }
+            };
+            process.StartInfo.ArgumentList.Add("consumer.py");
+            process.Start();
+            var output = process.StandardOutput.ReadToEndAsync();
+            var error = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            Assert.True(process.ExitCode == 0, $"Python image consumer failed.{Environment.NewLine}{await output}{await error}");
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Language_ReturnsPython()
     {
         Assert.Equal("Python", _generator.Language);

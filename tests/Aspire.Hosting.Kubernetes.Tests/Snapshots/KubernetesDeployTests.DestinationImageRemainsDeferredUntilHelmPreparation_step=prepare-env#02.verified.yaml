@@ -1,0 +1,8 @@
+﻿config:
+  consumer:
+    PUBLISHED_IMAGE: "registry.example.com/published@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    PUBLISHED_TAG: "aspire-deploy-TIMESTAMP"
+    PUBLISHED_SHA256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    PUBLISHED_REGISTRY: "registry.example.com"
+    PUBLISHED_REPOSITORY: "published"
+    SANDBOX_IMAGE: "registry.example.com/published@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

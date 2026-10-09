@@ -373,7 +373,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         WriteBindings(container);
     }
 
-    private async Task WriteBuildContextAsync(ContainerResource container)
+    internal async Task WriteBuildContextAsync(IResource container)
     {
         if (container.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out var annotations) && annotations.Single() is { } annotation)
         {

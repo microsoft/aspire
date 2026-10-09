@@ -1,0 +1,8 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "api-roles-acr.module.bicep",
+  "params": {
+    "acr_outputs_name": "{acr.outputs.name}",
+    "principalId": "{api-identity.outputs.principalId}"
+  }
+}

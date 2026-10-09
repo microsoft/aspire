@@ -1,0 +1,17 @@
+﻿{
+  OTHER_IMAGE: {first-image.image},
+  OTHER_REGISTRY: {first-image.registryEndpoint},
+  OTHER_REPOSITORY: {first-image.repository},
+  OTHER_SHA256: {first-image.sha256},
+  OTHER_TAG: {first-image.tag},
+  SECOND_IMAGE: {second-image.image},
+  SECOND_REGISTRY: {second-image.registryEndpoint},
+  SECOND_REPOSITORY: {second-image.repository},
+  SECOND_SHA256: {second-image.sha256},
+  SECOND_TAG: {second-image.tag},
+  WORKER_IMAGE_IMAGE: {first-image.image},
+  WORKER_IMAGE_REGISTRY: {first-image.registryEndpoint},
+  WORKER_IMAGE_REPOSITORY: {first-image.repository},
+  WORKER_IMAGE_SHA256: {first-image.sha256},
+  WORKER_IMAGE_TAG: {first-image.tag}
+}

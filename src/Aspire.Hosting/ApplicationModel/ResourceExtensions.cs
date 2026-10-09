@@ -1019,13 +1019,18 @@ public static class ResourceExtensions
     /// Resources require an image build and a push to a container registry if they provide
     /// their own Dockerfile or are a project.
     /// Resources that are excluded from publishing are not considered to require image building and pushing.
+    /// Standalone image artifact sources are built independently; publication belongs to their named registry destinations.
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image push requirements.</param>
     /// <returns>True if the resource requires image building and pushing; otherwise, false.</returns>
     [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuildAndPush(this IResource resource)
     {
-        return resource.RequiresImageBuild() && !resource.IsBuildOnlyContainer();
+        // Artifact sources publish through their named destinations, not a compute
+        // resource's implicit registry and repository.
+#pragma warning disable ASPIREPIPELINES003
+        return resource is not ContainerImageResource && resource.RequiresImageBuild() && !resource.IsBuildOnlyContainer();
+#pragma warning restore ASPIREPIPELINES003
     }
 
     internal static bool IsBuildOnlyContainer(this IResource resource)
@@ -1477,7 +1482,8 @@ public static class ResourceExtensions
     /// <item>Parent resources via <see cref="IResourceWithParent"/></item>
     /// <item>Wait dependencies via <see cref="WaitAnnotation"/></item>
     /// <item>Connection string redirects via <see cref="ConnectionStringRedirectAnnotation"/></item>
-    /// <item>References to endpoints in environment variables and command-line arguments (via <see cref="IValueWithReferences"/>)</item>
+    /// <item>Explicit references to destination images</item>
+    /// <item>Structured values in environment variables and command-line arguments (via <see cref="IValueWithReferences"/>)</item>
     /// </list>
     /// </para>
     /// <para>
@@ -1514,7 +1520,8 @@ public static class ResourceExtensions
     /// <item>Parent resources via <see cref="IResourceWithParent"/></item>
     /// <item>Wait dependencies via <see cref="WaitAnnotation"/></item>
     /// <item>Connection string redirects via <see cref="ConnectionStringRedirectAnnotation"/></item>
-    /// <item>References to endpoints in environment variables and command-line arguments (via <see cref="IValueWithReferences"/>)</item>
+    /// <item>Explicit references to destination images</item>
+    /// <item>Structured values in environment variables and command-line arguments (via <see cref="IValueWithReferences"/>)</item>
     /// </list>
     /// </para>
     /// <para>
@@ -1626,6 +1633,11 @@ public static class ResourceExtensions
 
         // Collect direct dependencies from annotations
         CollectAnnotationDependencies(resource, dependencies, newDependencies);
+
+        foreach (var reference in resource.Annotations.OfType<DestinationImageReferenceAnnotation>())
+        {
+            CollectDependenciesFromValue(reference.Image, dependencies, newDependencies, visited, executionContext);
+        }
 
         // Collect raw (unresolved) environment variable and argument values
         var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(resource, executionContext, options, cancellationToken).ConfigureAwait(false);

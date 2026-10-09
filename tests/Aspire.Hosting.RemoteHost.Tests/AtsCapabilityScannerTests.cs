@@ -14,6 +14,100 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class AtsCapabilityScannerTests
 {
+    [Theory]
+    [InlineData("withContainerImageDockerfile", "withDockerfile")]
+    [InlineData("withContainerImageDockerfileBuilder", "withDockerfileBuilder")]
+    [InlineData("withContainerImageBuildArg", "withBuildArg")]
+    [InlineData("withContainerImageBuildSecret", "withBuildSecret")]
+    [InlineData("withContainerImageBuildOptions", "withContainerBuildOptions")]
+    public void ScanAssembly_ImageBuildCapabilities_HaveDistinctIdsAndImageTargets(string id, string name)
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly);
+        var capability = Assert.Single(result.Capabilities, capability => capability.CapabilityId == $"Aspire.Hosting/{id}");
+#pragma warning disable ASPIREPIPELINES003
+        var type = AtsTypeMapping.DeriveTypeId(typeof(ContainerImageResource));
+#pragma warning restore ASPIREPIPELINES003
+
+        Assert.Equal(type, capability.TargetTypeId);
+        Assert.Equal(type, capability.ReturnType.TypeId);
+        Assert.Equal(name, capability.MethodName);
+    }
+
+    [Theory]
+    [InlineData(nameof(ResourceFirstRegistryConstraint), typeof(IResource))]
+    [InlineData(nameof(RegistryFirstResourceConstraint), typeof(IContainerRegistry))]
+    public void CreateTypeRef_ResourceBuilderWithMultipleConstraints_PreservesFirstConstraint(string methodName, Type expectedType)
+    {
+        var method = typeof(AtsCapabilityScannerTests).GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Static)!;
+        var builderType = method.GetParameters()[0].ParameterType;
+
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(expectedType),
+            AtsCapabilityScanner.MapToAtsTypeId(builderType));
+        var typeRef = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(builderType));
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(expectedType), typeRef.TypeId);
+        Assert.True(typeRef.IsInterface);
+        Assert.Equal(AtsTypeCategory.Handle, typeRef.Category);
+    }
+
+    [Fact]
+    public void ScanAssembly_ImagePublication_OnlyTargetsRegistries()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly);
+        var publication = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/addRegistryImage");
+
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(IContainerRegistry)), publication.TargetTypeId);
+#pragma warning disable ASPIRECOMPUTE003
+        Assert.Collection(publication.ExpandedTargetTypes,
+            target => Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(ContainerRegistryResource)), target.TypeId));
+#pragma warning restore ASPIRECOMPUTE003
+    }
+
+    [Fact]
+    public void ScanAssembly_ExistingResourceBuilderCapabilities_PreserveCompatibility()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly);
+        var capability = Assert.Single(result.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/withContainerRegistry");
+        var registry = Assert.Single(capability.Parameters, parameter => parameter.Name == "registry");
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(IResource)), registry.Type?.TypeId);
+        Assert.True(registry.Type?.IsInterface);
+
+        var buildOptions = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/withContainerBuildOptions");
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(IResource)), buildOptions.ReturnType.TypeId);
+        Assert.True(buildOptions.ReturnType.IsInterface);
+    }
+
+    private static IResourceBuilder<T> ResourceFirstRegistryConstraint<T>(IResourceBuilder<T> builder)
+        where T : IResource, IContainerRegistry
+    {
+        return builder;
+    }
+
+    [Theory]
+    [InlineData("imageExpression")]
+    [InlineData("tagExpression")]
+    [InlineData("sha256Expression")]
+    [InlineData("registryExpression")]
+    [InlineData("repositoryExpression")]
+    public void ScanAssembly_ImageProperties_AreDeferredExpressionGetters(string property)
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly);
+        var capability = Assert.Single(result.Capabilities,
+            candidate => candidate.CapabilityId.EndsWith($"/DestinationImageResource.{property}", StringComparison.Ordinal));
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, capability.CapabilityKind);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(ReferenceExpression)), capability.ReturnType.TypeId);
+#pragma warning disable ASPIREPIPELINES003
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(DestinationImageResource)), capability.TargetTypeId);
+#pragma warning restore ASPIREPIPELINES003
+    }
+
+    private static IResourceBuilder<T> RegistryFirstResourceConstraint<T>(IResourceBuilder<T> builder)
+        where T : IContainerRegistry, IResource
+    {
+        return builder;
+    }
+
     #region MapToAtsTypeId Tests
 
     [Fact]

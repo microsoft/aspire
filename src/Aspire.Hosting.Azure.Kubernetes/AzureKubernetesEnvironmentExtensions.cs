@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE003 // AzureSubnetResource used in WithSubnet extensions
 
 using Aspire.Hosting.ApplicationModel;
@@ -114,17 +115,24 @@ public static class AzureKubernetesEnvironmentExtensions
 
             foreach (var pushStep in pushSteps)
             {
-                // Ensure push waits for Azure provisioning (ACR endpoint resolution)
-                pushStep.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
+                // Standalone images already depend on their registry's provisioning. Waiting
+                // for all infrastructure would cycle through consumers that require the image.
+                if (pushStep.Resource is not DestinationImageResource)
+                {
+                    pushStep.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
+                }
 
                 // Ensure push waits for push-prereq (ACR login)
                 pushStep.DependsOn(WellKnownPipelineSteps.PushPrereq);
 
-                // Ensure push waits for its corresponding build step
-                var resourceName = pushStep.Resource?.Name;
-                if (resourceName is not null)
+                // Remote image publications have preparation steps, not compute build steps.
+                // Depend on the resource's actual build steps rather than inventing a name.
+                if (pushStep.Resource is { } pushResource)
                 {
-                    pushStep.DependsOn($"build-{resourceName}");
+                    foreach (var buildStep in context.GetSteps(pushResource, WellKnownPipelineTags.BuildCompute))
+                    {
+                        pushStep.DependsOn(buildStep.Name);
+                    }
                 }
             }
         }));

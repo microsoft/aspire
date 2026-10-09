@@ -63,6 +63,7 @@
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="shared/ComputeEnvironmentEndpointResolver.cs" />
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)TestPipelineActivityReporter.cs" Link="shared/TestPipelineActivityReporter.cs" />
+    <Compile Include="$(TestsSharedDir)InMemoryDeploymentStateManager.cs" Link="shared/InMemoryDeploymentStateManager.cs" />
     <Compile Include="$(TestsSharedDir)TestInteractionFileUploadStore.cs" Link="shared/TestInteractionFileUploadStore.cs" />
     <Compile Include="$(TestsSharedDir)TestTerminalService.cs" Link="shared/TestTerminalService.cs" />
     <Compile Include="$(TestsSharedDir)TestFileSystemService.cs" Link="shared/TestFileSystemService.cs" />

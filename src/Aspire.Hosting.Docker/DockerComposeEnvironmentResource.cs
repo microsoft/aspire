@@ -116,6 +116,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"prepare-{Name}",
                 Description = $"Prepares the Docker Compose environment {Name} for deployment.",
+                Tags = [WellKnownPipelineTags.DeployCompute],
                 Action = ctx => PrepareAsync(ctx),
                 DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments]
             };
@@ -127,7 +128,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"docker-compose-up-{Name}",
                 Action = ctx => DockerComposeUpAsync(ctx),
-                Tags = [DockerComposeUpTag],
+                Tags = [DockerComposeUpTag, WellKnownPipelineTags.DeployCompute],
                 DependsOnSteps = [$"prepare-{Name}"]
             };
             dockerComposeUpStep.RequiredBy(WellKnownPipelineSteps.Deploy);

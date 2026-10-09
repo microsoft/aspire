@@ -97,6 +97,12 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             remoteImageName).ConfigureAwait(false);
     }
 
+    public virtual Task<string> ResolveRemoteImageAsync(string imageName, CancellationToken cancellationToken)
+        => throw new DistributedApplicationException($"Container runtime '{Name}' does not support remote image resolution. Use Docker with Buildx.");
+
+    public virtual Task<string> CopyRemoteImageAsync(string sourceImageName, string destinationImageName, CancellationToken cancellationToken)
+        => throw new DistributedApplicationException($"Container runtime '{Name}' does not support lossless remote image copying. Use Docker with Buildx.");
+
     public virtual async Task<ContainerImageConfigInspectionResult> InspectImageConfigAsync(string imageName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imageName);

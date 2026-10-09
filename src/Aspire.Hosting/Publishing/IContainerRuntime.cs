@@ -59,6 +59,53 @@ public interface IContainerRuntime
     Task PushImageAsync(IResource resource, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Resolves a remote image reference to its immutable, fully qualified content reference.
+    /// </summary>
+    /// <param name="imageName">The remote image name, including a tag, digest, or both.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The registry-qualified repository and root manifest digest.</returns>
+    /// <remarks>
+    /// Resolution does not pull a platform-selected image into the daemon image store.
+    /// Resolve a mutable source once before copying it to multiple destinations.
+    /// The default implementation fails explicitly for runtimes without this capability.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var source = await runtime.ResolveRemoteImageAsync("docker.io/library/busybox:latest", cancellationToken);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentException">The source reference is invalid.</exception>
+    /// <exception cref="DistributedApplicationException">The runtime cannot resolve the image.</exception>
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    Task<string> ResolveRemoteImageAsync(string imageName, CancellationToken cancellationToken)
+        => throw new DistributedApplicationException($"Container runtime '{Name}' does not support remote image resolution. Use Docker with Buildx.");
+
+    /// <summary>
+    /// Copies a digest-pinned remote image and verifies the destination content digest.
+    /// </summary>
+    /// <param name="sourceImageName">The immutable source returned by <see cref="ResolveRemoteImageAsync"/>.</param>
+    /// <param name="destinationImageName">The fully qualified destination repository and explicit publication tag.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>The digest-qualified destination reference, without its publication tag.</returns>
+    /// <remarks>
+    /// Preserves the source root manifest or index and its referenced content, including every platform.
+    /// The publication tag is a transport address, not the returned consumer reference.
+    /// Authentication uses the runtime's configured registry credentials.
+    /// Separate OCI referrers or signatures outside the referenced content graph are not copied.
+    /// The default implementation fails explicitly rather than falling back to platform-selected pull/tag/push.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var destination = await runtime.CopyRemoteImageAsync(source, "registry.example.com/tools:publication", cancellationToken);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentException">A reference is invalid or the source is not digest-pinned.</exception>
+    /// <exception cref="DistributedApplicationException">The runtime cannot copy the image or verification fails.</exception>
+    [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    Task<string> CopyRemoteImageAsync(string sourceImageName, string destinationImageName, CancellationToken cancellationToken)
+        => throw new DistributedApplicationException($"Container runtime '{Name}' does not support lossless remote image copying. Use Docker with Buildx.");
+
+    /// <summary>
     /// Logs in to a container registry.
     /// </summary>
     /// <param name="registryServer">The registry server URL.</param>

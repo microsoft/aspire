@@ -5,10 +5,8 @@
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
 using System.Runtime.CompilerServices;
-using System.Text;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
@@ -687,30 +685,7 @@ public static class ContainerResourceBuilderExtensions
         var imageTag = ImageNameGenerator.GenerateImageTag(builder);
         var annotation = new DockerfileBuildAnnotation(fullyQualifiedContextPath, fullyQualifiedDockerfilePath, stage);
 
-        // Add default container build options annotation that uses the DockerfileBuildAnnotation's ImageName and ImageTag
-        var defaultContainerBuildOptions = new ContainerBuildOptionsCallbackAnnotation(context =>
-        {
-            // Use DockerfileBuildAnnotation values if set, otherwise fall back to resource name
-            if (context.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileAnnotation))
-            {
-                context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
-                context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-            }
-            else
-            {
-                context.LocalImageName = context.Resource.Name;
-                context.LocalImageTag = "latest";
-            }
-
-            // Default to linux/amd64 for publish, where outputs must be portable across host
-            // architectures. In run mode, leave the platform unset so docker/podman uses the host
-            // architecture by default and avoids slow/buggy emulation. Users can override either
-            // default via WithContainerBuildOptions(...).
-            if (context.ExecutionContext.IsPublishMode)
-            {
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
-            }
-        });
+        var defaultContainerBuildOptions = DockerfileHelper.CreateDefaultBuildOptions();
 
         // If there's already a ContainerImageAnnotation, don't overwrite it.
         // Instead, store the generated image name and tag on the DockerfileBuildAnnotation.
@@ -840,27 +815,7 @@ public static class ContainerResourceBuilderExtensions
             DockerfileFactory = dockerfileFactory
         };
 
-        // Add default container build options annotation that uses the DockerfileBuildAnnotation's ImageName and ImageTag
-        var defaultContainerBuildOptions = new ContainerBuildOptionsCallbackAnnotation(context =>
-        {
-            // Use DockerfileBuildAnnotation values if set, otherwise fall back to resource name
-            if (context.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileAnnotation))
-            {
-                context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
-                context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-            }
-            else
-            {
-                context.LocalImageName = context.Resource.Name;
-                context.LocalImageTag = "latest";
-            }
-
-            // Publish/run split: see AddDockerfile.
-            if (context.ExecutionContext.IsPublishMode)
-            {
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
-            }
-        });
+        var defaultContainerBuildOptions = DockerfileHelper.CreateDefaultBuildOptions();
 
         // If there's already a ContainerImageAnnotation, don't overwrite it.
         // Instead, store the generated image name and tag on the DockerfileBuildAnnotation.
@@ -1151,12 +1106,7 @@ public static class ContainerResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var annotation = builder.Resource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault();
-
-        if (annotation is null)
-        {
-            throw new InvalidOperationException($"The resource '{builder.Resource.Name}' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildArg.");
-        }
+        var annotation = DockerfileHelper.GetBuildAnnotation(builder.Resource, nameof(WithBuildArg));
 
         annotation.BuildArguments[name] = value;
 
@@ -1282,12 +1232,7 @@ public static class ContainerResourceBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        var annotation = builder.Resource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault();
-
-        if (annotation is null)
-        {
-            throw new InvalidOperationException($"The resource '{builder.Resource.Name}' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildSecret.");
-        }
+        var annotation = DockerfileHelper.GetBuildAnnotation(builder.Resource, nameof(WithBuildSecret));
 
         annotation.BuildSecrets[name] = value.Resource;
 
@@ -1728,47 +1673,7 @@ public static class ContainerResourceBuilderExtensions
         callbackAnnotation = new DockerfileBuilderCallbackAnnotation(callback);
         builder.WithAnnotation(callbackAnnotation);
 
-        // Create a factory that will invoke all callbacks and generate the Dockerfile
-        Func<DockerfileFactoryContext, Task<string>> dockerfileFactory = async factoryContext =>
-        {
-            var dockerfileBuilder = new DockerfileBuilder();
-
-            // Create the context for callbacks
-            var callbackContext = new DockerfileBuilderCallbackContext(
-                resource: factoryContext.Resource,
-                builder: dockerfileBuilder,
-                services: factoryContext.Services,
-                cancellationToken: factoryContext.CancellationToken
-            );
-
-            var annotation = factoryContext.Resource.Annotations.OfType<DockerfileBuilderCallbackAnnotation>().LastOrDefault();
-            if (annotation is not null)
-            {
-                foreach (var cb in annotation.Callbacks)
-                {
-                    await cb(callbackContext).ConfigureAwait(false);
-                }
-            }
-
-            // Convert DockerfileBuilder to string
-            using var memoryStream = new MemoryStream();
-            // Use UTF8 encoding without BOM
-            var utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-            using var writer = new StreamWriter(memoryStream, utf8WithoutBom, leaveOpen: true);
-            writer.NewLine = "\n"; // Use LF line endings for Dockerfiles
-
-            await dockerfileBuilder.WriteAsync(writer, factoryContext.CancellationToken).ConfigureAwait(false);
-            await writer.FlushAsync(factoryContext.CancellationToken).ConfigureAwait(false);
-
-            memoryStream.Position = 0;
-            using var reader = new StreamReader(memoryStream);
-            var dockerfileContent = await reader.ReadToEndAsync(factoryContext.CancellationToken).ConfigureAwait(false);
-
-            return dockerfileContent;
-        };
-
-        // Use the existing WithDockerfileFactory overload that takes a factory
-        return builder.WithDockerfileFactory(contextPath, dockerfileFactory, stage);
+        return builder.WithDockerfileFactory(contextPath, DockerfileHelper.CreateDockerfileFromBuilderAsync, stage);
     }
 
     /// <summary>

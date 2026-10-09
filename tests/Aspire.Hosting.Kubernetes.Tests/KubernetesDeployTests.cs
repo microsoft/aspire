@@ -7,10 +7,12 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
+using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +20,48 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class KubernetesDeployTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("publish")]
+    [InlineData("prepare-env")]
+    public async Task DestinationImageRemainsDeferredUntilHelmPreparation(string step)
+    {
+        const string digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: step);
+        var runtime = new FakeRemoteContainerRuntime
+        {
+            ResolveRemoteImageAsyncCallback = (_, _) => Task.FromResult("docker.io/library/busybox@" + digest),
+            CopyRemoteImageAsyncCallback = (_, destination, _) =>
+                Task.FromResult(destination[..destination.LastIndexOf(':')] + "@" + digest)
+        };
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(runtime);
+        builder.Services.AddSingleton<IDeploymentStateManager, InMemoryDeploymentStateManager>();
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IHelmRunner, FakeHelmRunner>();
+        builder.AddKubernetesEnvironment("env").WithDashboard(false);
+        var source = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var image = builder.AddContainerRegistry("registry", "registry.example.com").AddImage("published", source);
+        builder.AddContainer("consumer", "busybox")
+            .WithReference(image)
+            .WithEnvironment("SANDBOX_IMAGE", image);
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(step == "publish" ? 0 : 1, runtime.RemoteCopyCalls.Count);
+        var values = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+        var config = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "consumer", "config.yaml"));
+        if (step == "publish")
+        {
+            await Verify(values, "yaml").AppendContentAsFile(config, "yaml");
+        }
+        else
+        {
+            var resolved = await File.ReadAllTextAsync(Path.Combine(workspace.Path, HelmDeploymentEngine.GetDeployValuesFileName("env")));
+            await Verify(values, "yaml").AppendContentAsFile(config, "yaml").AppendContentAsFile(resolved, "yaml")
+                .ScrubLinesWithReplace(line => Regex.Replace(line, @"aspire-deploy-\d{14}", "aspire-deploy-TIMESTAMP"));
+        }
+    }
+
     [Fact]
     public void AddKubernetesEnvironment_AddsDefaultHelmEngine()
     {

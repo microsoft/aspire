@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 
 using Aspire.Hosting.ApplicationModel;
 
-public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerRuntimeResolver
+public class FakeContainerRuntime(bool shouldFail = false, bool isRunning = true, string name = "fake-runtime") : IContainerRuntime, IContainerRuntimeResolver
 {
     private int _checkIfRunningCallCount;
     private int _resolveAsyncCallCount;

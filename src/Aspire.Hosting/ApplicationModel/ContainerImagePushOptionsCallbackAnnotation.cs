@@ -19,6 +19,11 @@ namespace Aspire.Hosting.ApplicationModel;
 public sealed class ContainerImagePushOptionsCallbackAnnotation : IResourceAnnotation
 {
     /// <summary>
+    /// Identifies a generated image label that is replaced on the next deployment.
+    /// </summary>
+    internal bool IsDefaultImageTag { get; init; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ContainerImagePushOptionsCallbackAnnotation"/> class.
     /// </summary>
     /// <param name="callback">The synchronous callback to configure push options.</param>

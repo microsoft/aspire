@@ -1,0 +1,16 @@
+﻿{
+  Deferred: {
+    WORKER_IMAGE_IMAGE: {published-image.image},
+    WORKER_IMAGE_REGISTRY: {published-image.registryEndpoint},
+    WORKER_IMAGE_REPOSITORY: {published-image.repository},
+    WORKER_IMAGE_SHA256: {published-image.sha256},
+    WORKER_IMAGE_TAG: {published-image.tag}
+  },
+  Resolved: {
+    WORKER_IMAGE_IMAGE: registry.example.com/team/published-image@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+    WORKER_IMAGE_REGISTRY: registry.example.com,
+    WORKER_IMAGE_REPOSITORY: team/published-image,
+    WORKER_IMAGE_SHA256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+    WORKER_IMAGE_TAG: publication-tag
+  }
+}

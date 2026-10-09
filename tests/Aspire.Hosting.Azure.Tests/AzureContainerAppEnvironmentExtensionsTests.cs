@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
@@ -135,6 +136,147 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         var exception = Assert.Throws<InvalidOperationException>(() => containerAppEnvironment.Resource.ContainerRegistry);
         Assert.Contains("not an Azure Container Registry", exception.Message);
         Assert.Contains("env", exception.Message);
+    }
+
+    [Fact]
+    public async Task UnassociatedImageAdoptsGeneratedContainerRegistryWithoutComputeResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox:v1");
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        using var app = builder.Build();
+
+        Assert.Empty((await ManifestUtils.GetManifest(image.Resource))["publications"]!.AsObject());
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var registry = Assert.IsType<AzureContainerRegistryResource>(environment.Resource.ContainerRegistry);
+        var reference = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>());
+        Assert.Same(image.Resource, reference.Source);
+        Assert.Same(registry, reference.Parent);
+        Assert.Equal("{tools-env-acr.image}", reference.ValueExpression);
+        Assert.Empty(image.Resource.Annotations.OfType<DeploymentTargetAnnotation>());
+        Assert.Empty(app.Services.GetRequiredService<DistributedApplicationModel>().GetComputeResources());
+
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        await Verify(manifest.ToJsonString(new() { WriteIndented = true }), "json");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnassociatedImageAdoptsExplicitEnvironmentRegistryInsteadOfRemovedDefault(bool configureInBeforeStart)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var registry = builder.AddAzureContainerRegistry("selected");
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var generated = Assert.IsType<AzureContainerRegistryResource>(environment.Resource.ContainerRegistry);
+        if (configureInBeforeStart)
+        {
+            builder.OnBeforeStart((_, _) =>
+            {
+                environment.WithContainerRegistry(registry);
+                return Task.CompletedTask;
+            });
+        }
+        else
+        {
+            environment.WithContainerRegistry(registry);
+        }
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal(["tools-selected"], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Same(registry.Resource, Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>()).Parent);
+        Assert.Same(registry.Resource, environment.Resource.ContainerRegistry);
+        Assert.False(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.Contains(generated));
+        Assert.Same(registry.Resource, Assert.Single(environment.Resource.Annotations.OfType<ContainerImageRegistryTargetAnnotation>()).Registry);
+    }
+
+    [Fact]
+    public async Task ImageWithExplicitDestinationsDoesNotAdoptAnyEnvironmentRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var first = builder.AddContainerRegistry("first", "first.example.com");
+        var second = builder.AddContainerRegistry("second", "second.example.com");
+        builder.AddAzureContainerAppEnvironment("first-env");
+        builder.AddAzureContainerAppEnvironment("second-env");
+        var firstImage = first.AddImage("first-tools", image);
+        var secondImage = second.AddImage("second-tools", image);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal(["first-tools", "second-tools"], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal([firstImage.Resource, secondImage.Resource], app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>().ToArray());
+        Assert.Same(first.Resource, firstImage.Resource.Parent);
+        Assert.Same(second.Resource, secondImage.Resource.Parent);
+    }
+
+    [Fact]
+    public async Task UnassociatedImageRejectsMultipleGeneratedEnvironmentRegistries()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox");
+        builder.AddAzureContainerAppEnvironment("second-env");
+        builder.AddAzureContainerAppEnvironment("first-env");
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Image artifact(s) 'tools' have multiple default container registries available ('first-env-acr', 'second-env-acr'). " +
+            "Create each destination explicitly using 'registry.AddImage(name, image)'.",
+            exception.Message);
+        Assert.Empty((await ManifestUtils.GetManifest(image.Resource))["publications"]!.AsObject());
+    }
+
+    [Fact]
+    public async Task EnvironmentsUsingSameExplicitRegistryProvideOneImageDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var registry = builder.AddAzureContainerRegistry("shared");
+        builder.AddAzureContainerAppEnvironment("second-env").WithContainerRegistry(registry);
+        builder.AddAzureContainerAppEnvironment("first-env").WithContainerRegistry(registry);
+        using var app = builder.Build();
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal(["tools-shared"], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Same(registry.Resource, Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>()).Parent);
+        Assert.Equal([registry.Resource], app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<AzureContainerRegistryResource>().ToArray());
+    }
+
+    [Fact]
+    public async Task RepeatedEnvironmentPreparationReplacesInferredImageRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var registry = builder.AddAzureContainerRegistry("selected");
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        var generated = Assert.IsType<AzureContainerRegistryResource>(environment.Resource.ContainerRegistry);
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        var oldReference = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>());
+        Assert.Same(generated, oldReference.Parent);
+
+        environment.WithContainerRegistry(registry);
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal(["tools-selected"], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Same(registry.Resource, Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>()).Parent);
+        Assert.Same(registry.Resource, Assert.Single(environment.Resource.Annotations.OfType<ContainerImageRegistryTargetAnnotation>()).Registry);
+        Assert.Throws<InvalidOperationException>(() => oldReference.ValueExpression);
     }
 
     [Fact]

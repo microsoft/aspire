@@ -111,17 +111,23 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
                 }
 
-                var computeResources = context.Model.Resources
-                        .Where(r => r.RequiresImageBuild())
-                        .ToList();
+                var timeProvider = context.Services.GetRequiredService<TimeProvider>();
+                var uniqueDeployTag = "aspire-deploy-" + timeProvider.GetUtcNow().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
 
-                var uniqueDeployTag = $"aspire-deploy-{DateTime.UtcNow:yyyyMMddHHmmss}";
+                context.Logger.LogInformation("Setting default deploy tag '{Tag}' for image publications.", uniqueDeployTag);
 
-                context.Logger.LogInformation("Setting default deploy tag '{Tag}' for compute resource(s).", uniqueDeployTag);
-
-                // Resources that were built, will get this tag unless they have a custom ContainerImagePushOptionsCallbackAnnotation
-                foreach (var resource in context.Model.GetBuildResources())
+                foreach (var resource in context.Model.GetBuildResources()
+                    .Concat(context.Model.Resources.OfType<ContainerImageResource>().Where(resource => !resource.IsExcludedFromPublish()))
+                    .Distinct())
                 {
+                    // Refresh only pipeline-generated defaults. User callbacks remain authoritative,
+                    // including callbacks added after a previous execution.
+                    foreach (var generated in resource.Annotations.OfType<ContainerImagePushOptionsCallbackAnnotation>()
+                        .Where(annotation => annotation.IsDefaultImageTag).ToArray())
+                    {
+                        resource.Annotations.Remove(generated);
+                    }
+
                     if (resource.Annotations.OfType<ContainerImagePushOptionsCallbackAnnotation>().Any())
                     {
                         continue;
@@ -130,7 +136,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     resource.Annotations.Add(new ContainerImagePushOptionsCallbackAnnotation(context =>
                     {
                         context.Options.RemoteImageTag = uniqueDeployTag;
-                    }));
+                    })
+                    {
+                        IsDefaultImageTag = true
+                    });
                 }
             }
         });

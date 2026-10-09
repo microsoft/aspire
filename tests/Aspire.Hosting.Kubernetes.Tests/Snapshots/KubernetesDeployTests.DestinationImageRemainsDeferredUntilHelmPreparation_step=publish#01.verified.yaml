@@ -1,0 +1,16 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "consumer-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "consumer"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  PUBLISHED_IMAGE: "{{ .Values.config.consumer.PUBLISHED_IMAGE }}"
+  PUBLISHED_TAG: "{{ .Values.config.consumer.PUBLISHED_TAG }}"
+  PUBLISHED_SHA256: "{{ .Values.config.consumer.PUBLISHED_SHA256 }}"
+  PUBLISHED_REGISTRY: "{{ .Values.config.consumer.PUBLISHED_REGISTRY }}"
+  PUBLISHED_REPOSITORY: "{{ .Values.config.consumer.PUBLISHED_REPOSITORY }}"
+  SANDBOX_IMAGE: "{{ .Values.config.consumer.SANDBOX_IMAGE }}"

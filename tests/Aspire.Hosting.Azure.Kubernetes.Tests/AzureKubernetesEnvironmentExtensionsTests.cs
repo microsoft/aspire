@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES003
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -11,11 +12,77 @@ using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task RemoteImagePushUsesPreparationWithoutInventingAComputeBuildStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var source = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var environment = builder.AddAzureKubernetesEnvironment("aks");
+        var registry = Assert.IsType<AzureContainerRegistryResource>(
+            Assert.Single(environment.Resource.Annotations.OfType<ContainerRegistryReferenceAnnotation>()).Registry);
+        var image = builder.CreateResourceBuilder(registry).AddImage("published", source);
+        builder.AddContainer("consumer", "busybox")
+            .WithReference(image)
+            .WithEnvironment("SANDBOX_IMAGE", image)
+            .PublishAsKubernetesService(_ => { });
+        IReadOnlyList<PipelineStep> steps = [];
+        builder.Pipeline.AddPipelineConfiguration(context =>
+        {
+            steps = context.Steps;
+            return Task.CompletedTask;
+        });
+        builder.Services.Configure<PipelineOptions>(options => options.Step = WellKnownPipelineSteps.Diagnostics);
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        await app.Services.GetRequiredService<IDistributedApplicationPipeline>().ExecuteAsync(
+            new PipelineContext(app.Services.GetRequiredService<DistributedApplicationModel>(),
+                app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+                app.Services, NullLogger.Instance, default));
+
+        var push = Assert.Single(steps, step => step.Name == "push-published");
+        Assert.Equal(
+            new[] { "prepare-image-tools", "provision-aks-acr", WellKnownPipelineSteps.PushPrereq }.Order(StringComparer.Ordinal),
+            push.DependsOnSteps.Order(StringComparer.Ordinal));
+        Assert.All(push.DependsOnSteps, name => Assert.Single(steps, step => step.Name == name));
+        var prepare = Assert.Single(steps, step => step.Name == $"prepare-{environment.Resource.KubernetesEnvironment.Name}");
+        Assert.Contains(push.Name, prepare.DependsOnSteps);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnassociatedImageAdoptsEffectiveAksRegistry(bool overrideRegistry)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var image = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var registry = builder.AddAzureContainerRegistry("selected");
+        var environment = builder.AddAzureKubernetesEnvironment("aks");
+        var generated = Assert.IsType<AzureContainerRegistryResource>(
+            Assert.Single(environment.Resource.Annotations.OfType<ContainerRegistryReferenceAnnotation>()).Registry);
+        if (overrideRegistry)
+        {
+            environment.WithContainerRegistry(registry);
+        }
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var selected = overrideRegistry ? registry.Resource : generated;
+        var manifest = await ManifestUtils.GetManifest(image.Resource);
+        Assert.Equal([$"tools-{selected.Name}"], manifest["publications"]!.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Same(selected, Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<DestinationImageResource>()).Parent);
+        Assert.Same(selected, Assert.Single(environment.Resource.Annotations.OfType<ContainerImageRegistryTargetAnnotation>()).Registry);
+        Assert.Equal(!overrideRegistry, app.Services.GetRequiredService<DistributedApplicationModel>().Resources.Contains(generated));
+    }
+
     [Fact]
     public async Task AddAzureKubernetesEnvironment_BasicConfiguration()
     {

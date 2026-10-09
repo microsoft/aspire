@@ -3,11 +3,14 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIRECOMPUTE003
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +19,46 @@ namespace Aspire.Hosting.Docker.Tests;
 
 public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("publish")]
+    [InlineData("prepare-compose")]
+    public async Task DestinationImageRemainsDeferredUntilDeploymentPreparation(string step)
+    {
+        const string digest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: step);
+        var runtime = new FakeRemoteContainerRuntime
+        {
+            ResolveRemoteImageAsyncCallback = (_, _) => Task.FromResult("docker.io/library/busybox@" + digest),
+            CopyRemoteImageAsyncCallback = (_, destination, _) =>
+                Task.FromResult(destination[..destination.LastIndexOf(':')] + "@" + digest)
+        };
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(runtime);
+        builder.Services.AddSingleton<IDeploymentStateManager, InMemoryDeploymentStateManager>();
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("compose").WithDashboard(false);
+        var source = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var image = builder.AddContainerRegistry("registry", "registry.example.com").AddImage("published", source);
+        builder.AddContainer("consumer", "busybox")
+            .WithReference(image)
+            .WithEnvironment("SANDBOX_IMAGE", image);
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.Equal(step == "publish" ? 0 : 1, runtime.RemoteCopyCalls.Count);
+        var compose = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        if (step == "publish")
+        {
+            await Verify(compose, "yaml");
+        }
+        else
+        {
+            var environment = await File.ReadAllTextAsync(Path.Combine(workspace.Path, ".env.Production"));
+            await Verify(compose, "yaml").AppendContentAsFile(environment, "env")
+                .ScrubLinesWithReplace(line => Regex.Replace(line, @"aspire-deploy-\d{14}", "aspire-deploy-TIMESTAMP"));
+        }
+    }
+
     [Fact]
     public async Task PublishAsync_GeneratesValidDockerComposeFile()
     {

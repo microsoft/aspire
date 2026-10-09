@@ -1,0 +1,7 @@
+﻿{
+  image: localhost:5000/team/nested/published@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+  registryEndpoint: localhost:5000,
+  repository: team/nested/published,
+  sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+  tag: destination-tag
+}

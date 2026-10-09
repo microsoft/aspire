@@ -1,0 +1,16 @@
+﻿{
+  Deferred: {
+    PUBLISHED_IMAGE_IMAGE: {published-image.image},
+    PUBLISHED_IMAGE_REGISTRY: {published-image.registryEndpoint},
+    PUBLISHED_IMAGE_REPOSITORY: {published-image.repository},
+    PUBLISHED_IMAGE_SHA256: {published-image.sha256},
+    PUBLISHED_IMAGE_TAG: {published-image.tag}
+  },
+  Resolved: {
+    PUBLISHED_IMAGE_IMAGE: registry.example.com/team/published-image@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+    PUBLISHED_IMAGE_REGISTRY: registry.example.com,
+    PUBLISHED_IMAGE_REPOSITORY: team/published-image,
+    PUBLISHED_IMAGE_SHA256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef,
+    PUBLISHED_IMAGE_TAG: publication-tag
+  }
+}

@@ -16,19 +16,31 @@ internal sealed partial class ContainerReferenceParser
             throw new ArgumentOutOfRangeException(nameof(input), "repository name must have at least one component");
         }
 
-        var match = ImageNameRegex().Match(input);
-
-        if (!match.Success)
+        if (!TryParse(input, out var reference))
         {
             throw new ArgumentOutOfRangeException(nameof(input), input, "invalid reference format: could not parse container image name");
         }
 
-        return new(
+        return reference;
+    }
+
+    internal static bool TryParse(string input, out ContainerReference reference)
+    {
+        var match = ImageNameRegex().Match(input);
+        if (!match.Success)
+        {
+            reference = default;
+            return false;
+        }
+
+        reference = new(
             GetGroupValueOrDefault(match.Groups["registry"]),
             match.Groups["image"].Value,
             GetGroupValueOrDefault(match.Groups["tag"]),
             GetGroupValueOrDefault(match.Groups["digest"])
             );
+
+        return true;
 
         static string? GetGroupValueOrDefault(Group group)
             => group.Success ? group.Value : default;

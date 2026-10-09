@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -35,6 +36,9 @@ public class AzureContainerAppEnvironmentResource :
     public AzureContainerAppEnvironmentResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
         : base(name, configureInfrastructure)
     {
+        // Resolve through the facade's selection after preparation, not the generated ACR captured at registration.
+        Annotations.Add(new ContainerImageRegistryTargetAnnotation(GetContainerRegistry));
+
         // Add pipeline step annotation to create steps and expand deployment target steps
         Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
         {

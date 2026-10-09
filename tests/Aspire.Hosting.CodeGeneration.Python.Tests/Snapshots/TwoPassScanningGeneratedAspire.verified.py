@@ -1648,16 +1648,22 @@ class MergeRouteParameters(typing.TypedDict, total=False):
     middleware: str
 
 
-class BindMountParameters(typing.TypedDict, total=False):
-    source: typing.Required[str]
-    target: typing.Required[str]
-    is_read_only: bool
-
-
 class DockerfileParameters(typing.TypedDict, total=False):
     context_path: typing.Required[str]
     dockerfile_path: str
     stage: str
+
+
+class DockerfileBuilderParameters(typing.TypedDict, total=False):
+    context_path: typing.Required[str]
+    callback: typing.Required[typing.Callable[[DockerfileBuilderCallbackContext], None]]
+    stage: str
+
+
+class BindMountParameters(typing.TypedDict, total=False):
+    source: typing.Required[str]
+    target: typing.Required[str]
+    is_read_only: bool
 
 
 class DockerfileFactoryParameters(typing.TypedDict, total=False):
@@ -1682,12 +1688,6 @@ class ContainerFilesCallbackParameters(typing.TypedDict, total=False):
     destination_path: typing.Required[str]
     callback: typing.Required[typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]]
     options: ContainerFilesOptions
-
-
-class DockerfileBuilderParameters(typing.TypedDict, total=False):
-    context_path: typing.Required[str]
-    callback: typing.Required[typing.Callable[[DockerfileBuilderCallbackContext], None]]
-    stage: str
 
 
 class McpServerParameters(typing.TypedDict, total=False):
@@ -2292,8 +2292,33 @@ class AbstractConfigurationSection:
         )
 
 
-class AbstractContainerRegistry(abc.ABC):
-    """Abstract base class for AbstractContainerRegistry."""
+class AbstractContainerRegistry:
+    """Type class for AbstractContainerRegistry."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractContainerRegistry(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def add_image(self, name: str, image: ContainerImageResource, **kwargs: typing.Unpack["DestinationImageResourceKwargs"]) -> DestinationImageResource:  # type: ignore
+        """Adds a named publication destination for an image artifact in a container registry."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['image'] = image
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/addRegistryImage',
+            rpc_args,
+            kwargs,
+        )
+        return typing.cast(DestinationImageResource, result)
+
 
 class DistributedApplicationBuilder:
     '''Type class for DistributedApplicationBuilder.'''
@@ -2387,6 +2412,17 @@ class DistributedApplicationBuilder:
             rpc_args,
         )
         return typing.cast(DistributedApplication, result)
+
+    def add_container_image(self, name: str, **kwargs: typing.Unpack["ContainerImageResourceKwargs"]) -> ContainerImageResource:  # type: ignore
+        """Adds a standalone image artifact whose source is configured separately."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/addContainerImage',
+            rpc_args,
+            kwargs,
+        )
+        return typing.cast(ContainerImageResource, result)
 
     def add_container_registry(self, name: str, endpoint: str | ParameterResource, *, repository: str | ParameterResource | None = None, **kwargs: typing.Unpack["ContainerRegistryResourceKwargs"]) -> ContainerRegistryResource:  # type: ignore
         """Adds a container registry resource"""
@@ -7667,6 +7703,11 @@ class AbstractResourceWithContainerFiles(AbstractResource):
         """Removes any container files source annotation from the resource being built."""
 
 
+T_AbstractResourceWithCustomWithReferenceTSelfT = typing.TypeVar('T_AbstractResourceWithCustomWithReferenceTSelfT')
+class AbstractResourceWithCustomWithReferenceTSelfT(AbstractResource, typing.Generic[T_AbstractResourceWithCustomWithReferenceTSelfT]):
+    """Abstract base class for AbstractResourceWithCustomWithReferenceTSelfT interface."""
+
+
 class AbstractResourceWithEndpoints(AbstractResource):
     """Abstract base class for AbstractResourceWithEndpoints interface."""
 
@@ -7739,7 +7780,7 @@ class AbstractResourceWithEnvironment(AbstractResource):
         """Configures OTLP telemetry export"""
 
     @abc.abstractmethod
-    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> typing.Self:
+    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue) -> typing.Self:
         """Sets an environment variable"""
 
     @abc.abstractmethod
@@ -7781,6 +7822,19 @@ class AbstractResourceWithEnvironment(AbstractResource):
     @abc.abstractmethod
     def with_env_vars(self, vars: typing.Mapping[str, str]) -> typing.Self:
         """Sets environment variables"""
+
+
+class AbstractResourceWithoutLifetime(AbstractResource):
+    """Abstract base class for AbstractResourceWithoutLifetime interface."""
+
+
+class AbstractResourceWithParent(AbstractResource):
+    """Abstract base class for AbstractResourceWithParent interface."""
+
+
+T_AbstractResourceWithParentTT = typing.TypeVar('T_AbstractResourceWithParentTT')
+class AbstractResourceWithParentTT(AbstractResourceWithParent, typing.Generic[T_AbstractResourceWithParentTT]):
+    """Abstract base class for AbstractResourceWithParentTT interface."""
 
 
 class AbstractResourceWithProbes(AbstractResource):
@@ -8995,6 +9049,158 @@ class _BaseResource(AbstractResource):
             raise TypeError(f"Unexpected keyword arguments: {list(kwargs.keys())}")
 
 
+class ContainerImageResourceKwargs(_BaseResourceKwargs, total=False):
+    """ContainerImageResource options."""
+
+    image_source: str
+    dockerfile: str | DockerfileParameters
+    dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
+    build_arg: tuple[str, str | ParameterResource]
+    build_secret: tuple[str, ParameterResource]
+    container_build_options: typing.Callable[[ContainerBuildOptionsCallbackContext], None]
+
+class ContainerImageResource(_BaseResource, AbstractResourceWithoutLifetime):
+    """ContainerImageResource resource."""
+
+    def __repr__(self) -> str:
+        return "ContainerImageResource(handle={self._handle.handle_id})"
+
+    def with_image_source(self, image: str) -> typing.Self:
+        """Configures an existing registry image as the source of an image artifact."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['image'] = image
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerImageSource',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_dockerfile(self, context_path: str, *, dockerfile_path: str | None = None, stage: str | None = None) -> typing.Self:
+        """Configures a Dockerfile build as the source of an image artifact."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['contextPath'] = context_path
+        if dockerfile_path is not None:
+            rpc_args['dockerfilePath'] = dockerfile_path
+        if stage is not None:
+            rpc_args['stage'] = stage
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerImageDockerfile',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_dockerfile_builder(self, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None = None) -> typing.Self:
+        """Configures an image artifact's Dockerfile using an asynchronous builder callback."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['contextPath'] = context_path
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
+        if stage is not None:
+            rpc_args['stage'] = stage
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerImageDockerfileBuilder',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_build_arg(self, name: str, value: str | ParameterResource) -> typing.Self:
+        """Adds an argument to an image artifact's Dockerfile build."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['value'] = value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerImageBuildArg',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_build_secret(self, name: str, value: ParameterResource) -> typing.Self:
+        """Adds a parameter-backed secret to an image artifact's Dockerfile build."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['value'] = value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerImageBuildSecret',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_container_build_options(self, callback: typing.Callable[[ContainerBuildOptionsCallbackContext], None]) -> typing.Self:
+        """Configures an image artifact's container build options using an asynchronous callback."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext",))
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withContainerImageBuildOptions',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ContainerImageResourceKwargs]) -> None:
+        if _image_source := kwargs.pop("image_source", None):
+            if _validate_type(_image_source, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["image"] = typing.cast(str, _image_source)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageSource', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_source'. Expected: str")
+        if _dockerfile := kwargs.pop("dockerfile", None):
+            if _validate_type(_dockerfile, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["contextPath"] = typing.cast(str, _dockerfile)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageDockerfile', rpc_args))
+            elif _validate_dict_types(_dockerfile, DockerfileParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["contextPath"] = typing.cast(DockerfileParameters, _dockerfile)["context_path"]
+                rpc_args["dockerfilePath"] = typing.cast(DockerfileParameters, _dockerfile).get("dockerfile_path")
+                rpc_args["stage"] = typing.cast(DockerfileParameters, _dockerfile).get("stage")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageDockerfile', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'dockerfile'. Expected: str or DockerfileParameters")
+        if _dockerfile_builder := kwargs.pop("dockerfile_builder", None):
+            if _validate_tuple_types(_dockerfile_builder, (str, typing.Callable[[DockerfileBuilderCallbackContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["contextPath"] = typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageDockerfileBuilder', rpc_args))
+            elif _validate_dict_types(_dockerfile_builder, DockerfileBuilderParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["contextPath"] = typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["context_path"]
+                rpc_args["callback"] = client.register_callback(typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
+                rpc_args["stage"] = typing.cast(DockerfileBuilderParameters, _dockerfile_builder).get("stage")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageDockerfileBuilder', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'dockerfile_builder'. Expected: (str, Callable[[DockerfileBuilderCallbackContext], None]) or DockerfileBuilderParameters")
+        if _build_arg := kwargs.pop("build_arg", None):
+            if _validate_tuple_types(_build_arg, (str, str | ParameterResource)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["name"] = typing.cast(tuple[str, str | ParameterResource], _build_arg)[0]
+                rpc_args["value"] = typing.cast(tuple[str, str | ParameterResource], _build_arg)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageBuildArg', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'build_arg'. Expected: (str, str | ParameterResource)")
+        if _build_secret := kwargs.pop("build_secret", None):
+            if _validate_tuple_types(_build_secret, (str, ParameterResource)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["name"] = typing.cast(tuple[str, ParameterResource], _build_secret)[0]
+                rpc_args["value"] = typing.cast(tuple[str, ParameterResource], _build_secret)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageBuildSecret', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'build_secret'. Expected: (str, ParameterResource)")
+        if _container_build_options := kwargs.pop("container_build_options", None):
+            if _validate_type(_container_build_options, typing.Callable[[ContainerBuildOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerBuildOptionsCallbackContext], None], _container_build_options), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext",))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerImageBuildOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'container_build_options'. Expected: Callable[[ContainerBuildOptionsCallbackContext], None]")
+        super().__init__(handle, client, **kwargs)
+
+
 class ContainerRegistryResourceKwargs(_BaseResourceKwargs, total=False):
     """ContainerRegistryResource options."""
 
@@ -9004,6 +9210,18 @@ class ContainerRegistryResource(_BaseResource, AbstractContainerRegistry):
 
     def __repr__(self) -> str:
         return "ContainerRegistryResource(handle={self._handle.handle_id})"
+
+    def add_image(self, name: str, image: ContainerImageResource, **kwargs: typing.Unpack[DestinationImageResourceKwargs]) -> DestinationImageResource:  # type: ignore
+        """Adds a named publication destination for an image artifact in a container registry."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['image'] = image
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/addRegistryImage',
+            rpc_args,
+            kwargs,
+        )
+        return typing.cast(DestinationImageResource, result)
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ContainerRegistryResourceKwargs]) -> None:
         super().__init__(handle, client, **kwargs)
@@ -9035,7 +9253,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     mcp_server: McpServerParameters | typing.Literal[True]
     otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     publish_as_connection_string: typing.Literal[True]
-    env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
+    env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
@@ -9359,7 +9577,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> typing.Self:
+    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue) -> typing.Self:
         """Sets an environment variable"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -10045,13 +10263,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             else:
                 raise TypeError("Invalid type for option 'publish_as_connection_string'. Expected: Literal[True]")
         if _env := kwargs.pop("env", None):
-            if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
+            if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[0]
-                rpc_args["value"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[1]
+                rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue], _env)[0]
+                rpc_args["value"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue], _env)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironment', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)")
+                raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue)")
         if _env_callback := kwargs.pop("env_callback", None):
             if _validate_type(_env_callback, typing.Callable[[EnvironmentCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10388,7 +10606,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     replicas: int
     disable_forwarded_headers: typing.Literal[True]
     publish_as_docker_file: typing.Callable[[ContainerResource], None] | typing.Literal[True]
-    env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
+    env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
@@ -10490,7 +10708,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> typing.Self:
+    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue) -> typing.Self:
         """Sets an environment variable"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -11024,13 +11242,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             else:
                 raise TypeError("Invalid type for option 'publish_as_docker_file'. Expected: Callable[[ContainerResource], None] or Literal[True]")
         if _env := kwargs.pop("env", None):
-            if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
+            if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[0]
-                rpc_args["value"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[1]
+                rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue], _env)[0]
+                rpc_args["value"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue], _env)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironment', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)")
+                raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue)")
         if _env_callback := kwargs.pop("env_callback", None):
             if _validate_type(_env_callback, typing.Callable[[EnvironmentCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11391,6 +11609,65 @@ class CSharpAppResource(ProjectResource):
         super().__init__(handle, client, **kwargs)
 
 
+class DestinationImageResourceKwargs(_BaseResourceKwargs, total=False):
+    """DestinationImageResource options."""
+
+
+class DestinationImageResource(_BaseResource, AbstractResourceWithoutLifetime, AbstractResourceWithParentTT["AbstractResource"], AbstractExpressionValue, AbstractValueWithReferences, AbstractResourceWithCustomWithReferenceTSelfT["DestinationImageResource"]):
+    """DestinationImageResource resource."""
+
+    def __repr__(self) -> str:
+        return "DestinationImageResource(handle={self._handle.handle_id})"
+
+    @_cached_property
+    def image_expression(self) -> ReferenceExpression:
+        """Gets the complete, digest-qualified destination image reference."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DestinationImageResource.imageExpression',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def tag_expression(self) -> ReferenceExpression:
+        """Gets the tag used for the verified publication, not the source image tag."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DestinationImageResource.tagExpression',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def sha256_expression(self) -> ReferenceExpression:
+        """Gets the verified root SHA-256 digest without the algorithm prefix."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DestinationImageResource.sha256Expression',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def registry_expression(self) -> ReferenceExpression:
+        """Gets the destination registry authority, including its port when specified."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DestinationImageResource.registryExpression',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def repository_expression(self) -> ReferenceExpression:
+        """Gets the full destination repository path, including the registry namespace but not its authority."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/DestinationImageResource.repositoryExpression',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[DestinationImageResourceKwargs]) -> None:
+        super().__init__(handle, client, **kwargs)
+
+
 class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     """ExecutableResource options."""
 
@@ -11399,7 +11676,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     working_dir: str
     mcp_server: McpServerParameters | typing.Literal[True]
     otlp_exporter: OtlpProtocol | None | typing.Literal[True]
-    env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
+    env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
@@ -11499,7 +11776,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> typing.Self:
+    def with_env(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue) -> typing.Self:
         """Sets an environment variable"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -12008,13 +12285,13 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             else:
                 raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _env := kwargs.pop("env", None):
-            if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
+            if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[0]
-                rpc_args["value"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[1]
+                rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue], _env)[0]
+                rpc_args["value"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue], _env)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironment', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)")
+                raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | DestinationImageResource | AbstractExpressionValue)")
         if _env_callback := kwargs.pop("env_callback", None):
             if _validate_type(_env_callback, typing.Callable[[EnvironmentCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -13062,6 +13339,7 @@ _register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", AbstractConfigurationSection)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerRegistry", AbstractContainerRegistry)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", AbstractDistributedApplicationEventing)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", AbstractDistributedApplicationPipeline)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", AbstractExecutionConfigurationBuilder)
@@ -13143,10 +13421,12 @@ _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Host
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", TestResourceContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", UpdateCommandStateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource", _BaseResource)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageResource", ContainerImageResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource", ContainerRegistryResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", ContainerResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", ProjectResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource", CSharpAppResource)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DestinationImageResource", DestinationImageResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", ExecutableResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource", DotnetToolResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ExternalServiceResource", ExternalServiceResource)

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIRECOMPUTE003
 
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -11,6 +13,44 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class ResourceDependencyTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task DestinationImageReferencesIncludeSourceAndSelectedRegistry(bool environmentOnly, bool directOnly)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var source = builder.AddContainerImage("tools").WithImageSource("busybox");
+        var registry = builder.AddContainerRegistry("selected", "registry.example.com");
+        var image = registry.AddImage("published", source);
+        builder.AddContainerRegistry("unrelated", "other.example.com").AddImage("other", source);
+        var consumer = builder.AddContainer("consumer", "busybox");
+        if (environmentOnly)
+        {
+            consumer.WithEnvironment("IMAGE", image);
+        }
+        else
+        {
+            consumer.WithReference(image).WithReference(image);
+            Assert.Single(consumer.Resource.Annotations.OfType<DestinationImageReferenceAnnotation>());
+        }
+
+        var options = new ResourceDependencyDiscoveryOptions
+        {
+            DiscoveryMode = directOnly ? ResourceDependencyDiscoveryMode.DirectOnly : ResourceDependencyDiscoveryMode.Recursive
+        };
+        var dependencies = await consumer.Resource.GetResourceDependenciesAsync(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish), options);
+
+        Assert.Equal(new[] { image.Resource.Name, registry.Resource.Name, source.Resource.Name }.Order(StringComparer.Ordinal),
+            dependencies.Select(resource => resource.Name).Order(StringComparer.Ordinal));
+        if (!environmentOnly)
+        {
+            Assert.Equal(5, consumer.Resource.Annotations.OfType<EnvironmentCallbackAnnotation>().Count());
+        }
+    }
+
     [Fact]
     public async Task DirectReferenceViaWithReferenceIsIncluded()
     {

@@ -1,0 +1,15 @@
+﻿{
+  Manifest:
+{
+  "type": "containerimage.v0",
+  "build": {
+    "context": ".",
+    "dockerfile": "tools.Dockerfile"
+  },
+  "publications": {}
+},
+  Dockerfile:
+FROM scratch
+COPY payload /payload
+
+}

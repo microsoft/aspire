@@ -1,0 +1,28 @@
+﻿{
+  "type": "containerimage.v0",
+  "build": {
+    "context": "tools",
+    "dockerfile": "tools/custom.Dockerfile",
+    "stage": "release",
+    "args": {
+      "VERSION": "{version.value}",
+      "ENABLED": "true"
+    },
+    "secrets": {
+      "TOKEN": {
+        "type": "env",
+        "value": "{token.value}"
+      }
+    }
+  },
+  "publications": {
+    "first-tools": {
+      "registry": "first",
+      "image": "{first-tools.image}"
+    },
+    "second-tools": {
+      "registry": "second",
+      "image": "{second-tools.image}"
+    }
+  }
+}

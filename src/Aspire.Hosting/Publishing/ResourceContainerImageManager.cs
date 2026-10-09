@@ -134,6 +134,8 @@ public class ContainerImageBuildOptions
     /// Gets a value indicating whether the Dockerfile references images available only in the local runtime store.
     /// </summary>
     internal bool RequiresLocalImageStore { get; init; }
+
+    internal string? ArtifactMetadataPath { get; init; }
 }
 
 /// <summary>
@@ -946,21 +948,8 @@ internal sealed class ResourceContainerImageManager(
             await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, resource, serviceProvider, cancellationToken).ConfigureAwait(false);
         }
 
-        // Resolve build arguments
-        var resolvedBuildArguments = new Dictionary<string, string?>();
-        foreach (var buildArg in dockerfileBuildAnnotation.BuildArguments)
-        {
-            resolvedBuildArguments[buildArg.Key] = await ResolveValue(buildArg.Value, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Resolve build secrets
-        var resolvedBuildSecrets = new Dictionary<string, BuildImageSecretValue>();
-        foreach (var buildSecret in dockerfileBuildAnnotation.BuildSecrets)
-        {
-            var secretType = buildSecret.Value is FileInfo ? BuildImageSecretType.File : BuildImageSecretType.Environment;
-            var resolvedValue = await ResolveValue(buildSecret.Value, cancellationToken).ConfigureAwait(false);
-            resolvedBuildSecrets[buildSecret.Key] = new BuildImageSecretValue(resolvedValue, secretType);
-        }
+        var (resolvedBuildArguments, resolvedBuildSecrets) =
+            await ResolveDockerfileBuildInputsAsync(dockerfileBuildAnnotation, cancellationToken).ConfigureAwait(false);
 
         // ensure outputPath is created if specified since docker/podman won't create it for us
         if (options.OutputPath is { } outputPath)
@@ -1001,6 +990,25 @@ internal sealed class ResourceContainerImageManager(
             logger.LogError(ex, "Failed to build container image from Dockerfile for {ResourceName}", resource.Name);
             throw;
         }
+    }
+
+    internal static async Task<(Dictionary<string, string?> Arguments, Dictionary<string, BuildImageSecretValue> Secrets)>
+        ResolveDockerfileBuildInputsAsync(DockerfileBuildAnnotation annotation, CancellationToken cancellationToken)
+    {
+        var arguments = new Dictionary<string, string?>();
+        foreach (var argument in annotation.BuildArguments)
+        {
+            arguments[argument.Key] = await ResolveValue(argument.Value, cancellationToken).ConfigureAwait(false);
+        }
+        var secrets = new Dictionary<string, BuildImageSecretValue>();
+        foreach (var secret in annotation.BuildSecrets)
+        {
+            var type = secret.Value is FileInfo ? BuildImageSecretType.File : BuildImageSecretType.Environment;
+            secrets[secret.Key] = new BuildImageSecretValue(
+                await ResolveValue(secret.Value, cancellationToken).ConfigureAwait(false), type);
+        }
+
+        return (arguments, secrets);
     }
 
     internal static async Task<string?> ResolveValue(object? value, CancellationToken cancellationToken)

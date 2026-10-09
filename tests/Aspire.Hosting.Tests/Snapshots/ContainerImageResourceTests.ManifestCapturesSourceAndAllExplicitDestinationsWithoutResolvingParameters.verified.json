@@ -1,0 +1,68 @@
+﻿{
+  "resources": {
+    "tools": {
+      "type": "containerimage.v0",
+      "source": "ghcr.io/example/tools:v1",
+      "publications": {
+        "first-tools": {
+          "registry": "first",
+          "image": "{first-tools.image}"
+        },
+        "second-tools": {
+          "registry": "second",
+          "image": "{second-tools.image}"
+        }
+      }
+    },
+    "endpoint": {
+      "type": "parameter.v0",
+      "value": "{endpoint.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "repository": {
+      "type": "parameter.v0",
+      "value": "{repository.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "first": {
+      "type": "containerregistry.v0",
+      "endpoint": "{endpoint.value}",
+      "repository": "{repository.value}"
+    },
+    "second": {
+      "type": "containerregistry.v0",
+      "endpoint": "second.example.com"
+    },
+    "first-tools": {
+      "type": "containerimagepublication.v0",
+      "source": "tools",
+      "registry": "first",
+      "registryEndpoint": "{endpoint.value}",
+      "repository": "{repository.value}/first-tools",
+      "image": "{endpoint.value}/{repository.value}/first-tools@{first-tools.digest}"
+    },
+    "second-tools": {
+      "type": "containerimagepublication.v0",
+      "source": "tools",
+      "registry": "second",
+      "registryEndpoint": "second.example.com",
+      "repository": "second-tools",
+      "image": "second.example.com/second-tools@{second-tools.digest}"
+    },
+    "consumer": {
+      "type": "container.v0",
+      "image": "busybox:latest",
+      "env": {
+        "TOOLS_IMAGE": "{first-tools.image}"
+      }
+    }
+  }
+}

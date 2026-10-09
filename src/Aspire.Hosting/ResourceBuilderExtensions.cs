@@ -238,6 +238,7 @@ public static class ResourceBuilderExtensions
     /// Sets an environment variable
     /// </summary>
     [AspireExport]
+#pragma warning disable ASPIREPIPELINES003
     internal static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -248,6 +249,7 @@ public static class ResourceBuilderExtensions
             typeof(IResourceBuilder<ParameterResource>),
             typeof(IResourceBuilder<ExternalServiceResource>),
             typeof(IResourceBuilder<IResourceWithConnectionString>),
+            typeof(IResourceBuilder<DestinationImageResource>),
             typeof(IExpressionValue))]
         object value)
         where T : IResourceWithEnvironment
@@ -264,6 +266,7 @@ public static class ResourceBuilderExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithEnvironment(name, parameter),
             IResourceBuilder<ExternalServiceResource> externalService => builder.WithEnvironment(name, externalService),
             IResourceBuilder<IResourceWithConnectionString> connectionStringResource => builder.WithEnvironment(name, connectionStringResource),
+            IResourceBuilder<DestinationImageResource> image => builder.WithEnvironment(name, image),
             IExpressionValue expressionValue => builder.WithEnvironmentExpressionValue(name, expressionValue),
             IValueProvider and IManifestExpressionProvider => builder.WithEnvironmentValueProvider(name, value),
             _ => throw new ArgumentException(
@@ -271,6 +274,7 @@ public static class ResourceBuilderExtensions
                 nameof(value))
         };
     }
+#pragma warning restore ASPIREPIPELINES003
 
     /// <summary>
     /// Adds an environment variable to the resource.

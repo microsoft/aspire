@@ -148,6 +148,7 @@ internal static partial class HelmDeploymentEngine
         {
             Name = $"prepare-{environment.Name}",
             Description = $"Prepares Helm chart values for {environment.Name}.",
+            Tags = [WellKnownPipelineTags.DeployCompute],
             Action = ctx => PrepareAsync(ctx, environment)
         };
         prepareStep.DependsOn(WellKnownPipelineSteps.Publish);
@@ -160,7 +161,7 @@ internal static partial class HelmDeploymentEngine
         {
             Name = $"helm-deploy-{environment.Name}",
             Description = $"Deploys {environment.Name} to Kubernetes via Helm.",
-            Tags = [HelmDeployTag],
+            Tags = [HelmDeployTag, WellKnownPipelineTags.DeployCompute],
             Action = ctx => HelmDeployAsync(ctx, environment)
         };
         helmDeployStep.DependsOn($"prepare-{environment.Name}");
