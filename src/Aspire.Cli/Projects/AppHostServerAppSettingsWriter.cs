@@ -19,7 +19,9 @@ namespace Aspire.Cli.Projects;
 ///   pip / cargo / go modules later). The server's <c>IntegrationHostLauncher</c>
 ///   reads this section at <c>StartAsync</c> time and spawns each host process
 ///   itself, the same way it loads .NET integrations into an
-///   <c>AssemblyLoadContext</c>. No runtime RPC is involved.</item>
+///   <c>AssemblyLoadContext</c>. The host list comes from static startup configuration,
+///   not a runtime RPC request. After launch, external host registration, capability
+///   discovery, and invocation use authenticated JSON-RPC.</item>
 /// </list>
 ///
 /// Shared between <see cref="DotNetBasedAppHostServerProject"/> (dev mode, builds the
