@@ -100,48 +100,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Resources\LaunchProfileStrings.Designer.cs">
-      <DependentUpon>LaunchProfileStrings.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-    </Compile>
-    <Compile Update="Resources\MessageStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>MessageStrings.resx</DependentUpon>
-    </Compile>
-    <Compile Update="Resources\CommandStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>CommandStrings.resx</DependentUpon>
-    </Compile>
-    <Compile Update="Resources\InteractionStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>InteractionStrings.resx</DependentUpon>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Update="Resources\LaunchProfileStrings.resx">
-      <LastGenOutput>LaunchProfileStrings.Designer.cs</LastGenOutput>
-      <Generator>ResXFileCodeGenerator</Generator>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\MessageStrings.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>MessageStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\CommandStrings.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>CommandStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\InteractionStrings.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>InteractionStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-  </ItemGroup>
-
-  <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.TestUtilities" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />

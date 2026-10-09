@@ -16,6 +16,26 @@
 
   <Import Project="Sdk.targets" Sdk="Microsoft.DotNet.Arcade.Sdk" />
 
+  <PropertyGroup>
+    <ResxCodeGenerator Condition="'$(ResxCodeGenerator)' == ''">ResXFileCodeGenerator</ResxCodeGenerator>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Update="Resources\*.Designer.cs;Properties\*.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>$([System.IO.Path]::ChangeExtension('%(Filename)', '.resx'))</DependentUpon>
+    </Compile>
+    <!-- Only neutral files (Name.resx), not translations (Name.fr.resx), have designer classes. -->
+    <EmbeddedResource Update="Resources\*.resx;Properties\*.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType Condition="!$([System.String]::Copy('%(Filename)').Contains('.'))">Designer</SubType>
+      <Generator Condition="!$([System.String]::Copy('%(Filename)').Contains('.'))">$(ResxCodeGenerator)</Generator>
+      <LastGenOutput Condition="!$([System.String]::Copy('%(Filename)').Contains('.'))">%(Filename).Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup Condition="'$(ReadMeExists)' == 'true'">
     <None Include="$(ReadMePath)" Pack="true" PackagePath="\" />
   </ItemGroup>
