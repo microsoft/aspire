@@ -2,7 +2,7 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: 16px 20px 24px;
+    padding: var(--layout-top-padding) var(--layout-right-padding) 24px var(--layout-left-padding);
     container-type: inline-size;
     outline: none;
 }
@@ -32,27 +32,19 @@
     background: var(--aspire-control-background);
 }
 
-.span-4 {
-    grid-column: span 4;
-}
-
-.span-6 {
-    grid-column: span 6;
-}
-
-.span-12 {
-    grid-column: span 12;
+/* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
+.overview-grid > .overview-card {
+    grid-column: span var(--overview-span, 12);
 }
 
 @container (max-width: 1100px) {
-    .span-4 {
-        grid-column: span 6;
+    .overview-grid > .overview-card {
+        grid-column: span var(--overview-span-md, 12);
     }
 }
 
 @container (max-width: 760px) {
-    .span-4,
-    .span-6 {
+    .overview-grid > .overview-card {
         grid-column: span 12;
     }
 }
@@ -105,11 +97,26 @@
     text-decoration: underline;
 }
 
-/* Keep the header as tall as its title so the button doesn't add space above the card content. */
-.overview-card-header ::deep .overview-card-action,
+/* Card actions get a visible button surface so they read as buttons rather than decorative icons.
+   They stay short enough that the header remains as tall as its title. */
+.overview-card-header ::deep .overview-card-action {
+    --aspire-control-height: 26px;
+    margin-block: -3px;
+}
+
 .overview-card-header ::deep .overview-card-action::part(control) {
-    --aspire-control-height: 24px;
-    margin-block: -2px;
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    background: var(--colorNeutralBackground1);
+}
+
+.overview-card-header ::deep .overview-card-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
 }
 
 .overview-card-actions {
@@ -160,6 +167,12 @@
     font-size: 11px;
 }
 
+.overview-badge.overview-volume-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .overview-muted {
     color: var(--colorNeutralForeground2);
 }
@@ -171,6 +184,12 @@
 
 .overview-card ::deep .overview-property-grid td:first-child {
     padding-inline-start: 0;
+}
+
+/* Remove the default cell padding on the value column so its mask/visualizer buttons
+   align with the card header's rightmost action button instead of sitting inset from it. */
+.overview-card ::deep .overview-property-grid td:last-child {
+    padding-inline-end: 0;
 }
 
 .overview-console-paused {
@@ -225,7 +244,6 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-weight: 600;
 }
 
 /* Status colors don't reach text contrast on every theme, so only the icon carries the state color. */
@@ -273,6 +291,27 @@
     white-space: nowrap;
 }
 
+/* Sized and bordered like .overview-card-action so these read as buttons rather than bare icons. */
+.overview-list ::deep .overview-volume-action {
+    --aspire-control-height: 20px;
+    flex: 0 0 auto;
+}
+
+.overview-list ::deep .overview-volume-action::part(control) {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 5px;
+    background: var(--colorNeutralBackground1);
+}
+
+.overview-list ::deep .overview-volume-action:hover::part(control) {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
 .overview-list-value {
     flex: 1 1 auto;
     min-width: 0;
@@ -295,6 +334,24 @@ a.overview-list-value:hover {
     flex: 0 0 auto;
     color: var(--colorNeutralForeground2);
     font-variant-numeric: tabular-nums;
+}
+
+/* When a row has supplementary ghost text, the primary link keeps its natural width instead of growing to fill
+   the row, leaving the spare space for the ghost text. */
+.overview-list-value:has(+ .overview-list-ghost) {
+    flex: 0 1 auto;
+}
+
+/* Supplementary url text (e.g. the internal address of an endpoint already shown as the row's primary link).
+   It takes whatever room the primary link doesn't need, truncating/disappearing first as the card narrows so it
+   never forces the primary link to truncate. */
+.overview-list-ghost {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground3);
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .overview-level {
@@ -359,7 +416,9 @@ a.overview-stat:hover .overview-stat-label {
     color: var(--error);
 }
 
+/* The console output fills the card so it lines up with taller cards in the same row. */
 .overview-console {
+    flex: 1 1 auto;
     overflow: hidden;
     padding: 8px 10px;
     border-radius: 8px;
@@ -385,11 +444,78 @@ a.overview-stat:hover .overview-stat-label {
     color: #8a8a8a;
 }
 
-/* The resource details component normally fills a side panel. Here it flows with the page instead. */
+.overview-relationships-card ::deep .relationship-graph {
+    flex: 0 1 auto;
+}
+
+/* Metric instruments are compact tiles that flow into as many columns as the card width allows. */
+.overview-metric-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.overview-metric-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--colorNeutralStroke3);
+    border-radius: 8px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.overview-metric-tile:hover {
+    border-color: var(--colorBrandStroke1);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.overview-metric-name,
+.overview-metric-meter {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-metric-name {
+    color: var(--colorBrandForegroundLink);
+    font-size: 12.5px;
+}
+
+.overview-metric-meter {
+    color: var(--colorNeutralForeground2);
+    font-size: 11.5px;
+}
+
+.overview-selection-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.overview-selection-group-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 10px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Every card has the same three rows (title, meta, footer), so cards in a row stay the same height. */
 .overview-selection-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 14px;
+    gap: 12px;
 }
 
 .overview-selection-item {
@@ -399,7 +525,8 @@ a.overview-stat:hover .overview-stat-label {
 
 .overview-selection-card {
     flex: 1 1 auto;
-    gap: 12px;
+    gap: 6px;
+    padding: 12px 14px;
 }
 
 .overview-selection-card-header {
@@ -425,39 +552,91 @@ a.overview-selection-card-title:hover {
     text-decoration: underline;
 }
 
-.overview-selection-card .overview-list {
-    margin: 0;
-}
-
-.overview-selection-links {
+.overview-selection-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 14px;
+    gap: 4px 12px;
+    min-height: 18px;
+    padding-inline-start: 28px;
+    color: var(--colorNeutralForeground2);
+    font-size: 12px;
+}
+
+.overview-selection-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
     margin-top: auto;
-    padding-top: 10px;
+    padding-top: 8px;
     border-top: 1px solid var(--colorNeutralStroke3);
+}
+
+.overview-selection-url {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
     font-size: 12.5px;
 }
 
-.overview-selection-links a {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
+.overview-selection-url > a,
+.overview-selection-url > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overview-selection-url > a {
     color: var(--colorBrandForegroundLink);
     text-decoration: none;
 }
 
-.overview-selection-links a:hover {
+.overview-selection-url > a:hover {
     text-decoration: underline;
 }
 
+.overview-selection-actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+}
+
+.overview-selection-action {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorBrandForeground1);
+}
+
+.overview-selection-action:hover {
+    border-color: var(--colorNeutralStroke1Hover);
+    background: var(--colorNeutralBackground1Hover);
+}
+
+.overview-selection-action:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
 .overview-selection-errors {
+    position: absolute;
+    top: -6px;
+    right: -6px;
     min-width: 16px;
-    padding: 0 5px;
+    padding: 0 4px;
     border-radius: 8px;
     background: var(--error);
     color: var(--colorNeutralForegroundOnBrand, #fff);
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     line-height: 16px;
     text-align: center;

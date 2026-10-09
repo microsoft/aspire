@@ -5,6 +5,7 @@
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Otlp.Storage
+@using Microsoft.AspNetCore.Components.Sections
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -20,11 +21,26 @@
         Loc="@Loc"/>
 </PageTitle>
 
+@{
+    // Inside the resources layout on desktop, the filter toolbar shares the tabs row instead of taking its own row.
+    var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
+}
+
+@if (toolbarInTabsRow)
+{
+    <SectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.TabToolbarSectionName">
+        <div class="main-toolbar filter-toolbar" role="toolbar" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+            @GetFilterToolbar()
+        </div>
+    </SectionContent>
+}
+
 <div class="page-content-container">
     <AspirePageContentLayout @ref="@_contentLayout"
                              AddNewlineOnToolbar="true"
                              IsSummaryDetailsViewOpen="@(PageViewModel.SelectedLogEntry is not null)"
-                             HideDesktopToolbar="@ViewportInformation.IsDesktop">
+                             HideDesktopToolbar="@toolbarInTabsRow"
+                             MainContentStyle="margin-top: var(--layout-top-padding);">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]</h1>
         </PageTitleSection>
@@ -51,7 +67,7 @@
                 </DetailsTitleTemplate>
                 <Summary>
                     <div class="logs-summary-layout">
-                        @if (ViewportInformation.IsDesktop)
+                        @if (ViewportInformation.IsDesktop && !toolbarInTabsRow)
                         {
                             <div class="main-toolbar filter-toolbar" role="toolbar">
                                 @GetFilterToolbar()

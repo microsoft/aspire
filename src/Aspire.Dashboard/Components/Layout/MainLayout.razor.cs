@@ -43,6 +43,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
 
+    /// <summary>
+    /// Name of the section in the desktop top bar where nested layouts can render page context, such as the selected resource.
+    /// </summary>
+    internal const string HeaderContextSectionName = "header-context";
+
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
 

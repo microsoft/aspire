@@ -391,6 +391,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<IDialogService>(services => services.GetRequiredService<NavigationDialogService>());
 
         builder.Services.AddSingleton<IconResolver>();
+        builder.Services.AddSingleton<IVolumePathLauncher, VolumePathLauncher>();
 
         builder.Services.AddScoped<IThemeResolver, BrowserThemeResolver>();
         builder.Services.AddScoped<ThemeManager>();

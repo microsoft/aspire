@@ -25,6 +25,12 @@ namespace Aspire.Dashboard.Components.Pages;
 public sealed partial class Home : ComponentBase, IAsyncDisposable
 {
     private const int RecentItemCount = 5;
+    private const int InsightItemCount = 4;
+    internal const int ActivityBucketCount = 30;
+    // Bounds the work done on each refresh; the activity window only needs the most recent spans.
+    private const int MaxActivitySpans = 5000;
+    private const int MaxActivityErrorLogs = 500;
+    internal static readonly TimeSpan s_activityBucketSize = TimeSpan.FromSeconds(30);
 
     // Metrics arrive every few seconds from each resource, so coalesce telemetry notifications to bound the
     // number of repository queries the page runs.
@@ -218,8 +224,11 @@ public sealed partial class Home : ComponentBase, IAsyncDisposable
             }
         }
 
+        var activity = await LoadActivityAsync(repository, telemetryResources, errorCount, cancellationToken).ConfigureAwait(false);
+
         return new HomeTelemetry
         {
+            Activity = activity,
             LogCount = allLogs.TotalItemCount,
             WarningLogCount = warningLogs.TotalItemCount,
             ErrorLogCount = errorCount,
@@ -246,6 +255,167 @@ public sealed partial class Home : ComponentBase, IAsyncDisposable
             Count = count,
             Filters = filters
         };
+    }
+
+    /// <summary>
+    /// Aggregates recent incoming requests (server and consumer spans) into fixed time buckets, plus per-resource
+    /// and per-endpoint breakdowns used by the activity chart and insight cards.
+    /// </summary>
+    private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, int errorLogCount, CancellationToken cancellationToken)
+    {
+        // Align the window to bucket boundaries so bars don't shift between refreshes.
+        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var windowEnd = new DateTime(((now.Ticks / s_activityBucketSize.Ticks) + 1) * s_activityBucketSize.Ticks, DateTimeKind.Utc);
+        var windowStart = windowEnd - (s_activityBucketSize * ActivityBucketCount);
+
+        var spanTotal = (await repository.GetSpansAsync(CreateSpansRequest(0, 0), cancellationToken).ConfigureAwait(false)).PagedResult.TotalItemCount;
+        var spanCount = Math.Min(spanTotal, MaxActivitySpans);
+        var spans = spanCount > 0
+            ? (await repository.GetSpansAsync(CreateSpansRequest(spanTotal - spanCount, spanCount), cancellationToken).ConfigureAwait(false)).PagedResult.Items
+            : [];
+
+        var resourceNames = new Dictionary<ResourceKey, string>();
+        string GetName(OtlpResource resource)
+        {
+            if (!resourceNames.TryGetValue(resource.ResourceKey, out var name))
+            {
+                name = OtlpHelpers.GetResourceName(resource, telemetryResources);
+                resourceNames[resource.ResourceKey] = name;
+            }
+            return name;
+        }
+
+        var okBuckets = new int[ActivityBucketCount];
+        var errorBuckets = new int[ActivityBucketCount];
+        var durations = new List<double>();
+        var byResource = new Dictionary<ResourceKey, ResourceActivity>();
+        var byEndpoint = new Dictionary<(ResourceKey, string), List<double>>();
+
+        foreach (var span in spans)
+        {
+            if (span.Kind is not (OtlpSpanKind.Server or OtlpSpanKind.Consumer) || span.StartTime < windowStart || span.StartTime >= windowEnd)
+            {
+                continue;
+            }
+
+            var index = (int)((span.StartTime - windowStart).Ticks / s_activityBucketSize.Ticks);
+            var isError = span.Status == OtlpSpanStatusCode.Error;
+            var durationMs = span.Duration.TotalMilliseconds;
+            (isError ? errorBuckets : okBuckets)[index]++;
+            durations.Add(durationMs);
+
+            var resource = span.Source.Resource;
+            if (!byResource.TryGetValue(resource.ResourceKey, out var resourceActivity))
+            {
+                resourceActivity = new ResourceActivity(GetName(resource));
+                byResource[resource.ResourceKey] = resourceActivity;
+            }
+            resourceActivity.Buckets[index]++;
+            resourceActivity.Requests++;
+            if (isError)
+            {
+                resourceActivity.ErrorSpans++;
+            }
+
+            var endpointKey = (resource.ResourceKey, GetEndpointLabel(span));
+            if (!byEndpoint.TryGetValue(endpointKey, out var endpointDurations))
+            {
+                endpointDurations = [];
+                byEndpoint[endpointKey] = endpointDurations;
+            }
+            endpointDurations.Add(durationMs);
+        }
+
+        // Error logs count toward a resource's hotspot score alongside failed requests.
+        var logCount = Math.Min(errorLogCount, MaxActivityErrorLogs);
+        if (logCount > 0)
+        {
+            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext { ResourceKeys = [], StartIndex = errorLogCount - logCount, Count = logCount, Filters = s_errorLogFilters }, cancellationToken).ConfigureAwait(false);
+            foreach (var log in errorLogs.Items)
+            {
+                if (log.TimeStamp < windowStart)
+                {
+                    continue;
+                }
+
+                if (!byResource.TryGetValue(log.Resource.ResourceKey, out var resourceActivity))
+                {
+                    resourceActivity = new ResourceActivity(GetName(log.Resource));
+                    byResource[log.Resource.ResourceKey] = resourceActivity;
+                }
+                resourceActivity.ErrorLogs++;
+            }
+        }
+
+        var totalRequests = okBuckets.Sum() + errorBuckets.Sum();
+        var totalErrors = errorBuckets.Sum();
+        var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+
+        return new HomeActivity
+        {
+            WindowStart = windowStart,
+            OkBuckets = okBuckets,
+            ErrorBuckets = errorBuckets,
+            TotalRequests = totalRequests,
+            RequestsPerMinute = totalRequests / windowMinutes,
+            ErrorRate = totalRequests == 0 ? null : (double)totalErrors / totalRequests,
+            P95 = durations.Count == 0 ? null : TimeSpan.FromMilliseconds(Percentile(durations, 0.95)),
+            ByResource = byResource,
+            SlowestEndpoints = byEndpoint
+                .Select(e => new EndpointInsight(byResource[e.Key.Item1].Name, e.Key.Item2, e.Value.Count, TimeSpan.FromMilliseconds(Percentile(e.Value, 0.95))))
+                .OrderByDescending(e => e.P95)
+                .Take(InsightItemCount)
+                .ToList(),
+            ErrorHotspots = byResource.Values
+                .Where(r => r.TotalErrors > 0)
+                .OrderByDescending(r => r.TotalErrors)
+                .Take(InsightItemCount)
+                .ToList(),
+            BusiestResources = byResource.Values
+                .Where(r => r.Requests > 0)
+                .OrderByDescending(r => r.Requests)
+                .Take(InsightItemCount)
+                .ToList()
+        };
+
+        static GetSpansRequest CreateSpansRequest(int startIndex, int count) => new()
+        {
+            ResourceKeys = [],
+            StartIndex = startIndex,
+            Count = count,
+            Filters = []
+        };
+    }
+
+    // Prefer the low-cardinality route template ("GET /api/catalog/{id}") over the span name.
+    // See https://opentelemetry.io/docs/specs/semconv/http/http-spans/
+    private static string GetEndpointLabel(OtlpSpan span)
+    {
+        var route = span.Attributes.GetValue("http.route");
+        if (string.IsNullOrEmpty(route))
+        {
+            return span.Name;
+        }
+
+        var method = span.Attributes.GetValue("http.request.method") ?? span.Attributes.GetValue("http.method");
+        return string.IsNullOrEmpty(method) ? route : $"{method} {route}";
+    }
+
+    private static double Percentile(List<double> values, double percentile)
+    {
+        values.Sort();
+        var index = (int)Math.Ceiling(percentile * values.Count) - 1;
+        return values[Math.Clamp(index, 0, values.Count - 1)];
+    }
+
+    private int[]? GetResourceActivityBuckets(ResourceViewModel resource)
+    {
+        return _telemetry?.Activity is { } activity &&
+            TelemetryRepository.GetResourceByCompositeName(resource.Name) is { } otlpResource &&
+            activity.ByResource.TryGetValue(otlpResource.ResourceKey, out var resourceActivity) &&
+            resourceActivity.Requests > 0
+            ? resourceActivity.Buckets
+            : null;
     }
 
     private List<ResourceViewModel> GetResources()
@@ -367,8 +537,36 @@ public sealed partial class Home : ComponentBase, IAsyncDisposable
 
     private readonly record struct HealthSummary(int Total, int Running, int Pending, int Attention, int Inactive, DateTime? StartedAt);
 
+    private sealed class HomeActivity
+    {
+        public required DateTime WindowStart { get; init; }
+        public required int[] OkBuckets { get; init; }
+        public required int[] ErrorBuckets { get; init; }
+        public required int TotalRequests { get; init; }
+        public required double RequestsPerMinute { get; init; }
+        public required double? ErrorRate { get; init; }
+        public required TimeSpan? P95 { get; init; }
+        public required Dictionary<ResourceKey, ResourceActivity> ByResource { get; init; }
+        public required List<EndpointInsight> SlowestEndpoints { get; init; }
+        public required List<ResourceActivity> ErrorHotspots { get; init; }
+        public required List<ResourceActivity> BusiestResources { get; init; }
+    }
+
+    private sealed class ResourceActivity(string name)
+    {
+        public string Name { get; } = name;
+        public int[] Buckets { get; } = new int[ActivityBucketCount];
+        public int Requests { get; set; }
+        public int ErrorSpans { get; set; }
+        public int ErrorLogs { get; set; }
+        public int TotalErrors => ErrorSpans + ErrorLogs;
+    }
+
+    private sealed record EndpointInsight(string ResourceName, string Label, int Count, TimeSpan P95);
+
     private sealed class HomeTelemetry
     {
+        public required HomeActivity Activity { get; init; }
         public required int LogCount { get; init; }
         public required int WarningLogCount { get; init; }
         public required int ErrorLogCount { get; init; }

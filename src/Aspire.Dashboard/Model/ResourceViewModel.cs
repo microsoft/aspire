@@ -494,6 +494,10 @@ public sealed record class VolumeViewModel(int index, string Source, string Targ
     // Because there is no good key in data, use index of the volume in results.
     object IPropertyGridItem.Key => index;
 
+    // Only a bind mount's Source is a real host filesystem path. A named volume's Source is an opaque Docker
+    // volume identifier with no corresponding path on disk, so it can't be "revealed" in a file explorer.
+    public bool IsBindMount => string.Equals(MountType, "bind", StringComparison.OrdinalIgnoreCase);
+
     public bool MatchesFilter(string filter) =>
         Source?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) == true ||
         Target?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) == true;

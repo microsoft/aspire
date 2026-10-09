@@ -270,6 +270,18 @@ fluent-drawer fluent-drawer-body > [slot="close"] fluent-button::part(control) {
     background-color: var(--aspire-button-background);
 }
 
+/* The explicit background-color above overrides fluent-button's own hover/pressed shading,
+   so icon-only buttons need their own state colors to still read as interactive. */
+.aspire-icon-button:hover,
+.aspire-icon-button:hover::part(control) {
+    --aspire-button-background: var(--colorSubtleBackgroundHover);
+}
+
+.aspire-icon-button:active,
+.aspire-icon-button:active::part(control) {
+    --aspire-button-background: var(--colorSubtleBackgroundPressed);
+}
+
 .aspire-link-button,
 .aspire-link-button::part(control),
 .button-hyperlink,

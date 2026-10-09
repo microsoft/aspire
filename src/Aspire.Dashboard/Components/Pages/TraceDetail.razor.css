@@ -4,6 +4,39 @@
     padding-bottom: 4px;
 }
 
+::deep .trace-back-mobile {
+    padding-bottom: 4px;
+}
+
+::deep .trace-header-nav {
+    grid-area: nav;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 50cqw;
+    /* Separates the trace identity from the trace stats that follow it in the same row. */
+    margin-right: 16px;
+}
+
+::deep .trace-back-button {
+    flex: none;
+    margin-right: 4px;
+}
+
+::deep .trace-header-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+::deep .trace-header-nav .trace-id {
+    flex: none;
+    padding-left: 0;
+}
+
 ::deep .trace-id {
     color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
@@ -204,8 +237,8 @@
 
 ::deep .trace-header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: "details filters";
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: "nav details filters";
     align-items: center;
     column-gap: 8px;
     min-width: 0;
@@ -253,9 +286,14 @@
     ::deep .trace-header {
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas:
+            "nav"
             "details"
             "filters";
         row-gap: 8px;
+    }
+
+    ::deep .trace-header-nav {
+        max-width: none;
     }
 
 }

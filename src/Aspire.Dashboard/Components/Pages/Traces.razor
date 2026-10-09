@@ -5,6 +5,7 @@
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Otlp.Storage
+@using Microsoft.AspNetCore.Components.Sections
 
 @inject IJSRuntime JS
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
@@ -22,80 +23,24 @@
 </PageTitle>
 
 <div class="page-content-container">
-    <AspirePageContentLayout AddNewlineOnToolbar="true" @ref="@_contentLayout">
+    @{
+        // Inside the resources layout on desktop, the filter toolbar shares the tabs row instead of taking its own row.
+        var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
+    }
+    @if (toolbarInTabsRow)
+    {
+        <SectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.TabToolbarSectionName">
+            <div class="main-toolbar filter-toolbar" role="toolbar" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+                @GetFilterToolbar()
+            </div>
+        </SectionContent>
+    }
+    <AspirePageContentLayout AddNewlineOnToolbar="true" HideDesktopToolbar="@toolbarInTabsRow" MainContentStyle="margin-top: var(--layout-top-padding);" @ref="@_contentLayout">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
-            @if (ResourcesLayout is null)
-            {
-                <ResourceSelect Resources="_resourceViewModels"
-                                AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
-                                @bind-SelectedResource="PageViewModel.SelectedResource"
-                                @bind-SelectedResource:after="HandleSelectedResourceChanged"
-                                CanSelectGrouping="true"
-                                LabelClass="toolbar-left" />
-            }
-
-            <SignalsActionsDisplay HandleClearSignal="@ClearTraces"
-                                  IsPaused="@PauseManager.AreTracesPaused(out _)"
-                                  OnPausedChanged="@PauseManager.SetTracesPaused"
-                                  SelectedResource="@PageViewModel.SelectedResource" />
-
-            <div class="toolbar-end">
-                <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_filter"
-                              Class="toolbar-search"
-                              @bind-Value:after="HandleAfterFilterBindAsync"
-                              Name="traces-search"
-                              Immediate="true"
-                              ImmediateDelay="@FluentUIExtensions.InputDelay"
-                              Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                              title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
-                    <StartTemplate>
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
-                    </StartTemplate>
-                </FluentTextInput>
-
-                <DesktopToolbarDivider />
-
-                <SpanTypeSelect
-                                @bind-SpanType="@PageViewModel.SelectedSpanType"
-                                SpanTypes="@_spanTypes"
-                                HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
-
-                <DesktopToolbarDivider />
-
-                @if (TracesViewModel.Filters.Count == 0)
-                {
-                    if (ViewportInformation.IsDesktop)
-                    {
-                        <span>@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
-                    }
-                }
-                else
-                {
-                    <div>
-                        <FluentCounterBadge Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" ShowEmpty="false" Appearance="BadgeAppearance.Filled">
-                            <AnchorContent>
-                                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
-                            </AnchorContent>
-                        </FluentCounterBadge>
-                    </div>
-                }
-
-                <DesktopToolbarDivider />
-
-                @if (ViewportInformation.IsDesktop)
-                {
-                    <FluentButton Appearance="ButtonAppearance.Default" Class="toolbar-button" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /></FluentButton>
-                }
-                else
-                {
-                    <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
-                        <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
-                    </FluentButton>
-                }
-            </div>
+            @GetFilterToolbar()
         </ToolbarSection>
         <MainSection>
             <div id="@ScrollContainerId" class="datagrid-overflow-area continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]">
@@ -227,6 +172,78 @@
 </div>
 
 @code {
+    private RenderFragment GetFilterToolbar() => @<text>
+        @if (ResourcesLayout is null)
+        {
+            <ResourceSelect Resources="_resourceViewModels"
+                            AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
+                            @bind-SelectedResource="PageViewModel.SelectedResource"
+                            @bind-SelectedResource:after="HandleSelectedResourceChanged"
+                            CanSelectGrouping="true"
+                            LabelClass="toolbar-left" />
+        }
+
+        <SignalsActionsDisplay HandleClearSignal="@ClearTraces"
+                              IsPaused="@PauseManager.AreTracesPaused(out _)"
+                              OnPausedChanged="@PauseManager.SetTracesPaused"
+                              SelectedResource="@PageViewModel.SelectedResource" />
+
+        <div class="toolbar-end">
+            <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_filter"
+                          Class="toolbar-search"
+                          @bind-Value:after="HandleAfterFilterBindAsync"
+                          Name="traces-search"
+                          Immediate="true"
+                          ImmediateDelay="@FluentUIExtensions.InputDelay"
+                          Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                          title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                <StartTemplate>
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                </StartTemplate>
+            </FluentTextInput>
+
+            <DesktopToolbarDivider />
+
+            <SpanTypeSelect
+                            @bind-SpanType="@PageViewModel.SelectedSpanType"
+                            SpanTypes="@_spanTypes"
+                            HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
+
+            <DesktopToolbarDivider />
+
+            @if (TracesViewModel.Filters.Count == 0)
+            {
+                if (ViewportInformation.IsDesktop)
+                {
+                    <span>@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
+                }
+            }
+            else
+            {
+                <div>
+                    <FluentCounterBadge Count="@(TracesViewModel.Filters.GetEnabledFilters().Count())" ShowEmpty="false" Appearance="BadgeAppearance.Filled">
+                        <AnchorContent>
+                            <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" ItemsProvider="GetFilterMenuItems" />
+                        </AnchorContent>
+                    </FluentCounterBadge>
+                </div>
+            }
+
+            <DesktopToolbarDivider />
+
+            @if (ViewportInformation.IsDesktop)
+            {
+                <FluentButton Appearance="ButtonAppearance.Default" Class="toolbar-button" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)"><FluentIcon Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /></FluentButton>
+            }
+            else
+            {
+                <FluentButton Appearance="ButtonAppearance.Default" aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]" OnClick="() => OpenFilterAsync(null)">
+                    <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())" Color="Color.Primary" /> @FilterLoc[nameof(StructuredFiltering.AddFilter)]
+                </FluentButton>
+            }
+        </div>
+    </text>;
+
     private RenderFragment RenderTraceResourceSummary(TraceResourceSummary item) => @<span class="trace-tag trace-service-tag" title="@(GetSpansTooltip(item))" style="border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(item.Resource)));">
         @if (item.ErroredSpans > 0)
         {

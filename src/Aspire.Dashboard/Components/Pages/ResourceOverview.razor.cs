@@ -25,7 +25,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private const int ConsolePreviewLineCount = 10;
     private const int RecentItemCount = 5;
     private const int MetricsPreviewCount = 8;
-    private const int SelectionUrlCount = 3;
 
     // Telemetry can arrive many times per second. Coalesce updates so the overview queries the repository at most
     // a couple of times per second.
@@ -45,6 +44,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
+    private bool _telemetryLoaded;
     private OverviewTelemetry? _telemetry;
     private ResourcesLayout? _subscribedLayout;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
@@ -77,6 +77,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     public required IconResolver IconResolver { get; init; }
 
     [Inject]
+    public required IVolumePathLauncher VolumePathLauncher { get; init; }
+
+    [Inject]
+    public required Microsoft.FluentUI.AspNetCore.Components.INotificationService ToastService { get; init; }
+
+    [Inject]
     public required IStringLocalizer<Dashboard.Resources.Resources> Loc { get; init; }
 
     [Inject]
@@ -93,6 +99,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required ILogger<ResourceOverview> Logger { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
@@ -166,6 +175,9 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         _metricsSubscription?.Dispose();
         _logsSubscription = _tracesSubscription = _metricsSubscription = null;
         _telemetry = null;
+        // Cleared whenever the telemetry key changes so the telemetry cards show their loading skeleton again
+        // instead of flashing the previous resource's stale data or popping in abruptly once the new data arrives.
+        _telemetryLoaded = false;
         _telemetryKey = otlpResource?.ResourceKey;
 
         if (_telemetryKey is { } key)
@@ -210,6 +222,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
                     if (Equals(_telemetryKey, key))
                     {
                         _telemetry = telemetry;
+                        _telemetryLoaded = true;
                         StateHasChanged();
                     }
                 }).ConfigureAwait(false);
@@ -244,6 +257,11 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, attentionFilters, Math.Max(0, attentionCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
             : [];
 
+        // A healthy resource has no warnings or errors to highlight, so show its latest logs instead of an empty card.
+        var recentLogs = attentionCount == 0 && allLogs.TotalItemCount > 0
+            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, [], Math.Max(0, allLogs.TotalItemCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
+            : [];
+
         var allTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
         List<TelemetryFilter> failedTraceFilters = [new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) }];
         var failedTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, failedTraceFilters, 0, 0), cancellationToken).ConfigureAwait(false);
@@ -263,6 +281,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
             ErrorLogCount = errorLogs.TotalItemCount,
             WarningLogCount = warningLogs.TotalItemCount,
             RecentAttentionLogs = recentAttentionLogs.AsEnumerable().Reverse().ToList(),
+            RecentLogs = recentLogs.AsEnumerable().Reverse().ToList(),
             TraceCount = traceCount,
             FailedTraceCount = failedTraces.PagedResult.TotalItemCount,
             RecentTraces = recentTraces.AsEnumerable().Reverse().ToList(),
@@ -509,6 +528,58 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         }
     }
 
+    private sealed record EndpointGroup(DisplayedUrl Primary, DisplayedUrl? Secondary);
+
+    /// <summary>
+    /// Resources commonly expose the same logical endpoint twice: once reachable from outside the container
+    /// (the public address) and once reachable only from the host/other containers (the internal address). Both
+    /// urls share the same display name, so showing them as two separate rows just duplicates the row's label and
+    /// scheme badge. Collapse them into a single row, preferring the public url as the clickable link and keeping
+    /// the internal url as supplementary text.
+    /// </summary>
+    private static List<EndpointGroup> GroupEndpoints(IReadOnlyList<DisplayedUrl> urls)
+    {
+        var groups = new List<EndpointGroup>();
+        var consumedIndexes = new HashSet<int>();
+
+        for (var i = 0; i < urls.Count; i++)
+        {
+            if (!consumedIndexes.Add(i))
+            {
+                continue;
+            }
+
+            var primary = urls[i];
+            DisplayedUrl? secondary = null;
+
+            for (var j = i + 1; j < urls.Count; j++)
+            {
+                if (consumedIndexes.Contains(j))
+                {
+                    continue;
+                }
+
+                var candidate = urls[j];
+                if (string.Equals(candidate.Name, primary.Name, StringComparison.Ordinal) &&
+                    string.Equals(candidate.DisplayName ?? candidate.Text, primary.DisplayName ?? primary.Text, StringComparison.Ordinal))
+                {
+                    secondary = candidate;
+                    consumedIndexes.Add(j);
+                    break;
+                }
+            }
+
+            if (secondary is not null && primary.IsInternal && !secondary.IsInternal)
+            {
+                (primary, secondary) = (secondary, primary);
+            }
+
+            groups.Add(new EndpointGroup(primary, secondary));
+        }
+
+        return groups;
+    }
+
     private string GetResourceName(ResourceViewModel resource) => ResourcesLayout?.GetResourceName(resource) ?? resource.Name;
 
     private IEnumerable<RelatedResource> GetRelatedResources(ResourceViewModel resource)
@@ -571,6 +642,25 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private sealed record ConsolePreviewLine(int LineNumber, string Content, DateTimeOffset? Timestamp, bool IsError);
 
+    private sealed record SelectionGroup(string Title, List<string> Names);
+
+    // Common app model types come first in a fixed order; any other types follow alphabetically.
+    private static readonly string[] s_selectionGroupOrder = [KnownResourceTypes.Project, KnownResourceTypes.Container, KnownResourceTypes.Executable];
+
+    private List<SelectionGroup> GetSelectionGroups(IEnumerable<string> names)
+    {
+        var telemetryOnlyTitle = LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)].Value;
+        return names
+            .GroupBy(name => ResourcesLayout is not null && ResourceViewModel.TryGetResourceByName(name, ResourcesLayout.ResourceByName, out var resource)
+                ? resource.ResourceType
+                : telemetryOnlyTitle, StringComparer.Ordinal)
+            .OrderBy(g => g.Key == telemetryOnlyTitle ? 1 : 0)
+            .ThenBy(g => Array.IndexOf(s_selectionGroupOrder, g.Key) is var index and >= 0 ? index : s_selectionGroupOrder.Length)
+            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new SelectionGroup(g.Key, g.ToList()))
+            .ToList();
+    }
+
     private sealed record RelatedResource(ResourceViewModel Resource, string Type, bool IsIncoming);
 
     private sealed class OverviewTelemetry
@@ -579,9 +669,88 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         public required int ErrorLogCount { get; init; }
         public required int WarningLogCount { get; init; }
         public required List<LogSummary> RecentAttentionLogs { get; init; }
+        public required List<LogSummary> RecentLogs { get; init; }
         public required int TraceCount { get; init; }
         public required int FailedTraceCount { get; init; }
         public required List<TraceSummary> RecentTraces { get; init; }
         public required List<OtlpInstrumentSummary> Instruments { get; init; }
+    }
+
+    private enum OverviewCard
+    {
+        Status,
+        Endpoints,
+        Relationships,
+        Console,
+        Logs,
+        Traces,
+        Metrics,
+        Properties,
+        Environment,
+        Volumes,
+        Health
+    }
+
+    /// <summary>
+    /// Packs cards into rows of a 12 column grid in page order. Each card requests a span based on its content, and the
+    /// spare columns at the end of a row are shared between that row's cards so rows never have trailing gaps.
+    /// Medium widths use a separate two-per-row packing where wide cards take the full row.
+    /// </summary>
+    private sealed class OverviewCardLayout
+    {
+        private const int Columns = 12;
+
+        private readonly Dictionary<OverviewCard, int> _spans;
+        private readonly Dictionary<OverviewCard, int> _mediumSpans;
+
+        private OverviewCardLayout(Dictionary<OverviewCard, int> spans, Dictionary<OverviewCard, int> mediumSpans)
+        {
+            _spans = spans;
+            _mediumSpans = mediumSpans;
+        }
+
+        public static OverviewCardLayout Create(IReadOnlyList<(OverviewCard Card, int Span)> cards)
+        {
+            return new OverviewCardLayout(
+                Pack(cards),
+                Pack(cards.Select(c => (c.Card, c.Span >= 7 ? Columns : Columns / 2)).ToList()));
+        }
+
+        public string Style(OverviewCard card)
+        {
+            return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)};");
+        }
+
+        private static Dictionary<OverviewCard, int> Pack(IReadOnlyList<(OverviewCard Card, int Span)> cards)
+        {
+            var result = new Dictionary<OverviewCard, int>();
+            var row = new List<(OverviewCard Card, int Span)>();
+            var used = 0;
+
+            foreach (var (card, requested) in cards)
+            {
+                var span = Math.Clamp(requested, 1, Columns);
+                if (used + span > Columns)
+                {
+                    CompleteRow();
+                }
+                row.Add((card, span));
+                used += span;
+            }
+            CompleteRow();
+
+            return result;
+
+            void CompleteRow()
+            {
+                var spare = Columns - used;
+                for (var i = 0; i < row.Count; i++)
+                {
+                    result[row[i].Card] = row[i].Span + (spare / row.Count) + (i < spare % row.Count ? 1 : 0);
+                }
+                row.Clear();
+                used = 0;
+            }
+        }
     }
 }

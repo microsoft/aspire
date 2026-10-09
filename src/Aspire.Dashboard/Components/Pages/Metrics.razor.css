@@ -102,6 +102,9 @@
 
 ::deep .metrics-tree {
     min-width: auto;
+    /* The tabs row above provides no bottom border, so without this the first tree item's
+       text sits flush against it instead of reading as page content. */
+    padding-top: var(--layout-top-padding);
 }
 
 ::deep .metrics-tree fluent-tree-item::part(positioning-region) {
@@ -127,6 +130,12 @@
     color: var(--colorNeutralForeground1);
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Deemphasize instruments that haven't recorded any data yet, so it's obvious at a
+   glance which metrics are worth selecting without having to click through each one. */
+::deep .metrics-tree fluent-tree-item.no-data [part="text"] {
+    color: var(--colorNeutralForeground4);
 }
 
 ::deep .metrics-tree fluent-tree-item[selected] {
@@ -155,8 +164,11 @@
 }
 
 ::deep .plotly-chart-container {
+    /* Let the graph grow to fill the available row alongside the filters panel instead of
+       being capped at a fixed width that leaves large unused gaps on wide viewports. */
+    flex: 1 1 500px;
     width: 100%;
-    max-width: 650px;
+    max-width: 1100px;
     aspect-ratio: 13 / 9;
     margin-left: calc(-1 * var(--metrics-chart-horizontal-offset));
 }

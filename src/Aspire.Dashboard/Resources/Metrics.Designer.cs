@@ -141,6 +141,12 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        public static string MetricsInstrumentNoDataTooltip {
+            get {
+                return ResourceManager.GetString("MetricsInstrumentNoDataTooltip", resourceCulture);
+            }
+        }
+        
         public static string PauseInProgressText {
             get {
                 return ResourceManager.GetString("PauseInProgressText", resourceCulture);

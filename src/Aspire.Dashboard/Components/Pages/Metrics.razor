@@ -6,6 +6,8 @@
 
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
+@using Microsoft.AspNetCore.Components.Rendering
+@using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<Dashboard.Resources.Metrics> Loc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 
@@ -30,56 +32,33 @@
         Loc="@Loc"/>
 </PageTitle>
 
+@{
+    // Inside the resources layout on desktop, the filter toolbar shares the tabs row instead of taking its own row.
+    var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
+}
+
+@if (toolbarInTabsRow)
+{
+    <SectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.TabToolbarSectionName">
+        <div class="main-toolbar filter-toolbar" role="toolbar" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+            @((RenderFragment)RenderToolbar)
+        </div>
+    </SectionContent>
+}
+
 <div class="page-content-container">
     <AspirePageContentLayout
         AddNewlineOnToolbar="true"
         @ref="_contentLayout"
+        HideDesktopToolbar="@toolbarInTabsRow"
         HeaderStyle="margin-bottom: var(--spacingVerticalS);"
+        MainContentStyle="margin-top: var(--layout-top-padding);"
         MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.Metrics.MetricsViewAttributesToolbar)]">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.Metrics.MetricsHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
-            @if (ResourcesLayout is null || _selectionResourceViewModels is not null)
-            {
-                <ResourceSelect Resources="@(_selectionResourceViewModels ?? _resourceViewModels)"
-                                AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
-                                @bind-SelectedResource="PageViewModel.SelectedResource"
-                                @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
-                                CanSelectGrouping="true"
-                                LabelClass="toolbar-left" />
-            }
-
-            <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
-                                  OnPausedChanged="@PauseManager.SetMetricsPaused"
-                                  HandleClearSignal="ClearMetrics"
-                                  SelectedResource="@PageViewModel.SelectedResource"/>
-
-            <div class="toolbar-end">
-                <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
-
-                <DesktopToolbarDivider />
-
-                <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
-                              Class="toolbar-select"
-                              Id="@_selectDurationId"
-                              Items="@_durations"
-                              OptionText="@(c => c?.Name)"
-                              @bind-Value="PageViewModel.SelectedDuration"
-                              @bind-Value:after="HandleSelectedDurationChangedAsync"
-                              AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
-            </div>
-
-            @if (!ViewportInformation.IsDesktop)
-            {
-                // Show metric selector in the toolbar for mobile, since we don't have enough room to show both
-                // panels on a mobile viewport.
-                <TreeMetricSelector
-                    @ref="_treeMetricSelector"
-                    PageViewModel="@PageViewModel"
-                    IncludeLabel="true"
-                    HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
-            }
+            @((RenderFragment)RenderToolbar)
         </ToolbarSection>
         <MainSection>
             <div style="width: 100%; height: 100%; overflow: auto;">
@@ -184,3 +163,49 @@
         </FooterSection>
     </AspirePageContentLayout>
 </div>
+
+@code {
+    private void RenderToolbar(RenderTreeBuilder __builder)
+    {
+        @if (ResourcesLayout is null || _selectionResourceViewModels is not null)
+        {
+            <ResourceSelect Resources="@(_selectionResourceViewModels ?? _resourceViewModels)"
+                            AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
+                            @bind-SelectedResource="PageViewModel.SelectedResource"
+                            @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
+                            CanSelectGrouping="true"
+                            LabelClass="toolbar-left" />
+        }
+
+        <SignalsActionsDisplay IsPaused="@PauseManager.AreMetricsPaused(out _)"
+                              OnPausedChanged="@PauseManager.SetMetricsPaused"
+                              HandleClearSignal="ClearMetrics"
+                              SelectedResource="@PageViewModel.SelectedResource"/>
+
+        <div class="toolbar-end">
+            <label for="@_selectDurationId">@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]</label>
+
+            <DesktopToolbarDivider />
+
+            <FluentSelect TOption="SelectViewModel<TimeSpan>" TValue="SelectViewModel<TimeSpan>"
+                          Class="toolbar-select"
+                          Id="@_selectDurationId"
+                          Items="@_durations"
+                          OptionText="@(c => c?.Name)"
+                          @bind-Value="PageViewModel.SelectedDuration"
+                          @bind-Value:after="HandleSelectedDurationChangedAsync"
+                          AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]"/>
+        </div>
+
+        @if (!ViewportInformation.IsDesktop)
+        {
+            // Show metric selector in the toolbar for mobile, since we don't have enough room to show both
+            // panels on a mobile viewport.
+            <TreeMetricSelector
+                @ref="_treeMetricSelector"
+                PageViewModel="@PageViewModel"
+                IncludeLabel="true"
+                HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
+        }
+    }
+}

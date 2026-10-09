@@ -68,39 +68,9 @@
             }
         </section>
 
-        <section class="home-kpis" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeTelemetryLandmark)]">
-            <div class="home-kpi">
-                <div class="home-kpi-header">
-                    <span class="home-kpi-icon"><FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Width="18px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <a class="home-kpi-title" href="@DashboardUrls.StructuredLogsUrl()">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]</a>
-                </div>
-                <div class="home-kpi-stats">
-                    @KpiStat(_telemetry?.LogCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)], DashboardUrls.StructuredLogsUrl(), null)
-                    @KpiStat(_telemetry?.WarningLogCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewWarnings)], DashboardUrls.StructuredLogsUrl(logLevel: "warning"), "warning")
-                    @KpiStat(_telemetry?.ErrorLogCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewErrors)], DashboardUrls.StructuredLogsUrl(logLevel: "error"), "error")
-                </div>
-            </div>
-            <div class="home-kpi">
-                <div class="home-kpi-header">
-                    <span class="home-kpi-icon"><FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="18px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <a class="home-kpi-title" href="@DashboardUrls.TracesUrl()">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]</a>
-                </div>
-                <div class="home-kpi-stats">
-                    @KpiStat(_telemetry?.TraceCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)], DashboardUrls.TracesUrl(), null)
-                    @KpiStat(_telemetry?.FailedTraceCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)], s_failedTracesUrl, "error")
-                </div>
-            </div>
-            <div class="home-kpi">
-                <div class="home-kpi-header">
-                    <span class="home-kpi-icon"><FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Width="18px" Color="Color.Custom" CustomColor="currentColor" /></span>
-                    <a class="home-kpi-title" href="@DashboardUrls.MetricsUrl()">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)]</a>
-                </div>
-                <div class="home-kpi-stats">
-                    @KpiStat(_telemetry?.MeterCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMeters)], DashboardUrls.MetricsUrl(), null)
-                    @KpiStat(_telemetry?.InstrumentCount, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInstruments)], DashboardUrls.MetricsUrl(), null)
-                </div>
-            </div>
-        </section>
+        @ActivitySection()
+
+        @InsightsSection()
 
         <div class="home-columns">
             <section class="home-section" aria-labelledby="home-resources-title">
@@ -150,6 +120,10 @@
                                 @if (errorCount > 0)
                                 {
                                     <span class="home-error-badge" title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.HomeUnviewedErrors)], errorCount)">@errorCount</span>
+                                }
+                                @if (GetResourceActivityBuckets(resource) is { } buckets)
+                                {
+                                    @TileSparkline(buckets, ColorGenerator.Instance.GetColorVariableByKey(resourceName))
                                 }
                             </div>
                         }
@@ -243,6 +217,244 @@
 </div>
 
 @code {
+    private const double ChartWidth = 300;
+    private const double ChartHeight = 100;
+
+    private RenderFragment ActivitySection() => __builder =>
+    {
+        var activity = _telemetry?.Activity;
+        var max = activity is null ? 0 : Enumerable.Range(0, ActivityBucketCount).Max(i => activity.OkBuckets[i] + activity.ErrorBuckets[i]);
+        var slot = ChartWidth / ActivityBucketCount;
+        var barWidth = slot * 0.72;
+
+        <section class="home-activity" aria-labelledby="home-activity-title">
+            <div class="home-activity-header">
+                <div class="home-activity-title">
+                    <span class="home-live-dot" aria-hidden="true"></span>
+                    <h2 id="home-activity-title">Live activity</h2>
+                    <span class="home-activity-window">Incoming requests · last 15 min</span>
+                </div>
+                <div class="home-activity-totals">
+                    <a href="@DashboardUrls.StructuredLogsUrl()"><strong>@(_telemetry is { } t1 ? FormatCount(t1.LogCount) : "–")</strong> logs</a>
+                    <a href="@DashboardUrls.TracesUrl()"><strong>@(_telemetry is { } t2 ? FormatCount(t2.TraceCount) : "–")</strong> traces</a>
+                    <a href="@DashboardUrls.MetricsUrl()"><strong>@(_telemetry is { } t3 ? FormatCount(t3.InstrumentCount) : "–")</strong> metrics</a>
+                </div>
+            </div>
+
+            <div class="home-activity-body">
+                <div class="home-activity-stats">
+                    <div class="home-stat">
+                        <span class="home-stat-value">@(activity is null ? "–" : FormatRate(activity.RequestsPerMinute))</span>
+                        <span class="home-stat-label">requests / min</span>
+                    </div>
+                    <div class="home-stat @(activity?.ErrorRate > 0 ? "error" : null)">
+                        <span class="home-stat-value">@(activity?.ErrorRate is { } rate ? rate.ToString("P1", CultureInfo.CurrentCulture) : "–")</span>
+                        <span class="home-stat-label">error rate</span>
+                    </div>
+                    <div class="home-stat">
+                        <span class="home-stat-value">@(activity?.P95 is { } p95 ? DurationFormatter.FormatDuration(p95, CultureInfo.CurrentCulture) : "–")</span>
+                        <span class="home-stat-label">p95 latency</span>
+                    </div>
+                </div>
+
+                <div class="home-chart">
+                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="img" aria-label="Requests per 30 seconds over the last 15 minutes">
+                        <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="8" y2="8" />
+                        <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="54" y2="54" />
+                        <line class="home-chart-baseline" x1="0" x2="@Svg(ChartWidth)" y1="@Svg(ChartHeight)" y2="@Svg(ChartHeight)" />
+                        @if (activity is not null && max > 0)
+                        {
+                            for (var i = 0; i < ActivityBucketCount; i++)
+                            {
+                                var ok = activity.OkBuckets[i];
+                                var errors = activity.ErrorBuckets[i];
+                                if (ok + errors == 0)
+                                {
+                                    continue;
+                                }
+
+                                var x = (i * slot) + ((slot - barWidth) / 2);
+                                var okHeight = ok * 92.0 / max;
+                                var errorHeight = errors * 92.0 / max;
+                                var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
+                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)">
+                                    <title>@($"{FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart)} · {ok + errors} requests, {errors} failed")</title>
+                                    <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
+                                    @if (errors > 0)
+                                    {
+                                        <rect class="error" x="@Svg(x)" y="@Svg(ChartHeight - okHeight - errorHeight)" width="@Svg(barWidth)" height="@Svg(errorHeight)" />
+                                    }
+                                </g>
+                            }
+                        }
+                    </svg>
+                    @if (activity is not null && max > 0)
+                    {
+                        <span class="home-chart-max">@FormatCount(max)</span>
+                    }
+                    else
+                    {
+                        <div class="home-chart-empty">@(activity is null ? "Loading activity…" : "Waiting for requests. Interact with your app to see live traffic.")</div>
+                    }
+                    <div class="home-chart-axis" aria-hidden="true">
+                        <span>15 min ago</span>
+                        <span>now</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    };
+
+    private RenderFragment InsightsSection() => __builder =>
+    {
+        var activity = _telemetry?.Activity;
+
+        <section class="home-insights" aria-label="Insights">
+            <div class="home-insight">
+                <div class="home-insight-header">
+                    <span class="home-insight-icon slow"><FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                    <h2>Slowest endpoints</h2>
+                    <span class="home-insight-hint">p95</span>
+                </div>
+                @if (activity is null || activity.SlowestEndpoints.Count == 0)
+                {
+                    <div class="home-empty">No requests in the last 15 minutes</div>
+                }
+                else
+                {
+                    var slowest = activity.SlowestEndpoints[0].P95;
+                    <ul class="home-insight-list">
+                        @foreach (var endpoint in activity.SlowestEndpoints)
+                        {
+                            <li>
+                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" title="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
+                                    <span class="home-insight-row">
+                                        <span class="home-insight-name">@endpoint.Label</span>
+                                        <span class="home-insight-value">@DurationFormatter.FormatDuration(endpoint.P95, CultureInfo.CurrentCulture)</span>
+                                    </span>
+                                    <span class="home-insight-meter"><span class="slow" style="width: @FormatPercent(endpoint.P95.Ticks, slowest.Ticks)"></span></span>
+                                    <span class="home-event-meta">
+                                        <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(endpoint.ResourceName)"></span>
+                                        <span class="home-event-resource">@endpoint.ResourceName</span>
+                                        <span aria-hidden="true">·</span>
+                                        <span>@FormatCount(endpoint.Count) req</span>
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="home-insight">
+                <div class="home-insight-header">
+                    <span class="home-insight-icon hot"><FluentIcon Value="@(new Icons.Regular.Size16.Fire())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                    <h2>Error hotspots</h2>
+                    <span class="home-insight-hint">failed requests + error logs</span>
+                </div>
+                @if (activity is null || activity.ErrorHotspots.Count == 0)
+                {
+                    <div class="home-empty">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Success" />
+                        No errors in the last 15 minutes
+                    </div>
+                }
+                else
+                {
+                    var totalErrors = activity.ErrorHotspots.Sum(r => r.TotalErrors);
+                    <ul class="home-insight-list">
+                        @foreach (var hotspot in activity.ErrorHotspots)
+                        {
+                            <li>
+                                <a href="@DashboardUrls.StructuredLogsUrl(hotspot.Name, logLevel: "error")">
+                                    <span class="home-insight-row">
+                                        <span class="home-insight-name">
+                                            <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(hotspot.Name)"></span>
+                                            @hotspot.Name
+                                        </span>
+                                        <span class="home-insight-value">@FormatPercent(hotspot.TotalErrors, totalErrors)</span>
+                                    </span>
+                                    <span class="home-insight-meter"><span class="hot" style="width: @FormatPercent(hotspot.TotalErrors, totalErrors)"></span></span>
+                                    <span class="home-event-meta">
+                                        <span>@FormatCount(hotspot.ErrorSpans) failed requests</span>
+                                        <span aria-hidden="true">·</span>
+                                        <span>@FormatCount(hotspot.ErrorLogs) error logs</span>
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+
+            <div class="home-insight">
+                <div class="home-insight-header">
+                    <span class="home-insight-icon busy"><FluentIcon Value="@(new Icons.Regular.Size16.DataTrending())" Width="16px" Color="Color.Custom" CustomColor="currentColor" /></span>
+                    <h2>Busiest resources</h2>
+                    <span class="home-insight-hint">requests / min</span>
+                </div>
+                @if (activity is null || activity.BusiestResources.Count == 0)
+                {
+                    <div class="home-empty">No requests in the last 15 minutes</div>
+                }
+                else
+                {
+                    var busiest = activity.BusiestResources[0].Requests;
+                    var windowMinutes = s_activityBucketSize.TotalMinutes * ActivityBucketCount;
+                    <ul class="home-insight-list">
+                        @foreach (var busy in activity.BusiestResources)
+                        {
+                            <li>
+                                <a href="@DashboardUrls.TracesUrl(resource: busy.Name)">
+                                    <span class="home-insight-row">
+                                        <span class="home-insight-name">
+                                            <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(busy.Name)"></span>
+                                            @busy.Name
+                                        </span>
+                                        <span class="home-insight-value">@FormatRate(busy.Requests / windowMinutes)</span>
+                                    </span>
+                                    <span class="home-insight-meter"><span class="busy" style="width: @FormatPercent(busy.Requests, busiest)"></span></span>
+                                    <span class="home-event-meta">
+                                        <span>@FormatCount(busy.Requests) requests</span>
+                                        @if (busy.ErrorSpans > 0)
+                                        {
+                                            <span aria-hidden="true">·</span>
+                                            <span>@FormatCount(busy.ErrorSpans) failed</span>
+                                        }
+                                    </span>
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </section>
+    };
+
+    private static RenderFragment TileSparkline(int[] buckets, string color) => __builder =>
+    {
+        var max = Math.Max(1, buckets.Max());
+        var step = ChartWidth / (buckets.Length - 1);
+        var line = string.Join(" ", buckets.Select((v, i) => $"{Svg(i * step)},{Svg(ChartHeight - 4 - (v * 88.0 / max))}"));
+        <svg class="home-tile-spark" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" aria-hidden="true" style="color: @color">
+            <polygon points="0,@Svg(ChartHeight) @line @Svg(ChartWidth),@Svg(ChartHeight)" />
+            <polyline points="@line" />
+        </svg>
+    };
+
+    private static string Svg(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string FormatPercent(long value, long total) => total == 0
+        ? "0%"
+        : string.Create(CultureInfo.InvariantCulture, $"{value * 100.0 / total:0.#}%");
+
+    private static string FormatRate(double value) => value switch
+    {
+        0 => "0",
+        < 10 => value.ToString("0.#", CultureInfo.CurrentCulture),
+        _ => value.ToString("N0", CultureInfo.CurrentCulture)
+    };
+
     private static RenderFragment HealthBarSegment(int count, int total, string stateClass) => __builder =>
     {
         if (count > 0)
@@ -261,13 +473,5 @@
                 <span>@label</span>
             </li>
         }
-    };
-
-    private static RenderFragment KpiStat(int? value, string label, string href, string? severityClass) => __builder =>
-    {
-        <a class="home-kpi-stat @(value > 0 ? severityClass : null)" href="@href">
-            <span class="home-kpi-value">@(value is { } v ? FormatCount(v) : "–")</span>
-            <span class="home-kpi-label">@label</span>
-        </a>
     };
 }

@@ -19,12 +19,12 @@ public sealed partial class ResourceRelationshipGraph : ComponentBase
 {
     // A graph with both sides is sized to fit an overview card without being scaled down. Nodes are wider when only
     // one side has relationships, so the graph fills about the same width.
-    private const int ThreeColumnNodeWidth = 100;
-    private const int TwoColumnNodeWidth = 150;
-    private const int NodeHeight = 28;
-    private const int RowGap = 8;
-    private const int ThreeColumnGap = 20;
-    private const int TwoColumnGap = 36;
+    private const int ThreeColumnNodeWidth = 124;
+    private const int TwoColumnNodeWidth = 170;
+    private const int NodeHeight = 30;
+    private const int RowGap = 10;
+    private const int ThreeColumnGap = 28;
+    private const int TwoColumnGap = 44;
     private const int Padding = 2;
 
     // At 12px, text fits in a node with about one character per this many pixels, after the color dot.

@@ -1,0 +1,27 @@
+@using Aspire.Dashboard.Utils
+
+@if (_url is not null)
+{
+    <a class="container-image-link" href="@_url" target="_blank" rel="noreferrer noopener">
+        <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
+    </a>
+}
+else
+{
+    <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
+}
+
+@code {
+    private string? _url;
+
+    [Parameter]
+    public string? Value { get; set; }
+
+    [Parameter]
+    public string? HighlightText { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _url = Value is not null && ContainerImageUrlHelpers.TryGetRegistryPageUrl(Value, out var url) ? url : null;
+    }
+}

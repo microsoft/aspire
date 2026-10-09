@@ -19,14 +19,8 @@
     }
     else if (ResourcesLayout.IsMultiSelection)
     {
-        <div class="overview-selection-grid" role="list" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewSelectionSummary)]">
-            @foreach (var selectedName in ResourcesLayout.SelectedResourceNames)
-            {
-                <div role="listitem" class="overview-selection-item" @key="selectedName">
-                    @SelectionCard(selectedName)
-                </div>
-            }
-        </div>
+        @SelectionGroups(ResourcesLayout.SelectedResourceNames, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewSelectionSummary)])
+
     }
     else if (ResourceName is null)
     {
@@ -39,14 +33,8 @@
         }
         else
         {
-            <div class="overview-selection-grid" role="list" aria-label="@LayoutLoc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)]">
-                @foreach (var name in allResourceNames)
-                {
-                    <div role="listitem" class="overview-selection-item" @key="name">
-                        @SelectionCard(name)
-                    </div>
-                }
-            </div>
+            @SelectionGroups(allResourceNames, LayoutLoc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)])
+
         }
     }
     else if (Resource is not { } resource)
@@ -66,6 +54,68 @@
         var source = ResourceSourceViewModel.GetSourceViewModel(resource);
         var hasTelemetry = _telemetryKey is not null;
         var isInstrumented = hasTelemetry && TelemetryRepository.GetResource(_telemetryKey!.Value) is { UninstrumentedPeer: false };
+        // Only show telemetry cards that have something to show; an empty card wastes a large slot in the grid.
+        // While the first telemetry query for this resource is still in flight, keep a candidate card visible
+        // showing a loading skeleton instead of waiting for real counts. Otherwise these cards would pop in and
+        // reflow the whole grid a moment after the rest of the overview has already settled.
+        var showLogs = isInstrumented && (!_telemetryLoaded || _telemetry is { LogCount: > 0 });
+        var showTraces = hasTelemetry && (!_telemetryLoaded || _telemetry is { TraceCount: > 0 });
+        var showMetrics = isInstrumented && (!_telemetryLoaded || _telemetry is { Instruments.Count: > 0 });
+        var consoleLines = GetConsoleLines();
+        // Same rationale as the telemetry cards above: resources that structurally can't have endpoints
+        // (e.g. database sub-resources) or console output shouldn't waste a large empty card slot. Keep the
+        // console card visible while it's still loading so the spinner has somewhere to render.
+        var showEndpoints = urls.Count > 0;
+        var showConsole = consoleLines.Count > 0 || !_consoleLogsLoaded;
+        var properties = GetVisibleProperties();
+        var environmentVariables = GetVisibleEnvironmentVariables(resource);
+        var healthReports = GetHealthReports(resource);
+        // Resources with no health checks configured never report any, so (unlike properties/environment
+        // variables) an empty list means this resource structurally doesn't support health checks.
+        var showHealth = healthReports.Count > 0;
+        var hasVolumes = resource.Volumes.Length > 0;
+
+        // Each card asks for a width that suits its content: dense lists and log output get more columns,
+        // empty or short cards get fewer. The layout then packs cards into rows and widens cards so every row is full.
+        // This list must stay in the same order the cards are rendered in below: the packing algorithm distributes
+        // spare columns per row based on this order, and CSS grid auto-placement wraps rows in DOM order, so a
+        // mismatch here causes rows to wrap in different places than the computed spans assume.
+        List<(OverviewCard Card, int Span)> cardSpans =
+        [
+            (OverviewCard.Status, 4)
+        ];
+        if (showEndpoints)
+        {
+            cardSpans.Add((OverviewCard.Endpoints, urls.Count > 4 ? 5 : 4));
+        }
+        cardSpans.Add((OverviewCard.Relationships, relatedResources.Count == 0 ? 3 : 4));
+        if (showConsole)
+        {
+            cardSpans.Add((OverviewCard.Console, consoleLines.Count > 0 ? 7 : 4));
+        }
+        if (showLogs)
+        {
+            cardSpans.Add((OverviewCard.Logs, 5));
+        }
+        if (showTraces)
+        {
+            cardSpans.Add((OverviewCard.Traces, 6));
+        }
+        if (showMetrics)
+        {
+            cardSpans.Add((OverviewCard.Metrics, _telemetryLoaded && _telemetry!.Instruments.Count > 4 ? 6 : 4));
+        }
+        cardSpans.Add((OverviewCard.Properties, properties.Count == 0 ? 4 : 6));
+        cardSpans.Add((OverviewCard.Environment, resource.Environment.Length == 0 ? 4 : 6));
+        if (hasVolumes)
+        {
+            cardSpans.Add((OverviewCard.Volumes, 6));
+        }
+        if (showHealth)
+        {
+            cardSpans.Add((OverviewCard.Health, 6));
+        }
+        var cardLayout = OverviewCardLayout.Create(cardSpans);
 
         <div class="overview-grid">
             <section class="overview-card overview-tags-card span-12" aria-labelledby="overview-tags-title">
@@ -77,7 +127,7 @@
                 <ResourceTagEditor ResourceName="@resource.DisplayName" />
             </section>
 
-            <section class="overview-card span-4" aria-labelledby="overview-status-title">
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Status)" aria-labelledby="overview-status-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Color="Color.Primary" />
                     <h2 id="overview-status-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStatusTitle)]</h2>
@@ -125,47 +175,52 @@
                 </dl>
             </section>
 
-            <section class="overview-card span-4" aria-labelledby="overview-endpoints-title">
+            @if (showEndpoints)
+            {
+            var endpointGroups = GroupEndpoints(urls);
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Endpoints)" aria-labelledby="overview-endpoints-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.Link())" Color="Color.Primary" />
                     <h2 id="overview-endpoints-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)]</h2>
-                    @if (urls.Count > 0)
+                    @if (endpointGroups.Count > 0)
                     {
-                        <span class="overview-card-count">@urls.Count</span>
+                        <span class="overview-card-count">@endpointGroups.Count</span>
                     }
                 </div>
-                @if (urls.Count == 0)
-                {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEndpoints)]</div>
-                }
-                else
-                {
-                    <ul class="overview-list">
-                        @foreach (var url in urls)
-                        {
-                            var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
-                            <li>
-                                <span class="overview-list-label" title="@label">@label</span>
-                                @if (url.Url is not null)
-                                {
-                                    var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
-                                    <a class="overview-list-value" href="@url.Url" title="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
-                                }
-                                else
-                                {
-                                    <span class="overview-list-value overview-mono" title="@url.Text">@url.Text</span>
-                                }
-                                @if (url.IsInternal)
-                                {
-                                    <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
-                                }
-                            </li>
-                        }
-                    </ul>
-                }
+                <ul class="overview-list">
+                    @foreach (var group in endpointGroups)
+                    {
+                        var url = group.Primary;
+                        var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
+                        <li>
+                            <span class="overview-list-label" title="@label">@label</span>
+                            @if (url.Url is not null)
+                            {
+                                var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
+                                <a class="overview-list-value" href="@url.Url" title="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
+                            }
+                            else
+                            {
+                                <span class="overview-list-value overview-mono" title="@url.Text">@url.Text</span>
+                            }
+                            @if (group.Secondary?.Url is { } secondaryUrl)
+                            {
+                                @* The secondary url (typically the internal address of the same endpoint) is shown as faint
+                                   supplementary text instead of a duplicate row, and hides first as space runs out. *@
+                                var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
+                                <span class="overview-list-ghost overview-mono" title="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
+                            }
+                            @if (url.IsInternal)
+                            {
+                                <span class="overview-badge">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewInternalEndpoint)]</span>
+                            }
+                        </li>
+                    }
+                </ul>
             </section>
+            }
 
-            <section class="overview-card span-4" aria-labelledby="overview-relationships-title">
+            <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Color="Color.Primary" />
                     <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
@@ -186,35 +241,29 @@
                 }
             </section>
 
-            <section class="overview-card span-6" aria-labelledby="overview-console-title">
+            @if (showConsole)
+            {
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-console-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" Color="Color.Primary" />
                     <h2 id="overview-console-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)]</h2>
-                    <a class="overview-card-link" href="@DashboardUrls.ConsoleLogsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewOpenConsole)]</a>
                     @{
                         var consolePauseTitle = PauseManager.ConsoleLogsPaused
                             ? ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.ResumeButtonTitle)]
                             : ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.PauseButtonTitle)];
                     }
-                    <FluentButton Appearance="ButtonAppearance.Transparent"
-                                  IconOnly="true"
-                                  Class="aspire-icon-button overview-card-action"
-                                  Title="@consolePauseTitle"
-                                  aria-label="@consolePauseTitle"
-                                  aria-pressed="@(PauseManager.ConsoleLogsPaused ? "true" : "false")"
-                                  OnClick="@(() => OnConsolePausedChanged(!PauseManager.ConsoleLogsPaused))">
-                        @if (PauseManager.ConsoleLogsPaused)
-                        {
-                            <FluentIcon Value="@(new Icons.Regular.Size16.Play())" Color="Color.Primary" />
-                        }
-                        else
-                        {
-                            <FluentIcon Value="@(new Icons.Regular.Size16.Pause())" Color="Color.Primary" />
-                        }
-                    </FluentButton>
+                    <div class="overview-card-actions">
+                        @CardActionButton(
+                            consolePauseTitle,
+                            PauseManager.ConsoleLogsPaused ? new Icons.Regular.Size16.Play() : new Icons.Regular.Size16.Pause(),
+                            () => OnConsolePausedChanged(!PauseManager.ConsoleLogsPaused))
+                        @CardActionButton(
+                            Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewOpenConsole)],
+                            new Icons.Regular.Size16.Open(),
+                            () => NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resourceName)))
+                    </div>
                 </div>
                 @{
-                    var consoleLines = GetConsoleLines();
                     var consolePauseText = ConsolePauseText;
                 }
                 @if (consoleLines.Count == 0)
@@ -253,26 +302,23 @@
                     </div>
                 }
             </section>
+            }
 
-            <section class="overview-card span-6" aria-labelledby="overview-logs-title">
+            @if (showLogs)
+            {
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Logs)" aria-labelledby="overview-logs-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Color="Color.Primary" />
                     <h2 id="overview-logs-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]</h2>
-                    @if (isInstrumented)
-                    {
-                        <a class="overview-card-link" href="@DashboardUrls.StructuredLogsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
-                    }
+                    <a class="overview-card-link" href="@DashboardUrls.StructuredLogsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
-                @if (!isInstrumented)
+                @if (!_telemetryLoaded)
                 {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)]</div>
+                    @TelemetryCardSkeleton(statCount: 3, rowCount: 3)
                 }
-                else if (_telemetry is not { } telemetry)
+                else if (_telemetry is { } logsTelemetry)
                 {
-                    <div class="overview-empty"><FluentSpinner Size="SpinnerSize.ExtraSmall" /></div>
-                }
-                else
-                {
+                var telemetry = logsTelemetry;
                     <div class="overview-stats">
                         <a class="overview-stat" href="@DashboardUrls.StructuredLogsUrl(resourceName)">
                             <span class="overview-stat-value">@telemetry.LogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
@@ -300,32 +346,42 @@
                             }
                         </ul>
                     }
+                    else if (telemetry.RecentLogs.Count > 0)
+                    {
+                        <ul class="overview-list">
+                            @foreach (var log in telemetry.RecentLogs)
+                            {
+                                <li @key="log.InternalId">
+                                    <span class="overview-level">@log.Severity</span>
+                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" title="@log.Message">@log.Message</a>
+                                    <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                                </li>
+                            }
+                        </ul>
+                    }
                     else
                     {
                         <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoAttentionLogs)]</div>
                     }
                 }
             </section>
+            }
 
-            <section class="overview-card span-6" aria-labelledby="overview-traces-title">
+            @if (showTraces)
+            {
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Traces)" aria-labelledby="overview-traces-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Color="Color.Primary" />
                     <h2 id="overview-traces-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]</h2>
-                    @if (hasTelemetry)
-                    {
-                        <a class="overview-card-link" href="@DashboardUrls.TracesUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
-                    }
+                    <a class="overview-card-link" href="@DashboardUrls.TracesUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
-                @if (!hasTelemetry)
+                @if (!_telemetryLoaded)
                 {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)]</div>
+                    @TelemetryCardSkeleton(statCount: 2, rowCount: 3)
                 }
-                else if (_telemetry is not { } telemetry)
+                else if (_telemetry is { } tracesTelemetry)
                 {
-                    <div class="overview-empty"><FluentSpinner Size="SpinnerSize.ExtraSmall" /></div>
-                }
-                else
-                {
+                var telemetry = tracesTelemetry;
                     <div class="overview-stats">
                         <a class="overview-stat" href="@DashboardUrls.TracesUrl(resourceName)">
                             <span class="overview-stat-value">@telemetry.TraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
@@ -362,30 +418,23 @@
                     }
                 }
             </section>
+            }
 
-            <section class="overview-card span-6" aria-labelledby="overview-metrics-title">
+            @if (showMetrics)
+            {
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Metrics)" aria-labelledby="overview-metrics-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Color="Color.Primary" />
                     <h2 id="overview-metrics-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)]</h2>
-                    @if (isInstrumented)
-                    {
-                        <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
-                    }
+                    <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
-                @if (!isInstrumented)
+                @if (!_telemetryLoaded)
                 {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)]</div>
+                    @MetricsCardSkeleton()
                 }
-                else if (_telemetry is not { } telemetry)
+                else if (_telemetry is { } metricsTelemetry)
                 {
-                    <div class="overview-empty"><FluentSpinner Size="SpinnerSize.ExtraSmall" /></div>
-                }
-                else if (telemetry.Instruments.Count == 0)
-                {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoMetrics)]</div>
-                }
-                else
-                {
+                var telemetry = metricsTelemetry;
                     <div class="overview-stats">
                         <div class="overview-stat">
                             <span class="overview-stat-value">@telemetry.Instruments.Count.ToString("N0", CultureInfo.CurrentCulture)</span>
@@ -396,22 +445,22 @@
                             <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMeters)]</span>
                         </div>
                     </div>
-                    <ul class="overview-list">
+                    <ul class="overview-metric-tiles">
                         @foreach (var instrument in telemetry.Instruments.Take(MetricsPreviewCount))
                         {
                             <li @key="@($"{instrument.Parent.Name}/{instrument.Name}")">
-                                <a class="overview-list-value" href="@DashboardUrls.MetricsUrl(resourceName, instrument.Parent.Name, instrument.Name)" title="@instrument.Description">@instrument.Name</a>
-                                <span class="overview-list-time">@instrument.Parent.Name</span>
+                                <a class="overview-metric-tile" href="@DashboardUrls.MetricsUrl(resourceName, instrument.Parent.Name, instrument.Name)" title="@instrument.Description">
+                                    <span class="overview-metric-name">@instrument.Name</span>
+                                    <span class="overview-metric-meter">@instrument.Parent.Name</span>
+                                </a>
                             </li>
                         }
                     </ul>
                 }
             </section>
-
-            @{
-                var properties = GetVisibleProperties();
             }
-            <section class="overview-card span-6" aria-labelledby="overview-properties-title">
+
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Properties)" aria-labelledby="overview-properties-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Color="Color.Primary" />
                     <h2 id="overview-properties-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPropertiesTitle)]</h2>
@@ -451,10 +500,7 @@
                 }
             </section>
 
-            @{
-                var environmentVariables = GetVisibleEnvironmentVariables(resource);
-            }
-            <section class="overview-card span-6" aria-labelledby="overview-environment-title">
+            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Environment)" aria-labelledby="overview-environment-title">
                 <div class="overview-card-header">
                     <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Color="Color.Primary" />
                     <h2 id="overview-environment-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]</h2>
@@ -510,10 +556,10 @@
                 }
             </section>
 
-            @if (resource.Volumes.Length > 0)
+            @if (hasVolumes)
             {
                 var volumes = GetVolumes(resource);
-                <section class="overview-card span-6" aria-labelledby="overview-volumes-title">
+                <section class="overview-card" style="@cardLayout.Style(OverviewCard.Volumes)" aria-labelledby="overview-volumes-title">
                     <div class="overview-card-header">
                         <FluentIcon Value="@(new Icons.Regular.Size16.Storage())" Color="Color.Primary" />
                         <h2 id="overview-volumes-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]</h2>
@@ -524,37 +570,49 @@
                         {
                             <li>
                                 <span class="overview-list-label overview-mono" title="@volume.Source">@(string.IsNullOrEmpty(volume.Source) ? "-" : volume.Source)</span>
+                                @if (!string.IsNullOrEmpty(volume.Source))
+                                {
+                                    <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                  IconOnly="true"
+                                                  Class="aspire-icon-button overview-volume-action"
+                                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                                  AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(volume.Source, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                                        <FluentIcon Value="@(new Icons.Regular.Size16.Copy())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                                    </FluentButton>
+                                    @if (volume.IsBindMount)
+                                    {
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                      IconOnly="true"
+                                                      Class="aspire-icon-button overview-volume-action"
+                                                      Title="@ControlsStringsLoc[nameof(ControlsStrings.VolumeRevealInFileExplorer)]"
+                                                      OnClick="@(() => RevealVolumeSourceAsync(volume))">
+                                            <FluentIcon Value="@(new Icons.Regular.Size16.FolderOpen())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                                        </FluentButton>
+                                    }
+                                }
                                 <FluentIcon Value="@(new Icons.Regular.Size12.ArrowRight())" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
                                 <span class="overview-list-value overview-mono" title="@volume.Target">@volume.Target</span>
-                                @if (volume.IsReadOnly)
-                                {
-                                    <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" Title="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeColumnHeader)]" />
-                                }
-                                <span class="overview-list-time">@volume.MountType.Humanize()</span>
+                                <span class="overview-badge overview-volume-type">
+                                    @if (volume.IsReadOnly)
+                                    {
+                                        <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Color="Color.Custom" CustomColor="currentColor" Title="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeReadOnlyTitle)]" />
+                                    }
+                                    @volume.MountType.Humanize()
+                                </span>
                             </li>
                         }
                     </ul>
                 </section>
             }
 
-            @{
-                var healthReports = GetHealthReports(resource);
-            }
-            <section class="overview-card @(resource.Volumes.Length > 0 ? "span-6" : "span-12")" aria-labelledby="overview-health-title">
-                <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Heart())" Color="Color.Primary" />
-                    <h2 id="overview-health-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</h2>
-                    @if (healthReports.Count > 0)
-                    {
+            @if (showHealth)
+            {
+                <section class="overview-card" style="@cardLayout.Style(OverviewCard.Health)" aria-labelledby="overview-health-title">
+                    <div class="overview-card-header">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Heart())" Color="Color.Primary" />
+                        <h2 id="overview-health-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</h2>
                         <span class="overview-card-count">@healthReports.Count</span>
-                    }
-                </div>
-                @if (healthReports.Count == 0)
-                {
-                    <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoHealthChecks)]</div>
-                }
-                else
-                {
+                    </div>
                     <ul class="overview-list">
                         @foreach (var report in healthReports)
                         {
@@ -577,8 +635,8 @@
                             </li>
                         }
                     </ul>
-                }
-            </section>
+                </section>
+            }
         </div>
     }
 </div>
@@ -630,6 +688,83 @@
         </FluentButton>
     };
 
+    // Reuses the exact same CSS classes as the real Logs/Traces stats+list body so the skeleton occupies
+    // identical space to the content that replaces it once telemetry finishes loading. This is what prevents
+    // the overview grid from visibly reflowing a moment after the rest of the page has already settled.
+    private RenderFragment TelemetryCardSkeleton(int statCount, int rowCount) => __builder =>
+    {
+        <div class="overview-stats" aria-hidden="true">
+            @for (var i = 0; i < statCount; i++)
+            {
+                <div class="overview-stat">
+                    <span class="overview-stat-value"><FluentSkeleton Width="28px" Height="22px" Shimmer="true" /></span>
+                    <span class="overview-stat-label"><FluentSkeleton Width="48px" Height="12px" Shimmer="true" /></span>
+                </div>
+            }
+        </div>
+        <ul class="overview-list" aria-hidden="true">
+            @for (var i = 0; i < rowCount; i++)
+            {
+                <li>
+                    <span class="overview-level"><FluentSkeleton Width="36px" Height="12px" Shimmer="true" /></span>
+                    <span class="overview-list-value"><FluentSkeleton Width="60%" Height="12px" Shimmer="true" /></span>
+                    <span class="overview-list-time"><FluentSkeleton Width="32px" Height="12px" Shimmer="true" /></span>
+                </li>
+            }
+        </ul>
+    };
+
+    // The Metrics card body is a stats row plus a tile grid (not a list), so it gets its own skeleton shape
+    // that mirrors .overview-metric-tiles/.overview-metric-tile instead of reusing TelemetryCardSkeleton.
+    private RenderFragment MetricsCardSkeleton() => __builder =>
+    {
+        <div class="overview-stats" aria-hidden="true">
+            @for (var i = 0; i < 2; i++)
+            {
+                <div class="overview-stat">
+                    <span class="overview-stat-value"><FluentSkeleton Width="28px" Height="22px" Shimmer="true" /></span>
+                    <span class="overview-stat-label"><FluentSkeleton Width="48px" Height="12px" Shimmer="true" /></span>
+                </div>
+            }
+        </div>
+        <ul class="overview-metric-tiles" aria-hidden="true">
+            @for (var i = 0; i < 4; i++)
+            {
+                <li>
+                    <div class="overview-metric-tile">
+                        <span class="overview-metric-name"><FluentSkeleton Width="70%" Height="12px" Shimmer="true" /></span>
+                        <span class="overview-metric-meter"><FluentSkeleton Width="50%" Height="12px" Shimmer="true" /></span>
+                    </div>
+                </li>
+            }
+        </ul>
+    };
+
+    // Resources are grouped by type (projects, containers, executables, ...) so related resources sit together,
+    // and every card has the same fixed structure so cards in a row line up.
+    private RenderFragment SelectionGroups(IEnumerable<string> names, string ariaLabel) => __builder =>
+    {
+        <div class="overview-selection-groups" aria-label="@ariaLabel">
+            @foreach (var group in GetSelectionGroups(names))
+            {
+                <section class="overview-selection-group" aria-label="@group.Title" @key="group.Title">
+                    <h2 class="overview-selection-group-title">
+                        @group.Title
+                        <span class="overview-card-count">@group.Names.Count</span>
+                    </h2>
+                    <div class="overview-selection-grid" role="list">
+                        @foreach (var name in group.Names)
+                        {
+                            <div role="listitem" class="overview-selection-item" @key="name">
+                                @SelectionCard(name)
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    };
+
     private RenderFragment SelectionCard(string name) => __builder =>
     {
         if (ResourcesLayout is not null && ResourceViewModel.TryGetResourceByName(name, ResourcesLayout.ResourceByName, out var resource))
@@ -637,6 +772,7 @@
             var resourceName = GetResourceName(resource);
             var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
             var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true);
+            var primaryUrl = urls.FirstOrDefault();
             var otlpResource = TelemetryRepository.GetResourceByCompositeName(resource.Name);
             var isInstrumented = otlpResource is { UninstrumentedPeer: false };
             var errorCount = ResourcesLayout.GetUnviewedErrorCount(resource);
@@ -653,70 +789,51 @@
                         @stateViewModel.Text
                     </span>
                 </div>
-                <dl class="overview-properties">
-                    <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceType</dd>
+                <div class="overview-selection-meta">
                     @if (resource.HealthStatus is { } healthStatus)
                     {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)]</dt>
-                        <dd>@healthStatus.Humanize()</dd>
+                        <span>@healthStatus.Humanize()</span>
                     }
                     @if (resource.StartTimeStamp is not null)
                     {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</dt>
-                        <dd><StartTimeColumnDisplay Resource="@resource" /></dd>
+                        <span><StartTimeColumnDisplay Resource="@resource" /></span>
                     }
-                </dl>
-                @if (urls.Count > 0)
-                {
-                    <ul class="overview-list">
-                        @foreach (var url in urls.Take(SelectionUrlCount))
+                </div>
+                <div class="overview-selection-footer">
+                    <div class="overview-selection-url">
+                        @if (primaryUrl is null)
                         {
-                            <li>
-                                <span class="overview-list-label">@(url.DisplayName ?? url.Name)</span>
-                                @if (url.Url is not null)
-                                {
-                                    <a class="overview-list-value" href="@url.Url" target="_blank" rel="noreferrer noopener">@url.Text</a>
-                                }
-                                else
-                                {
-                                    <span class="overview-list-value overview-mono">@url.Text</span>
-                                }
-                            </li>
+                            <span class="overview-muted">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoEndpoints)]</span>
                         }
-                    </ul>
-                }
-                <nav class="overview-selection-links" aria-label="@resourceName">
-                    <a href="@DashboardUrls.ConsoleLogsUrl(resourceName)">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" Color="Color.Custom" CustomColor="currentColor" />
-                        @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)]
-                    </a>
-                    @if (isInstrumented)
-                    {
-                        <a href="@DashboardUrls.StructuredLogsUrl(resourceName)">
-                            <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Color="Color.Custom" CustomColor="currentColor" />
-                            @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]
-                            @if (errorCount > 0)
-                            {
-                                <span class="overview-selection-errors" title="@string.Format(CultureInfo.CurrentCulture, LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)">@errorCount</span>
-                            }
-                        </a>
-                    }
-                    @if (otlpResource is not null)
-                    {
-                        <a href="@DashboardUrls.TracesUrl(resourceName)">
-                            <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Color="Color.Custom" CustomColor="currentColor" />
-                            @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]
-                        </a>
-                    }
-                    @if (isInstrumented)
-                    {
-                        <a href="@DashboardUrls.MetricsUrl(resourceName)">
-                            <FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Color="Color.Custom" CustomColor="currentColor" />
-                            @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)]
-                        </a>
-                    }
-                </nav>
+                        else if (primaryUrl.Url is not null)
+                        {
+                            <a href="@primaryUrl.Url" title="@primaryUrl.Url" target="_blank" rel="noreferrer noopener">@primaryUrl.Text</a>
+                        }
+                        else
+                        {
+                            <span class="overview-mono" title="@primaryUrl.Text">@primaryUrl.Text</span>
+                        }
+                        @if (urls.Count > 1)
+                        {
+                            <span class="overview-badge" title="@string.Join(Environment.NewLine, urls.Skip(1).Select(u => u.Text))">+@(urls.Count - 1)</span>
+                        }
+                    </div>
+                    <nav class="overview-selection-actions" aria-label="@resourceName">
+                        @SelectionAction(DashboardUrls.ConsoleLogsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)], new Icons.Regular.Size16.SlideText(), 0)
+                        @if (isInstrumented)
+                        {
+                            @SelectionAction(DashboardUrls.StructuredLogsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], new Icons.Regular.Size16.SlideTextSparkle(), errorCount)
+                        }
+                        @if (otlpResource is not null)
+                        {
+                            @SelectionAction(DashboardUrls.TracesUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], new Icons.Regular.Size16.GanttChart(), 0)
+                        }
+                        @if (isInstrumented)
+                        {
+                            @SelectionAction(DashboardUrls.MetricsUrl(resourceName), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], new Icons.Regular.Size16.ChartMultiple(), 0)
+                        }
+                    </nav>
+                </div>
             </section>
         }
         else
@@ -730,22 +847,32 @@
                                 Value="@(new Icons.Regular.Size20.DataUsage())" />
                     <span class="overview-selection-card-title" title="@name">@name</span>
                 </div>
-                <div class="overview-empty">@LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)]</div>
-                <nav class="overview-selection-links" aria-label="@name">
-                    <a href="@DashboardUrls.StructuredLogsUrl(name)">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Color="Color.Custom" CustomColor="currentColor" />
-                        @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]
-                    </a>
-                    <a href="@DashboardUrls.TracesUrl(name)">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Color="Color.Custom" CustomColor="currentColor" />
-                        @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]
-                    </a>
-                    <a href="@DashboardUrls.MetricsUrl(name)">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Color="Color.Custom" CustomColor="currentColor" />
-                        @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)]
-                    </a>
-                </nav>
+                <div class="overview-selection-meta">
+                    <span>@LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)]</span>
+                </div>
+                <div class="overview-selection-footer">
+                    <div class="overview-selection-url"></div>
+                    <nav class="overview-selection-actions" aria-label="@name">
+                        @SelectionAction(DashboardUrls.StructuredLogsUrl(name), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)], new Icons.Regular.Size16.SlideTextSparkle(), 0)
+                        @SelectionAction(DashboardUrls.TracesUrl(name), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)], new Icons.Regular.Size16.GanttChart(), 0)
+                        @SelectionAction(DashboardUrls.MetricsUrl(name), Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)], new Icons.Regular.Size16.ChartMultiple(), 0)
+                    </nav>
+                </div>
             </section>
         }
+    };
+
+    private RenderFragment SelectionAction(string href, string title, Icon icon, int errorCount) => __builder =>
+    {
+        var label = errorCount > 0
+            ? $"{title} ({string.Format(CultureInfo.CurrentCulture, LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)})"
+            : title;
+        <a class="overview-selection-action" href="@href" title="@label" aria-label="@label">
+            <FluentIcon Value="@icon" Color="Color.Custom" CustomColor="currentColor" />
+            @if (errorCount > 0)
+            {
+                <span class="overview-selection-errors" aria-hidden="true">@errorCount</span>
+            }
+        </a>
     };
 }

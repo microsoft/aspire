@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Model;
@@ -115,11 +116,22 @@ public sealed partial class ResourceOverview
 
             // New resource servers send the parameter value as a known property, while legacy fallback metadata
             // exposes it as an unknown property. Register both keys so the renderer works in both cases.
-            _propertyValueComponents = new Dictionary<string, ComponentMetadata>
-            {
-                [KnownProperties.Parameter.Value] = metadata,
-                [DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata
-            };
+            _propertyValueComponents ??= [];
+            _propertyValueComponents[KnownProperties.Parameter.Value] = metadata;
+            _propertyValueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Parameter.Value)] = metadata;
+        }
+
+        // Link the container image to its registry page (Docker Hub or MCR) when we're confident of the URL.
+        if (resource.TryGetContainerImage(out _))
+        {
+            var metadata = new ComponentMetadata { Type = typeof(ContainerImageValue) };
+
+            // Resource servers with producer-supplied metadata send the container image as a known property,
+            // while legacy fallback metadata (see LegacyResourcePropertyMetadata) also keys it by the same
+            // name. Register both the known and unknown-property keys so the renderer works in both cases.
+            _propertyValueComponents ??= [];
+            _propertyValueComponents[KnownProperties.Container.Image] = metadata;
+            _propertyValueComponents[DisplayedResourcePropertyViewModel.GetUnknownKey(KnownProperties.Container.Image)] = metadata;
         }
     }
 
@@ -174,6 +186,14 @@ public sealed partial class ResourceOverview
 
     private static List<VolumeViewModel> GetVolumes(ResourceViewModel resource) =>
         resource.Volumes.OrderBy(v => v.Source, StringComparer.OrdinalIgnoreCase).ToList();
+
+    private async Task RevealVolumeSourceAsync(VolumeViewModel volume)
+    {
+        if (!VolumePathLauncher.TryReveal(volume.Source))
+        {
+            await ToastService.ShowErrorToastAsync(string.Format(CultureInfo.CurrentCulture, ControlsStringsLoc[nameof(Dashboard.Resources.ControlsStrings.VolumeRevealFailed)], volume.Source));
+        }
+    }
 
     /// <summary>
     /// Tracks whether the sensitive values of a card are masked. Individual values can be unmasked from the grid, so

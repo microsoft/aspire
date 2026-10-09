@@ -31,12 +31,13 @@
                             ExpandedChanged="@(expanded => SetMeterExpanded(meterGroup.Key, expanded))">
                 @foreach (var instrument in meterGroup.OrderBy(i => i.Name))
                 {
+                    var hasData = HasInstrumentData(instrument);
                     <FluentTreeItem @key="instrument"
                                     Id="@GetInstrumentTreeItemId(instrument.Parent.Name, instrument.Name)"
-                                    Class="nested"
+                                    Class="@(hasData ? "nested" : "nested no-data")"
                                     Text="@instrument.Name"
                                     Data="@instrument"
-                                    title="@instrument.Name" />
+                                    title="@(hasData ? instrument.Name : $"{instrument.Name} \u2014 {Loc[nameof(Metrics.MetricsInstrumentNoDataTooltip)]}")" />
                 }
             </FluentTreeItem>
         }

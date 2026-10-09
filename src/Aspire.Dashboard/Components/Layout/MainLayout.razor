@@ -1,6 +1,7 @@
 @using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Resources
+@using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
@@ -20,7 +21,9 @@
             <a href="/" class="application-name">
                 <ApplicationName/>
             </a>
-            <div class="flex-filler"></div>
+            <div class="header-context">
+                <SectionOutlet SectionName="@HeaderContextSectionName" />
+            </div>
             @if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;

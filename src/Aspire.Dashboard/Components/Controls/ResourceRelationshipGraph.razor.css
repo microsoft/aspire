@@ -2,7 +2,7 @@
     display: block;
     width: 100%;
     height: auto;
-    margin: 2px auto 12px;
+    margin: auto;
     overflow: visible;
     font-family: inherit;
     font-size: 12px;
@@ -28,10 +28,11 @@
     fill: var(--colorNeutralForeground1);
 }
 
+/* The center node is distinguished by weight rather than a saturated fill, so it doesn't dominate the card. */
 .relationship-graph-node.center rect {
-    fill: var(--colorBrandBackground2);
-    stroke: var(--colorBrandStroke1);
-    stroke-width: 1.5;
+    fill: var(--colorNeutralBackground3);
+    stroke: var(--colorNeutralStroke1);
+    stroke-width: 1;
 }
 
 .relationship-graph-node.center text {
@@ -54,5 +55,5 @@ a.relationship-graph-node:focus-visible {
 
 a.relationship-graph-node:focus-visible rect {
     stroke: var(--colorStrokeFocus2);
-    stroke-width: 2;
+    stroke-width: 1.5;
 }

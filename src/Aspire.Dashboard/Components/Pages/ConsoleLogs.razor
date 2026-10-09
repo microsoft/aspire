@@ -1,8 +1,10 @@
-﻿@page "/consolelogs"
+@page "/consolelogs"
 @page "/consolelogs/resource/{resourceName}"
 @layout ResourcesLayout
 
 @using Aspire.Dashboard.Resources
+@using Microsoft.AspNetCore.Components.Rendering
+@using Microsoft.AspNetCore.Components.Sections
 
 @namespace Aspire.Dashboard.Components.Pages
 
@@ -13,122 +15,31 @@
         Loc="@Loc"/>
 </PageTitle>
 
+@{
+    // Inside the resources layout on desktop, the console toolbar shares the tabs row instead of taking its own row.
+    var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
+}
+
+@if (toolbarInTabsRow)
+{
+    <SectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.TabToolbarSectionName">
+        <div class="main-toolbar filter-toolbar" role="toolbar" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.PageToolbarLandmark)]">
+            @((RenderFragment)RenderToolbar)
+        </div>
+    </SectionContent>
+}
+
 <div class="page-content-container">
     <AspirePageContentLayout AddNewlineOnToolbar="true"
                              @ref="@_contentLayout"
-                             MainContentStyle="margin-top: 10px;"
+                             HideDesktopToolbar="@toolbarInTabsRow"
+                             MainContentStyle="margin-top: var(--layout-top-padding);"
                              MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSelectResourceToolbar)]">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
-            @if (ResourcesLayout is null)
-            {
-                <ResourceSelect Resources="_resources"
-                                AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.ResourceLabel)]"
-                                @bind-SelectedResource="PageViewModel.SelectedResource"
-                                @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
-                                LabelClass="toolbar-left" />
-            }
-
-            @if (_activeView == ConsoleLogsView.Console)
-            {
-                <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
-                                      IsPaused="@PauseManager.ConsoleLogsPaused"
-                                      OnPausedChanged="@OnPausedChanged"
-                                      SelectedResource="@PageViewModel.SelectedResource" />
-            }
-
-            @if (ResourcesLayout is null && PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
-            {
-                if (ViewportInformation.IsDesktop && (_highlightedCommands.Count > 0 || _resourceMenuItems.Count > 0))
-                {
-                    <span style="margin-left: 10px;">@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]</span>
-                }
-
-                @foreach (var command in _highlightedCommands)
-                {
-                    <FluentButton Appearance="ButtonAppearance.Default"
-                                  Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
-                                  Disabled="@(DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
-                                  OnClick="@(() => ExecuteResourceCommandAsync(command))"
-                                  Class="highlighted-command toolbar-button">
-                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" Color="Color.Primary" />
-                    </FluentButton>
-                }
-
-                if (_resourceMenuItems.Count > 0)
-                {
-                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
-                                      ButtonClass="@(ViewportInformation.IsDesktop ? "toolbar-button" : null)"
-                                      Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
-                                      ItemsProvider="@(() => _resourceMenuItems)"
-                                      Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]"
-                                      Text="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)].Value)"/>
-                }
-            }
-
-            @if (ViewportInformation.IsDesktop)
-            {
-                <div class="toolbar-end">
-                    @* This takes up too much horizontal space on mobile, so show on a new line on mobile. *@
-                    @if (_activeView == ConsoleLogsView.Console)
-                    {
-                        <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">@PageViewModel.Status</FluentLabel>
-                    }
-
-                    @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
-                    {
-                        @if (_activeView == ConsoleLogsView.Console)
-                        {
-                        <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
-                                      Class="toolbar-search"
-                                      Name="console-logs-search"
-                                      AutoComplete="off"
-                                      Immediate="true"
-                                      ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                      Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
-                            <StartTemplate>
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
-                            </StartTemplate>
-                        </FluentTextInput>
-                        }
-
-                        <AspireMenuButton
-                            ButtonAppearance="ButtonAppearance.Default"
-                            ButtonClass="toolbar-button"
-                            Icon="@(new Icons.Regular.Size20.Options())"
-                            ItemsProvider="@(() => _logsMenuItems)"
-                            Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
-                    }
-                </div>
-            }
-            else if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
-            {
-                @if (_activeView == ConsoleLogsView.Console)
-                {
-                    <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
-                                  Class="toolbar-search"
-                                  Name="console-logs-search"
-                                  AutoComplete="off"
-                                  Immediate="true"
-                                  ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                  Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                                  Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
-                                  title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
-                        <StartTemplate>
-                            <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
-                        </StartTemplate>
-                    </FluentTextInput>
-                }
-
-                <AspireMenuButton
-                    Icon="@(new Icons.Regular.Size20.Options())"
-                    ItemsProvider="@(() => _logsMenuItems)"
-                    Text="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
-            }
-
+            @((RenderFragment)RenderToolbar)
         </ToolbarSection>
 
         <MobilePageTitleToolbarSection>
@@ -201,3 +112,110 @@
         </FooterSection>
     </AspirePageContentLayout>
 </div>
+
+@code {
+    private void RenderToolbar(RenderTreeBuilder __builder)
+    {
+    @if (ResourcesLayout is null)
+    {
+        <ResourceSelect Resources="_resources"
+                        AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.ResourceLabel)]"
+                        @bind-SelectedResource="PageViewModel.SelectedResource"
+                        @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
+                        LabelClass="toolbar-left" />
+    }
+
+    @if (_activeView == ConsoleLogsView.Console)
+    {
+        <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
+                              IsPaused="@PauseManager.ConsoleLogsPaused"
+                              OnPausedChanged="@OnPausedChanged"
+                              SelectedResource="@PageViewModel.SelectedResource" />
+    }
+
+    @if (ResourcesLayout is null && PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
+    {
+        if (ViewportInformation.IsDesktop && (_highlightedCommands.Count > 0 || _resourceMenuItems.Count > 0))
+        {
+            <span style="margin-left: 10px;">@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]</span>
+        }
+
+        @foreach (var command in _highlightedCommands)
+        {
+            <FluentButton Appearance="ButtonAppearance.Default"
+                          Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
+                          Disabled="@(DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
+                          OnClick="@(() => ExecuteResourceCommandAsync(command))"
+                          Class="highlighted-command toolbar-button">
+                <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" Color="Color.Primary" />
+            </FluentButton>
+        }
+
+        if (_resourceMenuItems.Count > 0)
+        {
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="@(ViewportInformation.IsDesktop ? "toolbar-button" : null)"
+                              Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
+                              ItemsProvider="@(() => _resourceMenuItems)"
+                              Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]"
+                              Text="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)].Value)"/>
+        }
+    }
+
+    @if (ViewportInformation.IsDesktop)
+    {
+        <div class="toolbar-end">
+            @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
+            {
+                @if (_activeView == ConsoleLogsView.Console)
+                {
+                <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
+                              Class="toolbar-search"
+                              Name="console-logs-search"
+                              AutoComplete="off"
+                              Immediate="true"
+                              ImmediateDelay="@FluentUIExtensions.InputDelay"
+                              Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                              title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                    <StartTemplate>
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                    </StartTemplate>
+                </FluentTextInput>
+                }
+
+                <AspireMenuButton
+                    ButtonAppearance="ButtonAppearance.Default"
+                    ButtonClass="toolbar-button"
+                    Icon="@(new Icons.Regular.Size20.Options())"
+                    ItemsProvider="@(() => _logsMenuItems)"
+                    Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
+            }
+        </div>
+    }
+    else if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
+    {
+        @if (_activeView == ConsoleLogsView.Console)
+        {
+            <FluentTextInput TextInputType="TextInputType.Search" @bind-Value="_logFilter"
+                          Class="toolbar-search"
+                          Name="console-logs-search"
+                          AutoComplete="off"
+                          Immediate="true"
+                          ImmediateDelay="@FluentUIExtensions.InputDelay"
+                          Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                          Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
+                          title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                <StartTemplate>
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                </StartTemplate>
+            </FluentTextInput>
+        }
+
+        <AspireMenuButton
+            Icon="@(new Icons.Regular.Size20.Options())"
+            ItemsProvider="@(() => _logsMenuItems)"
+            Text="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
+    }
+
+    }
+}

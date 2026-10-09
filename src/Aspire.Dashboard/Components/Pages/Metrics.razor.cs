@@ -198,6 +198,10 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
                 viewModel.SelectedInstrument = viewModel.Instruments.FirstOrDefault(i => i.Parent.Name == MeterName && i.Name == InstrumentName);
             }
         }
+        else
+        {
+            SelectDefaultInstrument(viewModel);
+        }
         return Task.CompletedTask;
 
         SelectViewModel<ResourceTypeDetails>? TryGetSingleResource()
@@ -206,6 +210,47 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
             return apps.Count == 1 ? apps[0] : null;
         }
     }
+
+    /// <summary>
+    /// Selects an instrument when nothing is selected, so the page opens on a chart instead of an empty pane.
+    /// Instruments that describe request traffic and latency come first because they're the most useful signals
+    /// for most apps, followed by connection, CPU and memory instruments. Otherwise the first instrument is used.
+    /// </summary>
+    private static void SelectDefaultInstrument(MetricsViewModel viewModel)
+    {
+        if (viewModel.SelectedMeter is not null || viewModel.SelectedInstrument is not null || viewModel.Instruments is not { Count: > 0 } instruments)
+        {
+            return;
+        }
+
+        var instrument = s_preferredInstrumentNames
+            .Select(name => instruments.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.Ordinal)))
+            .FirstOrDefault(i => i is not null)
+            ?? instruments.OrderBy(i => i.Parent.Name, StringComparer.Ordinal).ThenBy(i => i.Name, StringComparer.Ordinal).First();
+
+        viewModel.SelectedMeter = instrument.Parent.Name;
+        viewModel.SelectedInstrument = instrument;
+    }
+
+    // Instrument names follow the OpenTelemetry semantic conventions:
+    // https://opentelemetry.io/docs/specs/semconv/http/http-metrics/
+    // https://opentelemetry.io/docs/specs/semconv/database/database-metrics/
+    // https://opentelemetry.io/docs/specs/semconv/runtime/dotnet-metrics/
+    private static readonly string[] s_preferredInstrumentNames =
+    [
+        "http.server.request.duration",
+        "http.client.request.duration",
+        "db.client.operation.duration",
+        "db.client.commands.duration",
+        "rpc.server.duration",
+        "messaging.process.duration",
+        "kestrel.active_connections",
+        "http.server.active_requests",
+        "dotnet.process.cpu.time",
+        "process.cpu.time",
+        "dotnet.gc.heap.total_allocated",
+        "process.runtime.dotnet.gc.allocations.size",
+    ];
 
     private void UpdateInstruments(MetricsViewModel viewModel)
     {
@@ -264,6 +309,8 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
                 PageViewModel.SelectedInstrument = null;
             }
         }
+
+        SelectDefaultInstrument(PageViewModel);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
 
@@ -391,6 +438,9 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
                     if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
                     {
                         PageViewModel.Instruments = instruments;
+
+                        // Instruments can arrive after the page loads, e.g. when the resource has just started.
+                        SelectDefaultInstrument(PageViewModel);
                         await InvokeAsync(StateHasChanged);
                     }
                 }

@@ -1276,6 +1276,33 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Read-only.
+        /// </summary>
+        public static string VolumeMountTypeReadOnlyTitle {
+            get {
+                return ResourceManager.GetString("VolumeMountTypeReadOnlyTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Reveal in file explorer.
+        /// </summary>
+        public static string VolumeRevealInFileExplorer {
+            get {
+                return ResourceManager.GetString("VolumeRevealInFileExplorer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Couldn't open &apos;{0}&apos;. It may not exist on this machine..
+        /// </summary>
+        public static string VolumeRevealFailed {
+            get {
+                return ResourceManager.GetString("VolumeRevealFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
         public static string VolumePathColumnHeader {

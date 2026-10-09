@@ -433,6 +433,15 @@
   <data name="VolumeMountTypeColumnHeader" xml:space="preserve">
     <value>Mount type</value>
   </data>
+  <data name="VolumeMountTypeReadOnlyTitle" xml:space="preserve">
+    <value>Read-only</value>
+  </data>
+  <data name="VolumeRevealInFileExplorer" xml:space="preserve">
+    <value>Reveal in file explorer</value>
+  </data>
+  <data name="VolumeRevealFailed" xml:space="preserve">
+    <value>Couldn't open '{0}'. It may not exist on this machine.</value>
+  </data>
   <data name="ClearAllResources" xml:space="preserve">
     <value>Remove all telemetry</value>
   </data>

@@ -101,11 +101,12 @@
                         <div class="trace-summary-layout">
                             @if (ViewportInformation.IsDesktop)
                             {
-                                @GetDesktopToolbar()
+                                @GetDesktopToolbar(trace)
                             }
                             else
                             {
                                 <div class="trace-details-mobile">
+                                    <div class="trace-back-mobile">@GetBackButton()</div>
                                     @GetTraceDetailsFragment()
                                 </div>
                             }
@@ -358,9 +359,27 @@
 </div>
 
 @code {
-    private RenderFragment GetDesktopToolbar()
+    // The trace detail page is reached by drilling into a row of the traces list, so the back button makes the way
+    // back explicit. It uses the same toolbar button styling as the rest of the row so it reads as a page control.
+    private RenderFragment GetBackButton()
+    {
+        return @<FluentButton Appearance="ButtonAppearance.Default"
+                              Class="toolbar-button trace-back-button"
+                              Title="Back to traces"
+                              IconStart="@(new Icons.Regular.Size16.ArrowLeft().WithColor(Color.Primary))"
+                              OnClick="@(() => NavigationManager.NavigateTo(TracesListUrl))">
+            Traces
+        </FluentButton>;
+    }
+
+    private RenderFragment GetDesktopToolbar(OtlpTrace trace)
     {
         return @<div class="trace-header main-toolbar">
+            <div class="trace-header-nav">
+                @GetBackButton()
+                <span class="trace-header-title" title="@GetPageTitle()">@GetPageTitle()</span>
+                <span class="trace-id">@OtlpHelpers.ToShortenedId(trace.TraceId)</span>
+            </div>
             @GetTraceDetailsFragment()
             <div class="trace-header-filters filter-toolbar"
                  role="group"

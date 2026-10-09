@@ -403,12 +403,15 @@
     background: var(--colorNeutralStroke2);
 }
 
+/* Give "All resources" a brand-tinted icon at rest (not just when selected) so it reads as the
+   primary entry point in the pane rather than just another resource row. */
 .resource-row-all .resource-row-icon {
-    color: var(--colorNeutralForeground2);
+    background: var(--resource-brand-soft);
+    color: var(--colorBrandForeground1);
 }
 
-.resource-row-all.selected .resource-row-icon {
-    color: var(--colorBrandForeground1);
+.resource-row-all .resource-row-name {
+    font-weight: 700;
 }
 
 .resource-row-icon-state {
@@ -485,7 +488,7 @@
 }
 
 .resource-header {
-    padding: 12px 20px 0;
+    padding: 12px var(--layout-right-padding) 0 var(--layout-left-padding);
     background: var(--aspire-page-background);
 }
 
@@ -637,8 +640,104 @@
 }
 
 .resource-tabs {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin-top: 10px;
     min-width: 0;
+}
+
+.resource-tabs > .resource-header-actions {
+    margin-left: auto;
+}
+
+.resource-tabs > .resource-tab-toolbar {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    margin-left: auto;
+}
+
+.resource-tab-toolbar + .resource-header-actions {
+    margin-left: 0;
+}
+
+.resource-tab-toolbar:empty {
+    display: none;
+}
+
+.resource-tab-toolbar:empty + .resource-header-actions {
+    margin-left: auto;
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar {
+    flex-wrap: nowrap;
+    padding: 0;
+}
+
+/* Compact single-line variant rendered in the app top bar, separated from the app name by a divider. */
+.resource-header-row.in-top-bar {
+    flex: 1 1 auto;
+    gap: 10px;
+    height: 32px;
+    margin-left: 10px;
+    padding-left: 16px;
+    border-left: 1px solid var(--colorNeutralStroke2);
+}
+
+.in-top-bar .resource-header-icon {
+    flex-basis: 30px;
+    align-self: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+}
+
+.in-top-bar .resource-header-icon ::deep svg {
+    width: 18px;
+    height: 18px;
+}
+
+.in-top-bar .resource-header-text {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.in-top-bar .resource-header-title {
+    flex: 0 1 auto;
+}
+
+.in-top-bar .resource-title {
+    font-size: 16px;
+    line-height: 22px;
+}
+
+.in-top-bar .resource-header-meta {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    margin-top: 0;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.in-top-bar .resource-header-urls {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.in-top-bar .resource-header-actions {
+    margin-left: auto;
+}
+
+/* Tabs are all that remain in the content header on desktop, so they need less top spacing.
+   The row is taller than the fluent-tab itself (centered via align-items), so pull it up by
+   that same offset to line the tab's top edge up with the pane filter box beside it. */
+.resource-header:not(:has(.resource-header-row)) .resource-tabs {
+    margin-top: -4px;
 }
 
 /* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
@@ -649,6 +748,50 @@
     min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
+}
+
+/* Wraps the tab row in its own layout container so a container query can react to the row's
+   actual available width - which depends on sibling pane/toolbar state, not just viewport width -
+   rather than letting FluentTabs grow a horizontal scrollbar once labels no longer fit. */
+.resource-tabs-nav {
+    container-type: inline-size;
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.resource-tabs-nav ::deep .aspire-menu-button {
+    display: none;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@container (max-width: 600px) {
+    .resource-tabs-nav ::deep .resources-tab-header {
+        display: none;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        display: inline-flex;
+    }
+}
+
+/* Tabs the selected resource doesn't support (no telemetry) stay visible so the tab row keeps its
+   shape, but read as unavailable. */
+.resource-tabs ::deep fluent-tab[disabled],
+.resource-tabs ::deep fluent-tab[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.resource-tabs ::deep fluent-tab[disabled] *,
+.resource-tabs ::deep fluent-tab[aria-disabled="true"] * {
+    cursor: not-allowed;
 }
 
 .resource-tabs ::deep .resource-tab-error-count {

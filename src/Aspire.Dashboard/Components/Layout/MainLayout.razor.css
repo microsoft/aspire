@@ -9,6 +9,14 @@
     white-space: nowrap;
 }
 
+::deep.layout > header > .header-context {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    min-width: 0;
+    height: 100%;
+}
+
 ::deep.layout > header > a.application-name {
     display: flex;
     align-items: center;

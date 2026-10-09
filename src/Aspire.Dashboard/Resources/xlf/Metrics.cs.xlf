@@ -7,6 +7,11 @@
         <target state="translated">Metriky</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsInstrumentNoDataTooltip">
+        <source>No data has been recorded for this instrument yet</source>
+        <target state="new">No data has been recorded for this instrument yet</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsInsturementDescriptionGridNameColumnHeader">
         <source>Description</source>
         <target state="translated">Popis</target>

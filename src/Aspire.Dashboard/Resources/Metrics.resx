@@ -166,6 +166,9 @@
   <data name="MetricsViewAttributesToolbar" xml:space="preserve">
     <value>View attributes</value>
   </data>
+  <data name="MetricsInstrumentNoDataTooltip" xml:space="preserve">
+    <value>No data has been recorded for this instrument yet</value>
+  </data>
   <data name="PauseInProgressText" xml:space="preserve">
     <value>Metrics capture paused at {0}</value>
     <comment>{0} is a time</comment>

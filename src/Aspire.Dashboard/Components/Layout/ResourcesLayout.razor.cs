@@ -157,6 +157,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     internal string? SelectedResourceName => _selectedResourceNames.Count == 1 ? _selectedResourceNames[0] : null;
 
     /// <summary>
+    /// The name of the section in the desktop tabs row where tab pages render their filter controls.
+    /// </summary>
+    internal const string TabToolbarSectionName = "resource-tab-toolbar";
+
+    /// <summary>
     /// Gets the app model resource that matches <see cref="SelectedResourceName"/>, if any.
     /// </summary>
     internal ResourceViewModel? SelectedResource { get; private set; }
@@ -402,6 +407,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// selected resources, the metrics page uses it for the resource whose instruments are displayed.
     /// </summary>
     internal string? RouteResourceName { get; private set; }
+
+    /// <summary>
+    /// Gets the URL of the given tab for the resources currently selected in the resource list.
+    /// </summary>
+    internal string GetTabUrl(ResourceTab tab) => GetTabUrl(tab, _selectedResourceNames, RouteResourceName);
 
     private async Task ApplyPaneModeFromLocationAsync(string location)
     {
@@ -1282,6 +1292,38 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             var isAvailable = IsTabAvailable(tab);
             return new TabItem(tab, text, icon, isVisible, isAvailable ? GetTabUrl(tab, _selectedResourceNames, RouteResourceName) : null, errorCount);
         }
+    }
+
+    // Mirrors GetTabs() as a dropdown for narrow layouts, where the FluentTabs row no longer fits and would
+    // otherwise need its own horizontal scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
+    private IList<MenuButtonItem> GetTabMenuItems()
+    {
+        var items = new List<MenuButtonItem>();
+
+        foreach (var tab in GetTabs())
+        {
+            if (!tab.IsVisible)
+            {
+                continue;
+            }
+
+            items.Add(new MenuButtonItem
+            {
+                Id = $"{GetTabId(tab.Tab)}-menu-item",
+                Text = tab.Text,
+                StartIcon = tab.Icon,
+                Icon = s_checkmarkIcon,
+                Role = MenuItemRole.Radio,
+                Checked = tab.Tab == CurrentTab,
+                IsDisabled = tab.Href is null,
+                Tooltip = tab.Href is null ? Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value : null,
+                OnClick = tab.Href is { } href
+                    ? () => { NavigationManager.NavigateTo(href); return Task.CompletedTask; }
+                    : null
+            });
+        }
+
+        return items;
     }
 
     internal static string GetStateClass(ResourceViewModel resource) => resource.KnownState switch

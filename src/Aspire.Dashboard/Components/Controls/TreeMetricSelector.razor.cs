@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Microsoft.AspNetCore.Components;
 
@@ -10,6 +11,11 @@ namespace Aspire.Dashboard.Components.Controls;
 public partial class TreeMetricSelector
 {
     private readonly Dictionary<string, bool> _meterExpansion = new(StringComparer.Ordinal);
+
+    // Cache keyed by instrument so we don't re-query the telemetry store on every render.
+    // Cleared whenever the selected resource changes so stale "no data" results from a
+    // previous resource aren't carried over.
+    private readonly Dictionary<OtlpInstrumentKey, bool> _instrumentHasDataCache = new();
 
     [Parameter, EditorRequired]
     public required Func<Task> HandleSelectedTreeItemChangedAsync { get; set; }
@@ -28,7 +34,26 @@ public partial class TreeMetricSelector
     public void OnResourceChanged()
     {
         _meterExpansion.Clear();
+        _instrumentHasDataCache.Clear();
         StateHasChanged();
+    }
+
+    // Lets the tree deemphasize instruments that haven't recorded any data yet, so the user
+    // can tell at a glance which metrics are worth selecting instead of clicking through each one.
+    private bool HasInstrumentData(OtlpInstrumentSummary instrument)
+    {
+        var key = instrument.GetKey();
+        if (_instrumentHasDataCache.TryGetValue(key, out var hasData))
+        {
+            return hasData;
+        }
+
+        var resourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        hasData = resourceKey is { } rk
+            && TelemetryRepository.GetInstrumentLatestEndTime(rk, instrument.Parent.Name, instrument.Name) is not null;
+
+        _instrumentHasDataCache[key] = hasData;
+        return hasData;
     }
 
     private string? GetSelectedTreeItemId()
