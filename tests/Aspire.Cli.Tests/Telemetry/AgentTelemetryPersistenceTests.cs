@@ -16,6 +16,7 @@ using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
@@ -112,6 +113,104 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
                 [("MetricData", "_OTELRESOURCE_"), ("RemoteDependencyData", "reported-operation")],
                 exportedItems.ToArray());
         }, workspace.WorkspaceRoot.FullName);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void SharedLogExporter_PersistsOnlyWhenConfigured(bool shutdown, bool persist)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var process = RemoteExecutor.Invoke(static async (storageDirectory, shutdownValue, persistValue) =>
+        {
+            // Exporter switches and cached transmitters must not affect other tests or send SDK diagnostics.
+            Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            var shutdown = bool.Parse(shutdownValue);
+            var persist = bool.Parse(persistValue);
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: persist);
+            var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var uploaded = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                requestStarted.TrySetResult();
+                await releaseUpload.Task.WaitAsync(cancellationToken);
+                uploaded.TrySetResult(payload);
+                var count = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new { itemsReceived = count, itemsAccepted = count, errors = Array.Empty<object>() }))
+                };
+            });
+            using var client = new HttpClient(handler);
+            var connectionString = $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/";
+            var services = new ServiceCollection();
+            services.AddLogging(builder => builder.AddOpenTelemetry(logging =>
+            {
+                logging.IncludeFormattedMessage = true;
+                logging.IncludeScopes = false;
+                logging.AddAspireAzureMonitorExporter(connectionString, storageDirectory, options =>
+                {
+                    Assert.Equal(connectionString, options.ConnectionString);
+                    Assert.Equal(storageDirectory, options.StorageDirectory);
+                    Assert.False(options.EnableLiveMetrics);
+                    Assert.False(options.EnableStandardMetrics);
+                    Assert.False(options.EnablePerformanceCounters);
+                    options.Transport = new HttpClientTransport(client);
+                });
+            }));
+            using var serviceProvider = services.BuildServiceProvider();
+            var provider = serviceProvider.GetRequiredService<LoggerProvider>();
+            var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Test.Product.Events");
+            string[] eventNames = ["product-event-1", "product-event-2", "product-event-3"];
+            foreach (var eventName in eventNames)
+            {
+                logger.LogInformation("{EventName}", eventName);
+            }
+
+            try
+            {
+                var drain = Task.Run(() => shutdown ? provider.Shutdown(10_000) : provider.ForceFlush(10_000));
+                if (persist)
+                {
+                    // No trace provider is present to put the shared transmitter into persistence mode.
+                    Assert.True(await drain.DefaultTimeout());
+                }
+
+                await requestStarted.Task.DefaultTimeout();
+                Assert.False(uploaded.Task.IsCompleted);
+                if (persist)
+                {
+                    Assert.NotEmpty(Directory.EnumerateFiles(storageDirectory, "*", SearchOption.AllDirectories));
+                }
+                else
+                {
+                    Assert.False(drain.IsCompleted);
+                }
+
+                releaseUpload.SetResult();
+                Assert.True(await drain.DefaultTimeout());
+                var payload = await uploaded.Task.DefaultTimeout();
+                // Ingestion receives newline-delimited envelopes such as:
+                // {"data":{"baseType":"MessageData","baseData":{"message":"product-event-1",...}},...}
+                var actualEventNames = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line =>
+                {
+                    using var envelope = JsonDocument.Parse(line);
+                    var data = envelope.RootElement.GetProperty("data");
+                    Assert.Equal("MessageData", data.GetProperty("baseType").GetString());
+                    return data.GetProperty("baseData").GetProperty("message").GetString();
+                });
+                Assert.Equal(eventNames, actualEventNames);
+            }
+            finally
+            {
+                releaseUpload.TrySetResult();
+                provider.Shutdown(10_000);
+            }
+        }, workspace.Path, shutdown.ToString(), persist.ToString());
     }
 
     [Fact]

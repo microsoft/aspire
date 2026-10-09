@@ -130,6 +130,8 @@ Exporter storage is rooted in the current user's profile, not `ASPIRE_HOME`:
 
 Azure Monitor exporter 1.9 caches its transmitter by connection string. Each product uses the same connection string for its trace and log exporters, so both signals share a transmitter and storage. `AzureMonitorTelemetryProvider` configures both exporters with the same per-product storage directory.
 
+Both signals use the Azure Monitor exporter registration extensions so their exporter-specific batch processors honor shutdown persistence and the process-level `PersistOnForceFlush` switch. A generic OpenTelemetry batch processor around an Azure Monitor exporter does not provide this persistence behavior.
+
 The Azure exporter owns batching, disk storage, retries, retention, and cross-process leases. Buffering and storage are best effort: abrupt termination, storage limits, filesystem failures, and ingestion errors can prevent delivery.
 
 `AzureMonitorTelemetryProvider` owns the tracer provider, log provider, and private logging services. Force flush and shutdown run concurrently for traces and logs and combine their success results. Shutdown is idempotent and waits for in-flight force flushes before shutting down either provider. Disposal releases the product providers without disposing the application's logger factory.

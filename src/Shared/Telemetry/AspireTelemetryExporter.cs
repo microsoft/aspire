@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Azure.Monitor.OpenTelemetry.Exporter;
-using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Trace;
 
@@ -41,10 +40,13 @@ internal static class AspireTelemetryExporter
         string storageDirectory,
         Action<AzureMonitorExporterOptions>? configure = null)
     {
-        var exporterOptions = new AzureMonitorExporterOptions();
-        ConfigureExporter(exporterOptions, connectionString, storageDirectory);
-        configure?.Invoke(exporterOptions);
-        return options.AddProcessor(new BatchLogRecordExportProcessor(new AzureMonitorLogExporter(exporterOptions)));
+        // The exporter-specific batch processor implements shutdown and force-flush persistence.
+        // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/README.md#telemetry-delivery-on-shutdown
+        return options.AddAzureMonitorLogExporter(exporterOptions =>
+        {
+            ConfigureExporter(exporterOptions, connectionString, storageDirectory);
+            configure?.Invoke(exporterOptions);
+        });
     }
 
     internal static void ConfigureExporter(AzureMonitorExporterOptions options, string connectionString, string storageDirectory)
