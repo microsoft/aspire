@@ -40,18 +40,11 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
 
 resource env 'Microsoft.App/managedEnvironments@2026-03-02-preview' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: env_law.properties.customerId
-        sharedKey: env_law.listKeys().primarySharedKey
-      }
-    }
     environmentMode: 'Express'
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
