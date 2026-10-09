@@ -193,7 +193,8 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
-Configure hosted-agent tools in the agent application, not in the AppHost.
+The preview `HostedAgentConfiguration.Tools` property has been removed. Configure hosted-agent
+tools in the agent application, not in the AppHost.
 
 ## Toolbox usage
 
