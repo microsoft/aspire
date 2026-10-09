@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"reflect"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -843,6 +845,31 @@ func getString(m map[string]any, key string) string {
 		}
 	}
 	return ""
+}
+
+func openConnection(socketPath string, timeout time.Duration) (io.ReadWriteCloser, error) {
+	if runtime.GOOS == "windows" {
+		pipePath := `\\.\pipe\` + socketPath
+		return openNamedPipe(pipePath)
+	}
+	dialer := net.Dialer{}
+	if timeout > 0 {
+		dialer.Timeout = timeout
+	}
+	return dialer.Dial("unix", socketPath)
+}
+
+func openNamedPipe(path string) (io.ReadWriteCloser, error) {
+	// Go 1.26 supports Windows FILE_FLAG_* bits in os.OpenFile.
+	// Overlapped I/O lets the background read and authentication write run
+	// concurrently and allows Close to cancel a pending read.
+	// https://go.dev/doc/go1.26#os
+	const fileFlagOverlapped = 0x40000000
+	f, err := os.OpenFile(path, os.O_RDWR|fileFlagOverlapped, 0)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 // validateCapabilityArgs checks for circular references in arguments before sending to the server.
