@@ -81,7 +81,7 @@ Integration package installation succeeds only after command completion and clea
 `ChildProcess` owns the common shutdown implementation for both cancellation and disposal:
 
 1. If the caller supplies an enabled graceful window and signaler, signal and exit observation run concurrently within that window.
-2. If graceful exit does not finish in time, terminate the process tree and bound exit observation by the termination timeout.
+2. If graceful exit does not finish in time, terminate the process tree and bound exit observation by the termination timeout. Windows `AppHost` executions configured with `KillEntireProcessTreeOnCancel = false` terminate only the root so DCP can finish resource cleanup. `OwnedTree` escalation always terminates the full tree.
 3. For owned executions, retire and verify containment even if the root already exited.
 4. Drain output and release process handles. Disposal is idempotent.
 

@@ -289,12 +289,29 @@ public sealed class ProcessTestFixture : IAsyncLifetime
                 await NotifyReady(args[1], "started", Environment.ProcessId);
                 Block();
                 break;
+            case "cleanup-worker":
+                await NotifyReady(args[1], "worker", Environment.ProcessId);
+                await NotifyReady(args[1], "started", Environment.ProcessId);
+                using (var cleanup = new NamedPipeClientStream(".", $"{args[1]}-cleanup", PipeDirection.In, PipeOptions.Asynchronous))
+                {
+                    await cleanup.ConnectAsync(30_000);
+                    using var reader = new StreamReader(cleanup);
+                    if (await reader.ReadLineAsync() != "cleanup")
+                    {
+                        throw new InvalidOperationException("Expected cleanup request.");
+                    }
+                    await File.WriteAllTextAsync(args[2], "completed");
+                }
+                break;
             case "tree":
             case "tree-exit":
             case "tree-graceful":
+            case "tree-cleanup":
                 using (var started = new NamedPipeServerStream($"{args[1]}-started", PipeDirection.In,
                     1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
-                using (var worker = Process.Start(Command("worker", args[1]))!)
+                using (var worker = Process.Start(args[0] == "tree-cleanup"
+                    ? Command("cleanup-worker", args[1], args[2])
+                    : Command("worker", args[1]))!)
                 {
                     var shutdown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                     using var sigterm = args[0] == "tree-graceful" ? PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>

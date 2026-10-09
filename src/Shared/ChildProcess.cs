@@ -359,7 +359,12 @@ internal partial class ChildProcess : IChildProcess
             }
             if (!process.HasExited)
             {
-                KillOwnedProcess(process, entireProcessTree: true);
+                // DCP must survive Windows AppHost escalation to finish resource cleanup.
+                // Owned trees still require full-tree termination regardless of this option.
+                var preserveAppHostDescendants = _isWindows
+                    && _options.Lifetime == ChildProcessLifetime.AppHost
+                    && !_options.KillEntireProcessTreeOnCancel;
+                KillOwnedProcess(process, entireProcessTree: !preserveAppHostDescendants);
                 await process.WaitForExitAsync(CancellationToken.None).WaitAsync(
                     _options.TerminationTimeout, _options.TimeProvider, CancellationToken.None).ConfigureAwait(false);
             }

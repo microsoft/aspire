@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Pipes;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Logging;
@@ -320,6 +321,76 @@ public class ChildProcessTests(ProcessTestFixture fixture)
         {
             var entry = Assert.Single(sink.Writes, entry => entry.Exception?.Message == "test signal failure");
             Assert.Equal(LogLevel.Warning, entry.LogLevel);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(bool dispose, bool ownedTree)
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "DCP-safe AppHost escalation is Windows-specific.");
+        using var readiness = new ProcessTestReadiness();
+        using var gracefulBudget = new CancellationTokenSource();
+        using var cancellation = new CancellationTokenSource();
+        using var cleanup = new NamedPipeServerStream($"{readiness.Name}-cleanup", PipeDirection.Out, 1,
+            PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        var cleanupPath = Path.Combine(fixture.CreateDirectory().FullName, "cleanup-completed");
+        var signaled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var process = ProcessTestFixture.CreateProcess(fixture.CreateStartInfo("tree-cleanup", readiness.Name, cleanupPath),
+            new ChildProcessOptions
+            {
+                Lifetime = ownedTree ? ChildProcessLifetime.OwnedTree : ChildProcessLifetime.AppHost,
+                KillEntireProcessTreeOnCancel = false,
+                CreateSupervisorStartInfo = fixture.CreateSupervisorStartInfo,
+                BeginGracefulShutdown = () => gracefulBudget.Token,
+                RequestGracefulShutdownAsync = (_, _) =>
+                {
+                    signaled.TrySetResult();
+                    return Task.CompletedTask;
+                }
+            });
+        ProcessTestIdentity[] identities = [];
+        try
+        {
+            await process.StartAsync(TestContext.Current.CancellationToken);
+            identities = await readiness.ReadTreeAsync();
+            cancellation.Cancel();
+            var shutdown = dispose
+                ? process.DisposeAsync().AsTask()
+                : Assert.ThrowsAnyAsync<OperationCanceledException>(() => process.WaitForExitAsync(cancellation.Token));
+            await signaled.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            Assert.False(shutdown.IsCompleted);
+            gracefulBudget.Cancel();
+
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await ProcessTestFixture.AssertExitedAsync(identities[0]);
+            if (ownedTree)
+            {
+                await ProcessTestFixture.AssertExitedAsync(identities[1]);
+            }
+            else
+            {
+                using var worker = Process.GetProcessById(identities[1].ProcessId);
+                Assert.False(worker.HasExited);
+                await cleanup.WaitForConnectionAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                using var writer = new StreamWriter(cleanup, leaveOpen: true) { AutoFlush = true };
+                await writer.WriteLineAsync("cleanup");
+                await worker.WaitForExitAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30));
+                Assert.Equal(0, worker.ExitCode);
+                Assert.Equal("completed", await File.ReadAllTextAsync(cleanupPath, TestContext.Current.CancellationToken));
+            }
+        }
+        finally
+        {
+            gracefulBudget.Cancel();
+            await process.DisposeAsync();
+            foreach (var identity in identities)
+            {
+                ProcessTestFixture.KillIfRunning(identity);
+            }
         }
     }
 
