@@ -4,6 +4,7 @@
 using System.ClientModel.Primitives;
 using System.Text.Json;
 using Aspire.Components.TestUtilities;
+using Aspire.OpenAI;
 using Azure.AI.Extensions.OpenAI;
 using Azure.Core.Extensions;
 using Json.Schema;
@@ -250,7 +251,13 @@ public class AspireAzureProjectOpenAIExtensionsTests
     [InlineData(true, true, false, true)]
     [InlineData(true, true, true, false)]
     [InlineData(true, true, true, true)]
-    public async Task ModelClientsUseProjectEndpointAndIndependentTelemetry(bool keyed, bool embeddings, bool disableTracing, bool disableMetrics)
+    public async Task ModelClientsUseConfiguredEndpointsAndIndependentTelemetry(bool keyed, bool embeddings, bool disableTracing, bool disableMetrics)
+    {
+        await AssertModelClientTelemetryAsync(keyed, embeddings, disableTracing, disableMetrics, projectIntegration: true);
+        await AssertModelClientTelemetryAsync(keyed, embeddings, disableTracing, disableMetrics, projectIntegration: false);
+    }
+
+    private static async Task AssertModelClientTelemetryAsync(bool keyed, bool embeddings, bool disableTracing, bool disableMetrics, bool projectIntegration)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         using var handler = new FoundryTestHttpMessageHandler(embeddings ? """
@@ -276,9 +283,31 @@ public class AspireAzureProjectOpenAIExtensionsTests
         void ConfigureClient(IAzureClientBuilder<ProjectOpenAIClient, ProjectOpenAIClientOptions> client)
             => client.ConfigureOptions(options => options.Transport = new HttpClientPipelineTransport(httpClient));
 
-        var clientBuilder = keyed
-            ? builder.AddKeyedAzureProjectOpenAIClient("project", ConfigureSettings, ConfigureClient)
-            : builder.AddAzureProjectOpenAIClient("project", ConfigureSettings, ConfigureClient);
+        AspireOpenAIClientBuilder clientBuilder;
+        if (projectIntegration)
+        {
+            clientBuilder = keyed
+                ? builder.AddKeyedAzureProjectOpenAIClient("project", ConfigureSettings, ConfigureClient)
+                : builder.AddAzureProjectOpenAIClient("project", ConfigureSettings, ConfigureClient);
+        }
+        else
+        {
+            void ConfigureOpenAISettings(OpenAISettings settings)
+            {
+                settings.Endpoint = new("https://example.invalid/v1");
+                settings.Key = "test-key";
+                settings.DisableTracing = disableTracing;
+                settings.DisableMetrics = disableMetrics;
+            }
+
+            void ConfigureOpenAIOptions(OpenAIClientOptions options)
+                => options.Transport = new HttpClientPipelineTransport(httpClient);
+
+            clientBuilder = keyed
+                ? builder.AddKeyedOpenAIClient("openai", ConfigureOpenAISettings, ConfigureOpenAIOptions)
+                : builder.AddOpenAIClient("openai", ConfigureOpenAISettings, ConfigureOpenAIOptions);
+        }
+
         Assert.Equal(disableTracing, clientBuilder.DisableTracing);
         Assert.Equal(disableMetrics, clientBuilder.DisableMetrics);
         if (keyed)
@@ -322,8 +351,8 @@ public class AspireAzureProjectOpenAIExtensionsTests
             Assert.Equal("Hello", response.Text);
         }
 
-        Assert.Equal(embeddings ? "/api/projects/test/openai/v1/embeddings" : "/api/projects/test/openai/v1/chat/completions",
-            Assert.Single(handler.Requests).Uri.AbsolutePath);
+        var expectedEndpoint = projectIntegration ? "/api/projects/test/openai/v1" : "/v1";
+        Assert.Equal($"{expectedEndpoint}/{(embeddings ? "embeddings" : "chat/completions")}", Assert.Single(handler.Requests).Uri.AbsolutePath);
         if (!disableTracing)
         {
             Assert.Contains(exporter.Activities, activity => activity.Source.Name is "Experimental.Microsoft.Extensions.AI" or "Microsoft.Extensions.AI");
@@ -336,6 +365,9 @@ public class AspireAzureProjectOpenAIExtensionsTests
         if (!disableMetrics)
         {
             Assert.True(meterProvider!.ForceFlush());
+            Assert.Equal(
+                ["gen_ai.client.operation.duration", "gen_ai.client.token.usage"],
+                metricExporter.Metrics.Select(metric => metric.Name).Order(StringComparer.Ordinal));
             var metric = Assert.Single(metricExporter.Metrics, metric => metric.Name == "gen_ai.client.token.usage");
             long measurements = 0;
             foreach (var point in metric.GetMetricPoints())

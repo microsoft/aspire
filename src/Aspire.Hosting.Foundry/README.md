@@ -193,22 +193,12 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
-With the Azure AI SDK 3.0.0-beta.3 upgrade, custom .NET hosted-agent configuration uses
-`OpenAI.Responses.ResponseTool` in `HostedAgentConfiguration.Tools` instead of the removed
-`Azure.AI.Projects.Agents.ProjectsAgentTool` type. This legacy collection must remain empty:
-the SDK no longer serializes hosted-agent tools, so Aspire rejects non-empty collections before
-creating a remote agent version. Configure tools in the hosted agent application instead.
-Azure-specific prompt-agent tool types now live in `Azure.AI.Extensions.OpenAI`;
-Aspire's prompt-agent and toolbox tool builder methods are unchanged.
+Configure hosted-agent tools in the agent application, not in the AppHost.
 
 ## Toolbox usage
 
-Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire creates the first
-immutable Toolbox version and promotes new versions only when the configured tools, description,
-or metadata change, or when the `Aspire.Hosting.Foundry` integration is upgraded. The fingerprint
-includes the full hosting assembly informational version, including prerelease and build suffixes,
-so integration upgrades refresh the default even when the AppHost configuration is unchanged.
-Unchanged deployments using the same integration build reuse the matching version.
+Toolboxes bundle reusable Foundry tools behind a single MCP endpoint. Aspire reuses unchanged
+versions and creates a new default version when the configuration or hosting integration changes.
 
 **C#**
 

@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Azure.AI.Projects.Agents;
-using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -38,17 +37,6 @@ public partial class HostedAgentConfiguration(string image)
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public ContentFilterConfiguration? ContentFilterConfiguration { get; set; }
-
-    /// <summary>
-    /// Legacy tool configuration for the hosted agent.
-    /// </summary>
-    /// <remarks>
-    /// This collection must remain empty. The Azure AI SDK 3.x hosted-agent definition does not support
-    /// tool configuration. Non-empty collections are rejected during deployment; configure tools in
-    /// the hosted agent application instead.
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ResponseTool> Tools { get; init; } = [];
 
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
@@ -126,15 +114,6 @@ public partial class HostedAgentConfiguration(string image)
         ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
         ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
         ValidateProtocolVersions(targetResourceName);
-
-        // The SDK retains Tools for compatibility but omits it from the creation request.
-        // https://github.com/Azure/azure-sdk-for-net/blob/Azure.AI.Projects.Agents_3.0.0-beta.3/sdk/ai/Azure.AI.Projects.Agents/src/Custom/HostedAgentDefinition.cs
-        if (Tools.Count > 0)
-        {
-            throw new NotSupportedException(
-                $"Foundry hosted agent for target resource '{targetResourceName}' cannot configure tools through {nameof(HostedAgentConfiguration)}.{nameof(Tools)}. " +
-                "The Azure AI SDK 3.x hosted-agent definition does not support tool configuration. Configure tools in the hosted agent application instead.");
-        }
 
         var def = new HostedAgentDefinition(
             versions: ProtocolVersions,

@@ -13,12 +13,17 @@ Aspire.Azure.AI.Extensions.OpenAI:
 - Log categories:
   - "Azure.Core"
   - "Azure.Identity"
+  - "Microsoft.Extensions.AI.OpenTelemetryChatClient"
+  - "Microsoft.Extensions.AI.OpenTelemetryEmbeddingGenerator"
 - Activity source names:
   - "Experimental.Microsoft.Extensions.AI"
   - "Microsoft.Extensions.AI"
-- Metric names:
+- Meter names:
   - "Experimental.Microsoft.Extensions.AI"
   - "Microsoft.Extensions.AI"
+- Metric names:
+  - "gen_ai.client.operation.duration"
+  - "gen_ai.client.token.usage"
 
 Aspire.Azure.Data.Tables:
 - Log categories:
@@ -303,11 +308,17 @@ Aspire.Npgsql.EntityFrameworkCore.PostgreSQL:
 
 Aspire.OpenAI:
 - Log categories:
-  - none
+  - "Microsoft.Extensions.AI.OpenTelemetryChatClient"
+  - "Microsoft.Extensions.AI.OpenTelemetryEmbeddingGenerator"
 - Activity source names:
-  - "OpenAI.*"
+  - "Experimental.Microsoft.Extensions.AI"
+  - "Microsoft.Extensions.AI"
+- Meter names:
+  - "Experimental.Microsoft.Extensions.AI"
+  - "Microsoft.Extensions.AI"
 - Metric names:
-  - "OpenAI.*"
+  - "gen_ai.client.operation.duration"
+  - "gen_ai.client.token.usage"
 
 Aspire.Oracle.EntityFrameworkCore:
 - Log categories:

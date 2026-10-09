@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001
-#pragma warning disable OPENAI001 // Responses tools are experimental.
 
 using System.ClientModel.Primitives;
 using System.Net;
@@ -18,7 +17,6 @@ using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
@@ -753,32 +751,6 @@ public class HostedAgentExtensionTests
                 ["ConnectionStrings__my_db"] = "Host=portable"
             },
             envVars);
-    }
-
-    [Fact]
-    public async Task CreateAgentVersionAsync_RejectsToolsBeforeSendingRequests()
-    {
-        var resource = new AzureHostedAgentResource("agent", new ContainerResource("target"));
-        var configuration = new HostedAgentConfiguration("test-image")
-        {
-            ProtocolVersions = [new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0")],
-            Tools = [ResponseTool.CreateWebSearchTool()]
-        };
-        using var handler = new SequenceHttpMessageHandler();
-        using var httpClient = new HttpClient(handler);
-        var client = new AIProjectClient(
-            new Uri("https://example.invalid/api/projects/my-project"),
-            new TestTokenCredential(),
-            new AIProjectClientOptions { Transport = new HttpClientPipelineTransport(httpClient) });
-
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(() => resource.CreateAgentVersionAsync(
-            client.AgentAdministrationClient, configuration, TestContext.Current.CancellationToken));
-
-        Assert.Equal(
-            "Foundry hosted agent for target resource 'target' cannot configure tools through HostedAgentConfiguration.Tools. " +
-            "The Azure AI SDK 3.x hosted-agent definition does not support tool configuration. Configure tools in the hosted agent application instead.",
-            exception.Message);
-        Assert.Empty(handler.Requests);
     }
 
     [Fact]

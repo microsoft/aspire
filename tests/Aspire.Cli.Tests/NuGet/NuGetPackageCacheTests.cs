@@ -136,16 +136,17 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("Aspire.Azure.AI.Inference", true)]
-    [InlineData("Aspire.Azure.AI.OpenAI", true)]
-    [InlineData("aspire.azure.ai.inference", true)]
-    [InlineData("aspire.azure.ai.openai", true)]
-    [InlineData("Aspire.Azure.AI.Projects", false)]
-    [InlineData("Aspire.Azure.AI.Extensions.OpenAI", false)]
-    [InlineData("Aspire.OpenAI", false)]
-    public void AIClientPackageRetirementPolicy(string packageId, bool deprecated)
+    [InlineData("Aspire.Azure.AI.Inference")]
+    [InlineData("Aspire.Azure.AI.OpenAI")]
+    [InlineData("aspire.azure.ai.inference")]
+    [InlineData("aspire.azure.ai.openai")]
+    [InlineData("Aspire.Azure.AI.Projects")]
+    [InlineData("Aspire.Azure.AI.Extensions.OpenAI")]
+    [InlineData("Aspire.OpenAI")]
+    public void ClientPackagesAreExcludedFromHostingDiscovery(string packageId)
     {
-        Assert.Equal(deprecated, DeprecatedPackages.IsDeprecated(packageId));
+        Assert.False(PackageIdFilters.IsOfficialOrCommunityToolkitPackage(packageId));
+        Assert.False(PackageIdFilters.IsIntegrationPackageId(packageId));
     }
 
     [Fact]

@@ -28,8 +28,6 @@ internal static class DeprecatedPackages
 {
     private static readonly FrozenSet<string> s_all = new[]
     {
-        "Aspire.Azure.AI.Inference",
-        "Aspire.Azure.AI.OpenAI",
         "Aspire.Hosting.Dapr",
         "Aspire.Hosting.GitHub.Models",
         "Aspire.Hosting.NodeJs"
