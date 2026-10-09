@@ -4,7 +4,9 @@
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Telemetry;
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
@@ -12,6 +14,22 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 [UseCulture("en-US")]
 public sealed class SettingsDialogTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Render_TelemetryNoticeFollowsConfiguredEnablement(bool enabled)
+    {
+        var themeManager = new ThemeManager(new TestThemeResolver());
+        await themeManager.EnsureInitializedAsync();
+        FluentUISetupHelpers.AddCommonDashboardServices(this, themeManager: themeManager);
+        FluentUISetupHelpers.SetupFluentList(this);
+        Services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = enabled });
+
+        var cut = Render<SettingsDialog>();
+
+        Assert.Equal(enabled ? 1 : 0, cut.FindAll("a[href='https://aka.ms/aspire/dashboard-microsoft-collected-telemetry']").Count);
+    }
+
     [Fact]
     public async Task Render_RadioLabelsUseLocalizedResources()
     {

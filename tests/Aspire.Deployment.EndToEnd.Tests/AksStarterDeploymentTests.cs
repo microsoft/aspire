@@ -228,12 +228,6 @@ builder.Build().Run();
 
             content = content.Replace(buildRunPattern, replacement);
 
-            // Add required pragma to suppress experimental warning
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
-            {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
-            }
-
             File.WriteAllText(appHostFilePath, content);
 
             var apiServiceFilePath = Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs");

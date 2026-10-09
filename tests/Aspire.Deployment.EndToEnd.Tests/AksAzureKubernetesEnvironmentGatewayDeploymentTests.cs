@@ -158,13 +158,12 @@ builder.Build().Run();
             // exercising any of the AGC / Gateway / LoadBalancer code paths under test.
             Assert.Contains(buildRunPattern, content);
 
-            // Required pragmas for the new (still experimental) AGC + pipeline surface.
+            // Required pragmas for the experimental compute and AGC surface.
             const string pragmaBlock =
-                "#pragma warning disable ASPIREPIPELINES001\n" +
                 "#pragma warning disable ASPIRECOMPUTE003\n" +
                 "#pragma warning disable ASPIREAZURE003\n";
 
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
+            if (!content.Contains(pragmaBlock))
             {
                 content = pragmaBlock + content;
             }

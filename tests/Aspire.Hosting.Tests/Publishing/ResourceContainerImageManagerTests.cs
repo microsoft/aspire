@@ -3,9 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREPROJECTS001
-#pragma warning disable ASPIRECSHARPAPPS001
 
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -65,6 +63,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             """);
         var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar.gz");
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+#pragma warning disable CS0618 // Verify publishing compatibility for legacy CSharpApp resources.
         var resource = builder.AddCSharpApp("file-app", appPath, options => options.ExcludeLaunchProfile = true)
             .WithContainerBuildOptions(context =>
             {
@@ -73,6 +72,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 context.OutputPath = archivePath;
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             });
+#pragma warning restore CS0618
         using var app = builder.Build();
         var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
 
