@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using ModelContextProtocol.Protocol;
 using Nerdbank.Streams;
@@ -88,6 +89,7 @@ public class BackchannelJsonSerializerContextTests
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/20666")]
     public async Task RpcCancellationReachesServer()
     {
         var (clientStream, serverStream) = FullDuplexStream.CreatePair();

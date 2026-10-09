@@ -56,6 +56,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IGracefulShutdownWindow _shutdownService;
     private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly IEnvironment _environment;
+    private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -80,6 +81,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
         IEnvironment environment,
+        AppHostConfigurationProjector appHostConfigurationProjector,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
@@ -100,6 +102,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
         _environment = environment;
+        _appHostConfigurationProjector = appHostConfigurationProjector;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _profilingTelemetry = profilingTelemetry;
@@ -462,6 +465,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)

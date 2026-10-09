@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport and WithLaunchToolArgs are experimental but used internally for debug support.
 
@@ -2233,5 +2232,4 @@ public static partial class JavaHostingExtensions
 }
 
 #pragma warning restore ASPIREPIPELINES003
-#pragma warning restore ASPIREPIPELINES001
 #pragma warning restore ASPIREDOCKERFILEBUILDER001

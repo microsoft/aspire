@@ -549,7 +549,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             if (sessionPort.Split(':') is { Length: 2 } parts &&
                 int.TryParse(parts[1], CultureInfo.InvariantCulture, out var port))
             {
-                context.EnvironmentVariables[DashboardConfigNames.DebugSessionPortName.EnvVarName] = port;
+                context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName] = port;
             }
             else
             {
@@ -558,7 +558,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         }
         if (configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
         {
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionTokenName.EnvVarName] = sessionToken;
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName] = sessionToken;
         }
         if (configuration[KnownConfigNames.DcpInstanceIdPrefix] is { Length: > 0 } sessionDcpInstanceIdPrefix)
         {
@@ -566,15 +566,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             // stable dashboard-specific suffix so dashboard telemetry can use the
             // same scoped DCP authorization path as other IDE endpoint requests.
             var separator = sessionDcpInstanceIdPrefix.EndsWith('-') ? string.Empty : "-";
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
         }
         if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
         {
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
         }
         if (options.TelemetryOptOut is { } optOutValue)
         {
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
     }
 

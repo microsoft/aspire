@@ -107,7 +107,7 @@
     box-sizing: content-box;
     width: 16px;
     color: var(--colorBrandForegroundLink);
-    padding-inline-end: 8px;
+    padding-inline-end: 12px;
     border-inline-end: 1px solid var(--terminal-titlebar-border-color, var(--colorNeutralStroke1));
     flex-shrink: 0;
 }

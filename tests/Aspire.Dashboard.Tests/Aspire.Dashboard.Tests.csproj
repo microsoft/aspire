@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+    <PackageReference Include="Verify.XunitV3" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" PrivateAssets="all" NoWarn="NU3018;NU3027;NU3042" Condition="'$(MicrosoftFluentUIAspNetCoreComponentsIsPreview)' == 'true'" />
     <!-- axe-core accessibility scanning for the Playwright integration tests (AccessibilityTests). -->
@@ -31,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(TestsSharedDir)TestDashboardTelemetrySender.cs" Link="shared/TestDashboardTelemetrySender.cs" />
+    <Compile Include="$(TestsSharedDir)DashboardTelemetryFixture.cs" Link="shared/DashboardTelemetryFixture.cs" />
     <Compile Include="$(TestsSharedDir)TestStringLocalizer.cs" Link="shared/TestStringLocalizer.cs" />
     <Compile Include="$(TestsSharedDir)TestDialogService.cs" Link="shared/TestDialogService.cs" />
     <Compile Include="$(TestsSharedDir)TestDashboardClient.cs" Link="shared/TestDashboardClient.cs" />
@@ -50,6 +51,8 @@
   <ItemGroup>
     <Using Include="Aspire.Dashboard.ServiceClient" />
     <Using Include="Aspire.Tests.Utils" />
+    <!-- Keep the explicit test usings used throughout this project. -->
+    <Using Remove="Xunit;VerifyXunit;VerifyXunit.Verifier" />
   </ItemGroup>
 
   <Import Project="..\Shared\Playwright\Playwright.targets" />

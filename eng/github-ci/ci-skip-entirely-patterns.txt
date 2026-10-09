@@ -57,7 +57,6 @@ Aspire-Core.slnf
 # Dev/AzDO/scheduled-only infrastructure with no regular GitHub PR CI consumer.
 .config/dotnet-tools.json
 eng/Version.Details.xml
-.github/actions/create-pull-request/**
 .github/actions/preload-azure-cli-requests/**
 
 # GitHub workflow files that do not affect the CI build or test process
@@ -77,7 +76,13 @@ eng/Version.Details.xml
 .github/workflows/specialized-test-runner.yml
 .github/workflows/tests-outerloop.yml
 .github/workflows/tests-quarantine.yml
-.github/workflows/update-*.yml
+# Scheduled updater workflows without regular PR-CI validation. Keep update-actionlint.yml
+# out of this list because its edits must run the workflow and CI-selector contract tests.
+.github/workflows/update-azure-vm-sizes.yml
+.github/workflows/update-ai-foundry-models.yml
+.github/workflows/update-nix-cli-flake.yml
+.github/workflows/update-aspire-skills-bundle.yml
+.github/workflows/update-dependencies.yml
 .github/workflows/auto-rerun-transient-ci-failures.*
 
 # GitHub Agentic Workflows (gh-aw): shared action locks (.github/aw/**), compiled

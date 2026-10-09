@@ -27,6 +27,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(ConsoleLogsFilters))]
 [JsonSerializable(typeof(ConsoleLogs.ConsoleLogConsoleSettings))]
 [JsonSerializable(typeof(ConsoleLogs.ConsoleLogsPageState))]
+[JsonSerializable(typeof(Terminals.TerminalsPageState))]
 [JsonSerializable(typeof(Metrics.MetricsPageState))]
 [JsonSerializable(typeof(global::Aspire.Dashboard.Components.Pages.Resources.ResourcesPageState))]
 [JsonSerializable(typeof(StructuredLogs.StructuredLogsPageState))]

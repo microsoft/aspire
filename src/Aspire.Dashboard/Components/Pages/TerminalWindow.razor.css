@@ -20,7 +20,7 @@
     display: flex;
     align-items: center;
     flex: 0 0 30px;
-    padding-inline: 8px;
+    padding-inline: 12px;
     background: var(--colorNeutralBackground2);
 }
 

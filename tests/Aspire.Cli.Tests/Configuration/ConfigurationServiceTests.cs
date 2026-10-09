@@ -263,6 +263,33 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WhenLocalConfigDoesNotContainKey_FallsBackToGlobalConfig()
+    {
+        const string configuredImage = "example.com/aspire-tunnel:global";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "language": "csharp"
+            }
+            """);
+
+        await service.SetConfigurationAsync(
+            AspireConfigContainerTunnel.BaseImageConfigPath,
+            configuredImage,
+            isGlobal: true);
+
+        var value = await service.GetConfigurationFromDirectoryAsync(
+            AspireConfigContainerTunnel.BaseImageConfigPath,
+            workspace.WorkspaceRoot);
+
+        Assert.Equal(configuredImage, value);
+    }
+
+    [Fact]
     public async Task GetConfigurationFromDirectoryAsync_FindsNearestParentConfigWhenStartDirectoryHasNoConfig()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

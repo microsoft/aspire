@@ -269,7 +269,9 @@ public class WithTerminalTests : IAsyncLifetime
 
         var model = await BuildAndPublishBeforeStartAsync(builder);
 
-        foreach (var host in model.Resources.OfType<TerminalHostResource>())
+        var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
+        Assert.Equal(2, hosts.Count);
+        foreach (var host in hosts)
         {
             var snapshot = host.Annotations.OfType<ResourceSnapshotAnnotation>().Single();
             Assert.True(snapshot.InitialSnapshot.IsHidden,
@@ -277,46 +279,23 @@ public class WithTerminalTests : IAsyncLifetime
         }
     }
 
-    [Fact]
-    public async Task ShowTerminalHostOptionMakesTerminalHostsVisible()
-    {
-        using var builder = CreateBuilder();
-        var resource = builder.AddExecutable("myapp", "myapp", ".")
-            .WithAnnotation(new ReplicaAnnotation(2));
-        resource.WithTerminal(options => options.ShowTerminalHost = true);
-
-        var model = await BuildAndPublishBeforeStartAsync(builder);
-
-        var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
-        Assert.Equal(2, hosts.Count);
-        foreach (var host in hosts)
-        {
-            var snapshot = host.Annotations.OfType<ResourceSnapshotAnnotation>().Single();
-            Assert.False(snapshot.InitialSnapshot.IsHidden,
-                $"'{host.Name}' should be visible when ShowTerminalHost=true.");
-
-            // Visibility is the only thing that should change — exclusion from the
-            // manifest is unconditional (terminal hosts are never user-deployable).
-            Assert.Same(
-                ManifestPublishingCallbackAnnotation.Ignore,
-                host.Annotations.OfType<ManifestPublishingCallbackAnnotation>().Single());
-        }
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task TerminalHostTelemetryFollowsVisibility(bool showTerminalHost)
+    public async Task HiddenTerminalHostsExportTelemetry(bool parentExportsTelemetry)
     {
-        using var builder = CreateBuilder();
+        using var builder = CreateBuilder(disableDashboard: false);
         const string otlpEndpoint = "http://localhost:4317";
         builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = otlpEndpoint;
-        builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "true";
+        builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "false";
 
         var resource = builder.AddExecutable("myapp", "myapp", ".")
             .WithAnnotation(new ReplicaAnnotation(2))
-            .WithOtlpExporter()
-            .WithTerminal(options => options.ShowTerminalHost = showTerminalHost);
+            .WithTerminal();
+        if (parentExportsTelemetry)
+        {
+            resource.WithOtlpExporter();
+        }
 
         await using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -327,28 +306,69 @@ public class WithTerminalTests : IAsyncLifetime
         foreach (var host in hosts)
         {
             var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(host, serviceProvider: app.Services);
-            Assert.Equal(showTerminalHost ? "true" : "false", environment[KnownConfigNames.TerminalHostTelemetryEnabled]);
-
-            if (showTerminalHost)
-            {
-                Assert.Equal(otlpEndpoint, environment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
-                Assert.Equal("grpc", environment["OTEL_EXPORTER_OTLP_PROTOCOL"]);
-            }
-            else
-            {
-                Assert.Equal(
-                    [
-                        KnownConfigNames.TerminalHostParentProcessId,
-                        KnownConfigNames.TerminalHostParentProcessStartedStable,
-                        KnownConfigNames.TerminalHostTelemetryEnabled,
-                    ],
-                    environment.Keys.Order(StringComparer.Ordinal));
-            }
+            Assert.True(host.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot.IsHidden);
+            Assert.Single(host.Annotations.OfType<OtlpExporterAnnotation>());
+            Assert.Equal("true", environment[KnownConfigNames.TerminalHostTelemetryEnabled]);
+            Assert.Equal(otlpEndpoint, environment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+            Assert.Equal("grpc", environment["OTEL_EXPORTER_OTLP_PROTOCOL"]);
+            Assert.Equal(
+                "{{- index .Annotations \"otel-service-name\" -}}",
+                environment["OTEL_SERVICE_NAME"]);
+            Assert.Equal(
+                "service.instance.id={{- index .Annotations \"otel-service-instance-id\" -}}",
+                environment["OTEL_RESOURCE_ATTRIBUTES"]);
         }
 
         var parentEnvironment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource.Resource, serviceProvider: app.Services);
-        Assert.Equal(otlpEndpoint, parentEnvironment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        Assert.Equal(parentExportsTelemetry, parentEnvironment.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"));
+        if (parentExportsTelemetry)
+        {
+            Assert.Equal(otlpEndpoint, parentEnvironment["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+        }
         Assert.False(parentEnvironment.ContainsKey(KnownConfigNames.TerminalHostTelemetryEnabled));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)]
+    [InlineData(KnownConfigNames.DashboardOtlpHttpEndpointUrl)]
+    [InlineData(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl)]
+    [InlineData(KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl)]
+    public async Task TerminalHostsDisableTelemetryWhenDashboardIsDisabled(string? endpointConfigurationKey)
+    {
+        using var builder = CreateBuilder(disableDashboard: true);
+        builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.DashboardOtlpHttpEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl] = null;
+        builder.Configuration[KnownConfigNames.TerminalHostTelemetryEnabled] = "true";
+        if (endpointConfigurationKey is not null)
+        {
+            builder.Configuration[endpointConfigurationKey] = "http://localhost:4317";
+        }
+
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithOtlpExporter()
+            .WithTerminal();
+
+        await using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+        var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
+        Assert.Equal(2, hosts.Count);
+        foreach (var host in hosts)
+        {
+            var environment = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(host, serviceProvider: app.Services);
+            Assert.True(host.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot.IsHidden);
+            Assert.Empty(host.Annotations.OfType<OtlpExporterAnnotation>());
+            Assert.Equal("false", environment[KnownConfigNames.TerminalHostTelemetryEnabled]);
+            Assert.False(environment.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"));
+            Assert.False(environment.ContainsKey("OTEL_EXPORTER_OTLP_PROTOCOL"));
+            Assert.False(environment.ContainsKey("OTEL_SERVICE_NAME"));
+            Assert.False(environment.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"));
+        }
     }
 
     [Fact]
@@ -1445,6 +1465,17 @@ public class WithTerminalTests : IAsyncLifetime
         DistributedApplicationOperation operation = DistributedApplicationOperation.Run)
     {
         var builder = TestDistributedApplicationBuilder.Create(operation);
+        builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = _terminalDirectory;
+        return builder;
+    }
+
+    private IDistributedApplicationTestingBuilder CreateBuilder(bool disableDashboard)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(options =>
+        {
+            options.DisableDashboard = disableDashboard;
+            options.TrustDeveloperCertificate = false;
+        });
         builder.Configuration[TerminalHostPaths.DirectoryOverrideConfigName] = _terminalDirectory;
         return builder;
     }

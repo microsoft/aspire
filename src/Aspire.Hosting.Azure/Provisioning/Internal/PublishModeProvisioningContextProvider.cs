@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREPIPELINES001
-
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;

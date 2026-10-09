@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001, ASPIREPIPELINES001, ASPIREPROJECTS001
+#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
 using System.IO.Compression;
 using System.Reflection;
@@ -950,7 +950,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(projectRoot, "Directory.Build.props"), """
             <Project>
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
                 <RestorePackagesPath>$(MSBuildThisFileDirectory)packages</RestorePackagesPath>
                 <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
@@ -972,7 +972,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework />
-                <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+                <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
               </PropertyGroup>
               <ItemGroup>
                 <PackageReference Include="Aspire.RestoreTest" />
@@ -1023,7 +1023,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Path.Combine(Path.GetDirectoryName(sharedProject)!, "obj", "project.assets.json"))))
         {
             Assert.Equal(
-                ["net8.0", "net9.0"],
+                ["net10.0", "net11.0"],
                 assets.RootElement.GetProperty("project").GetProperty("frameworks")
                     .EnumerateObject().Select(framework => framework.Name).Order(StringComparer.Ordinal));
         }
@@ -2968,7 +2968,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
             </Project>
             """);
@@ -3056,7 +3056,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <UseAppHost>false</UseAppHost>
                 <BUILD_FLAVOR>project-default</BUILD_FLAVOR>
@@ -3784,7 +3784,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProjectFile(root, "Shared", """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               <Target Name="ValidateSolutionIdentity" BeforeTargets="CoreCompile">
                 <Error Condition="'$(BuildingSolutionFile)' == 'true'" Text="BuildingSolutionFile must match a direct project build." />
@@ -3820,7 +3820,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
               </PropertyGroup>
               <ItemGroup>
@@ -3850,7 +3850,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               {{additionalTargets}}
             </Project>
@@ -3866,7 +3866,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProjectFile(root, "Broken", """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               <Target Name="WaitThenFailBuild" BeforeTargets="CoreCompile">
                 <Exec Command="dotnet run --file &quot;$(MSBuildProjectDirectory)/BuildGate.cs&quot; --no-cache --no-launch-profile" />
@@ -3893,7 +3893,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <UseAppHost>false</UseAppHost>
               </PropertyGroup>
               <Target Name="WriteBuildSentinel" AfterTargets="Build">
@@ -3915,7 +3915,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               <Target Name="EmitBuildMarker" BeforeTargets="CoreCompile">
                 <Message Importance="high" Text="{{buildLogMarker}}" />

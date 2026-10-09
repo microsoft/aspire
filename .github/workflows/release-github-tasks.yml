@@ -77,9 +77,9 @@ concurrency:
   group: release-github-tasks
   cancel-in-progress: false
 
-permissions:
-  contents: write
-  pull-requests: write
+# Disable every configurable permission on the automatic GITHUB_TOKEN by default.
+# Repository mutations use the separate App tokens minted within each job.
+permissions: {}
 
 jobs:
   # Three-job layout:
@@ -98,6 +98,9 @@ jobs:
   release:
     name: Release Tasks
     runs-on: ubuntu-latest
+    # Authorization uses github.token; release operations use the App token.
+    permissions:
+      contents: read
     steps:
       # --- Authorize ---------------------------------------------------------
       - name: Authorize
@@ -220,6 +223,11 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # actions dispatches release notes; contents pushes the tag and creates the draft release;
+          # workflows permits releases whose target commit changes workflow files relative to main.
+          permission-actions: write
+          permission-contents: write
+          permission-workflows: write
 
       # Single checkout with full history. The tag-creation step needs all
       # branches/tags reachable (fetch-depth: 0). The baseline-pr step
@@ -284,8 +292,10 @@ jobs:
         id: check-release
         if: inputs.skip_github_release != true
         env:
-          # Read-only check, no event fired — github.token is fine.
-          GH_TOKEN: ${{ github.token }}
+          # Draft visibility requires push access; the read-only automatic token
+          # would miss an existing draft and break release retries.
+          # https://docs.github.com/en/rest/releases/releases#list-releases
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
           if gh release view "$TAG_NAME" >/dev/null 2>&1; then
@@ -410,9 +420,8 @@ jobs:
     needs: release
     if: inputs.skip_merge_pr != true
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+    # Every GitHub operation in this job uses the App token minted below.
+    permissions: {}
     steps:
       - name: Generate GitHub App Token
         id: app-token
@@ -420,6 +429,10 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents reads the release branch; pull-requests queries and creates
+          # the merge-back pull request and applies its label.
+          permission-contents: read
+          permission-pull-requests: write
 
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -496,9 +509,8 @@ jobs:
     needs: release
     if: inputs.skip_baseline_pr != true && inputs.is_prerelease != true
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
+    # Every GitHub operation in this job uses the App token minted below.
+    permissions: {}
     steps:
       - name: Generate GitHub App Token
         id: app-token
@@ -506,6 +518,10 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the baseline branch; pull-requests queries and creates
+          # the baseline pull request and applies its label.
+          permission-contents: write
+          permission-pull-requests: write
 
       # Checkout main directly — the baseline-update branch is meant to be
       # branched off main, not off the release branch the workflow was

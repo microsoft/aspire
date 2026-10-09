@@ -1,6 +1,5 @@
 @page "/terminal-window/apphost/{TerminalId}"
 @page "/terminal-window/resource/{ResourceName}"
-@page "/terminal-window/resource/{ResourceName}/{ReplicaIndex:int}"
 @layout EmptyLayout
 @namespace Aspire.Dashboard.Components.Pages
 @using Aspire.Dashboard.Components.Controls
@@ -21,11 +20,10 @@
     else if (_windowReady)
     {
         <div class="terminal-window-titlebar">
-            <TerminalTitle State="@_terminalState" FallbackTitle="@_title" />
+            <TerminalTitle State="@_terminalState" IdleIcon="@_resourceIcon" FallbackTitle="@_title" />
         </div>
         <div class="terminal-window-body">
-            <TerminalView ResourceName="@ResourceName"
-                          ReplicaIndex="@ReplicaIndex"
+            <TerminalView ResourceName="@_resourceInstanceName"
                           EndpointPathAndQuery="@_endpoint"
                           InitialFontSize="@FontSize"
                           AutoFit="true"

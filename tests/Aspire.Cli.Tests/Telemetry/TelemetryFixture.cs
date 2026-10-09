@@ -49,6 +49,11 @@ internal sealed class TelemetryFixture : IDisposable
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
         executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
         TagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        Telemetry = new AspireCliTelemetry(logger,
+            machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector,
+            telemetryConfiguration ?? new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
+        Telemetry.SetEventLogger(logger);
 
         // Simulate CliTagEnrichmentProcessor behavior: in production, tags are added
         // in OnEnd before export. Tests assert on live activities before they
@@ -69,7 +74,7 @@ internal sealed class TelemetryFixture : IDisposable
                             continue;
                         }
 
-                        activity.SetTag(tag.Key, tag.Value);
+                        Telemetry.SetActivityProperty(activity, tag.Key, tag.Value);
                     }
                 }
             },
@@ -77,9 +82,6 @@ internal sealed class TelemetryFixture : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
 
-        Telemetry = telemetryConfiguration is null
-            ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
-            : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
         if (initialize)
         {
             Telemetry.Initialize();
@@ -114,7 +116,11 @@ internal sealed class TelemetryFixture : IDisposable
     public Activity? CapturedActivity { get; private set; }
 
     /// <inheritdoc/>
-    public void Dispose() => _listener.Dispose();
+    public void Dispose()
+    {
+        Telemetry.Dispose();
+        _listener.Dispose();
+    }
 
     /// <summary>
     /// A test implementation of <see cref="IMachineInformationProvider"/> with configurable values.

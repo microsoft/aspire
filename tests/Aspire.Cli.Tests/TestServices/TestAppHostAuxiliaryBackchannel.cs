@@ -19,6 +19,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
     private int _disposeCallCount;
 
+    public string Hash { get; set; } = "test-hash";
+
     private IAppHostSocket _socket = new TestAppHostSocket("/tmp/test.sock");
 
     public IAppHostSocket Socket
@@ -54,6 +56,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
     /// </summary>
     public GetAppHostInfoResponse? AppHostInfoResponse { get; set; }
+    public Func<CancellationToken, Task<GetAppHostInfoResponse?>>? GetAppHostInfoV2Handler { get; set; }
 
     public WaitForAppHostReadyResponse? WaitForAppHostReadyResponse { get; set; }
     public Func<CancellationToken, Task<WaitForAppHostReadyResponse?>>? WaitForAppHostReadyHandler { get; set; }
@@ -130,7 +133,10 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
+        if (GetAppHostInfoV2Handler is not null)
+        {
+            return GetAppHostInfoV2Handler(cancellationToken);
+        }
 
         if (AppHostInfoResponse is not null)
         {
@@ -321,6 +327,9 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public WaitForResourceResponse WaitForResourceResult { get; set; } = new WaitForResourceResponse { Success = true, State = "Running" };
 
+    /// <summary>
+    /// Gets or sets the function invoked by WaitForResourceAsync.
+    /// </summary>
     public Func<string, string, int, CancellationToken, Task<WaitForResourceResponse>>? WaitForResourceHandler { get; set; }
 
     public Task<WaitForResourceResponse> WaitForResourceAsync(

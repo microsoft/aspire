@@ -42,6 +42,7 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
 
     public bool IsEnabled => true;
     public Task WhenConnected => Task.CompletedTask;
+    public Task WhenResourcesReady => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
     public string? MinRequiredVersion => null;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
@@ -98,7 +99,8 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
         throw new NotImplementedException();
     }
 
-    public ResourceViewModel? GetResource(string resourceName) => null;
+    public ResourceViewModel? GetResource(string resourceName) =>
+        GetResources().FirstOrDefault(resource => string.Equals(resource.Name, resourceName, StringComparison.Ordinal));
 
     public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [];
 

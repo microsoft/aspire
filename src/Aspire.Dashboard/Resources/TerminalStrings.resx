@@ -159,6 +159,21 @@
     <value>Terminal</value>
     <comment>Default terminal title when no resource name is available.</comment>
   </data>
+  <data name="TerminalsPageTitle" xml:space="preserve">
+    <value>Terminals</value>
+  </data>
+  <data name="TerminalsHeader" xml:space="preserve">
+    <value>Terminals</value>
+  </data>
+  <data name="TerminalsSelectResourceToolbar" xml:space="preserve">
+    <value>Select resource</value>
+  </data>
+  <data name="TerminalsSettings" xml:space="preserve">
+    <value>View options</value>
+  </data>
+  <data name="TerminalsSelectAResource" xml:space="preserve">
+    <value>Select a resource to view its terminal</value>
+  </data>
   <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
     <value>Decrease font size</value>
   </data>
@@ -202,8 +217,8 @@
   <data name="TerminalToolbarOpenInWindowFailed" xml:space="preserve">
     <value>Unable to open the terminal window. Reload the dashboard and try again.</value>
   </data>
-  <data name="TerminalFocusControlsHint" xml:space="preserve">
-    <value>F6: Focus terminal controls</value>
+  <data name="TerminalFocusControlsDescription" xml:space="preserve">
+    <value>Focus terminal controls</value>
   </data>
   <data name="MainLayoutToggleTerminalDock" xml:space="preserve">
     <value>Toggle terminal (`)</value>

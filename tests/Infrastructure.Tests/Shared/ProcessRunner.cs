@@ -12,9 +12,14 @@ internal static class ProcessRunner
         ITestOutputHelper output,
         string fileName,
         IReadOnlyList<string> arguments,
-        string workingDirectory)
+        string workingDirectory,
+        IReadOnlyDictionary<string, string>? environment = null)
     {
         using var process = new Process();
+        foreach (var (name, value) in environment ?? new Dictionary<string, string>())
+        {
+            process.StartInfo.Environment[name] = value;
+        }
         process.StartInfo.FileName = fileName;
         process.StartInfo.WorkingDirectory = workingDirectory;
         process.StartInfo.RedirectStandardOutput = true;

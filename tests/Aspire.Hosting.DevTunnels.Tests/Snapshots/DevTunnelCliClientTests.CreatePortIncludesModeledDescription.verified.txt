@@ -1,0 +1,17 @@
+﻿[
+  port,
+  create,
+  mytunnel.usw2,
+  --port-number,
+  3000,
+  --protocol,
+  https,
+  --description,
+  target/https,
+  --labels,
+  target,
+  --labels,
+  https,
+  --json,
+  --nologo
+]

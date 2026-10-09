@@ -41,37 +41,17 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private readonly string _sizeSelectId = $"terminal-size-{Guid.NewGuid():N}";
     private readonly string _paletteSelectId = $"terminal-palette-{Guid.NewGuid():N}";
 
-    /// <summary>Gets or sets the display name of the resource that owns the terminal.</summary>
+    /// <summary>Gets or sets the unique instance name of the resource that owns the terminal.</summary>
     [Parameter]
     public string? ResourceName { get; set; }
+
+    /// <summary>Gets or sets the canonical resource name for the detached window, defaulting to the instance name.</summary>
+    [Parameter]
+    public string? WindowResourceName { get; set; }
 
     /// <summary>Gets or sets the resource icon displayed in the titlebar when progress is inactive.</summary>
     [Parameter]
     public Icon? ResourceIcon { get; set; }
-
-    /// <summary>Gets or sets the zero-based resource replica index.</summary>
-    [Parameter]
-    public int ReplicaIndex { get; set; }
-
-    /// <summary>Gets or sets the accessible label for decreasing the font size.</summary>
-    [Parameter]
-    public string? DecreaseFontSizeLabel { get; set; }
-
-    /// <summary>Gets or sets the accessible label for increasing the font size.</summary>
-    [Parameter]
-    public string? IncreaseFontSizeLabel { get; set; }
-
-    /// <summary>Gets or sets the accessible label for the terminal dimensions selector.</summary>
-    [Parameter]
-    public string? TerminalDimensionsLabel { get; set; }
-
-    /// <summary>Gets or sets the label for fitting the terminal to the available space.</summary>
-    [Parameter]
-    public string? FitLabel { get; set; }
-
-    /// <summary>Gets or sets the hint describing focus navigation to the terminal controls.</summary>
-    [Parameter]
-    public string? FocusControlsHintLabel { get; set; }
 
     /// <summary>
     /// Gets or sets an explicit endpoint path and query, overriding the resource and replica.
@@ -90,7 +70,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public bool Chromeless { get; set; }
 
     /// <summary>Gets or sets whether the resource terminal titlebar offers an independent window.</summary>
-    /// <remarks>Only the active resource Terminal view enables this. Chromeless surfaces never render this action.</remarks>
+    /// <remarks>The Terminals page enables this. Chromeless surfaces never render this action.</remarks>
     [Parameter]
     public bool ShowOpenInWindow { get; set; }
 
@@ -221,7 +201,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             return null;
         }
         return new Uri(new Uri(NavigationManager.BaseUri),
-            $"api/terminal?resource={Uri.EscapeDataString(ResourceName)}&replica={ReplicaIndex}").PathAndQuery;
+            $"api/terminal?resource={Uri.EscapeDataString(ResourceName)}").PathAndQuery;
     }
 
     private Task InitializeTerminalAsync(string endpoint)
@@ -247,18 +227,12 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             "initTerminal", _terminalElement, BuildWebSocketUrl(endpoint), _selfRef,
             new TerminalViewOptions
             {
-                ViewId = _viewSession!.Id,
                 ReadOnly = readOnly,
-                Chromeless = Chromeless,
                 ShowDimensions = ShowDimensionsPicker,
                 AutoFit = autoFit,
                 SizeMemoryKey = SizeMemoryKey,
                 InitialFontSize = InitialFontSize,
                 Label = Loc[nameof(Resources.TerminalStrings.TerminalInputLabel)],
-                DecreaseFontSize = DecreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)],
-                IncreaseFontSize = IncreaseFontSizeLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)],
-                Fit = FitLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)],
-                FocusControlsHint = FocusControlsHintLabel ?? Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsHint)],
             }, _selectionTemplateElement, _footerElement);
         _appliedReadOnly = readOnly;
         _appliedAutoFit = autoFit;
@@ -544,15 +518,11 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }
 }
 
-/// <summary>Localized options serialized to the JS adapter using camelCase property names.</summary>
+/// <summary>Options serialized to the JS adapter using camelCase property names.</summary>
 public sealed record TerminalViewOptions
 {
-    /// <summary>The opaque registry identity for this view's input policy.</summary>
-    public required string ViewId { get; init; }
     /// <summary>Whether application input is blocked.</summary>
     public bool ReadOnly { get; init; }
-    /// <summary>Whether the host supplies its own surrounding chrome.</summary>
-    public bool Chromeless { get; init; }
     /// <summary>Whether fixed-resolution presets are offered.</summary>
     public bool ShowDimensions { get; init; } = true;
     /// <summary>Whether opening the active surface requests automatic grid sizing at the current font size.</summary>
@@ -563,14 +533,6 @@ public sealed record TerminalViewOptions
     public int? InitialFontSize { get; init; }
     /// <summary>The accessible label for the terminal's keyboard input.</summary>
     public required string Label { get; init; }
-    /// <summary>The accessible decrease-font-size label.</summary>
-    public required string DecreaseFontSize { get; init; }
-    /// <summary>The accessible increase-font-size label.</summary>
-    public required string IncreaseFontSize { get; init; }
-    /// <summary>The localized automatic-sizing option.</summary>
-    public required string Fit { get; init; }
-    /// <summary>The localized focus-navigation hint.</summary>
-    public required string FocusControlsHint { get; init; }
 }
 
 /// <summary>A generation-tagged snapshot of terminal metadata, role, sizing and connection state.</summary>

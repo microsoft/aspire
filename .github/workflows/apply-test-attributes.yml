@@ -388,6 +388,11 @@ jobs:
       with:
         client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
         private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+        # contents pushes the update branch; issues reacts to the command comment;
+        # pull-requests reads, creates, or updates the target pull request and its labels.
+        permission-contents: write
+        permission-issues: write
+        permission-pull-requests: write
 
     # Credentials must persist for git push operations later in workflow
     - name: Checkout repo

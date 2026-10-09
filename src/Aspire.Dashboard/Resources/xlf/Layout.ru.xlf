@@ -118,8 +118,8 @@
         <note />
       </trans-unit>
       <trans-unit id="NavMenuConsoleLogsTab">
-        <source>Console</source>
-        <target state="translated">Консоль</target>
+        <source>Console logs</source>
+        <target state="needs-review-translation">Консоль</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuMetricsTab">
@@ -133,8 +133,13 @@
         <note />
       </trans-unit>
       <trans-unit id="NavMenuStructuredLogsTab">
-        <source>Structured</source>
-        <target state="translated">Структурированные</target>
+        <source>Structured logs</source>
+        <target state="needs-review-translation">Структурированные</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuTerminalsTab">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleCollapse">

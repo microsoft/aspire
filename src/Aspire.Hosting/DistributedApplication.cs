@@ -680,7 +680,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
 
             EnsureComputeEnvironmentAnnotationsApplied(appModel);
 
-#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             // Execute the before-start pipeline step
             var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
             // Cast to internal implementation to access ExecuteStepSequentiallyAsync
@@ -723,8 +722,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     throw;
                 }
             }
-#pragma warning restore ASPIREPIPELINES001
-
             if (execContext.IsPublishMode)
             {
                 // Providers can remove or replace generated registries during preparation.

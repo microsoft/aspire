@@ -9,7 +9,6 @@ using Aspire.Hosting.Utils;
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
-#pragma warning disable ASPIREFILESYSTEM001
 
 namespace Aspire.Hosting;
 

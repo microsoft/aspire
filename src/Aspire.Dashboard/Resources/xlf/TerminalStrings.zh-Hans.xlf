@@ -127,9 +127,9 @@
         <target state="new">Terminals</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalFocusControlsHint">
-        <source>F6: Focus terminal controls</source>
-        <target state="new">F6: Focus terminal controls</target>
+      <trans-unit id="TerminalFocusControlsDescription">
+        <source>Focus terminal controls</source>
+        <target state="new">Focus terminal controls</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputFailed">
@@ -250,6 +250,31 @@
       <trans-unit id="TerminalWindowTrackingFailed">
         <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
         <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsHeader">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsPageTitle">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsSelectAResource">
+        <source>Select a resource to view its terminal</source>
+        <target state="new">Select a resource to view its terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsSelectResourceToolbar">
+        <source>Select resource</source>
+        <target state="new">Select resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsSettings">
+        <source>View options</source>
+        <target state="new">View options</target>
         <note />
       </trans-unit>
     </body>

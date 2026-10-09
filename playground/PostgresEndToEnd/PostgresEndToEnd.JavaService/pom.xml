@@ -19,6 +19,13 @@
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>2.21.7</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <!--
                 These overrides pin transitive versions brought in by azure-identity, Javalin,
                 and the PostgreSQL JDBC driver so Component Governance sees patched versions
@@ -83,7 +90,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.21.5</version>
         </dependency>
     </dependencies>
 

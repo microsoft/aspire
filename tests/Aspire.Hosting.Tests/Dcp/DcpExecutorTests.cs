@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
-#pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
@@ -10162,6 +10161,32 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var createdContainers = kubernetesService.CreatedResources.OfType<Container>().ToList();
         Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelDependent");
         Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelIndependent");
+    }
+
+    [Fact]
+    public async Task ContainerTunnelUsesConfiguredBaseImage()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var executable = builder.AddExecutable("executable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        builder.AddContainer("container", "image")
+            .WithEnvironment("EXECUTABLE_PORT", executable.GetEndpoint("http").Property(EndpointProperty.Port));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+            ContainerTunnelBaseImage = "example.com/tunnel-base:custom",
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelProxy = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.Equal("example.com/tunnel-base:custom", tunnelProxy.Spec.BaseImage);
     }
 
     [Fact]

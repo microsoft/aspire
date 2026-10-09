@@ -466,7 +466,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             Client = new TestDashboardClient(
                 isEnabled: true,
                 terminalChannelProvider: () => Volatile.Read(ref _updates),
-                attachTerminal: async (id, token) => (await TerminalResolver.ConnectAsync(id, 0, token))!,
+                attachTerminal: async (id, token) => (await TerminalResolver.ConnectAsync(id, token))!,
                 closeTerminal: (id, token) => Volatile.Read(ref _closes).Writer.WriteAsync(id, token).AsTask());
         }
 

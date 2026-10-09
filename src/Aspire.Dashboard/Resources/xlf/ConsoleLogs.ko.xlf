@@ -102,16 +102,6 @@
         <target state="translated">알 수 없는 상태</target>
         <note />
       </trans-unit>
-      <trans-unit id="ConsoleLogsViewConsoleOption">
-        <source>Console logs</source>
-        <target state="new">Console logs</target>
-        <note>Option in the View dropdown that shows the resource's console logs.</note>
-      </trans-unit>
-      <trans-unit id="ConsoleLogsViewTerminalOption">
-        <source>Terminal</source>
-        <target state="new">Terminal</target>
-        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
-      </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
         <target state="translated">로그를 보는 중...</target>

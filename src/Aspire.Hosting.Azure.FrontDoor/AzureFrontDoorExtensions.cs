@@ -4,7 +4,6 @@
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIRECOMPUTE002 // IComputeEnvironmentResource.GetHostAddressExpression is experimental
-#pragma warning disable ASPIREPROBES001 // EndpointProbeAnnotation is experimental
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;

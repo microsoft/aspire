@@ -19,7 +19,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture)
 {
     private const string ResourceName = "terminal-resource";
-    private const string Endpoint = "/api/terminal?resource=terminal-resource&replica=0";
+    private const string Endpoint = "/api/terminal?resource=terminal-resource";
 
     [Theory]
     [InlineData(false, false)]
@@ -135,7 +135,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             var decreaseFontButton = page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true });
             var precedingControl = page.GetByLabel("Page toolbar", new() { Exact = true })
-                .GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true });
+                .GetByRole(AriaRole.Button, new() { Name = "View options", Exact = true });
             var focusHint = page.Locator(".terminal-focus-hint");
 
             await Assertions.Expect(decreaseFontButton).ToBeEnabledAsync();
@@ -449,7 +449,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page)
     {
         await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
-        await page.GotoAsync($"/consolelogs/resource/{ResourceName}").DefaultTimeout();
+        await page.GotoAsync($"/terminals/resource/{ResourceName}").DefaultTimeout();
         var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
         await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();

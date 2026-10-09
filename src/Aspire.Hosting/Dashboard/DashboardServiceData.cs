@@ -45,8 +45,8 @@ internal sealed class DashboardServiceData : IDisposable
                 // If the resource has a TerminalAnnotation, stamp the per-replica terminal
                 // properties onto the snapshot so the Dashboard can:
                 //   * detect that a terminal is available (HasTerminal),
-                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
-                //     at the right replica (TryGetTerminalReplicaInfo).
+                //   * attach through /api/terminal?resource=<instance-name> using
+                //     the matching snapshot's consumer UDS path.
                 //
                 // The dashboard never *follows* this path itself - it only displays it
                 // (masked) in the resource details panel and uses it via

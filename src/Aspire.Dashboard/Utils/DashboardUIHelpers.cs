@@ -31,6 +31,7 @@ internal static class DashboardUIHelpers
     public const string JavascriptFormat = "javascript";
     public const string PlaintextFormat = "plaintext";
     public const string MarkdownFormat = "markdown";
+    public const string SqlFormat = "sql";
     public const string PropertiesFormat = "properties";
 
     // The initial data fetch for a FluentDataGrid doesn't include a count of items to return.

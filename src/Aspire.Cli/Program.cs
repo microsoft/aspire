@@ -641,6 +641,7 @@ public class Program
         // Commands.
         builder.Services.AddSingleton<CommonCommandServices>();
         builder.Services.AddSingleton<ResourceWaitService>();
+        builder.Services.AddSingleton<AppHostConfigurationProjector>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<DcpWorkloadCleanupService>();
         builder.Services.AddTransient<NewCommand>();
@@ -963,7 +964,8 @@ public class Program
                 return false;
             }
 
-            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--format=mermaid", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -981,7 +983,8 @@ public class Program
 
             if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
                 && i + 1 < args.Length
-                && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+                && (args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase) ||
+                    args[i + 1].Equals("mermaid", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
             }
@@ -1224,7 +1227,7 @@ public class Program
                 var commandName = GetCommandName(parseResult);
                 logger.LogDebug("Executing command: {CommandName}", commandName);
 
-                mainActivity?.SetTag(TelemetryConstants.Tags.CommandName, commandName);
+                telemetry.SetActivityProperty(mainActivity, TelemetryConstants.Tags.CommandName, commandName);
 
                 ProfilingTelemetry.ActivityScope profileCommandActivity = default;
                 try
@@ -1271,7 +1274,7 @@ public class Program
             }
             finally
             {
-                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                telemetry.SetActivityProperty(mainActivity, TelemetryConstants.Tags.ProcessExitCode, exitCode);
                 mainActivity?.Stop();
             }
 
@@ -1329,9 +1332,12 @@ public class Program
         {
             using var currentProcess = Process.GetCurrentProcess();
             activity.SetStartTime(currentProcess.StartTime);
-            activity.AddTag(TelemetryConstants.Tags.ProcessPid, currentProcess.Id);
-            activity.AddTag(TelemetryConstants.Tags.ProcessExecutableName, "aspire");
-            activity.SetTag(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect());
+            telemetry.SetActivityProperties(activity,
+            [
+                new(TelemetryConstants.Tags.ProcessPid, currentProcess.Id),
+                new(TelemetryConstants.Tags.ProcessExecutableName, "aspire"),
+                new(TelemetryConstants.Tags.InstallSource, installSourceDetector.Detect())
+            ]);
         }
 
         return activity;

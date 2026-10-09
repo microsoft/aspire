@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Data;
 using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Model;
@@ -18,11 +17,14 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
+        // Keep the count, selected trace IDs, and their spans in one snapshot so eviction
+        // cannot remove a selected trace between queries.
+        using var transaction = connection.BeginTransaction(deferred: true);
         var query = BuildTraceQuery(context);
         var aggregate = connection.QuerySingle<TraceAggregateRecord>($"""
             SELECT COUNT(*) AS TotalItemCount, COALESCE(MAX(t.duration_ticks), 0) AS MaxDurationTicks
             {query.FromAndWhere};
-            """, query.Parameters);
+            """, query.Parameters, transaction);
         var hiddenItemCount = context.LatestItemCount is { } latestItemCount
             ? Math.Max(aggregate.TotalItemCount - Math.Max(latestItemCount, 0), 0)
             : 0;
@@ -35,11 +37,11 @@ public sealed partial class SqliteTelemetryRepository
             {query.FromAndWhere}
             ORDER BY t.first_span_timestamp_ticks, t.trace_id
             LIMIT @Count OFFSET @StartIndex;
-            """, query.Parameters).AsList();
+            """, query.Parameters, transaction).AsList();
         var traces = new List<OtlpTrace>(records.Count);
         foreach (var batch in records.Chunk(MaxTraceBatchSize))
         {
-            var tracesById = MaterializeTraces(connection, batch.Select(record => record.TraceId).ToArray());
+            var tracesById = MaterializeTraces(connection, batch.Select(record => record.TraceId).ToArray(), transaction);
             traces.AddRange(batch.Select(record => tracesById[record.TraceId]));
         }
         return new GetTracesResponse
@@ -48,7 +50,7 @@ public sealed partial class SqliteTelemetryRepository
             {
                 Items = traces,
                 TotalItemCount = aggregate.TotalItemCount,
-                IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;") >= _otlpContext.Options.MaxTraceCount
+                IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;", transaction: transaction) >= _otlpContext.Options.MaxTraceCount
             },
             MaxDuration = TimeSpan.FromTicks(aggregate.MaxDurationTicks)
         };
@@ -393,8 +395,11 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
+        // Keep the count, selected span identities, and their trace details in one snapshot
+        // so eviction cannot remove a selected span between queries.
+        using var transaction = connection.BeginTransaction(deferred: true);
         var query = BuildSpanQuery(context);
-        var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere};", query.Parameters);
+        var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere};", query.Parameters, transaction);
         query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
         query.Parameters.Add("Count", Math.Max(context.Count, 0));
         var identities = connection.Query<SpanIdentityRecord>($"""
@@ -402,16 +407,16 @@ public sealed partial class SqliteTelemetryRepository
             {query.FromAndWhere}
             ORDER BY t.first_span_timestamp_ticks, t.trace_id, s.start_time_ticks, s.span_id
             LIMIT @Count OFFSET @StartIndex;
-            """, query.Parameters).AsList();
+            """, query.Parameters, transaction).AsList();
         var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparer.Ordinal)
-            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId)!, StringComparer.Ordinal);
+            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId, transaction)!, StringComparer.Ordinal);
         return new GetSpansResponse
         {
             PagedResult = new PagedResult<OtlpSpan>
             {
                 Items = identities.Select(identity => traces[identity.TraceId].Spans.Single(span => span.SpanId == identity.SpanId)).ToList(),
                 TotalItemCount = totalCount,
-                IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;") >= _otlpContext.Options.MaxTraceCount
+                IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;", transaction: transaction) >= _otlpContext.Options.MaxTraceCount
             }
         };
     }
@@ -670,11 +675,14 @@ public sealed partial class SqliteTelemetryRepository
     private OtlpTrace? GetTraceFromDatabase(string traceId)
     {
         using var connection = _database.OpenConnection();
+        // Resolve the trace ID and materialize its spans from the same snapshot so
+        // eviction cannot remove the trace between queries.
+        using var transaction = connection.BeginTransaction(deferred: true);
         var usePrefix = traceId.Length >= OtlpHelpers.ShortenedIdLength;
         var storedTraceId = connection.QueryFirstOrDefault<string>(usePrefix
             ? "SELECT trace_id FROM telemetry_traces WHERE trace_id LIKE @TraceId ESCAPE '!' ORDER BY first_span_timestamp_ticks, trace_id LIMIT 1;"
-            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE NOCASE ORDER BY first_span_timestamp_ticks, trace_id LIMIT 1;", new { TraceId = usePrefix ? CreateStartsWithLikePattern(traceId) : traceId });
-        return storedTraceId is null ? null : MaterializeTrace(connection, storedTraceId);
+            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE NOCASE ORDER BY first_span_timestamp_ticks, trace_id LIMIT 1;", new { TraceId = usePrefix ? CreateStartsWithLikePattern(traceId) : traceId }, transaction);
+        return storedTraceId is null ? null : MaterializeTrace(connection, storedTraceId, transaction);
     }
 
     private OtlpSpan? GetSpanFromDatabase(string traceId, string spanId)
@@ -683,12 +691,12 @@ public sealed partial class SqliteTelemetryRepository
         return trace?.Spans.FirstOrDefault(span => span.SpanId == spanId);
     }
 
-    private OtlpTrace? MaterializeTrace(SqliteConnection connection, string traceId, IDbTransaction? transaction = null)
+    private OtlpTrace? MaterializeTrace(SqliteConnection connection, string traceId, SqliteTransaction transaction)
     {
         return MaterializeTraces(connection, [traceId], transaction).GetValueOrDefault(traceId);
     }
 
-    private Dictionary<string, OtlpTrace> MaterializeTraces(SqliteConnection connection, IReadOnlyList<string> traceIds, IDbTransaction? transaction = null)
+    private Dictionary<string, OtlpTrace> MaterializeTraces(SqliteConnection connection, IReadOnlyList<string> traceIds, SqliteTransaction transaction)
     {
         var records = connection.Query<SpanRecord>("""
             SELECT

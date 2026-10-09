@@ -479,6 +479,27 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_HostingAssembly_CorePipelineCapabilitiesAreStable()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(DistributedApplication).Assembly);
+
+        (string TypeName, string MethodName)[] members =
+        [
+            ("PipelineEditor", "steps"),
+            ("PipelineEditor", "stepsByTag"),
+            ("PipelineStepContext", "reportingStep"),
+            ("PipelineSummary", "add")
+        ];
+
+        foreach (var (typeName, methodName) in members)
+        {
+            var capability = Assert.Single(result.Capabilities, capability => capability.OwningTypeName == typeName && capability.MethodName == methodName);
+
+            Assert.False(capability.IsExperimental);
+        }
+    }
+
+    [Fact]
     public void ScanAssembly_HostingAssembly_ExportsWithHttpCommandCapabilityWithAtsFriendlyOptions()
     {
         var hostingAssembly = typeof(DistributedApplication).Assembly;

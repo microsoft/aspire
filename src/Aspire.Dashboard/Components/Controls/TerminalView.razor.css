@@ -57,6 +57,16 @@
     --lineHeightBase300: var(--lineHeightBase200);
 }
 
+.terminal-focus-hint kbd {
+    margin-inline-end: 2px;
+    padding: 1px 4px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 2px;
+    background-color: color-mix(in srgb, var(--colorNeutralBackground3) 60%, var(--colorNeutralStroke2));
+    color: var(--colorNeutralForeground1);
+    font-size: 0.875em;
+}
+
 .terminal-controls {
     display: flex;
     flex-wrap: wrap;

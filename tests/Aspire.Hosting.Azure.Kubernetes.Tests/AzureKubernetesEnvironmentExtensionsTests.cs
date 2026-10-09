@@ -3,9 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
-#pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is evaluation-only
 #pragma warning disable ASPIREPIPELINES003
-#pragma warning disable ASPIREAZURE001
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;

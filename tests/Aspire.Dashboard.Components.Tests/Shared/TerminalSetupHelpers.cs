@@ -12,6 +12,7 @@ using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.JSInterop;
@@ -55,6 +56,7 @@ internal static class TerminalSetupHelpers
         FluentUISetupHelpers.SetupFluentUIComponents(context);
         FluentUISetupHelpers.SetupFluentButton(context);
         context.Services.AddSingleton<IDashboardClient>(client);
+        context.Services.TryAddSingleton<IconResolver>();
         context.JSInterop.Setup<string>("Blazor._internal.PageTitle.getAndRemoveExistingTitle", _ => true).SetResult(string.Empty);
         SetupTerminalView(context, pathBase);
         SetupTerminalDock(context, pathBase);
@@ -71,7 +73,7 @@ internal static class TerminalSetupHelpers
     {
         SetupTerminalTitle(context);
         context.Services.TryAddSingleton<TerminalViewSessionRegistry>();
-        FluentUISetupHelpers.SetupFluentList(context);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Select.Initialize", _ => true).SetVoidResult();
         var module = context.JSInterop.SetupModule(modulePath);
         module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
@@ -127,10 +129,25 @@ internal static class TerminalSetupHelpers
     public static void AssertSingleTerminalConnection(BunitContext context, string expectedWebSocketUrl)
     {
         var invocation = Assert.Single(context.JSInterop.Invocations, invocation => invocation.Identifier == "initTerminal");
-        var options = Assert.IsType<TerminalViewOptions>(invocation.Arguments[3]);
-        Assert.Equal($"{expectedWebSocketUrl}&viewId={options.ViewId}", invocation.Arguments[1]);
+        var viewId = GetTerminalViewId(invocation.Arguments[1]);
+        AssertBoundEndpoint(expectedWebSocketUrl, invocation.Arguments[1]);
         Assert.True(context.Services.GetRequiredService<TerminalViewSessionRegistry>().TryGet(
-            options.ViewId, new Uri(expectedWebSocketUrl).PathAndQuery, out _));
+            viewId, new Uri(expectedWebSocketUrl).PathAndQuery, out _));
+    }
+
+    public static string GetTerminalViewId(object? webSocketUrl)
+    {
+        var uri = new Uri(Assert.IsType<string>(webSocketUrl));
+        var viewId = QueryHelpers.ParseQuery(uri.Query)["viewId"].ToString();
+        Assert.True(Guid.TryParseExact(viewId, "N", out _));
+
+        return viewId;
+    }
+
+    public static void AssertBoundEndpoint(string expectedWebSocketUrl, object? actualWebSocketUrl)
+    {
+        var viewId = GetTerminalViewId(actualWebSocketUrl);
+        Assert.Equal($"{expectedWebSocketUrl}&viewId={viewId}", Assert.IsType<string>(actualWebSocketUrl));
     }
 
     public static WatchTerminalsUpdate Snapshot(params string[] terminalIds) => new()
