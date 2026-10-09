@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#20608, which targeted milestone 17.0, not 13.6 — no matching changelog entry in this milestone",
+  "mergedAt": "2026-10-08T17:00:15Z",
+  "number": 1800,
+  "runDate": "2026-10-09T00:08:49Z",
+  "status": "excluded",
+  "title": "[docs] Remove stale Aspire.RabbitMQ.Client.v6 / Aspire.MongoDB.Driver.v2 guidance"
+}
