@@ -1929,8 +1929,8 @@ function publicReasons(reasons) {
  * Runs in the safe_outputs job before the push handler. gh-aw's push-to-pull-request-branch
  * needs `target: "*"` on a scheduled run and only filters by label and title prefix, so a
  * mislabeled PR on another branch would otherwise be pushable. Every requested push must
- * name an open PR whose head is AUTO_SEC_BRANCH in this repository; any other request
- * fails the step, which stops the job before the handler pushes anything.
+ * name an open bot-authored PR whose head is AUTO_SEC_BRANCH in this repository; any
+ * other request fails the step, which stops the job before the handler pushes anything.
  */
 async function runPushTargetGate({ github, context, core, fs = require('node:fs'), env = process.env }) {
     const outputPath = env.GH_AW_AGENT_OUTPUT;
@@ -1938,6 +1938,7 @@ async function runPushTargetGate({ github, context, core, fs = require('node:fs'
     const items = (Array.isArray(agentOutput?.items) ? agentOutput.items : []).filter(item => item?.type === 'push_to_pull_request_branch');
     const { owner, repo } = context.repo;
     const fullName = `${owner}/${repo}`.toLowerCase();
+    const botLogin = env.AUTO_SEC_BOT_LOGIN || DEFAULT_BOT_LOGIN;
     const violations = [];
 
     for (const item of items) {
@@ -1955,6 +1956,9 @@ async function runPushTargetGate({ github, context, core, fs = require('node:fs'
             violations.push({ pr: prNumber, reason: 'wrong-head-repository' });
         } else if (pr.base?.ref !== BASE_BRANCH) {
             violations.push({ pr: prNumber, reason: 'wrong-base-branch' });
+        } else if (pr.user?.login !== botLogin) {
+            // A matching branch name does not establish ownership of its existing diff.
+            violations.push({ pr: prNumber, reason: 'wrong-author' });
         }
     }
 

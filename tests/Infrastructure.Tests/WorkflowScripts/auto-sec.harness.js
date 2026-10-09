@@ -293,7 +293,7 @@ async function main() {
                     github: createGitHub(request, []),
                     context: { repo: { owner: 'microsoft', repo: 'aspire' } },
                     core: { info: message => info.push(message), setFailed: message => failures.push(message) },
-                    env: { GH_AW_AGENT_OUTPUT: outputPath },
+                    env: { GH_AW_AGENT_OUTPUT: outputPath, AUTO_SEC_BOT_LOGIN: request.botLogin },
                 });
                 result = { value, info, failures };
             } finally {

@@ -3909,6 +3909,8 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     [InlineData("wrong-head-branch")]
     [InlineData("wrong-head-repository")]
     [InlineData("wrong-base-branch")]
+    [InlineData("wrong-author")]
+    [InlineData("missing-author")]
     [InlineData("not-open")]
     [InlineData("missing-pull-request-number")]
     public async Task PushGateFailsForPullRequestsOutsideAutoSecBranch(string reason)
@@ -3926,6 +3928,12 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             case "wrong-base-branch":
                 pr["base_ref"] = "release/13.3";
                 break;
+            case "wrong-author":
+                pr["user_login"] = "repository-writer";
+                break;
+            case "missing-author":
+                pr["user_login"] = "";
+                break;
             case "not-open":
                 pr["state"] = "closed";
                 break;
@@ -3937,7 +3945,23 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         var result = await RunHarnessAsync(CreatePushGateScenario(pr, item));
 
         var failure = Assert.Single(result["failures"]!.AsArray());
-        Assert.Contains(reason, failure!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains(reason == "missing-author" ? "wrong-author" : reason, failure!.GetValue<string>(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [RequiresTools(["node"])]
+    [InlineData("custom-auto-sec[bot]", true)]
+    [InlineData("aspire-repo-bot[bot]", false)]
+    public async Task PushGateRequiresConfiguredBotAuthor(string author, bool allowed)
+    {
+        var scenario = CreatePushGateScenario(new JsonObject { ["user_login"] = author });
+        scenario["botLogin"] = "custom-auto-sec[bot]";
+
+        var result = await RunHarnessAsync(scenario);
+
+        Assert.Equal(allowed ? 0 : 1, result["failures"]!.AsArray().Count);
+        Assert.Equal(allowed ? [] : ["wrong-author"],
+            result["value"]!["violations"]!.AsArray().Select(violation => violation!["reason"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -4026,7 +4050,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             ["number"] = 202,
             ["state"] = "open",
-            ["user_login"] = "github-actions[bot]",
+            ["user_login"] = "aspire-repo-bot[bot]",
             ["head_sha"] = HeadSha,
             ["head_ref"] = "auto-sec/security-updates",
             ["head_repo"] = "microsoft/aspire",

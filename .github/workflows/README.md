@@ -186,7 +186,9 @@ contents stop reconciliation before the agent can propose a duplicate fix.
   like output transport metadata, to the workflow snapshot or live auto-sec ref.
   The pre-upload scrub reads bases from the immutable workflow checkout and the
   bot-owned branch, not arbitrary agent-written blobs; unavailable bases block
-  publication. uv local-source descriptors count as delivery sources,
+  publication. Pushes to an existing auto-sec PR also require its author to match
+  the configured Aspire bot identity; the branch name alone cannot authorize reuse.
+  uv local-source descriptors count as delivery sources,
   and pnpm tarball binding covers both inline and block-style resolution tables.
   The writable framework directory retains only validated safe outputs and patches:
   all other entries, including prompts and telemetry, are removed before summaries
