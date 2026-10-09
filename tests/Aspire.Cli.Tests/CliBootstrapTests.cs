@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents.AspireSkills;
@@ -168,6 +170,43 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // Cancellation prevents network access even if host disposal stops disposing the provider.
         await Assert.ThrowsAsync<ObjectDisposedException>(() =>
             provider.GetTrustRootAsync(new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public async Task BuildApplication_UnwritableTufCache_DoesNotPreventCommandTreeCreation()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        var tufDirectory = Directory.CreateDirectory(Path.Combine(aspireHome.FullName, "cache", "tuf"));
+        Directory.CreateDirectory(Path.Combine(tufDirectory.FullName, "targets"));
+        using var identity = WindowsIdentity.GetCurrent();
+        var denyFileCreation = new FileSystemAccessRule(
+            identity.User!,
+            FileSystemRights.CreateFiles,
+            AccessControlType.Deny);
+        var security = tufDirectory.GetAccessControl();
+        security.AddAccessRule(denyFileCreation);
+        tufDirectory.SetAccessControl(security);
+
+        try
+        {
+            using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+            using var host = await BuildHostAsync();
+
+            Assert.NotNull(host.Services.GetRequiredService<RootCommand>());
+            Assert.IsType<TufTrustRootProvider>(host.Services.GetRequiredService<ITrustRootProvider>());
+        }
+        finally
+        {
+            security.RemoveAccessRuleSpecific(denyFileCreation);
+            tufDirectory.SetAccessControl(security);
+        }
     }
 
     [Fact]
