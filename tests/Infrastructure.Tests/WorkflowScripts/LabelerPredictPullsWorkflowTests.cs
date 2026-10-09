@@ -55,11 +55,24 @@ public sealed class LabelerPredictPullsWorkflowTests : IDisposable
         var result = await RunScriptAsync(
             PullRequest(
                 author: "Copilot",
-                assignees: [new { login = "ellahathaway", type = "User" }],
+                assignees: [new { login = "octocat", type = "User" }],
                 labels: [new { name = "needs-assignee" }]));
 
         Assert.Empty(result.Labels);
         Assert.Equal(["pulls.get", "removeLabel"], result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task BotAssignedCopilotPullRequestGetsNeedsAssigneeLabel()
+    {
+        var result = await RunScriptAsync(
+            PullRequest(
+                author: "Copilot",
+                assignees: [new { login = "dependabot[bot]", type = "Bot" }]));
+
+        Assert.Equal(["needs-assignee"], result.Labels);
+        Assert.Equal(["pulls.get", "addLabels"], result.Calls);
     }
 
     [Fact]
@@ -69,7 +82,7 @@ public sealed class LabelerPredictPullsWorkflowTests : IDisposable
         var result = await RunScriptAsync(
             PullRequest(
                 author: "Copilot",
-                assignees: [new { login = "ellahathaway", type = "User" }],
+                assignees: [new { login = "octocat", type = "User" }],
                 labels: [new { name = "needs-assignee" }]),
             removeLabelNotFound: true);
 
