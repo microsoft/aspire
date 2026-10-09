@@ -43,8 +43,8 @@
     <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.2.0" />
     <PackageVersion Include="Azure.Provisioning.AppService" Version="1.3.1" />
     <PackageVersion Include="Azure.Provisioning.ApplicationInsights" Version="1.1.0" />
-    <!-- beta.3 changes generated Azure resource names; stay on beta.2 until https://github.com/Azure/azure-sdk-for-net/issues/63274 is fixed. -->
-    <PackageVersion Include="Azure.Provisioning.Cdn" Version="1.0.0-beta.2" />
+    <!-- beta.4 restores the resource-name requirements regressed in beta.3. -->
+    <PackageVersion Include="Azure.Provisioning.Cdn" Version="1.0.0-beta.4" />
     <PackageVersion Include="Azure.Provisioning.ContainerRegistry" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.ContainerService" Version="1.0.0-beta.6" />
     <PackageVersion Include="Azure.Provisioning.CognitiveServices" Version="1.2.0" />
@@ -208,7 +208,7 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.10.0" />
     <!-- playground apps dependencies for javascript -->
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
-    <PackageVersion Include="Azure.Core" Version="1.62.0" />
+    <PackageVersion Include="Azure.Core" Version="1.63.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
