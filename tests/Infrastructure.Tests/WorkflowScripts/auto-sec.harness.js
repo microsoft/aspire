@@ -13,6 +13,7 @@
 //   { mode: "agent-scrub", outputLines, patchFiles, workFiles, ioFailure } -> { value, info, failures, remaining, outputs, stepOutputs }
 //   { mode: "publication-guard", workflow } -> { value, repeated } or { error }
 //   { mode: "private-shell", script } -> { stdout, stderr, exitCode }
+//   { mode: "collect-prs", prs, alerts, changedFiles, contents, failure } -> { output, calls, failed }
 // PRs may carry `head_repo` (defaults to microsoft/aspire) and `base_ref` (defaults to main).
 // Alerts may carry `vulnerable_version_range` and `advisory_ranges` (every range the
 // advisory lists for the package).
@@ -175,6 +176,53 @@ async function main() {
     let result;
 
     switch (request.mode) {
+        case 'collect-prs': {
+            // Execute the production inline collector, not a duplicate implementation.
+            const source = fs.readFileSync(path.join(__dirname, '..', '..', '..', '.github', 'workflows', 'auto-sec.md'), 'utf8');
+            const script = /      node -e '\r?\n([\s\S]*?)\r?\n      '/.exec(source)?.[1];
+            if (!script) {
+                throw new Error('Missing Dependabot collector');
+            }
+            const calls = [];
+            let output = null;
+            let failed = false;
+            try {
+                vm.runInNewContext(script, {
+                    process: { env: { REPO: 'microsoft/aspire' } },
+                    require: name => {
+                        if (name === 'node:fs') {
+                            return {
+                                readFileSync: filename => JSON.stringify(filename.endsWith('dependabot-prs-raw.json') ? request.prs : request.alerts),
+                                writeFileSync: (filename, value) => { output = JSON.parse(value); },
+                            };
+                        }
+                        if (name === 'node:child_process') {
+                            return {
+                                execFileSync: (command, args) => {
+                                    const endpoint = args.at(-1);
+                                    calls.push(endpoint);
+                                    if (endpoint === request.failure?.endpoint) {
+                                        throw Object.assign(new Error('synthetic private API failure'), { status: request.failure.status });
+                                    }
+                                    if (endpoint.includes('/pulls/')) {
+                                        return JSON.stringify(request.changedFiles);
+                                    }
+                                    if (Object.hasOwn(request.contents, endpoint)) {
+                                        return request.contents[endpoint];
+                                    }
+                                    throw new Error('Unexpected content request');
+                                },
+                            };
+                        }
+                        return gate;
+                    },
+                });
+            } catch {
+                failed = true;
+            }
+            result = { output, calls, failed };
+            break;
+        }
         case 'call': {
             const value = await gate[request.fn](...request.args.map(reviveDates));
             result = { value: value instanceof Set ? [...value].sort() : value };

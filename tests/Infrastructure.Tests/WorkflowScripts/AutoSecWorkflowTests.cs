@@ -17,6 +17,108 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     private const string HeadSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     private const string Now = "2026-10-01T00:00:00Z";
 
+    [Theory]
+    [RequiresTools(["node"])]
+    [InlineData("files", 401)]
+    [InlineData("files", 403)]
+    [InlineData("files", 429)]
+    [InlineData("files", 503)]
+    [InlineData("base", 401)]
+    [InlineData("base", 403)]
+    [InlineData("base", 404)]
+    [InlineData("base", 429)]
+    [InlineData("base", 500)]
+    [InlineData("head", 401)]
+    [InlineData("head", 403)]
+    [InlineData("head", 404)]
+    [InlineData("head", 429)]
+    [InlineData("head", 503)]
+    public async Task DependabotCollectionFailsClosedOnApiErrors(string phase, int status)
+    {
+        var request = CreateCollectionScenario();
+        var endpoint = phase == "files"
+            ? "repos/microsoft/aspire/pulls/101/files?per_page=100"
+            : $"repos/microsoft/aspire/contents/extension/yarn.lock?ref={phase}";
+        request["failure"] = new JsonObject { ["endpoint"] = endpoint, ["status"] = status };
+
+        var result = await RunHarnessAsync(request);
+
+        Assert.True(result["failed"]!.GetValue<bool>());
+        Assert.Null(result["output"]);
+        Assert.Equal(endpoint, result["calls"]!.AsArray().Last()!.GetValue<string>());
+    }
+
+    [Theory]
+    [RequiresTools(["node"])]
+    [InlineData("modified")]
+    [InlineData("added")]
+    [InlineData("removed")]
+    [InlineData("renamed")]
+    public async Task DependabotCollectionUsesTrustedFileStatusesForMissingSides(string status)
+    {
+        var request = CreateCollectionScenario();
+        var file = request["changedFiles"]![1]![0]!;
+        file["status"] = status;
+        var contents = request["contents"]!.AsObject();
+        if (status == "added")
+        {
+            contents.Remove("repos/microsoft/aspire/contents/extension/yarn.lock?ref=base");
+        }
+        else if (status == "removed")
+        {
+            contents.Remove("repos/microsoft/aspire/contents/extension/yarn.lock?ref=head");
+        }
+        else if (status == "renamed")
+        {
+            file["previous_filename"] = "extension/old yarn.lock";
+            contents["repos/microsoft/aspire/contents/extension/old%20yarn.lock?ref=base"] =
+                contents["repos/microsoft/aspire/contents/extension/yarn.lock?ref=base"]!.DeepClone();
+            contents.Remove("repos/microsoft/aspire/contents/extension/yarn.lock?ref=base");
+        }
+
+        var result = await RunHarnessAsync(request);
+
+        Assert.False(result["failed"]!.GetValue<bool>());
+        var pr = Assert.Single(result["output"]!.AsArray())!;
+        Assert.Equal(["README.md", "extension/yarn.lock"], pr["files"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal(status == "removed" ? [] : [7], pr["covered_alerts"]!.AsArray().Select(n => n!.GetValue<int>()));
+        var calls = new List<string> { "repos/microsoft/aspire/pulls/101/files?per_page=100" };
+        if (status != "added")
+        {
+            calls.Add($"repos/microsoft/aspire/contents/extension/{(status == "renamed" ? "old%20yarn.lock" : "yarn.lock")}?ref=base");
+        }
+        if (status != "removed")
+        {
+            calls.Add("repos/microsoft/aspire/contents/extension/yarn.lock?ref=head");
+        }
+        Assert.Equal(calls, result["calls"]!.AsArray().Select(n => n!.GetValue<string>()));
+    }
+
+    [Theory]
+    [RequiresTools(["node"])]
+    [InlineData("added")]
+    [InlineData("removed")]
+    [InlineData("unknown")]
+    [InlineData("renamed")]
+    public async Task DependabotCollectionRejectsUnexpectedMissingFilesAndStatuses(string status)
+    {
+        var request = CreateCollectionScenario();
+        request["changedFiles"]![1]![0]!["status"] = status;
+        if (status is "added" or "removed")
+        {
+            request["failure"] = new JsonObject
+            {
+                ["endpoint"] = $"repos/microsoft/aspire/contents/extension/yarn.lock?ref={(status == "added" ? "head" : "base")}",
+                ["status"] = 404,
+            };
+        }
+
+        var result = await RunHarnessAsync(request);
+
+        Assert.True(result["failed"]!.GetValue<bool>());
+        Assert.Null(result["output"]);
+    }
+
     [Fact]
     [RequiresTools(["node"])]
     public async Task ApprovesDependabotPrThatPassesEveryGate()
@@ -3959,6 +4061,39 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     {
         ["resources"] = new JsonArray(new JsonObject { ["@id"] = flatContainer, ["@type"] = "PackageBaseAddress/3.0.0" }),
     });
+
+    private static JsonObject CreateCollectionScenario() => new()
+    {
+        ["mode"] = "collect-prs",
+        ["prs"] = new JsonArray(new JsonObject
+        {
+            ["number"] = 101,
+            ["headRefName"] = "dependabot/npm_and_yarn/extension/lodash-4.17.21",
+            ["headRefOid"] = "head",
+            ["baseRefOid"] = "base",
+            ["title"] = "Bump lodash from 4.17.20 to 4.17.21 in /extension",
+            ["body"] = "",
+            ["isDraft"] = false,
+            ["statusCheckRollup"] = new JsonArray(new JsonObject { ["conclusion"] = "SUCCESS" }),
+        }),
+        ["changedFiles"] = new JsonArray(
+            new JsonArray(new JsonObject { ["filename"] = "README.md", ["status"] = "modified" }),
+            new JsonArray(new JsonObject { ["filename"] = "extension/yarn.lock", ["status"] = "modified" })),
+        ["contents"] = new JsonObject
+        {
+            ["repos/microsoft/aspire/contents/extension/yarn.lock?ref=base"] = YarnLockEntry("lodash", "4.17.20"),
+            ["repos/microsoft/aspire/contents/extension/yarn.lock?ref=head"] = YarnLockEntry("lodash", "4.17.21"),
+        },
+        ["alerts"] = new JsonArray(new JsonObject
+        {
+            ["number"] = 7,
+            ["ecosystem"] = "npm",
+            ["package"] = "lodash",
+            ["manifest_path"] = "extension/yarn.lock",
+            ["vulnerable_version_range"] = "< 4.17.21",
+            ["first_patched_version"] = "4.17.21",
+        }),
+    };
 
     private static JsonObject CreateApprovalScenario() => new()
     {

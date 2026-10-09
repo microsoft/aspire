@@ -99,6 +99,11 @@ pnpm), pip (`uv.lock`, `pyproject.toml`), NuGet (`Directory.Packages.props`), an
 GitHub Actions alerts are handled; alerts in other ecosystems, such as Maven,
 Gradle, Go, Cargo, or `requirements.txt`, are reported as blocked.
 
+Dependabot coverage collection fails on GitHub API errors instead of treating
+unavailable contents as an absent file. Paginated REST file statuses identify
+added/deleted sides and the original path of renamed files; missing expected
+contents stop reconciliation before the agent can propose a duplicate fix.
+
 - **Dependabot PRs** that fix an open alert are approved by the Aspire bot App only
   when `.github/workflows/auto-sec/auto-sec.js` re-verifies every gate in the
   `approve_dependabot_pr` safe-output job. The gates are:
