@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Security/improvement: consistently sets restrictive permissions on local sockets and endpoints used for backchannel, DCP, and terminal communication.",
+  "mergedAt": "2026-09-24T10:47:20Z",
+  "number": 20330,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Set local socket directory and endpoint permissions consistently"
+}

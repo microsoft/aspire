@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: adds a 'Learn about runs' help option to the dashboard run selector linking to run-persistence documentation.",
+  "mergedAt": "2026-09-25T14:57:50Z",
+  "number": 20469,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Add run persistence help to dashboard"
+}

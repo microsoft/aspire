@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Blazor gateway APIs from a product PR outside the current batch.",
+  "mergedAt": "2026-09-29T00:10:39Z",
+  "number": 1564,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Document DotnetProjectResource-backed Blazor gateway APIs for polyglot AppHosts"
+}

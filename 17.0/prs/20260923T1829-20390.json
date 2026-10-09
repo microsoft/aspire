@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bot-authored engineering-process change (milestone assignment policy); not user-facing.",
+  "mergedAt": "2026-09-23T18:29:34Z",
+  "number": 20390,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Assign 14.0 milestone to PRs merged to main"
+}

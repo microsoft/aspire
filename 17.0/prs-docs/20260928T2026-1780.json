@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "13.6 release-note coverage audit; explicitly excludes #20334 as not in the audited release and documents other PRs outside the current batch.",
+  "mergedAt": "2026-09-28T20:26:26Z",
+  "number": 1780,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Close Aspire 13.6 canonical guide and release-note coverage gaps"
+}

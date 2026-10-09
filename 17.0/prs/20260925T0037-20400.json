@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test-only fix for a VS Code extension E2E test race condition; no production extension behavior change.",
+  "mergedAt": "2026-09-25T00:37:45Z",
+  "number": 20400,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Fix AppHost tree E2E row recycling race"
+}

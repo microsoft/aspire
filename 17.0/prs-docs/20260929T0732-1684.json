@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Documents dashboard/AppHost terminal features broadly; no explicit match to #20330 (socket permissions) and remains a draft pending sample PR merge.",
+  "mergedAt": "2026-09-29T07:32:34Z",
+  "number": 1684,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Document dashboard and AppHost terminals for Aspire 13.6"
+}

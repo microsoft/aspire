@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds `aspire completions script [bash|fish|pwsh|zsh]` to generate shell tab-completion scripts for commands, subcommands, options, and completion-enabled values. Release installers (shell, PowerShell, Homebrew) register completions automatically where supported, with a `--skip-completions` opt-out.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-09-24T01:32:11Z",
+  "lastMergedAt": "2026-09-24T01:32:11Z",
+  "name": "CLI shell completions",
+  "owner": "DamianEdwards",
+  "prs": [
+    20026
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs-site build performance engineering change; not related to an Aspire product changelog entry.",
+  "mergedAt": "2026-09-28T17:51:44Z",
+  "number": 1774,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Improve release build performance and cache contributor requests"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documents connection-string alias behavior from a product PR outside the current batch.",
+  "mergedAt": "2026-09-28T20:33:01Z",
+  "number": 1778,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Correct connection-string alias guidance for Aspire 13.6"
+}

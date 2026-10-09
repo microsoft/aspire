@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire describe secret redaction from a product PR outside the current batch.",
+  "mergedAt": "2026-09-29T05:14:27Z",
+  "number": 1499,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Note secret redaction behavior in `aspire describe`"
+}

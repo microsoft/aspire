@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Breaking change and improvement: reduces agent telemetry hook overhead, upgrades OpenTelemetry packages, and lowers the default max OTLP request size from 128 MiB to 64 MiB.",
+  "mergedAt": "2026-09-25T03:50:17Z",
+  "number": 20387,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Reduce agent telemetry hook overhead without reducing coverage"
+}

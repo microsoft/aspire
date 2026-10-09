@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Long resource names selected in dashboard dropdowns (such as on the Console and Metrics pages) now truncate with an ellipsis on one line instead of being hard-cut before the chevron.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✂️",
+  "firstMergedAt": "2026-09-24T13:18:14Z",
+  "lastMergedAt": "2026-09-24T13:18:14Z",
+  "name": "Fix dropdown text truncation",
+  "owner": "JamesNK",
+  "prs": [
+    20426
+  ]
+}

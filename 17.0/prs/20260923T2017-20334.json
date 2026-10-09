@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "User-facing improvement: surfaces actionable DCP dependency-check reasons and working-directory context in startup failures.",
+  "mergedAt": "2026-09-23T20:17:42Z",
+  "number": 20334,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Improve startup error reporting"
+}

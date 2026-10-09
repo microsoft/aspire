@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI test-selection engineering change; no user-facing product impact.",
+  "mergedAt": "2026-09-24T16:38:57Z",
+  "number": 20322,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "fix(ci): tighten PR test selection to avoid unnecessary full runs"
+}

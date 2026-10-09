@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: dashboard filter badges and toolbar controls no longer shift layout or wrap incorrectly; mobile Resources tab navigation no longer gets stuck.",
+  "mergedAt": "2026-09-25T13:52:22Z",
+  "number": 20471,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Fix dashboard filter badges and toolbar navigation"
+}

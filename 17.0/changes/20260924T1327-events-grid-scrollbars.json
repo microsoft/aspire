@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The trace details Events grid no longer shows scrollbars inside multiline cells that contain nested attribute grids; content now clips with the existing text visualizer available for truncated values.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📜",
+  "firstMergedAt": "2026-09-24T13:27:30Z",
+  "lastMergedAt": "2026-09-24T13:27:30Z",
+  "name": "Fix Events grid scrollbars",
+  "owner": "JamesNK",
+  "prs": [
+    20425
+  ]
+}

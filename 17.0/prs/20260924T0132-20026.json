@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "New feature: adds shell completion generation and installer integration for the CLI.",
+  "mergedAt": "2026-09-24T01:32:11Z",
+  "number": 20026,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Add CLI shell completion generation and installer integration"
+}

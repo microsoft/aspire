@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: the terminal dock now slides into view on its first open instead of appearing immediately.",
+  "mergedAt": "2026-09-24T13:29:03Z",
+  "number": 20414,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Animate terminal dock on first open"
+}

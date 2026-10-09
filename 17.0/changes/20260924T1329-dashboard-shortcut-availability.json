@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The dashboard help dialog (`?`) now only lists shortcuts that are actually available. In standalone configurations without a resource service, Resources (`r`) and Console Logs (`c`) shortcuts are no longer listed or actionable, while panel shortcuts remain listed on every page.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-09-24T13:29:51Z",
+  "lastMergedAt": "2026-09-24T13:29:51Z",
+  "name": "Fix dashboard shortcut availability",
+  "owner": "JamesNK",
+  "prs": [
+    20413
+  ]
+}

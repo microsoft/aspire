@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents multithreaded .NET project builds (#20337), which was excluded here as already backported to release/13.6.",
+  "mergedAt": "2026-09-28T22:58:21Z",
+  "number": 1744,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Document multithreaded .NET project builds (-mt)"
+}

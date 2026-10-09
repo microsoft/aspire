@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard run selector menu now includes a **Learn about runs** option that explains live, historical, and pinned runs and links to the run persistence documentation.",
+  "docsPrs": [
+    1764
+  ],
+  "docsRequired": true,
+  "emoji": "❓",
+  "firstMergedAt": "2026-09-25T14:57:50Z",
+  "lastMergedAt": "2026-09-25T14:57:50Z",
+  "name": "Run persistence help in dashboard",
+  "owner": "JamesNK",
+  "prs": [
+    20469
+  ]
+}

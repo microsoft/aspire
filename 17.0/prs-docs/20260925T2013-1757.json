@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-site refactor (TypeScript API sidebar catalogs); not related to a product changelog entry.",
+  "mergedAt": "2026-09-25T20:13:16Z",
+  "number": 1757,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "fix: avoid repeated TypeScript API sidebar catalogs"
+}

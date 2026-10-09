@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Dashboard filter badges no longer stay visible with an empty count or shift toolbar height when toggled. Resource details, Structured Logs, and Traces toolbars wrap more correctly at narrow widths, and a mobile Resources tab change no longer leaves a stale navigation queued when the filter panel is closed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧰",
+  "firstMergedAt": "2026-09-25T13:52:22Z",
+  "lastMergedAt": "2026-09-25T13:52:22Z",
+  "name": "Fix dashboard filter badges and toolbar navigation",
+  "owner": "JamesNK",
+  "prs": [
+    20471
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: dashboard help dialog and keyboard shortcuts now reflect actual availability in standalone configurations without the resource service.",
+  "mergedAt": "2026-09-24T13:29:51Z",
+  "number": 20413,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Fix dashboard shortcut availability"
+}

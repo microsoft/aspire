@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Backchannel, DCP, and terminal local sockets now consistently get restrictive directory and endpoint permissions before binding, reducing the risk of other local users accessing these channels.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-09-24T10:47:20Z",
+  "lastMergedAt": "2026-09-24T10:47:20Z",
+  "name": "Consistent local socket permissions",
+  "owner": "mitchdenny",
+  "prs": [
+    20330
+  ]
+}

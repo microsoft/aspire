@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documents a macOS VS Code debugging prerequisite unrelated to this batch's product PRs.",
+  "mergedAt": "2026-09-28T19:59:40Z",
+  "number": 1779,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Document macOS developer mode for Rust debugging in VS Code"
+}

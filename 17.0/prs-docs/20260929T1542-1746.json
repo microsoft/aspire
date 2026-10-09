@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Documents aspire stop --force anonymous-volume behavior from a product PR outside the current batch.",
+  "mergedAt": "2026-09-29T15:42:15Z",
+  "number": 1746,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Clarify anonymous-volume behavior for `aspire stop --force`"
+}

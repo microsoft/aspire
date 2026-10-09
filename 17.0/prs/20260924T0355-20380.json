@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Change to internal Aspire Team App tooling (repository automation); not a user-facing Aspire product change.",
+  "mergedAt": "2026-09-24T03:55:56Z",
+  "number": 20380,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Add Sisyphus to Proxima dashboard defaults"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents a DevTunnel fix from a product PR outside the current batch.",
+  "mergedAt": "2026-09-28T23:07:16Z",
+  "number": 1570,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Add troubleshooting note for DevTunnel URL publication fix"
+}

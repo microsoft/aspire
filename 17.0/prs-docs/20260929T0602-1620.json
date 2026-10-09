@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents an AKS destroy fix from a product PR outside the current batch.",
+  "mergedAt": "2026-09-29T06:02:25Z",
+  "number": 1620,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "[docs] Document AKS destroy cleanup ordering fix"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The terminal dock now slides into view on its first open after a dashboard refresh, instead of appearing immediately. Subsequent open and close transitions are unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎬",
+  "firstMergedAt": "2026-09-24T13:29:03Z",
+  "lastMergedAt": "2026-09-24T13:29:03Z",
+  "name": "Animated terminal dock first open",
+  "owner": "JamesNK",
+  "prs": [
+    20414
+  ]
+}

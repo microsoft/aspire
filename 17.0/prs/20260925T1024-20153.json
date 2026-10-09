@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Test-only fix for a flaky integration test (waits for tunnel health); no product behavior change.",
+  "mergedAt": "2026-09-25T10:24:29Z",
+  "number": 20153,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Wait for tunnel health before asserting in ContainerTunnelTests"
+}

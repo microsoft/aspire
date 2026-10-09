@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Reduces CLI agent telemetry hook startup overhead by removing shell startup and synchronous upload waits, while preserving existing telemetry coverage. Also upgrades OpenTelemetry packages, which lowers the default maximum OTLP request size from 128 MiB to 64 MiB; configure `OtlpExporterOptions.MaxRequestSizeBytes` if your project relies on the previous limit.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-09-25T03:50:17Z",
+  "lastMergedAt": "2026-09-25T03:50:17Z",
+  "name": "Faster agent telemetry hooks",
+  "owner": "IEvangelist",
+  "prs": [
+    20387
+  ]
+}

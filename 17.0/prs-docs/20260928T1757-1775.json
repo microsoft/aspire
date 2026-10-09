@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Documents MongoDB automatic TLS migration from a product PR outside the current batch.",
+  "mergedAt": "2026-09-28T17:57:39Z",
+  "number": 1775,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Document MongoDB automatic TLS migration in Aspire 13.6"
+}

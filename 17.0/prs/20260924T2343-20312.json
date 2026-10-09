@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Test-only stabilization of Blazor browser-debugger E2E fixtures; no product behavior change.",
+  "mergedAt": "2026-09-24T23:43:11Z",
+  "number": 20312,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Stabilize Blazor browser debugger E2E setup and profile isolation"
+}

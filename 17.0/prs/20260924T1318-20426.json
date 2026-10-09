@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: dashboard dropdown selected values now truncate with an ellipsis instead of being hard-cut.",
+  "mergedAt": "2026-09-24T13:18:14Z",
+  "number": 20426,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Fix truncation of selected dashboard dropdown values"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Regenerates generated API/catalog data from a staging build; not a changelog-entry-level documentation change.",
+  "mergedAt": "2026-09-29T15:03:52Z",
+  "number": 1787,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "excluded",
+  "title": "Regenerate API data from Aspire 13.6.0 staging build f4c27f2d"
+}

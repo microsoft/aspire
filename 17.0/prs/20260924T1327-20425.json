@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: dashboard Events grid cells no longer show scrollbars for multiline nested attribute content.",
+  "mergedAt": "2026-09-24T13:27:30Z",
+  "number": 20425,
+  "runDate": "2026-10-09T07:42:17Z",
+  "status": "included",
+  "title": "Prevent scrollbars in dashboard Events grid cells"
+}

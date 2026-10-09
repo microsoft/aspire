@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Startup failures now surface the specific DCP dependency-check reason (such as an unsupported Docker CLI version) in warnings and exceptions, and executable process-start failures include the resolved working directory to help distinguish an invalid working directory from an invalid executable path.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-09-23T20:17:42Z",
+  "lastMergedAt": "2026-09-23T20:17:42Z",
+  "name": "Clearer startup error reporting",
+  "owner": "karolz-ms",
+  "prs": [
+    20334
+  ]
+}
