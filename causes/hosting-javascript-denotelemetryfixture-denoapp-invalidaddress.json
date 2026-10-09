@@ -12,5 +12,6 @@
       "pr_number": 0,
       "observed_at": "2026-10-09T06:10:34Z"
     }
-  ]
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/20850"
 }
