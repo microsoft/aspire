@@ -57,7 +57,7 @@
 name: "13.3 Release Burndown Report"
 on:
   schedule:
-    - cron: "51 8 * * *"  # Friendly format: daily around 9am (scattered)
+    - cron: "34 8 * * *"  # Friendly format: daily around 9am (scattered)
   workflow_dispatch:
     inputs:
       aw_context:
