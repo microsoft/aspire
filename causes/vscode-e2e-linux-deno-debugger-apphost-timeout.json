@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-linux-deno-debugger-apphost-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Linux, deno-debugger) times out waiting for Aspire AppHost debug startup",
+  "test_name": "Aspire Deno debugger E2E attaches js-debug to a Deno resource and hits a TypeScript breakpoint",
+  "error_pattern": "Failed to apply E2E control revision: Error: Timed out after 180000ms waiting for Aspire AppHost debug startup completion. Last error: <none>.\n\tat applyE2eControl (out/test-e2e/test-e2e/helpers/assertions.js:355:15)\n\tat async executeE2eControlCommand (out/test-e2e/test-e2e/helpers/fixtures.js:168:12)",
+  "occurrences": [
+    {
+      "run_id": 37864887850,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37864887850",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T01:21:33Z"
+    }
+  ]
+}

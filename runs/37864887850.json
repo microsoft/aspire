@@ -1,0 +1,98 @@
+{
+  "run_id": 37864887850,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37864887850",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-09T01:21:33Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20825,
+    "title": "Obsolete AddCSharpApp in favor of AddDotnetProject",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-stable-csharp-app-apis",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20825",
+    "merged_at": "2026-10-09T00:27:36Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d3784060b37d760f3f311b03c7ac75edb4936df8",
+    "failed_sha": "6630da51c4e2ae6d572d68a7995cbefece61d5e8",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4932ff6cfde773b9861b06af2b1dbc060915e369",
+        "message": "Graduate core pipeline APIs to stable (#20809) ## Description Graduate the existing `ASPIREPIPELINES001` core pipeline API family to stable so C# AppHosts and integration authors can use it without experimental-warning suppressions. This is an attribute-only graduation, not an API redesign or removal. Re-enumerated current `main` at `a3f44d274fe0866724aa2293f9f7fedd96786a86`: **29 attributed source declarations**, comprising 23 public types, `IDistributedApplicationBuilder.Pipeline`, and five in",
+        "html_url": "https://github.com/microsoft/aspire/commit/4932ff6cfde773b9861b06af2b1dbc060915e369",
+        "pull_request": {
+          "number": 20809,
+          "title": "Graduate core pipeline APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20809",
+          "merged_at": "2026-10-08T22:40:01Z"
+        }
+      },
+      {
+        "sha": "22c172e589870658e4e184f5ee4039e1131fdd22",
+        "message": "Graduate core Azure deployment APIs to stable (#20820) ## Description Consumers should no longer need `ASPIREAZURE001` suppressions to use the long-standing core Azure deployment APIs. This is the explicitly authorized, attribute-only graduation of `AzurePublishingContext`, `AzureEnvironmentResource`, and `AzureEnvironmentResourceExtensions.AddAzureEnvironment`, `WithLocation`, and `WithResourceGroup` in `Aspire.Hosting.Azure`. Remove obsolete `ASPIREAZURE001` suppressions from consumers that us",
+        "html_url": "https://github.com/microsoft/aspire/commit/22c172e589870658e4e184f5ee4039e1131fdd22",
+        "pull_request": {
+          "number": 20820,
+          "title": "Graduate core Azure deployment APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20820",
+          "merged_at": "2026-10-08T23:18:00Z"
+        }
+      },
+      {
+        "sha": "4d4bee810453b7d4f493734a5faad5245d61379c",
+        "message": "Graduate pipeline output service APIs to stable (#20814) ## Description Graduate the pipeline output-directory API family so consumers can use `IPipelineOutputService` without suppressing `ASPIREPIPELINES004`. The only actual source declarations carrying this diagnostic are `IPipelineOutputService` and the internal `PipelineOutputService`. Remove both experimental attributes, their unused imports, and all suppressions for this diagnostic in hosting, Azure deployment infrastructure, Entity Framew",
+        "html_url": "https://github.com/microsoft/aspire/commit/4d4bee810453b7d4f493734a5faad5245d61379c",
+        "pull_request": {
+          "number": 20814,
+          "title": "Graduate pipeline output service APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20814",
+          "merged_at": "2026-10-08T23:41:45Z"
+        }
+      },
+      {
+        "sha": "6630da51c4e2ae6d572d68a7995cbefece61d5e8",
+        "message": "Obsolete AddCSharpApp in favor of AddDotnetProject (#20825) ## Description `AddCSharpApp` has always been experimental. Replace `ASPIRECSHARPAPPS001` with warning-level `[Obsolete]` attributes directing consumers to `AddDotnetProject` from `Aspire.Hosting.Dotnet`. Both public overloads and the internal `addCSharpApp` dispatcher are obsolete. The dispatcher directs polyglot callers to `addDotnetProject`; the TypeScript snapshot now emits `@deprecated` rather than `@experimental`. Keep all signatu",
+        "html_url": "https://github.com/microsoft/aspire/commit/6630da51c4e2ae6d572d68a7995cbefece61d5e8",
+        "pull_request": {
+          "number": 20825,
+          "title": "Obsolete AddCSharpApp in favor of AddDotnetProject",
+          "url": "https://github.com/microsoft/aspire/pull/20825",
+          "merged_at": "2026-10-09T00:27:36Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "id": 113618219496,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37864887850/job/113618219496",
+      "classification": "flaky-test",
+      "reason": "The 'Run extension E2E tests' step ran and a single E2E test timed out after 180000ms waiting for Aspire AppHost debug startup completion. This is a Deno debugger E2E scenario unrelated to the candidate merges (pipeline/Azure API graduation, AddCSharpApp obsoletion), consistent with known startup-timing flakiness in this E2E suite.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire Deno debugger E2E attaches js-debug to a Deno resource and hits a TypeScript breakpoint",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, deno-debugger)",
+      "error": "Failed to apply E2E control revision 1791507810055: Error: Timed out after 180000ms waiting for Aspire AppHost debug startup completion. Last error: <none>.\n\tat J (/tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1345254)\n\tat async q (/tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1341947)\n\tat async O (/tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1330394)\n\tat async /tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1299293\n\tat async /tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1297912",
+      "stack_trace": "Error: Failed to apply E2E control revision 1791507810055: Error: Timed out after 180000ms waiting for Aspire AppHost debug startup completion. Last error: <none>.\n\tat J (/tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1345254)\n\tat async q (/tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1341947)\n\tat async O (/tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1330394)\n\tat async /tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1299293\n\tat async /tmp/aev-l9cH53/extensions/microsoft-aspire.aspire-vscode-1.24.0/dist/extension.js:2:1297912\n    at applyE2eControl (out/test-e2e/test-e2e/helpers/assertions.js:355:15)\n    at async executeE2eControlCommand (out/test-e2e/test-e2e/helpers/fixtures.js:168:12)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/denoDebugger.e2e.test.js:87:23)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "A 180-second debug-startup timeout in a VS Code extension E2E scenario is a timing-related failure unrelated to any candidate merge (API graduations and an [Obsolete] attribute change), matching known startup-timing flakiness in this E2E suite."
+    }
+  ],
+  "causes": [
+    "vscode-e2e-linux-deno-debugger-apphost-timeout"
+  ]
+}
