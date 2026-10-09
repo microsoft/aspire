@@ -1,0 +1,110 @@
+{
+  "run_id": 37977079859,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37977079859",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-09T19:46:07Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20557,
+    "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/validate-ts-infrastructure",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20557",
+    "merged_at": "2026-10-09T18:59:06Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 113978800541,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37977079859/job/113978800541",
+      "classification": "transient-infra",
+      "reason": "Test host process was killed (exit code 137/SIGKILL) on macOS runner after all 6249 executed tests passed (0 failed, 40 skipped); matches known recurring macOS test-host SIGKILL infra issue.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (windows-latest)",
+      "id": 113978803430,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37977079859/job/113978803430",
+      "classification": "flaky-test",
+      "reason": "AzureResourcePreparerTests.PipelineStepAfterBeforeStartCanInspectRoleAssignmentsForTargetAzureResource failed with 'Collection was modified; enumeration operation may not execute.', a known recurring race condition unrelated to the merged TypeScript Bicep PR.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "id": 113978824515,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37977079859/job/113978824515",
+      "classification": "flaky-test",
+      "reason": "DevTunnelMonitorTests.CancellingAHealthCallerDoesNotCancelTheSharedObserver failed with ObjectDisposedException on a disposed IServiceProvider during an async callback, a timing/race-condition failure in code unrelated to the merged TypeScript Bicep PR.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelMonitorTests.CancellingAHealthCallerDoesNotCancelTheSharedObserver",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "error": "System.ObjectDisposedException : Cannot access a disposed object.\nObject name: 'IServiceProvider'.",
+      "stack_trace": "at Microsoft.Extensions.DependencyInjection.ServiceLookup.ThrowHelper.ThrowObjectDisposedException()\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService[T](IServiceProvider provider)\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.get_Configuration() in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 34\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.RecordResourceLifecycleMilestones(IResource resource, String resourceId, ResourceNotificationState notificationState, CustomResourceSnapshot previousSnapshot, CustomResourceSnapshot snapshot) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 998\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, String resourceId, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 923\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1271\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs, DateTimeOffset now) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 811\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass40_0.<<RefreshAccessAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 356\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass55_0`1.<<InvokeAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 724\n--- End of stack trace from previo",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Test name implies a cancellation race against a shared observer; the disposed service provider error happens in an async callback racing the test host teardown, a timing-dependent failure unrelated to the merged PR's TypeScript Bicep changes."
+    },
+    {
+      "name": "Aspire.Hosting.Azure.Tests.AzureResourcePreparerTests.PipelineStepAfterBeforeStartCanInspectRoleAssignmentsForTargetAzureResource",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Azure.Tests, Hosting.Azure, Hosting.Azure, tests/Aspire... / Hosting.Azure (windows-latest)",
+      "error": "System.InvalidOperationException : Step 'validate-compute-environments' failed: Collection was modified; enumeration operation may not execute.\n---- System.InvalidOperationException : Collection was modified; enumeration operation may not execute.",
+      "stack_trace": "at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1106\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 867\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 875\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 881\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepsAsTaskDag(List`1 steps, Dictionary`2 stepsByName, PipelineContext context) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 905\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteAsync(PipelineContext context) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 537\n   at Aspire.Hosting.Azure.Tests.AzureResourcePreparerTests.PipelineStepAfterBeforeStartCanInspectRoleAssignmentsForTargetAzureResource() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Azure.Tests\\AzureResourcePreparerTests.cs:line 279\n--- End of stack trace from previous location ---\n----- Inner Stack Trace -----\n   at System.Collections.Generic.List`1.Enumerator.MoveNext()\n   at System.Linq.Enumerable.OfTypeIterator`1.ToList()\n   at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ValidateComputeEnvironmentBindings(DistributedAppli",
+      "standard_output": "| [2026-10-09T19:06:56] Aspire.Hosting.Azure.Tests.AzureResourcePreparerTests Error: Step 'validate-compute-environments' failed.\n| System.InvalidOperationException: Step 'validate-compute-environments' failed: Collection was modified; enumeration operation may not execute.\n|  ---> System.InvalidOperationException: Collection was modified; enumeration operation may not execute.\n|    at System.Collections.Generic.List`1.Enumerator.MoveNext()\n|    at System.Linq.Enumerable.OfTypeIterator`1.ToList()\n|    at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ValidateComputeEnvironmentBindings(DistributedApplicationModel model) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 343\n|    at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c.<.ctor>b__4_16(PipelineStepContext context) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 308\n|    at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1090\n|    --- End of inner exception stack trace ---\n|    at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.ExecuteStepAsync(PipelineStep step, PipelineStepContext stepContext) in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 1106\n|    at Aspire.Hosting.Pipelines.DistributedApplicationPipeline.<>c__DisplayClass24_0.<<ExecuteStepsAsTaskDag>g__ExecuteStepWithDependencies|0>d.MoveNext() in /_/src/Aspire.Hosting/Pipelines/DistributedApplicationPipeline.cs:line 867",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches a previously recorded recurring race condition (cause azureresourcepreparer-collection-modified) where concurrent enumeration of compute environment bindings throws 'Collection was modified'; unrelated to the merged TypeScript Bicep PR."
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-sigkill-137",
+    "azureresourcepreparer-collection-modified",
+    "devtunnels-devtunnelmonitor-cancellinghealthcaller-objectdisposed"
+  ]
+}

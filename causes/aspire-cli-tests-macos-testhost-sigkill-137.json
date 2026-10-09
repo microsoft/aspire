@@ -31,6 +31,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
       "pr_number": 0,
       "observed_at": "2026-10-08T02:47:20Z"
+    },
+    {
+      "run_id": 37977079859,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37977079859",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T19:46:07Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20543"
