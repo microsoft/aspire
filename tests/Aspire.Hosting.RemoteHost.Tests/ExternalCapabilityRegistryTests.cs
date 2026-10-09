@@ -133,6 +133,51 @@ public class ExternalCapabilityRegistryTests
         Assert.Throws<InvalidOperationException>(() => registry.AugmentContext(CreateContext()));
     }
 
+    [Theory]
+    [InlineData("id", false, null)]
+    [InlineData("id", true, null)]
+    [InlineData("id", true, "")]
+    [InlineData("id", true, " \t\r\n")]
+    [InlineData("method", false, null)]
+    [InlineData("method", true, null)]
+    [InlineData("method", true, "")]
+    [InlineData("method", true, " \t\r\n")]
+    public async Task InitializeAllHostsAsync_RejectsInvalidRequiredCapabilityFieldsWithoutPublishing(
+        string fieldName, bool includeField, string? fieldValue)
+    {
+        var payload = JsonNode.Parse(CreateCapabilities("test.external/valid", "test.external/invalid").GetRawText())!.AsObject();
+        var invalidCapability = payload["capabilities"]![1]!.AsObject();
+        if (includeField)
+        {
+            invalidCapability[fieldName] = fieldValue;
+        }
+        else
+        {
+            invalidCapability.Remove(fieldName);
+        }
+        var sink = new TestSink();
+        using var loggerFactory = new TestLoggerFactory(sink, enabled: true);
+        using var registry = new ExternalCapabilityRegistry(loggerFactory.CreateLogger<ExternalCapabilityRegistry>());
+        using var connection = new IntegrationHostTestConnection(JsonSerializer.SerializeToElement(payload));
+        registry.AddIntegrationHost(connection.ServerRpc);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.InitializeAllHostsAsync(
+            1, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+
+        var validationError = Assert.IsType<JsonException>(error.InnerException);
+        Assert.Equal(fieldName == "id"
+            ? "Integration capabilities must declare a non-empty id."
+            : "Integration capability 'test.external/invalid' must declare a non-empty method.", validationError.Message);
+        var diagnostic = Assert.Single(sink.Writes, write => write.LogLevel == LogLevel.Error);
+        Assert.Equal("Integration host capability discovery failed.", diagnostic.Message);
+        Assert.Same(error, diagnostic.Exception);
+        Assert.False(registry.IsRegistered("test.external/valid"));
+        Assert.False(registry.IsRegistered("test.external/invalid"));
+        Assert.False(registry.IsRegistered(""));
+        var augmentationError = Assert.Throws<InvalidOperationException>(() => registry.AugmentContext(CreateContext()));
+        Assert.Same(error, augmentationError.InnerException);
+    }
+
     [Fact]
     public async Task InvokeGuestCallbackAsync_DeferredRelayUsesItsOriginalGuestAndRejectsOtherHosts()
     {
@@ -492,6 +537,34 @@ public class ExternalCapabilityRegistryTests
             original.ServerRpc, replacement.ServerRpc, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
 
         Assert.StartsWith("The restarted integration host changed its capability signatures.", error.Message);
+        var capability = Assert.Single(registry.AugmentContext(CreateContext()).Capabilities);
+        Assert.Equal("test.external/value", capability.CapabilityId);
+        Assert.Equal("externalMethod", capability.MethodName);
+        Assert.Equal("string", capability.ReturnType!.TypeId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => registry.TryInvokeAsync("test.external/value", null));
+    }
+
+    [Theory]
+    [InlineData("id")]
+    [InlineData("method")]
+    public async Task ReplaceHostAsync_RejectsMissingRequiredCapabilityFieldsWithoutPublishing(string fieldName)
+    {
+        using var registry = new ExternalCapabilityRegistry(NullLogger<ExternalCapabilityRegistry>.Instance);
+        using var original = new IntegrationHostTestConnection(CreateCapabilities("test.external/value"));
+        var payload = JsonNode.Parse(CreateCapabilities("test.external/value").GetRawText())!.AsObject();
+        payload["capabilities"]![0]!.AsObject().Remove(fieldName);
+        using var replacement = new IntegrationHostTestConnection(JsonSerializer.SerializeToElement(payload));
+        registry.AddIntegrationHost(original.ServerRpc);
+        await registry.InitializeAllHostsAsync(1, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        registry.MarkHostUnavailable(original.ServerRpc);
+        registry.AddIntegrationHost(replacement.ServerRpc);
+
+        var error = await Assert.ThrowsAsync<JsonException>(() => registry.ReplaceHostAsync(
+            original.ServerRpc, replacement.ServerRpc, TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+
+        Assert.Equal(fieldName == "id"
+            ? "Integration capabilities must declare a non-empty id."
+            : "Integration capability 'test.external/value' must declare a non-empty method.", error.Message);
         var capability = Assert.Single(registry.AugmentContext(CreateContext()).Capabilities);
         Assert.Equal("test.external/value", capability.CapabilityId);
         Assert.Equal("externalMethod", capability.MethodName);

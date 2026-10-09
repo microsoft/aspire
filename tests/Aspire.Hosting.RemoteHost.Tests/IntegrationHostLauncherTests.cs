@@ -105,13 +105,13 @@ public class IntegrationHostLauncherTests
             discoveryStarted.TrySetResult();
             return Task.FromResult(JsonSerializer.SerializeToElement(new[]
             {
-                new { id = "test/first", returnType = new { typeId = "void", category = "Primitive" } }
+                new { id = "test/first", method = "first", returnType = new { typeId = "void", category = "Primitive" } }
             }));
         });
         using var secondConnection = new IntegrationHostTestConnection(
             JsonSerializer.SerializeToElement(new[]
             {
-                new { id = "test/second", returnType = new { typeId = "void", category = "Primitive" } }
+                new { id = "test/second", method = "second", returnType = new { typeId = "void", category = "Primitive" } }
             }));
         registry.AddIntegrationHost(firstConnection.ServerRpc);
 

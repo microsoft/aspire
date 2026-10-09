@@ -746,6 +746,14 @@ internal sealed class ExternalCapabilityRegistry : IDisposable
 
     private static AtsCapabilityInfo CreateProjectedCapability(ExternalCapabilityProjection capability)
     {
+        if (string.IsNullOrWhiteSpace(capability.Id))
+        {
+            throw new JsonException("Integration capabilities must declare a non-empty id.");
+        }
+        if (string.IsNullOrWhiteSpace(capability.Method))
+        {
+            throw new JsonException($"Integration capability '{capability.Id}' must declare a non-empty method.");
+        }
         if (capability.ReturnType is null)
         {
             throw new JsonException(

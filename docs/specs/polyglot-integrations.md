@@ -438,6 +438,8 @@ This is *the* contract. It is not a translation layer from CLR to RPC — it is 
 - `owningTypeName`
 - `expandedTargetTypes`
 
+External capability records must declare non-empty, non-whitespace `id` and `method` strings; missing or null values are invalid. Discovery rejects invalid records before publishing any capabilities or generating an SDK. Each record must also declare `returnType`, using `void` for a void method.
+
 In the current implementation, external integrations reuse existing ATS type IDs (`IDistributedApplicationBuilder`, `ContainerResource`, `string`, `number`) instead of minting new ones. A future iteration will let hosts contribute their own handle and DTO type catalogs.
 
 ---
