@@ -10,7 +10,7 @@ namespace Aspire.Cli.Tests.TestServices;
 /// <see cref="IAppHostServerProject"/> whose <see cref="PrepareAsync"/> returns success.
 /// Used with a fake codegen session (<see cref="FakeAppHostServerSession"/> via an injected
 /// <see cref="IAppHostServerSessionFactory"/>) that bypasses <see cref="AppHostServerSession"/>,
-/// so <see cref="RunAsync"/> is never called.
+/// so <see cref="RunAsync"/> is only supported when a callback is supplied.
 /// </summary>
 internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject, IDisposable
 {
@@ -21,6 +21,8 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
     public string? PackageSourceOverride { get; private set; }
 
     public string? PackageSourceOverridePattern { get; private set; }
+
+    public Func<Task<AppHostServerRunResult>>? RunAsyncCallback { get; init; }
 
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
@@ -44,7 +46,7 @@ internal sealed class FakeSucceedingAppHostServerProject(string appDirectoryPath
         string[]? additionalArgs,
         bool debug,
         AppHostServerRunControl? runControl) =>
-        throw new NotSupportedException("Run should not be invoked when using a fake codegen session.");
+        RunAsyncCallback?.Invoke() ?? throw new NotSupportedException("Run should not be invoked when using a fake codegen session.");
 
     public void Dispose()
     {

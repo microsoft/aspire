@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -14,7 +14,7 @@ namespace Aspire.Cli.Telemetry;
 /// <summary>
 /// Provides a single ActivitySource for all Aspire CLI components.
 /// </summary>
-internal sealed class AspireCliTelemetry : IHostedService
+internal sealed class AspireCliTelemetry : AspireTelemetryBase, IHostedService
 {
     private static readonly TimeSpan s_internalMicrosoftDiagnosticsCompletionTimeout = TimeSpan.FromSeconds(20);
 
@@ -22,6 +22,11 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// The name of the ActivitySource for report telemetry. This telemetry is exported to external systems.
     /// </summary>
     public const string ReportedActivitySourceName = "Aspire.Cli.Reported";
+
+    /// <summary>
+    /// The category for explicitly reported product-event logs.
+    /// </summary>
+    public const string EventLogCategoryName = "Aspire.Cli.Reported.Events";
 
     /// <summary>
     /// The name of the ActivitySource for diagnostics telemetry. This telemetry is used for internal diagnostics only.
@@ -44,8 +49,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// </summary>
     internal const string ConsoleExporterLevelConfigKey = "ASPIRE_CLI_CONSOLE_EXPORTER_LEVEL";
 
-    private readonly ActivitySource _diagnosticsActivitySource;
-    private readonly ActivitySource _reportedActivitySource;
     private readonly IMachineInformationProvider _machineInformationProvider;
     private readonly ICIEnvironmentDetector _ciEnvironmentDetector;
     private readonly ICodingAgentDetector _codingAgentDetector;
@@ -111,6 +114,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <param name="executionContext">The CLI execution context carrying the effective identity.</param>
     /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     internal AspireCliTelemetry(ILogger<AspireCliTelemetry> logger, IMachineInformationProvider machineInformationProvider, ICIEnvironmentDetector ciEnvironmentDetector, ICodingAgentDetector codingAgentDetector, IInternalMicrosoftDetector internalMicrosoftDetector, TelemetryConfiguration telemetryConfiguration, string reportedSourceName, string diagnosticsSourceName, CliExecutionContext executionContext, TelemetryTagsSource tagsSource)
+        : base(logger, reportedSourceName, diagnosticsSourceName, TelemetryConstants.Events.Error)
     {
         _logger = logger;
         _machineInformationProvider = machineInformationProvider;
@@ -120,8 +124,6 @@ internal sealed class AspireCliTelemetry : IHostedService
         _telemetryConfiguration = telemetryConfiguration;
         _executionContext = executionContext;
         _tagsSource = tagsSource;
-        _reportedActivitySource = new ActivitySource(reportedSourceName);
-        _diagnosticsActivitySource = new ActivitySource(diagnosticsSourceName);
     }
 
     /// <summary>
@@ -134,96 +136,26 @@ internal sealed class AspireCliTelemetry : IHostedService
         return tags;
     }
 
-    /// <summary>
-    /// Starts a new activity for reported telemetry that is exported to external systems.
-    /// </summary>
-    /// <param name="name">The name of the activity.</param>
-    /// <param name="kind">The activity kind.</param>
-    /// <returns>The started activity, or null if no listeners are registered.</returns>
-    public Activity? StartReportedActivity([CallerMemberName] string name = "", ActivityKind kind = ActivityKind.Internal)
+    protected override IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags() => _tagsSource.GetResolvedTags();
+
+    protected override bool IsReportedTelemetryEnabled => _telemetryConfiguration.ReportedTelemetryEnabled;
+
+    /// <inheritdoc />
+    protected override bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue)
     {
-        return StartActivityCore(_reportedActivitySource, name, kind);
+        // CLI properties are supplied by internal instrumentation, which retains its existing
+        // tag set and exception details rather than adopting the dashboard's privacy policy.
+        sanitizedValue = value;
+        return true;
     }
 
     /// <summary>
-    /// Starts a new activity for reported telemetry with an explicit parent context.
+    /// Records a CLI product event immediately as a structured log.
     /// </summary>
-    public Activity? StartReportedActivity(string name, ActivityKind kind, ActivityContext parentContext)
-    {
-        return StartActivityCore(_reportedActivitySource, name, kind, parentContext);
-    }
-
-    /// <summary>
-    /// Starts a new activity for diagnostic telemetry used for internal diagnostics only.
-    /// Uses the caller member name if no name is provided.
-    /// </summary>
-    /// <param name="name">The name of the activity. Defaults to the caller member name if not specified.</param>
-    /// <param name="kind">The activity kind.</param>
-    /// <returns>The started activity, or null if no listeners are registered.</returns>
-    public Activity? StartDiagnosticActivity([CallerMemberName] string name = "", ActivityKind kind = ActivityKind.Internal)
-    {
-        return StartActivityCore(_diagnosticsActivitySource, name, kind);
-    }
-
-    /// <summary>
-    /// Starts a new activity for diagnostic telemetry with an explicit parent context.
-    /// </summary>
-    public Activity? StartDiagnosticActivity(string name, ActivityKind kind, ActivityContext parentContext)
-    {
-        return StartActivityCore(_diagnosticsActivitySource, name, kind, parentContext);
-    }
-
-    private static Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
-    {
-        return StartActivityCore(source, name, kind, parentContext: null);
-    }
-
-    private static Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind, ActivityContext? parentContext)
-    {
-        // Activities must have a name.
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        var activity = parentContext is { } context
-            ? source.StartActivity(name, kind, context)
-            : source.StartActivity(name, kind);
-
-        return activity;
-    }
-
-    /// <summary>
-    /// Records an error by logging it and adding an activity event to a CLI activity.
-    /// </summary>
-    /// <param name="message">The error message.</param>
-    /// <param name="exception">The exception that occurred.</param>
-    public void RecordError(string message, Exception exception)
-    {
-        _logger.LogError(exception, message);
-
-        var activity = FindReportedActivity(Activity.Current);
-        if (activity is not null)
-        {
-            // This adds an activity event for the error. Capturing the data manually is intentional.
-            // The reason is we want to record this information to the traces table instead of the exceptions table.
-            var tags = new ActivityTagsCollection
-            {
-                [TelemetryConstants.Tags.ExceptionType] = exception.GetType().FullName,
-                [TelemetryConstants.Tags.ExceptionMessage] = exception.Message,
-                [TelemetryConstants.Tags.ExceptionStackTrace] = exception.StackTrace
-            };
-
-            foreach (var tag in _tagsSource.GetResolvedTags())
-            {
-                tags[tag.Key] = tag.Value;
-            }
-
-            activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.Error, tags: tags));
-        }
-        else
-        {
-            // There should always be a reported activity. Sanity check in case something goes wrong.
-            Debug.WriteLine("No reported activity found to record the error event.");
-        }
-    }
+    /// <param name="eventName">The event name.</param>
+    /// <param name="properties">The CLI-specific event properties.</param>
+    public void RecordEvent(string eventName, IEnumerable<KeyValuePair<string, object?>>? properties = null) =>
+        RecordEventCore(eventName, properties);
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken)
@@ -450,16 +382,18 @@ internal sealed class AspireCliTelemetry : IHostedService
             return;
         }
 
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome);
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus);
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds);
+        SetActivityProperties(activity,
+        [
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome, result.Outcome),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus, result.CacheStatus),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs, (long)result.Duration.TotalMilliseconds),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias)),
+            new(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain))
+        ]);
         if (!string.IsNullOrEmpty(result.Source))
         {
-            activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
+            SetActivityProperty(activity, TelemetryConstants.Tags.InternalMicrosoftSource, result.Source);
         }
-
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias, !string.IsNullOrEmpty(result.Alias));
-        activity.SetTag(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain, !string.IsNullOrEmpty(result.Domain));
 
         foreach (var probe in result.ProbeDiagnostics)
         {
@@ -492,25 +426,6 @@ internal sealed class AspireCliTelemetry : IHostedService
 
             activity.AddEvent(new ActivityEvent(TelemetryConstants.Events.InternalMicrosoftProbe, tags: tags));
         }
-    }
-
-    /// <summary>
-    /// Searches the activity hierarchy to find the first reported activity.
-    /// We want to log errors only to the reported activity so they're reported.
-    /// </summary>
-    private Activity? FindReportedActivity(Activity? activity)
-    {
-        while (activity is not null)
-        {
-            if (activity.Source == _reportedActivitySource)
-            {
-                return activity;
-            }
-
-            activity = activity.Parent;
-        }
-
-        return null;
     }
 
     /// <summary>

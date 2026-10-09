@@ -6,6 +6,7 @@ using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -33,14 +34,22 @@ public static class RemoteHostServer
     /// <returns>A task that completes when the server has stopped.</returns>
     public static async Task RunAsync(string[] args)
     {
+        if (ProcessSupervisor.IsSupervisor)
+        {
+            await ProcessSupervisor.RunAsync().ConfigureAwait(false);
+            return;
+        }
+
         var builder = CreateBuilder(args);
         using var host = builder.Build();
         var profilingTelemetry = host.Services.GetRequiredService<RemoteHostProfilingTelemetry>();
+        var integrationHostLauncher = host.Services.GetRequiredService<IntegrationHostLauncher>();
 
         using var activity = profilingTelemetry.StartRemoteHostRun();
         try
         {
             await host.RunAsync().ConfigureAwait(false);
+            integrationHostLauncher.ThrowIfFailed();
         }
         catch (Exception ex)
         {
@@ -53,7 +62,7 @@ public static class RemoteHostServer
     {
         var builder = Host.CreateApplicationBuilder(args);
         ConfigureAppHostLogLevel(builder.Logging, builder.Configuration);
-        ConfigureServices(builder.Services);
+        ConfigureServices(builder.Services, builder.Configuration);
         ConfigureProfilingTelemetry(builder);
 
         return builder;
@@ -70,11 +79,20 @@ public static class RemoteHostServer
         }
     }
 
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(IServiceCollection services, IConfiguration configuration)
     {
+        var integrationConfiguration = new IntegrationHostConfiguration(configuration);
+        services.AddSingleton(integrationConfiguration);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IChildProcessFactory, ChildProcessFactory>();
+        services.AddSingleton<IntegrationHostProcessLauncher>();
         // Hosted services
         services.AddHostedService<OrphanDetector>();
         services.AddHostedService<JsonRpcServer>();
+        // Integration host launcher is registered as a hosted service so its StopAsync
+        // runs during graceful shutdown, killing any integration host processes it spawned.
+        services.AddSingleton<IntegrationHostLauncher>();
+        services.AddHostedService(sp => sp.GetRequiredService<IntegrationHostLauncher>());
 
         // Singletons
         services.AddSingleton<RemoteHostProfilingTelemetry>();
@@ -83,12 +101,22 @@ public static class RemoteHostServer
         services.AddSingleton(sp => sp.GetRequiredService<AtsContextFactory>().GetContext());
         services.AddSingleton<CodeGeneratorResolver>();
         services.AddSingleton<LanguageSupportResolver>();
+        services.AddSingleton<ExternalCapabilityRegistry>();
+        if (integrationConfiguration.Enabled)
+        {
+            // Integration hosts resolve handles created by the guest, so opted-in sessions
+            // share capability tokens and clean them up when the server shuts down.
+            services.AddSingleton<HandleRegistry>();
+        }
+        else
+        {
+            services.AddScoped<HandleRegistry>();
+        }
 
         // Scoped services
         services.AddScoped<CodeGenerationService>();
         services.AddScoped<LanguageService>();
         services.AddScoped<JsonRpcAuthenticationState>();
-        services.AddScoped<HandleRegistry>();
         services.AddScoped<CancellationTokenRegistry>();
         services.AddScoped<JsonRpcCallbackInvoker>();
         services.AddScoped<ICallbackInvoker>(sp => sp.GetRequiredService<JsonRpcCallbackInvoker>());

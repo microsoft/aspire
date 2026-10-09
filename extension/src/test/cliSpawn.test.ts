@@ -12,9 +12,88 @@ import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { canVsCodeQuoteCommandShimLaunch, getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
 import { EnvironmentVariables } from '../utils/environment';
+import { createE2ePsFollowProcessTracker } from '../testing/e2eStateFileBridge';
+import { getPsFollowProcessLogPath, readPsFollowProcesses } from '../testing/psFollowProcessLog';
 
 import { removeDirectorySafely } from './testHelpers';
 suite('spawnCliProcess tests', () => {
+    test('records native ps followers before output and across extension-host tracker replacement', () => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-native-ps-'));
+        const stateFile = path.join(directory, 'state.json');
+        const environmentStub = sinon.stub(process, 'env').value({
+            ...process.env,
+            ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
+            ASPIRE_EXTENSION_E2E_STATE_FILE: stateFile,
+            ASPIRE_EXTENSION_E2E_CONTROL_FILE: path.join(directory, 'control.json'),
+            ASPIRE_EXTENSION_E2E_RUN_ID: 'run',
+        });
+        const children = [createTestChildProcess(4805), createTestChildProcess(4805)];
+        const spawnStub = sinon.stub(nodeChildProcess, 'spawn');
+        spawnStub.onFirstCall().returns(children[0]);
+        spawnStub.onSecondCall().returns(children[1]);
+        const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
+        const firstTracker = createE2ePsFollowProcessTracker();
+        let replacementTracker: { dispose(): void } | undefined;
+
+        try {
+            spawnCliProcess(terminalProvider, 'aspire', ['ps', '--follow', '--format', 'json']);
+            const logPath = getPsFollowProcessLogPath(stateFile);
+            assert.deepStrictEqual(readPsFollowProcesses(logPath, 'run').map(record => ({
+                pid: record.pid, exited: record.exited,
+            })), [{ pid: 4805, exited: false }]);
+
+            firstTracker.dispose();
+            children[0].emit('exit', 0);
+            assert.deepStrictEqual(readPsFollowProcesses(logPath, 'run').map(record => record.exited), [true]);
+            children[0].emit('close', 0);
+            replacementTracker = createE2ePsFollowProcessTracker();
+            spawnCliProcess(terminalProvider, 'aspire', ['ps', '--follow', '--format', 'json']);
+            const records = readPsFollowProcesses(logPath, 'run');
+            assert.deepStrictEqual(records.map(record => ({ pid: record.pid, exited: record.exited })), [
+                { pid: 4805, exited: true },
+                { pid: 4805, exited: false },
+            ]);
+            assert.notStrictEqual(records[0].id, records[1].id);
+        } finally {
+            children.forEach(child => {
+                child.emit('exit', 0);
+                child.emit('close', 0);
+            });
+            replacementTracker?.dispose();
+            firstTracker.dispose();
+            spawnStub.restore();
+            environmentStub.restore();
+            removeDirectorySafely(directory);
+        }
+    });
+
+    for (const platform of ['linux', 'win32']) {
+        test(`PID-less termination remains bounded without a confirmed close on ${platform}`, async () => {
+            const platformStub = sinon.stub(process, 'platform').value(platform);
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const child = createTestChildProcess(4807);
+            Object.defineProperty(child, 'pid', { value: undefined });
+            child.kill.returns(false);
+
+            try {
+                const termination = terminateCliProcess(child, 'failed spawn', { force: true });
+                let settled = false;
+                void termination.catch(() => { settled = true; });
+                await clock.tickAsync(4999);
+                assert.strictEqual(settled, false);
+
+                await clock.tickAsync(1);
+                await assert.rejects(termination, platform === 'win32'
+                    ? /no process identifier/
+                    : /forcefully terminate/);
+                assert.strictEqual(child.listenerCount('close'), 0);
+            } finally {
+                clock.restore();
+                platformStub.restore();
+            }
+        });
+    }
+
     test('builds the child environment from the exact CLI command being launched', () => {
         const childProcess = createTestChildProcess(4801);
         const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
@@ -225,6 +304,59 @@ suite('spawnCliProcess tests', () => {
             platformStub.restore();
         }
     });
+
+    for (const failure of [
+        { name: 'signal failure', signalFails: true },
+        { name: 'confirmation timeout', signalFails: false },
+    ]) {
+        test(`retrying POSIX cleanup after ${failure.name} retains process-group ownership`, async () => {
+            const platformStub = sinon.stub(process, 'platform').value('linux');
+            let processGroupAlive = true;
+            let signalFails = failure.signalFails;
+            const processKillStub = sinon.stub(process, 'kill').callsFake((_pid, signal) => {
+                if (signal === 'SIGKILL' && signalFails) {
+                    throw Object.assign(new Error('Cannot signal process group'), { code: 'EPERM' });
+                }
+                if (signal === 0 && !processGroupAlive) {
+                    throw Object.assign(new Error('No such process'), { code: 'ESRCH' });
+                }
+                return true;
+            });
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            const childProcess = createTestChildProcess(4596);
+            const spawnStub = sinon.stub(nodeChildProcess, 'spawn').returns(childProcess);
+            const terminalProvider = { createEnvironment: () => ({}) } as AspireTerminalProvider;
+
+            try {
+                const child = spawnCliProcess(terminalProvider, 'aspire', ['ps', '--follow'], { createProcessGroup: true });
+                const rejection = assert.rejects(terminateCliProcess(child, 'test Aspire CLI', { force: true }));
+                await clock.tickAsync(5000);
+                await rejection;
+
+                signalFails = false;
+                let settled = false;
+                const retry = terminateCliProcess(child, 'test Aspire CLI', { force: true }).then(() => { settled = true; });
+                assert.deepStrictEqual(processKillStub.args.filter(args => args[1] === 'SIGKILL'), [
+                    [-4596, 'SIGKILL'],
+                    [-4596, 'SIGKILL'],
+                ]);
+                sinon.assert.notCalled(childProcess.kill);
+
+                await clock.tickAsync(50);
+                assert.strictEqual(settled, false, 'retry must confirm group exit, not just send the signal');
+                processGroupAlive = false;
+                await clock.tickAsync(50);
+                await retry;
+                assert.strictEqual(settled, true);
+                assert.strictEqual(clock.countTimers(), 0);
+            } finally {
+                spawnStub.restore();
+                clock.restore();
+                processKillStub.restore();
+                platformStub.restore();
+            }
+        });
+    }
 
     test('does not signal a POSIX process group after it exits with its leader', async () => {
         const platformStub = sinon.stub(process, 'platform').value('linux');

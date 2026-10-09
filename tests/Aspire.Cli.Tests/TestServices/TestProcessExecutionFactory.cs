@@ -7,15 +7,49 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 {
     private int _attemptCount;
+
+    internal static IProcessExecutionFactory CreateForCliGuardian(IEnvironment environment)
+    {
+        var factory = new ProcessExecutionFactory(environment, NullLogger<ProcessExecutionFactory>.Instance);
+        static void ConfigureGuardian(ProcessInvocationOptions options)
+        {
+            // MTP cannot re-enter guardian mode. Only replace the executable and argv:
+            // the production handoff, containment, output and completion policy remain intact.
+            options.CreateSupervisorStartInfo = (command, completionPath, timeout) =>
+            {
+                var guardian = ProcessSupervisor.CreateStartInfo(command, completionPath, timeout);
+                guardian.FileName = Path.Combine(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(), "..", "..", "..", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+                guardian.ArgumentList.Clear();
+                guardian.ArgumentList.Add(typeof(Aspire.Cli.Program).Assembly.Location);
+                return guardian;
+            };
+        }
+
+        return new TestProcessExecutionFactory
+        {
+            CreateExecutionFromStartInfoCallback = (startInfo, options) =>
+            {
+                ConfigureGuardian(options);
+                return factory.CreateExecution(startInfo, options);
+            },
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, directory, options) =>
+            {
+                ConfigureGuardian(options);
+                return factory.CreateExecution(fileName, arguments, environment, directory, options);
+            }
+        };
+    }
 
     /// <summary>
     /// Gets or sets a callback that is invoked when <c>CreateExecution</c> is called.
@@ -24,6 +58,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     public Func<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions, IProcessExecution>? CreateExecutionCallback { get; set; }
 
     public Func<string, string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions, IProcessExecution>? CreateExecutionWithFileNameCallback { get; set; }
+    public Func<System.Diagnostics.ProcessStartInfo, ProcessInvocationOptions, IProcessExecution>? CreateExecutionFromStartInfoCallback { get; set; }
 
     /// <summary>
     /// Gets or sets an action that is invoked when <c>CreateExecution</c> is called,
@@ -47,7 +82,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     public Func<int, ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, string? Stdout)>>? AsyncAttemptCallback { get; set; }
 
     /// <summary>
-    /// When set, the execution will use this exit code when <see cref="IProcessExecution.WaitForExitAsync"/> is called.
+    /// When set, the execution will use this exit code when <see cref="Aspire.Shared.IChildProcess.WaitForExitAsync"/> is called.
     /// </summary>
     public int DefaultExitCode { get; set; }
 
@@ -114,6 +149,10 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 
     public IProcessExecution CreateExecution(System.Diagnostics.ProcessStartInfo startInfo, ProcessInvocationOptions options)
     {
+        if (CreateExecutionFromStartInfoCallback is not null)
+        {
+            return CreateExecutionFromStartInfoCallback(startInfo, options);
+        }
         // Translate the fully-populated ProcessStartInfo into the (fileName, args, env, workingDirectory)
         // shape the rest of this fake understands, so the AppHost server / guest spawn paths (which use
         // the PSI overload) flow through the same assertion + callback machinery as every other caller.

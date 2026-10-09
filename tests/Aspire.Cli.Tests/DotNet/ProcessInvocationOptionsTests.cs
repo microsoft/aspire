@@ -4,6 +4,7 @@
 using System.Reflection;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -31,6 +32,9 @@ public sealed class ProcessInvocationOptionsTests
             KillEntireProcessTreeOnCancel = false,
             IsolateConsole = true,
             KillOnParentExit = true,
+            Lifetime = ChildProcessLifetime.AppHost,
+            CompletionPath = "exit-code",
+            CreateSupervisorStartInfo = (command, _, _) => command,
             Detached = true,
             // Internal properties are included below, so they need non-default values too.
             AppHostArgumentStartIndex = 3,

@@ -64,6 +64,7 @@ public class AtsTypeScriptCodeGeneratorTests
         // would have to be regenerated on every change to the source resource.
         Assert.Equal(EmbeddedResources.Read("base.mts"), files["base.mts"]);
         Assert.Equal(EmbeddedResources.Read("transport.mts"), files["transport.mts"]);
+        Assert.Equal(EmbeddedResources.Read("integration-host.mts"), files["integration-host.mts"]);
     }
 
     [Fact]
@@ -949,6 +950,62 @@ public class AtsTypeScriptCodeGeneratorTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => projector.MapInputUnionTypeToTypeScript(typeRef));
         Assert.Equal("Union input types must define at least one member type.", ex.Message);
+    }
+
+    [Fact]
+    public void GenerateCallbackTypeSignature_MapsCollectionsAsJsonData()
+    {
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
+
+        var stringType = new AtsTypeRef
+        {
+            TypeId = "string",
+            Category = AtsTypeCategory.Primitive
+        };
+        var listType = new AtsTypeRef
+        {
+            TypeId = "list",
+            Category = AtsTypeCategory.List,
+            ElementType = stringType
+        };
+        var dictionaryType = new AtsTypeRef
+        {
+            TypeId = "dictionary",
+            Category = AtsTypeCategory.Dict,
+            KeyType = stringType,
+            ValueType = stringType
+        };
+
+        Assert.Equal("() => Promise<string[]>", projector.GenerateCallbackTypeSignature([], listType));
+        Assert.Equal("() => Promise<Record<string, string>>", projector.GenerateCallbackTypeSignature([], dictionaryType));
+    }
+
+    [Fact]
+    public void GenerateCallbackTypeSignature_MapsNestedNullableCollectionsAsJsonData()
+    {
+        var projector = new TypeScriptApiProjector(CreateContextFromTestAssembly());
+        var nullableNumber = new AtsTypeRef
+        {
+            TypeId = AtsConstants.Number,
+            Category = AtsTypeCategory.Primitive,
+            IsNullable = true
+        };
+        var returnType = new AtsTypeRef
+        {
+            TypeId = "dictionary",
+            Category = AtsTypeCategory.Dict,
+            KeyType = new AtsTypeRef { TypeId = AtsConstants.String, Category = AtsTypeCategory.Primitive },
+            ValueType = new AtsTypeRef
+            {
+                TypeId = "list",
+                Category = AtsTypeCategory.List,
+                ElementType = nullableNumber
+            }
+        };
+
+        Assert.Equal(
+            "() => Promise<Record<string, (number | null)[]>>",
+            projector.GenerateCallbackTypeSignature([], returnType));
     }
 
     [Fact]
@@ -2275,6 +2332,9 @@ public class AtsTypeScriptCodeGeneratorTests
         var legacyTypeId = AtsTypeMapping.DeriveTypeId(typeof(ProjectResourceOptions));
         Assert.Single(context.HandleTypes, type => type.AtsTypeId == legacyTypeId);
         var addCSharpApp = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addCSharpApp");
+        Assert.True(addCSharpApp.IsObsolete);
+        Assert.False(addCSharpApp.IsExperimental);
+        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", addCSharpApp.ObsoleteMessage);
         var legacyOptions = Assert.Single(addCSharpApp.Parameters, parameter => parameter.Name == "options");
         Assert.NotNull(legacyOptions.Type);
         Assert.Equal(AtsTypeCategory.Handle, legacyOptions.Type.Category);

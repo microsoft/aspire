@@ -376,6 +376,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Hosting integrations authored outside .NET are experimental and disabled by default. Run &apos;aspire config set features.experimentalHostingIntegrations true&apos; to enable them..
+        /// </summary>
+        public static string HostingIntegrationsFeatureNotEnabled {
+            get {
+                return ResourceManager.GetString("HostingIntegrationsFeatureNotEnabled", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The integration project could not be built..
         /// </summary>
         public static string IntegrationBuildFailed {

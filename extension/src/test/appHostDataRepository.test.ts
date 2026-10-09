@@ -13,12 +13,12 @@ import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../ut
 import * as cliModule from '../utils/process/cliProcess';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability, lsJsonStreamCapability } from '../types/configInfo';
-import { errorFetchingAppHosts } from '../loc/strings';
+import { errorFetchingAppHosts, errorStoppingAppHostWatcher } from '../loc/strings';
 import { windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { createAppHostOperationTarget } from '../utils/appHostOperationTarget';
 import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
-import { removeDirectorySafely } from './testHelpers';
+import { isProcessAlive, removeDirectorySafely } from './testHelpers';
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
     stderr = new PassThrough();
@@ -6352,6 +6352,377 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
+    test('rapid ps follow restarts wait for the previous process termination', async () => {
+        const firstProcess = new TestChildProcess(false);
+        const replacementProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(firstProcess);
+        spawnStub.onSecondCall().returns(replacementProcess);
+        const termination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
+        terminateStub.onFirstCall().returns(termination.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(spawnStub.callCount, 1);
+            const firstExitCallback = spawnStub.firstCall.args[3].exitCallback;
+
+            for (let restart = 0; restart < 5; restart++) {
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+            }
+
+            assert.strictEqual(spawnStub.callCount, 1, 'a replacement must not overlap a still-live follower');
+            sinon.assert.calledOnce(terminateStub);
+
+            firstProcess.markExited();
+            firstExitCallback(1);
+            termination.resolve();
+            await waitForCondition(() => spawnStub.callCount === 2, 'replacement ps follow did not start after cleanup');
+        } finally {
+            termination.resolve();
+            repository.dispose();
+            await waitForMicrotasks();
+            terminateStub.restore();
+        }
+    });
+
+    for (const command of ['follow', 'snapshot']) {
+        test(`failed ps ${command} spawn during restart does not retain cleanup ownership`, async () => {
+            const failedProcess = new TestChildProcess(false);
+            const follower = new TestChildProcess(false);
+            const failedCallIndex = command === 'follow' ? 0 : 1;
+            spawnStub.onFirstCall().returns(command === 'follow' ? failedProcess : follower);
+            spawnStub.onSecondCall().returns(command === 'follow' ? new TestChildProcess() : failedProcess);
+            const cleanupFailure = new Error('the process never started');
+            const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').resolves();
+            terminateStub.onCall(failedCallIndex).rejects(cleanupFailure);
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                if (command === 'snapshot') {
+                    repository.refresh();
+                    await waitForMicrotasks();
+                }
+                const initialSpawnCount = spawnStub.callCount;
+                const failedCallbacks = spawnStub.getCall(failedCallIndex).args[3];
+
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                failedCallbacks.errorCallback(new Error('spawn ENOENT'));
+                failedProcess.markExited(-2);
+                failedCallbacks.exitCallback(-2);
+
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+
+                assert.strictEqual(spawnStub.callCount, initialSpawnCount + 1);
+                assert.strictEqual(repository.errorMessage, undefined);
+                await repository.shutdown();
+            } finally {
+                terminateStub.resolves();
+                repository.dispose();
+                await waitForMicrotasks();
+                terminateStub.restore();
+            }
+        });
+    }
+
+    for (const command of ['follow', 'snapshot']) {
+        test(`shutdown racing a failed ps ${command} spawn waits for the spawn outcome`, async () => {
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-failed-ps-spawn-'));
+            getCliPathStub.resolves(path.join(directory, 'missing-aspire'));
+            spawnStub.resetBehavior();
+            spawnStub.callThrough();
+            if (command === 'snapshot') {
+                spawnStub.onFirstCall().returns(new TestChildProcess());
+            }
+            const spawned = createDeferred<void>();
+            const subscription = cliModule.onDidSpawnCliProcess(() => spawned.resolve());
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                if (command === 'snapshot') {
+                    await waitForMicrotasks();
+                    repository.refresh();
+                }
+
+                // Resume in the spawning microtask, before Node delivers ENOENT on its next tick.
+                await spawned.promise;
+                await repository.shutdown();
+                assert.strictEqual(repository.errorMessage, undefined);
+            } finally {
+                subscription.dispose();
+                repository.dispose();
+                await waitForMicrotasks();
+                removeDirectorySafely(directory);
+            }
+        });
+    }
+
+    for (const snapshot of [
+        { name: 'success', exitCode: 0, stdout: '[]', stderr: '' },
+        { name: 'failure', exitCode: 1, stdout: '', stderr: 'snapshot unavailable' },
+    ]) {
+        test(`ps cleanup failure survives view changes, snapshot ${snapshot.name}, and a pending retry`, async () => {
+            const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+            const firstProcess = new TestChildProcess(false);
+            spawnStub.onFirstCall().returns(firstProcess);
+            const expectedError = new Error('process-tree cleanup could not be confirmed');
+            const cleanupError = errorStoppingAppHostWatcher(String(expectedError));
+            const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').rejects(expectedError);
+            const retry = createDeferred<void>();
+            const repository = new AppHostDataRepository(terminalProvider);
+
+            try {
+                repository.setViewMode('global');
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                assert.strictEqual(repository.errorMessage, cleanupError);
+
+                repository.setViewMode('workspace');
+                repository.setViewMode('global');
+                assert.strictEqual(repository.errorMessage, cleanupError);
+
+                terminateStub.returns(retry.promise);
+                repository.setPanelVisible(false);
+                repository.setPanelVisible(true);
+                await waitForMicrotasks();
+                assert.strictEqual(repository.errorMessage, cleanupError);
+                assert.strictEqual(spawnStub.callCount, 1);
+                sinon.assert.alwaysCalledWith(terminateStub, firstProcess);
+
+                repository.refresh();
+                await waitForMicrotasks();
+                assert.strictEqual(repository.errorMessage, cleanupError, 'refresh must not clear unconfirmed cleanup');
+                const snapshotCall = spawnStub.getCalls().find(call => call.args[2][0] === 'ps' && !call.args[2].includes('--follow'));
+                assert.ok(snapshotCall);
+                snapshotCall.args[3].stdoutCallback(snapshot.stdout);
+                snapshotCall.args[3].stderrCallback(snapshot.stderr);
+                snapshotCall.args[3].exitCallback(snapshot.exitCode);
+                assert.strictEqual(repository.errorMessage, cleanupError);
+                assert.strictEqual(repository.isLoading, false);
+
+                firstProcess.markExited();
+                spawnStub.firstCall.args[3].exitCallback(1);
+                retry.resolve();
+                await waitForCondition(
+                    () => spawnStub.getCalls().filter(call => call.args[2].includes('--follow')).length === 2,
+                    'replacement ps follow did not start after cleanup retry');
+                assert.strictEqual(repository.errorMessage,
+                    snapshot.exitCode === 0 ? undefined : errorFetchingAppHosts(snapshot.stderr));
+            } finally {
+                retry.resolve();
+                terminateStub.resolves();
+                await repository.shutdown();
+                terminateStub.restore();
+                workspaceFoldersStub.restore();
+            }
+        });
+    }
+
+    test('ps cleanup failure after leader exit is not mistaken for successful tree cleanup', async () => {
+        const firstProcess = new TestChildProcess(false);
+        spawnStub.returns(firstProcess);
+        const expectedError = new Error('descendant cleanup could not be confirmed');
+        let rejectTermination!: (error: Error) => void;
+        const termination = new Promise<void>((_resolve, reject) => { rejectTermination = reject; });
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').returns(termination);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            repository.setPanelVisible(false);
+            firstProcess.markExited();
+            spawnStub.firstCall.args[3].exitCallback(1);
+            rejectTermination(expectedError);
+            await waitForMicrotasks();
+
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            assert.strictEqual(repository.errorMessage, errorStoppingAppHostWatcher(String(expectedError)));
+            assert.strictEqual(spawnStub.callCount, 1);
+            sinon.assert.calledOnce(terminateStub);
+            await assert.rejects(repository.shutdown(), error => error === expectedError);
+        } finally {
+            repository.dispose();
+            await waitForMicrotasks();
+            terminateStub.restore();
+        }
+    });
+
+    test('repository shutdown awaits pending ps termination and prevents a queued restart', async () => {
+        spawnStub.returns(new TestChildProcess(false));
+        const termination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess').returns(termination.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            repository.setPanelVisible(false);
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            const shutdown = repository.shutdown();
+            let settled = false;
+            void shutdown.then(() => { settled = true; });
+            repository.dispose();
+            repository.setPanelVisible(false);
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.strictEqual(settled, false);
+            assert.strictEqual(spawnStub.callCount, 1);
+            sinon.assert.calledOnce(terminateStub);
+
+            termination.resolve();
+            await shutdown;
+            await waitForMicrotasks();
+            assert.strictEqual(settled, true);
+            assert.strictEqual(spawnStub.callCount, 1);
+        } finally {
+            termination.resolve();
+            await repository.shutdown();
+            terminateStub.restore();
+        }
+    });
+
+    test('disposing during ps CLI path resolution prevents a late spawn', async () => {
+        const cliPath = createDeferred<string>();
+        getCliPathStub.returns(cliPath.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            await repository.shutdown();
+            cliPath.resolve('aspire');
+            await waitForMicrotasks();
+
+            sinon.assert.notCalled(spawnStub);
+        } finally {
+            cliPath.resolve('aspire');
+            await repository.shutdown();
+        }
+    });
+
+    test('repository shutdown drains every ps process even when one cleanup fails', async () => {
+        spawnStub.onFirstCall().returns(new TestChildProcess(false));
+        spawnStub.onSecondCall().returns(new TestChildProcess(false));
+        const expectedError = new Error('follow cleanup failed');
+        const snapshotTermination = createDeferred<void>();
+        const terminateStub = sinon.stub(cliModule, 'terminateCliProcess');
+        terminateStub.onFirstCall().rejects(expectedError);
+        terminateStub.onSecondCall().returns(snapshotTermination.promise);
+        const repository = new AppHostDataRepository(terminalProvider);
+        let rejection: Promise<void> | undefined;
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            repository.refresh();
+            await waitForMicrotasks();
+            sinon.assert.calledTwice(spawnStub);
+
+            const shutdown = repository.shutdown();
+            rejection = assert.rejects(shutdown, error => error === expectedError);
+            let settled = false;
+            void rejection.then(() => { settled = true; });
+            await waitForMicrotasks();
+            sinon.assert.calledTwice(terminateStub);
+            assert.strictEqual(settled, false, 'failed follow cleanup must still drain the snapshot process');
+
+            snapshotTermination.resolve();
+            await rejection;
+            assert.strictEqual(settled, true);
+        } finally {
+            snapshotTermination.resolve();
+            repository.dispose();
+            await rejection;
+            terminateStub.restore();
+        }
+    });
+
+    test('ps follow restarts reap real Windows cmd shim children', async function () {
+        if (process.platform !== 'win32') {
+            this.skip();
+        }
+        this.timeout(30_000);
+
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-ps-'));
+        const scriptPath = path.join(directory, 'follow.js');
+        const shimPath = path.join(directory, 'aspire.cmd');
+        const pidLogPath = path.join(directory, 'pids.log');
+        fs.writeFileSync(scriptPath, `
+require('fs').appendFileSync(${JSON.stringify(pidLogPath)}, String(process.pid) + '\\n');
+setInterval(() => {}, 1000);
+`);
+        fs.writeFileSync(shimPath, `@echo off\r\n"${process.execPath}" "${scriptPath}" %*\r\n`);
+        const environmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '1',
+        });
+        getCliPathStub.resolves(shimPath);
+        spawnStub.resetBehavior();
+        spawnStub.callThrough();
+        const repository = new AppHostDataRepository(terminalProvider);
+        const readPids = (): number[] => {
+            if (!fs.existsSync(pidLogPath)) {
+                return [];
+            }
+            // The stand-in appends "<pid>\n". Ignore an unfinished final line while it writes.
+            return fs.readFileSync(pidLogPath, 'utf8').split(/\r?\n/).slice(0, -1).map(line => {
+                const pid = Number(line);
+                assert.ok(Number.isSafeInteger(pid) && pid > 0, `Invalid follow process PID: ${line}`);
+                return pid;
+            });
+        };
+
+        try {
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            for (let generation = 0; generation < 2; generation++) {
+                await waitForCondition(() => readPids().length === generation + 1, 'Windows follow process did not start', 5000);
+                const pids = readPids();
+                assert.deepStrictEqual(pids.map(isProcessAlive), pids.map((_pid, index) => index === generation));
+                const leaders: nodeChildProcess.ChildProcessWithoutNullStreams[] = spawnStub.getCalls().map(call => call.returnValue);
+                assert.strictEqual(leaders.filter(child => child.exitCode === null && child.signalCode === null).length, 1);
+
+                if (generation === 0) {
+                    repository.setPanelVisible(false);
+                    repository.setPanelVisible(true);
+                }
+            }
+
+            await repository.shutdown();
+            assert.deepStrictEqual(readPids().map(isProcessAlive), [false, false]);
+        } finally {
+            try {
+                await repository.shutdown();
+            } finally {
+                environmentStub.restore();
+                removeDirectorySafely(directory);
+            }
+        }
+    });
+
     test('background data lease keeps ps follow active while the panel is hidden', async () => {
         const childProcess = new TestChildProcess();
         spawnStub.returns(childProcess);
@@ -8058,8 +8429,8 @@ async function waitForAppHostDiscovery(): Promise<void> {
     await waitForMicrotasks();
 }
 
-async function waitForCondition(condition: () => boolean, message: string): Promise<void> {
-    for (let i = 0; i < 100; i++) {
+async function waitForCondition(condition: () => boolean, message: string, maxAttempts = 100): Promise<void> {
+    for (let i = 0; i < maxAttempts; i++) {
         if (condition()) {
             return;
         }

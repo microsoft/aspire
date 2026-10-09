@@ -101,20 +101,16 @@ internal sealed class ProcessInvocationOptions
     public bool IsolateConsole { get; set; }
 
     /// <summary>
-    /// When <c>true</c>, the child is bound to the CLI's Windows kill-on-close job so the OS terminates
-    /// it when the CLI exits unexpectedly (crash / SIGKILL), even if the child does not react 
-    /// to cancellation request. This is an OS-level, Windows-only crash-time safety net
-    /// for background helpers that must never outlive their parent — such as the standalone dashboard
-    /// and profiling collector — and, unlike
-    /// <see cref="IsolateConsole"/>, it does not give the child a new console group.
+    /// Binds a child to its owner's lifetime, independently of cooperative cancellation.
     /// </summary>
     /// <remarks>
-    /// On non-Windows hosts this is a no-op; process-group signalling plus the in-child
-    /// parent-liveness watchdog (which self-terminates when <c>ASPIRE_CLI_PID</c> disappears) provide
-    /// the cross-platform equivalent. The two layers are complementary: the job is the instant,
-    /// guaranteed backstop on Windows, and the watchdog is the graceful, cross-platform mechanism.
+    /// Ordinary owned children use the shared guardian on every platform. AppHost children
+    /// retain the Windows breakaway job so DCP can finish cleanup after the AppHost exits.
     /// </remarks>
     public bool KillOnParentExit { get; set; }
+    public ChildProcessLifetime Lifetime { get; set; }
+    public string? CompletionPath { get; set; }
+    public Func<ProcessStartInfo, string?, TimeSpan, ProcessStartInfo> CreateSupervisorStartInfo { get; set; } = ProcessSupervisor.CreateStartInfo;
 
     /// <summary>
     /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
@@ -188,6 +184,9 @@ internal sealed class ProcessInvocationOptions
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
+        Lifetime = Lifetime,
+        CompletionPath = CompletionPath,
+        CreateSupervisorStartInfo = CreateSupervisorStartInfo,
         Detached = Detached,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
         EnvironmentVariables = EnvironmentVariables,
@@ -435,6 +434,9 @@ internal sealed class DotNetCliRunner(
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Lifetime = options.Lifetime,
+            CompletionPath = options.CompletionPath,
+            CreateSupervisorStartInfo = options.CreateSupervisorStartInfo,
             Detached = options.Detached,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             EnvironmentVariables = options.EnvironmentVariables,

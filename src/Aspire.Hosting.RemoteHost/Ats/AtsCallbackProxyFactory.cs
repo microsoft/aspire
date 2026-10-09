@@ -58,6 +58,13 @@ internal sealed class AtsCallbackProxyFactory : IDisposable
             return null;
         }
 
+        if (_invoker is JsonRpcCallbackInvoker rpcInvoker)
+        {
+            // The returned delegate can outlive this RPC call in the resource model.
+            // Its process-local callback ID cannot be rebound by metadata rediscovery.
+            rpcInvoker.RegisterCallback();
+        }
+
         return _cache.GetOrAdd((callbackId, delegateType), key => BuildProxy(key.CallbackId, key.DelegateType));
     }
 

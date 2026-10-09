@@ -35,7 +35,13 @@ public sealed class SpanDetailsViewModel
                 Value = OtlpHelpers.GetResourceName(destination, resources)
             });
         }
-        entryProperties.AddRange(span.GetAttributeProperties().Select(CreateTelemetryProperty));
+        entryProperties.AddRange(span.GetAttributeProperties().Select(f => new TelemetryPropertyViewModel
+        {
+            Name = f.DisplayName,
+            Key = f.Key,
+            Value = f.Value,
+            TextVisualizerFormat = TextVisualizerFormatHelpers.GetFormat(f.DisplayName, span.Attributes)
+        }));
 
         var traceCache = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
 

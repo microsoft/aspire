@@ -176,8 +176,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         CancellationToken cancellationToken = default)
     {
         var integrationList = integrations.ToList();
-        var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
-        var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
+        var packageRefs = integrationList.Where(r => r.Source == IntegrationSource.Nuget).ToList();
+        var projectRefs = integrationList.Where(r => r.Source == IntegrationSource.Project).ToList();
+        var npmIntegrations = integrationList.Where(r => r.Source == IntegrationSource.Npm).ToList();
         // Lifted to outer scope so the failure footer reflects the source actually used by
         // restore, including an auto-discovered local hive, rather than only the --source value
         // originally passed in.
@@ -238,6 +239,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                     projectRefs,
                     sdkVersion,
                     restorePlan!,
+                    npmIntegrations,
                     cancellationToken).ConfigureAwait(false);
 
                 if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
@@ -259,7 +261,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             }
             else
             {
-                var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
+                var appSettingsContent = CreateAppSettingsContent(packageRefs, [], npmIntegrations);
                 await WriteAppSettingsAsync(_workingDirectory, appSettingsContent, cancellationToken).ConfigureAwait(false);
             }
 
@@ -573,6 +575,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         List<IntegrationReference> projectRefs,
         string sdkVersion,
         IntegrationRestorePlan restorePlan,
+        List<IntegrationReference> npmIntegrations,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
@@ -674,7 +677,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             restoreDir,
             _logger,
             cancellationToken).ConfigureAwait(false);
-        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
+        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames, npmIntegrations);
 
         var closureManifest = await IntegrationClosureBuilder.ReadClosureManifestAsync(
             restoreDir,
@@ -725,7 +728,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         }
 
         projectFile.ProjectReferences.AddRange(projectRefs.Select(p => new CSharpProjectReference(
-            p.ProjectPath!,
+            p.Path!,
             IsAspireProjectResource: false,
             ReferenceOutputAssembly: true)));
 
@@ -796,23 +799,17 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         void OnStdout(string line)
         {
-            // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
-            // CLI's on-disk log under the default file-logger filter (Debug). Previously
-            // these lines were dropped entirely, which made apphost-side warnings
-            // (for example, "LoaderExceptions" from the type-discovery path) invisible to
-            // anyone diagnosing a "no code generator found" / "no language support found"
-            // error. See https://github.com/microsoft/aspire/issues/16729.
+            // Debug retains raw server output in the default CLI file log without
+            // printing routine diagnostics during normal usage.
             _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
             outputCollector.AppendOutput(line);
         }
 
         void OnStderr(string line)
         {
-            // Promoted from LogTrace to LogInformation so that apphost-server stderr is
-            // visible at the default console log level (Information). Stderr is reserved
-            // for genuine problems in well-behaved server processes, so surfacing it
-            // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
-            _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            // The stream does not establish severity. Startup failures surface the
+            // collected output separately at Error.
+            _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
             outputCollector.AppendError(line);
         }
 
@@ -822,6 +819,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
             KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
@@ -968,7 +966,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
     private static string CreateAppSettingsContent(
         List<IntegrationReference> packageRefs,
-        List<string> projectRefAssemblyNames)
+        List<string> projectRefAssemblyNames,
+        List<IntegrationReference> npmIntegrations)
     {
         var atsAssemblies = new List<string> { "Aspire.Hosting" };
 
@@ -994,21 +993,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             }
         }
 
-        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
-        return $$"""
-            {
-              "Logging": {
-                "LogLevel": {
-                  "Default": "Information",
-                  "Microsoft.AspNetCore": "Warning",
-                  "Aspire.Hosting.Dcp": "Warning"
-                }
-              },
-              "AtsAssemblies": [
-                {{assembliesJson}}
-              ]
-            }
-            """;
+        var appSettingsJson = AppHostServerAppSettingsWriter.Generate(atsAssemblies, npmIntegrations);
+        return appSettingsJson;
     }
 
     private static async Task WriteAppSettingsAsync(string contentRootPath, string appSettingsContent, CancellationToken cancellationToken)

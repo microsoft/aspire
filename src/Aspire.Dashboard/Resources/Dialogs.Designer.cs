@@ -1317,6 +1317,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to SQL.
+        /// </summary>
+        public static string TextVisualizerDialogSqlFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogSqlFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to XML.
         /// </summary>
         public static string TextVisualizerDialogXmlFormat {

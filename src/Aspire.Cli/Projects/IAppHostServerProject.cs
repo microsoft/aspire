@@ -29,9 +29,9 @@ internal sealed record AppHostServerPrepareResult(
 /// <param name="OutputCollector">Captured stdout/stderr for failure display.</param>
 /// <param name="Execution">
 /// The started <see cref="IProcessExecution"/> that owns the server child. Callers observe state
-/// (<see cref="IProcessExecution.HasExited"/>, <see cref="IProcessExecution.ExitCode"/>,
-/// <see cref="IProcessExecution.ProcessId"/>), drive its lifetime via
-/// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/> (which runs the shared
+/// (<see cref="Aspire.Shared.IChildProcess.HasExited"/>, <see cref="Aspire.Shared.IChildProcess.ExitCode"/>,
+/// <see cref="Aspire.Shared.IChildProcess.ProcessId"/>), drive its lifetime via
+/// <see cref="Aspire.Shared.IChildProcess.WaitForExitAsync(CancellationToken)"/> (which runs the shared
 /// shutdown ladder on cancellation), and dispose it via
 /// <see cref="System.IAsyncDisposable.DisposeAsync"/>.
 /// </param>

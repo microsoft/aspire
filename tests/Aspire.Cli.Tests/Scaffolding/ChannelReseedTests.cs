@@ -88,7 +88,9 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             environment: new TestEnvironment(),
             logger: NullLogger<ScaffoldingService>.Instance,
             executionContext: workspace.CreateExecutionContext(),
-            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            features: new TestFeatures(),
+            processExecutionFactory: new TestProcessExecutionFactory());
 
         var context = new ScaffoldContext(
             Language: language,
@@ -125,7 +127,9 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             environment: new TestEnvironment(),
             logger: NullLogger<ScaffoldingService>.Instance,
             executionContext: workspace.CreateExecutionContext(),
-            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            features: new TestFeatures(),
+            processExecutionFactory: new TestProcessExecutionFactory());
     }
 
     private sealed class CapturingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject

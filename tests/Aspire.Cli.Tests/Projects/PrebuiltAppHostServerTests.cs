@@ -4391,7 +4391,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 [
                     IntegrationReference.FromPackage("Aspire.Hosting", "13.2.0"),
                     IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0"),
-                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj"),
+                    IntegrationReference.FromNpm("@test/integration", "/path/to/host.mts")
                 ]);
             Assert.True(result.Success);
 
@@ -4428,6 +4429,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                     Assert.Equal("13.2.0", packageReference.Attribute("Version")?.Value);
                 });
             Assert.Single(generatedProject.Descendants("ProjectReference"));
+            await Verify(await File.ReadAllTextAsync(Path.Combine(workingDirectory, "appsettings.json")), "json");
         }
         finally
         {

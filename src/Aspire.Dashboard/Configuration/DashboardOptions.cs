@@ -19,7 +19,6 @@ public sealed class DashboardOptions
     public FrontendOptions Frontend { get; set; } = new();
     public ResourceServiceClientOptions ResourceServiceClient { get; set; } = new();
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
-    public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
     public DashboardDataOptions Data { get; set; } = new();
 
@@ -438,49 +437,4 @@ public sealed class ClaimAction
     public string? SubKey { get; set; }
     public bool? IsUnique { get; set; }
     public string? ValueType { get; set; }
-}
-
-public sealed class DebugSessionOptions
-{
-    private X509Certificate2? _serverCertificate;
-
-    public int? Port { get; set; }
-    public string? Token { get; set; }
-    public string? DcpInstanceId { get; set; }
-    public string? ServerCertificate { get; set; }
-    public bool? TelemetryOptOut { get; set; }
-
-    public X509Certificate2? GetServerCertificate() => _serverCertificate;
-
-    internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
-    {
-        if (!string.IsNullOrEmpty(ServerCertificate))
-        {
-            byte[] data;
-            try
-            {
-                data = Convert.FromBase64String(ServerCertificate);
-            }
-            catch (Exception ex)
-            {
-                errorMessage = $"Error converting server certificate payload from base64 to bytes: {ex.Message}";
-                return false;
-            }
-
-            try
-            {
-                // Server identity validation needs a single DER/PEM public certificate, not a
-                // PKCS#12/PFX or PKCS#7 container. Do not restore the constructor's format sniffing.
-                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
-            }
-            catch (Exception ex)
-            {
-                errorMessage = $"Error reading server certificate as X509Certificate2: {ex.Message}";
-                return false;
-            }
-        }
-
-        errorMessage = null;
-        return true;
-    }
 }
