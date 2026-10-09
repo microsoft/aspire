@@ -120,7 +120,9 @@
         <div class="overview-grid">
             <section class="overview-card overview-tags-card span-12" aria-labelledby="overview-tags-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-tags-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceTagsLabel)]</h2>
                 </div>
                 @* Tags are keyed by display name so they apply to every replica and survive the random replica suffix changing between runs. *@
@@ -129,7 +131,9 @@
 
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Status)" aria-labelledby="overview-status-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-status-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStatusTitle)]</h2>
                 </div>
                 <dl class="overview-properties">
@@ -180,7 +184,9 @@
             var endpointGroups = GroupEndpoints(urls);
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Endpoints)" aria-labelledby="overview-endpoints-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Link())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Link())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-endpoints-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewEndpointsTitle)]</h2>
                     @if (endpointGroups.Count > 0)
                     {
@@ -222,7 +228,9 @@
 
             <section class="overview-card overview-relationships-card" style="@cardLayout.Style(OverviewCard.Relationships)" aria-labelledby="overview-relationships-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.BranchFork())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-relationships-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewRelationshipsTitle)]</h2>
                     @if (relatedResources.Count > 0)
                     {
@@ -245,7 +253,9 @@
             {
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Console)" aria-labelledby="overview-console-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-console-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewConsoleTitle)]</h2>
                     @{
                         var consolePauseTitle = PauseManager.ConsoleLogsPaused
@@ -308,7 +318,9 @@
             {
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Logs)" aria-labelledby="overview-logs-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-logs-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]</h2>
                     <a class="overview-card-link" href="@DashboardUrls.StructuredLogsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
@@ -371,7 +383,9 @@
             {
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Traces)" aria-labelledby="overview-traces-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-traces-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]</h2>
                     <a class="overview-card-link" href="@DashboardUrls.TracesUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
@@ -424,7 +438,9 @@
             {
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Metrics)" aria-labelledby="overview-metrics-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.ChartMultiple())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-metrics-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewMetricsTitle)]</h2>
                     <a class="overview-card-link" href="@DashboardUrls.MetricsUrl(resourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
                 </div>
@@ -462,7 +478,9 @@
 
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Properties)" aria-labelledby="overview-properties-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListSquare())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-properties-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewPropertiesTitle)]</h2>
                     @CardCount(Math.Min(properties.Count, _propertiesExpanded ? properties.Count : DetailsPreviewCount), properties.Count)
                     <div class="overview-card-actions">
@@ -502,7 +520,9 @@
 
             <section class="overview-card" style="@cardLayout.Style(OverviewCard.Environment)" aria-labelledby="overview-environment-title">
                 <div class="overview-card-header">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Color="Color.Primary" />
+                    <span class="card-header-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Braces())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
                     <h2 id="overview-environment-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]</h2>
                     @CardCount(Math.Min(environmentVariables.Count, _environmentExpanded ? environmentVariables.Count : DetailsPreviewCount), environmentVariables.Count)
                     @if (resource.Environment.Length > 0)
@@ -561,7 +581,9 @@
                 var volumes = GetVolumes(resource);
                 <section class="overview-card" style="@cardLayout.Style(OverviewCard.Volumes)" aria-labelledby="overview-volumes-title">
                     <div class="overview-card-header">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Storage())" Color="Color.Primary" />
+                        <span class="card-header-icon" aria-hidden="true">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Storage())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                        </span>
                         <h2 id="overview-volumes-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]</h2>
                         <span class="overview-card-count">@volumes.Count</span>
                     </div>
@@ -609,7 +631,9 @@
             {
                 <section class="overview-card" style="@cardLayout.Style(OverviewCard.Health)" aria-labelledby="overview-health-title">
                     <div class="overview-card-header">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Heart())" Color="Color.Primary" />
+                        <span class="card-header-icon" aria-hidden="true">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Heart())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+                        </span>
                         <h2 id="overview-health-title">@ControlsStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</h2>
                         <span class="overview-card-count">@healthReports.Count</span>
                     </div>

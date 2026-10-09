@@ -389,28 +389,14 @@
     white-space: nowrap;
 }
 
-.home-insight-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 8px;
-}
-
-.home-insight-icon.slow {
+.card-header-icon.slow {
     background: color-mix(in srgb, var(--warning) 18%, transparent);
     color: var(--warning);
 }
 
-.home-insight-icon.hot {
+.card-header-icon.hot {
     background: color-mix(in srgb, var(--error) 18%, transparent);
     color: var(--error);
-}
-
-.home-insight-icon.busy {
-    background: var(--colorBrandBackground2);
-    color: var(--colorBrandForeground2);
 }
 
 .home-insight-list {

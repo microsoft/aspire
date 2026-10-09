@@ -38,6 +38,18 @@
     src: url("../fonts/poppins/latin-700-normal.woff2") format("woff2");
 }
 
+.card-header-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--colorBrandBackground2);
+    color: var(--colorBrandForeground2);
+}
+
 :root {
     color-scheme: light;
     --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
