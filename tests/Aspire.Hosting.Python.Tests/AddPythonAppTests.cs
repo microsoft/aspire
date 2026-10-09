@@ -3,7 +3,6 @@
 
 #pragma warning disable CS0612
 #pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental
 
 using Microsoft.Extensions.DependencyInjection;

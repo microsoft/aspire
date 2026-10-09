@@ -341,8 +341,8 @@ The core invariant to verify on any gh-aw PR:
 
 ```bash
 # Validate, then recompile and confirm the lock file matches the source.
-gh aw compile --validate
-gh aw compile <workflow-name>
+gh aw compile --validate --schedule-seed microsoft/aspire
+gh aw compile <workflow-name> --schedule-seed microsoft/aspire
 git --no-pager diff -- .github/workflows/<workflow-name>.lock.yml
 ```
 
@@ -353,7 +353,7 @@ git --no-pager diff -- .github/workflows/<workflow-name>.lock.yml
   repo's lock files use (run `gh aw compile --help` / `gh aw version` to confirm
   flag spelling and version if unsure — flags can change between gh-aw releases).
 - For a **Dependabot** PR that edits a `*.lock.yml`'s action SHAs: do **not**
-  merge directly — recompile via `gh aw compile --dependabot` from the `.md`
+  merge directly — recompile via `gh aw compile --dependabot --schedule-seed microsoft/aspire` from the `.md`
   source (see the agent doc, "Fix Dependabot PRs").
 - The runtime lock-file traps (stale-check overrides, cross-repo `safe_outputs`
   checkouts, branch resolution) are in Failure modes §6.

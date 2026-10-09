@@ -200,19 +200,17 @@ internal sealed class JsonRpcServer : BackgroundService
         var disconnectReason = "unknown";
         using var activity = _profilingTelemetry.StartJsonRpcConnection();
 
-        // Create a DI scope for this client connection
-        // All scoped services (HandleRegistry, RemoteAppHostService, etc.) are per-client
-        _logger.LogDebug("Creating DI scope for client {ClientId}", clientId);
-        var scope = _scopeFactory.CreateAsyncScope();
-        await using var _ = scope.ConfigureAwait(false);
-
-        // Resolve the scoped RemoteAppHostService
-        var clientService = scope.ServiceProvider.GetRequiredService<RemoteAppHostService>();
-        var codeGenerationService = scope.ServiceProvider.GetRequiredService<CodeGenerationService>();
-        var languageService = scope.ServiceProvider.GetRequiredService<LanguageService>();
-
         try
         {
+            // Service activation must stay inside the connection ownership boundary so setup
+            // failures are logged and close the accepted stream instead of stranding the client.
+            _logger.LogDebug("Creating DI scope for client {ClientId}", clientId);
+            var scope = _scopeFactory.CreateAsyncScope();
+            await using var _ = scope.ConfigureAwait(false);
+            var clientService = scope.ServiceProvider.GetRequiredService<RemoteAppHostService>();
+            var codeGenerationService = scope.ServiceProvider.GetRequiredService<CodeGenerationService>();
+            var languageService = scope.ServiceProvider.GetRequiredService<LanguageService>();
+
             // Use System.Text.Json formatter instead of the default Newtonsoft.Json formatter
             var formatter = new SystemTextJsonFormatter();
             var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream, formatter);
@@ -221,17 +219,31 @@ internal sealed class JsonRpcServer : BackgroundService
                 ActivityTracingStrategy = new ActivityTracingStrategy()
             };
 
+            // Allow concurrent message dispatch so cross-connection calls don't deadlock.
+            // Without this, the default NonConcurrentSynchronizationContext serializes all
+            // message processing per-connection, which deadlocks when one connection's
+            // handler awaits a call on another connection's JsonRpc instance.
+            jsonRpc.SynchronizationContext = null;
+
+            // Keep wire tracing quiet unless trace logging is explicitly enabled. StreamJsonRpc
+            // invokes trace listeners for every frame at Verbose, before ILogger can filter it.
+            jsonRpc.TraceSource.Switch.Level = _logger.IsEnabled(LogLevel.Trace)
+                ? System.Diagnostics.SourceLevels.Verbose
+                : System.Diagnostics.SourceLevels.Warning;
+            jsonRpc.TraceSource.Listeners.Add(new JsonRpcTraceListener(_logger, clientId));
+
             // Add the shared CodeGenerationService as an additional target for generateCode method
             jsonRpc.AddLocalRpcTarget(codeGenerationService);
 
             // Add the shared LanguageService as an additional target for language support methods
             jsonRpc.AddLocalRpcTarget(languageService);
 
+            // Initialize the connection before dispatching requests: a host can register
+            // immediately, and registration and callbacks both require this connection.
+            clientService.SetClientConnection(jsonRpc);
+
             jsonRpc.StartListening();
             activity.AddJsonRpcListening();
-
-            // Enable bidirectional communication - allow .NET to call back to TypeScript
-            clientService.SetClientConnection(jsonRpc);
 
             _logger.LogDebug("JsonRpc connection established for client {ClientId} (bidirectional)", clientId);
 
@@ -268,11 +280,13 @@ internal sealed class JsonRpcServer : BackgroundService
         }
         catch (IOException ex)
         {
+            disconnectReason = "I/O error";
             activity.SetError(ex);
             _logger.LogWarning(ex, "Client {ClientId} I/O error", clientId);
         }
         catch (Exception ex)
         {
+            disconnectReason = "unexpected error";
             activity.SetError(ex);
             _logger.LogError(ex, "Client {ClientId} unexpected error", clientId);
         }
@@ -325,5 +339,36 @@ internal sealed class JsonRpcServer : BackgroundService
         }
 
         base.Dispose();
+    }
+}
+
+/// <summary>
+/// Forwards StreamJsonRpc trace output to ILogger for wire-level debugging.
+/// </summary>
+file sealed class JsonRpcTraceListener : System.Diagnostics.TraceListener
+{
+    private readonly ILogger _logger;
+    private readonly string _clientId;
+
+    public JsonRpcTraceListener(ILogger logger, string clientId)
+    {
+        _logger = logger;
+        _clientId = clientId;
+    }
+
+    public override void Write(string? message) => _logger.LogDebug("[JsonRpc:{ClientId}] {Message}", _clientId, message);
+    public override void WriteLine(string? message) => _logger.LogDebug("[JsonRpc:{ClientId}] {Message}", _clientId, message);
+
+    public override void TraceEvent(System.Diagnostics.TraceEventCache? eventCache, string source, System.Diagnostics.TraceEventType eventType, int id, string? message)
+    {
+        _logger.LogDebug("[JsonRpc:{ClientId}:{EventType}] {Message}", _clientId, eventType, message);
+    }
+
+    public override void TraceEvent(System.Diagnostics.TraceEventCache? eventCache, string source, System.Diagnostics.TraceEventType eventType, int id, string? format, params object?[]? args)
+    {
+        if (format is not null && args is not null)
+        {
+            _logger.LogDebug("[JsonRpc:{ClientId}:{EventType}] {Message}", _clientId, eventType, string.Format(System.Globalization.CultureInfo.InvariantCulture, format, args));
+        }
     }
 }

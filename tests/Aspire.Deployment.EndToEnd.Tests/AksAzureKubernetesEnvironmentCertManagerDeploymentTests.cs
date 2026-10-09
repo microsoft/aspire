@@ -162,11 +162,10 @@ builder.Build().Run();
             content = content.Replace(buildRunPattern, replacement);
 
             const string pragmaBlock =
-                "#pragma warning disable ASPIREPIPELINES001\n" +
                 "#pragma warning disable ASPIRECOMPUTE003\n" +
                 "#pragma warning disable ASPIREAZURE003\n";
 
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
+            if (!content.Contains(pragmaBlock))
             {
                 content = pragmaBlock + content;
             }

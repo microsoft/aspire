@@ -468,6 +468,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Vai a Log strutturati</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogGoToTerminals">
+        <source>Go to Terminals</source>
+        <target state="new">Go to Terminals</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Go to Traces</source>
         <target state="translated">Vai a Tracce</target>
@@ -756,6 +761,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
         <source>Unformatted</source>
         <target state="translated">Non formattato</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextVisualizerDialogSqlFormat">
+        <source>SQL</source>
+        <target state="new">SQL</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">

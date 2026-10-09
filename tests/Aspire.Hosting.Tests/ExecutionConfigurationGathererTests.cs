@@ -597,7 +597,7 @@ public class ExecutionConfigurationGathererTests
 
                     for (var i = 0; i < certificates.Count; i++)
                     {
-                        var publicCert = new X509Certificate2(certificates[i].Export(X509ContentType.Cert));
+                        using var publicCert = X509CertificateLoader.LoadCertificate(certificates[i].Export(X509ContentType.Cert));
                         var certBag = safeContents.AddCertificate(publicCert);
                         certBag.Attributes.Add(
                             new CryptographicAttributeObject(
@@ -632,8 +632,7 @@ public class ExecutionConfigurationGathererTests
         var pkcs12Bytes = await factory(metadata.Certificates, CancellationToken.None);
         Assert.NotEmpty(pkcs12Bytes);
 
-        var loaded = new X509Certificate2Collection();
-        loaded.Import(pkcs12Bytes, string.Empty, X509KeyStorageFlags.DefaultKeySet);
+        var loaded = X509CertificateLoader.LoadPkcs12Collection(pkcs12Bytes, string.Empty, X509KeyStorageFlags.DefaultKeySet);
         Assert.Single(loaded);
         Assert.Equal(cert.Thumbprint, loaded[0].Thumbprint);
         Assert.False(loaded[0].HasPrivateKey);

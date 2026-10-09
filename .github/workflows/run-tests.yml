@@ -81,6 +81,7 @@ jobs:
         run: |
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "TEST_RUN_PATH=${{ github.workspace }}\run-tests" >> $env:GITHUB_ENV
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
 
@@ -92,10 +93,9 @@ jobs:
         # Used for running tests outside the repo
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         with:
-          dotnet-version: |
-            8.x
-            9.x
-            10.x
+          dotnet-version: 10.x
+          # Install the pinned SDK as well, including its exact prerelease version.
+          global-json-file: global.json
         env:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
 
@@ -452,7 +452,6 @@ jobs:
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           BUILT_NUGETS_PATH: ${{ github.workspace }}/artifacts/packages/Debug/Shipping
-          NUGET_PACKAGES: ${{ github.workspace }}/nuget-cache
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
@@ -580,7 +579,6 @@ jobs:
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent the Roslyn compiler server (VBCSCompiler) from starting during tests.
@@ -783,7 +781,7 @@ jobs:
           path: |
             **/*.binlog
             testresults/**
-            artifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**
+            artifacts/bin/Aspire.Templates.Tests/Debug/net10.0/logs/**
             artifacts/log/test-logs/**
 
       - name: Copy CLI E2E recordings for upload

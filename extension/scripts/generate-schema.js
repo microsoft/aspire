@@ -215,6 +215,29 @@ function createPropertySchema(prop, configInfo) {
                     default: feature.DefaultValue
                 };
             }
+        } else if (prop.Name === 'packages' && prop.AdditionalPropertiesType === 'object') {
+            // PackageEntry's converter accepts null / "" / "1.2.3" / "../My.Hosting.csproj"
+            // or { "source": "npm", "path": "./integration/host.mts" }. Reflection
+            // exposes CLR Source/Version/Path instead of this wire shape.
+            schema.additionalProperties = {
+                anyOf: [
+                    { type: ['string', 'null'] },
+                    {
+                        type: 'object',
+                        properties: {
+                            source: { type: 'string', enum: ['nuget', 'project', 'npm'] },
+                            version: { type: ['string', 'null'] },
+                            path: { type: 'string' }
+                        },
+                        required: ['source'],
+                        allOf: [{
+                            if: { properties: { source: { enum: ['project', 'npm'] } } },
+                            then: { required: ['path'] }
+                        }],
+                        additionalProperties: false
+                    }
+                ]
+            };
         } else if (prop.SubProperties && prop.SubProperties.length > 0) {
             if (prop.AdditionalPropertiesType === 'object') {
                 // Dictionary with complex values (e.g., profiles)

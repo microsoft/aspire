@@ -49,6 +49,7 @@
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" Link="Utils\ResourceNameComparer.cs" />
     <Compile Include="$(SharedDir)TaskHelpers.cs" Link="Utils\TaskHelpers.cs" />
+    <Compile Include="$(SharedDir)TimeSpanMillisecondsJsonConverter.cs" Link="Utils\TimeSpanMillisecondsJsonConverter.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)TokenGenerator.cs" Link="Utils\TokenGenerator.cs" />
     <Compile Include="$(SharedDir)LoggingHelpers.cs" Link="Utils\LoggingHelpers.cs" />
@@ -61,7 +62,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="Utils\ConsoleLogs\AnsiParser.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\*.cs" />
-    <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
     <Compile Include="$(SharedDir)PackageUpdateHelpers.cs" Link="Utils\PackageUpdateHelpers.cs" />
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />

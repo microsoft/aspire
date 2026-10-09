@@ -1,18 +1,25 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared;
+using Aspire.Shared.Telemetry;
 using Aspire.TestUtilities;
 using Azure.Core.Pipeline;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
 namespace Aspire.Cli.Tests.Telemetry;
@@ -20,9 +27,98 @@ namespace Aspire.Cli.Tests.Telemetry;
 public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void SharedExporter_DisablesStandardMetricsAndPerformanceCounters()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var process = RemoteExecutor.Invoke(static async storageDirectory =>
+        {
+            // Isolate cached exporter settings and prevent SDK diagnostics from making real requests.
+            Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            Environment.SetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS", "true");
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false);
+            using var fixture = new TelemetryFixture(initialize: false);
+            fixture.TagsSource.StartCalculation(() => Task.FromResult<IReadOnlyList<KeyValuePair<string, object?>>>(
+            [
+                new(TelemetryConstants.Tags.CliVersion, "1.0.0-test"),
+                new("machine.device_id", "test-device-id")
+            ]));
+            var exportedItems = new ConcurrentQueue<(string BaseType, string Name)>();
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                // The ingestion request contains newline-delimited Application Insights envelopes:
+                // {"data":{"baseType":"RemoteDependencyData","baseData":{...}},...}
+                var lines = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var line in lines)
+                {
+                    using var envelope = JsonDocument.Parse(line);
+                    var data = envelope.RootElement.GetProperty("data");
+                    var baseType = data.GetProperty("baseType").GetString()!;
+                    var baseData = data.GetProperty("baseData");
+                    var name = baseType == "MetricData"
+                        ? baseData.GetProperty("metrics")[0].GetProperty("name").GetString()!
+                        : baseData.GetProperty("name").GetString()!;
+                    if (baseType == "RemoteDependencyData")
+                    {
+                        var properties = baseData.GetProperty("properties");
+                        Assert.Equal("1.0.0-test", properties.GetProperty(TelemetryConstants.Tags.CliVersion).GetString());
+                        Assert.Equal("test-device-id", properties.GetProperty("machine.device_id").GetString());
+                    }
+                    exportedItems.Enqueue((baseType, name));
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new { itemsReceived = lines.Length, itemsAccepted = lines.Length, errors = Array.Empty<object>() }))
+                };
+            });
+            using var client = new HttpClient(handler);
+            AzureMonitorExporterOptions? exporterOptions = null;
+            using var provider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(),
+                ResourceBuilder.CreateEmpty().AddService("aspire-cli"), "MetricsDisabledTest", AspireCliTelemetry.EventLogCategoryName,
+                $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/", storageDirectory,
+                builder =>
+                {
+                    builder.AddProcessor(new CliTagEnrichmentProcessor(fixture.TagsSource, fixture.Telemetry));
+                    builder.ConfigureServices(services => services.Configure<AzureMonitorExporterOptions>(options =>
+                    {
+                        exporterOptions = options;
+                        options.Transport = new HttpClientTransport(client);
+                    }));
+                });
+
+            Assert.NotNull(exporterOptions);
+            Assert.False(exporterOptions.EnableLiveMetrics);
+            Assert.False(exporterOptions.EnableStandardMetrics);
+            Assert.False(exporterOptions.EnablePerformanceCounters);
+            Assert.Null(exporterOptions.TracesPerSecond);
+            Assert.Equal(1.0f, exporterOptions.SamplingRatio);
+            Assert.Equal("true", Environment.GetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS"));
+            Assert.Equal("aspire-cli", provider.Resource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+            using var diagnosticSource = new ActivitySource(AspireCliTelemetry.DiagnosticsActivitySourceName);
+            Assert.False(diagnosticSource.HasListeners());
+            using var profilingSource = new ActivitySource(ProfilingTelemetry.ActivitySourceName);
+            Assert.False(profilingSource.HasListeners());
+
+            using var source = new ActivitySource("MetricsDisabledTest");
+            using (var activity = source.StartActivity("reported-operation"))
+            {
+                Assert.NotNull(activity);
+                Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.CliVersion));
+            }
+
+            Assert.True(await provider.ForceFlushAsync(10_000));
+            Assert.Equal(
+                [("MetricData", "_OTELRESOURCE_"), ("RemoteDependencyData", "reported-operation")],
+                exportedItems.ToArray());
+        }, workspace.WorkspaceRoot.FullName);
+    }
+
+    [Fact]
     public async Task TelemetryManager_RequiresInitializationBeforeUse()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
 
         Assert.False(manager.IsInitialized);
         Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
@@ -41,10 +137,76 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
     }
 
+    [Theory]
+    [InlineData(true)]
+#if DEBUG
+    [InlineData(false)]
+#endif
+    public void TelemetryManager_IsolatesProductResourceFromDiagnosticAndProfilingResources(bool profilingEnabled)
+    {
+        using var process = RemoteExecutor.Invoke(static profilingValue =>
+        {
+            Environment.SetEnvironmentVariable("OTEL_SERVICE_NAME", "environment-service");
+            Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", "customer.tenant=synthetic-tenant,deployment.path=synthetic-path");
+            var profilingEnabled = bool.Parse(profilingValue);
+            var configuration = new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = true,
+                ProfilingEnabled = profilingEnabled,
+                RequestedOtlpExporter = true
+            };
+            using var fixture = new TelemetryFixture(telemetryConfiguration: configuration, initialize: false);
+            Resource? azureTraceResource = null;
+            Resource? azureLogResource = null;
+            using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance,
+                (resource, _) =>
+                {
+                    var provider = AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource, AspireCliTelemetry.EventLogCategoryName,
+                        () => Sdk.CreateTracerProviderBuilder().SetResourceBuilder(resource).Build(),
+                        loggerProvider => azureLogResource = loggerProvider.GetResource());
+                    azureTraceResource = provider.Resource;
+                    return provider;
+                });
+
+            manager.Initialize();
+
+            Assert.True(manager.HasAzureMonitor);
+            Assert.Equal(profilingEnabled, manager.HasProfilingProvider);
+            Assert.Equal(!profilingEnabled, manager.HasDiagnosticProvider);
+            Assert.NotNull(azureTraceResource);
+            Assert.NotNull(azureLogResource);
+            Assert.Equal(azureTraceResource.Attributes.ToArray(), azureLogResource.Attributes.ToArray());
+            Assert.Equal("aspire-cli", azureTraceResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+
+            // Inspect the actual OTLP provider without exposing manager-owned providers to callers.
+            var field = typeof(TelemetryManager).GetField(profilingEnabled ? "_profilingProvider" : "_debugDiagnosticProvider",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(field);
+            var otlpProvider = Assert.IsAssignableFrom<TracerProvider>(field.GetValue(manager));
+            var otlpResource = otlpProvider.GetResource();
+            Assert.Equal("aspire-cli", otlpResource.Attributes.Single(attribute => attribute.Key == "service.name").Value);
+            var expectedVersion = AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
+            Assert.NotEmpty(expectedVersion);
+            Assert.Collection(azureTraceResource.Attributes.OrderBy(attribute => attribute.Key, StringComparer.Ordinal),
+                attribute =>
+                {
+                    Assert.Equal("service.instance.id", attribute.Key);
+                    Assert.True(Guid.TryParse(Assert.IsType<string>(attribute.Value), out var instanceId));
+                    Assert.NotEqual(Guid.Empty, instanceId);
+                },
+                attribute => Assert.Equal(new KeyValuePair<string, object>("service.name", "aspire-cli"), attribute),
+                attribute => Assert.Equal(new KeyValuePair<string, object>("service.version", expectedVersion), attribute));
+            Assert.Equal(expectedVersion, otlpResource.Attributes.Single(attribute => attribute.Key == "service.version").Value);
+            Assert.Equal("synthetic-tenant", otlpResource.Attributes.Single(attribute => attribute.Key == "customer.tenant").Value);
+            Assert.Equal("synthetic-path", otlpResource.Attributes.Single(attribute => attribute.Key == "deployment.path").Value);
+        }, profilingEnabled.ToString());
+    }
+
     [Fact]
     public async Task TelemetryManager_ConcurrentInitializationAndRepeatedShutdownAreIdempotent()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
         await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(manager.Initialize)));
 
         Assert.True(manager.IsInitialized);
@@ -59,7 +221,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryManager_ConcurrentInitializeAndTryShutdownLeaveConsistentState()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var initialization = Task.Run(async () =>
         {
@@ -86,7 +249,8 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryManager_DisposeBeforeInitializationPreventsInitialization()
     {
-        var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        var manager = CreateDisabledManager(fixture);
         manager.Dispose();
 
         Assert.Throws<InvalidOperationException>(manager.Initialize);
@@ -96,16 +260,19 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ForceFlushReportedAsync_WithoutProviderSucceeds()
     {
-        using var manager = CreateDisabledManager();
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = CreateDisabledManager(fixture);
 
         manager.Initialize();
         Assert.True(await manager.ForceFlushReportedAsync().DefaultTimeout());
     }
 
-    private static TelemetryManager CreateDisabledManager()
+    private static TelemetryManager CreateDisabledManager(TelemetryFixture fixture)
         => new(
             new TelemetryConfiguration { ReportedTelemetryEnabled = false },
-            new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
+            fixture.TagsSource,
+            fixture.Telemetry,
+            NullLogger<TelemetryManager>.Instance);
 
     [Fact]
     [OuterloopTest("Exercises the exporter's real three-minute lease expiry across processes.")]

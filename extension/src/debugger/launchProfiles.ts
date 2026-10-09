@@ -5,6 +5,7 @@ import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { getNodeValue, Node, parse, ParseError, parseTree } from 'jsonc-parser';
 import { aspireConfigFileName, AspireConfigProfile } from '../utils/cliTypes';
+import { equalsOrdinalIgnoreCase } from '../utils/strings';
 
 /*
  * Represents a launchSettings.json profile.
@@ -327,25 +328,6 @@ function parseJsonContent<T>(content: string): { value: T; normalizedContent: st
     }
 
     return { value, normalizedContent };
-}
-
-function equalsOrdinalIgnoreCase(left: string, right: string): boolean {
-    if (left.length !== right.length) {
-        return false;
-    }
-
-    const toOrdinalUpperCase = (value: string) => Array.from(value, character => {
-        // .NET ordinal casing deliberately excludes the Turkish dotless I and long S mappings.
-        // JavaScript also performs multi-character uppercase expansions that ordinal casing omits.
-        if (character === '\u0131' || character === '\u017F') {
-            return character;
-        }
-
-        const upper = character.toUpperCase();
-        return upper.length === character.length ? upper : character;
-    }).join('');
-
-    return toOrdinalUpperCase(left) === toOrdinalUpperCase(right);
 }
 
 /**

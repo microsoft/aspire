@@ -11,6 +11,12 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
     private readonly ConcurrentQueue<TestDevTunnelCliResult> _createResults = new();
     private readonly ConcurrentQueue<TestDevTunnelCliResult> _updateResults = new();
     private readonly ConcurrentQueue<TestDevTunnelCliResult> _resetAccessResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _showResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _showPortResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _createPortResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _deletePortResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _createAccessResults = new();
+    private readonly ConcurrentQueue<TestDevTunnelCliResult> _listAccessResults = new();
 
     public TestDevTunnelCli()
         : base("test-devtunnel")
@@ -18,6 +24,8 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
     }
 
     public ConcurrentQueue<TestDevTunnelCliCall> Calls { get; } = new();
+
+    public Action<TestDevTunnelCliCall>? OnCall { get; set; }
 
     public void EnqueueCreateResult(int exitCode, string? output = null, string? error = null)
         => _createResults.Enqueue(new(exitCode, output, error));
@@ -27,6 +35,24 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
 
     public void EnqueueResetAccessResult(int exitCode, string? output = null, string? error = null)
         => _resetAccessResults.Enqueue(new(exitCode, output, error));
+
+    public void EnqueueShowResult(int exitCode, string? output = null, string? error = null)
+        => _showResults.Enqueue(new(exitCode, output, error));
+
+    public void EnqueueShowPortResult(int exitCode, string? output = null, string? error = null)
+        => _showPortResults.Enqueue(new(exitCode, output, error));
+
+    public void EnqueueCreatePortResult(int exitCode, string? output = null, string? error = null)
+        => _createPortResults.Enqueue(new(exitCode, output, error));
+
+    public void EnqueueDeletePortResult(int exitCode, string? output = null, string? error = null)
+        => _deletePortResults.Enqueue(new(exitCode, output, error));
+
+    public void EnqueueCreateAccessResult(int exitCode, string? output = null, string? error = null)
+        => _createAccessResults.Enqueue(new(exitCode, output, error));
+
+    public void EnqueueListAccessResult(int exitCode, string? output = null, string? error = null)
+        => _listAccessResults.Enqueue(new(exitCode, output, error));
 
     protected override Task<int> RunAsync(
         string[] args,
@@ -40,10 +66,18 @@ internal sealed class TestDevTunnelCli : DevTunnelCli
             ["create", ..] => (nameof(CreateTunnelAsync), args.Length > 1 && !args[1].StartsWith("--", StringComparison.Ordinal) ? args[1] : null, _createResults),
             ["update", var id, ..] => (nameof(UpdateTunnelAsync), id, _updateResults),
             ["access", "reset", var id, ..] => (nameof(ResetAccessAsync), id, _resetAccessResults),
+            ["show", var id, ..] => (nameof(ShowTunnelAsync), id, _showResults),
+            ["port", "show", var id, ..] => (nameof(ShowPortAsync), id, _showPortResults),
+            ["port", "create", var id, ..] => (nameof(CreatePortAsync), id, _createPortResults),
+            ["port", "delete", var id, ..] => (nameof(DeletePortAsync), id, _deletePortResults),
+            ["access", "create", var id, ..] => (nameof(CreateAccessAsync), id, _createAccessResults),
+            ["access", "list", var id, ..] => (nameof(ListAccessAsync), id, _listAccessResults),
             _ => throw new InvalidOperationException($"Unexpected test devtunnel command: {string.Join(" ", args)}")
         };
 
-        Calls.Enqueue(new(method, tunnelId, args));
+        var call = new TestDevTunnelCliCall(method, tunnelId, args);
+        Calls.Enqueue(call);
+        OnCall?.Invoke(call);
         return CompleteAsync(results, outputWriter, errorWriter, cancellationToken);
     }
 

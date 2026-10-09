@@ -17,6 +17,21 @@
         <target state="translated">Il tunnel dev '{0}' è attivo con {1} connessioni host e {2} porte.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevTunnelHostDisconnected">
+        <source>The local host for dev tunnel '{0}' is disconnected.</source>
+        <target state="new">The local host for dev tunnel '{0}' is disconnected.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevTunnelHostHealthy">
+        <source>Dev tunnel '{0}' is connected and hosting all expected ports.</source>
+        <target state="new">Dev tunnel '{0}' is connected and hosting all expected ports.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevTunnelHostNotReady">
+        <source>Waiting for dev tunnel '{0}' to connect and expose its ports.</source>
+        <target state="new">Waiting for dev tunnel '{0}' to connect and expose its ports.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevTunnelPortHealthy">
         <source>Dev tunnel port '{0}' on dev tunnel '{1}' is active.</source>
         <target state="translated">La porta del tunnel dev '{0}' nel tunnel dev '{1}' è attiva.</target>

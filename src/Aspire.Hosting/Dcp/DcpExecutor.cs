@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIRECONTAINERSHELLEXECUTION001
-#pragma warning disable ASPIREUSERSECRETS001
 
 using System.Collections.Immutable;
 using System.Diagnostics;

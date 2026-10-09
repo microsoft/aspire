@@ -8,6 +8,26 @@ The dashboard shows:
 - Live console logs of resources.
 - Live telemetry, such as structured logs, traces and metrics.
 
+## Exporting the resource graph
+
+In **Resources > Graph**, select **Export as Mermaid** in the graph controls to open a dialog showing the generated
+Mermaid source. Use **Copy to clipboard** to copy the source or **Download** to save it as `resources.mmd`.
+The diagram includes the currently visible resources and their connections, respecting search, resource filters,
+and the **Show hidden resources** setting. Parameters are not included. Resource labels match the dashboard graph,
+including replica names; resource values, endpoints, and other configuration are not exported.
+
+Paste the file contents into a `mermaid` code block in Markdown or open the file with a Mermaid-compatible viewer.
+The export captures the graph at that moment; it does not include the interactive graph's layout or live state.
+
+To export from the command line instead, run:
+
+```bash
+aspire resources --format mermaid >> file.txt
+```
+
+This exports a snapshot of the running AppHost's resources, excluding hidden resources by default. Use `--include-hidden`
+to include them. The CLI also accepts `aspire describe --format mermaid`; `--follow` is not supported for this format.
+
 ## Security considerations
 
 The dashboard can display sensitive information, including resource configuration, environment variables, console logs, and telemetry. Secure the dashboard and its endpoints whenever they are accessible beyond a trusted local development environment.
@@ -204,6 +224,12 @@ The software may collect information about you and your use of the software and 
 
 ### Opting out of data collection
 
-Aspire dashboard usage telemetry is collected only when the dashboard is launched through Visual Studio or Visual Studio Code as part of a running Aspire application. To opt out for all users accessing the dashboard, set the `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` environment variable to `true`. Alternatively, disable telemetry collection in the host IDE.
+Aspire dashboard usage and error telemetry uses Azure Monitor directly, independently of an IDE debug session, with a dashboard-specific Application Insights destination. This reporting path includes dashboards launched by the CLI, standalone dashboards, and deployed dashboards. To opt out for all users accessing the dashboard, set the `ASPIRE_DASHBOARD_TELEMETRY_OPTOUT` environment variable to `true` (or `1`) in the AppHost or dashboard process. IDE telemetry settings do not control this direct reporting.
+
+Product log and trace providers use the OpenTelemetry resource name `aspire-dashboard`, which supplies their Azure cloud role. Diagnostic OTLP tracing also defaults to `aspire-dashboard` and retains its separate configured resource identity.
+
+Product telemetry uses separate providers from diagnostic OTLP tracing and does not export application logs, traces, or metrics received by the dashboard. Usage and sanitized error events are Information-level structured logs in the product event category from an isolated logger factory owned by the hosted telemetry manager and configured through shared telemetry helpers. This pipeline contains only Azure Monitor product export, with no scope export. Ordinary logs are excluded by logger-factory isolation, not by product-specific category or level filters on the logger provider or batch processor. Application logging configuration cannot disable product events or enable export of ordinary logs. Product events do not reach application file/console providers, while ordinary dashboard/framework logs are retained locally. Usage and error events create no spans or activity events, and logs use only ambient trace/span correlation. Commands remain activity-based. Reporting includes dashboard version/build information, bounded component and command metadata, and exception types/runtime versions. Reported properties are scalar values; strings are truncated to at most 1,024 characters, and collections are excluded. Exception messages, stack traces, raw browser user agents, resource names, unknown property keys, and PII-classified properties are excluded. Handled errors and unhandled Blazor circuit errors are recorded as sanitized logs independently of trace sampling; no fallback activity is created when there is no ambient activity.
+
+Telemetry enablement is resolved once from configuration. For backwards compatibility, the legacy AppHost-forwarded `Dashboard:DebugSession:TelemetryOptOut` setting (`DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT`) is still honored; either it or the direct opt-out setting disables reporting. The obsolete debug-session transport settings are ignored. Instrumentation is independent of provider lifecycle: a hosted telemetry manager attempts to initialize the reported providers before requests are served. Its shared telemetry provider owns both Azure Monitor signals, flushes and shuts them down concurrently, and disposes the trace provider and isolated logging services without affecting the application logger factory. Exporter or storage initialization failures are logged locally and do not prevent the dashboard from starting.
 
 For details about the data collected and how it's used, see [Microsoft-collected dashboard telemetry](https://aspire.dev/dashboard/microsoft-collected-dashboard-telemetry/).

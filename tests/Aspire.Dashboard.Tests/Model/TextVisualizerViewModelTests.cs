@@ -10,6 +10,37 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class TextVisualizerViewModelTests
 {
     [Fact]
+    public void Create_KnownSqlFormat_PreservesQueryAndCanChangeFormat()
+    {
+        const string query = "SELECT '<value>', @id;\r\n-- comment\r\nSELECT 2;";
+        var vm = new TextVisualizerViewModel(query, indentText: true, knownFormat: DashboardUIHelpers.SqlFormat);
+
+        Assert.Equal(DashboardUIHelpers.SqlFormat, vm.FormatKind);
+        Assert.Equal(query, vm.FormattedText);
+        Assert.All(vm.FormattedLines, line => Assert.Equal(DashboardUIHelpers.SqlFormat, line.FormatKind));
+
+        vm.UpdateFormat(DashboardUIHelpers.PlaintextFormat);
+        Assert.Equal(DashboardUIHelpers.PlaintextFormat, vm.FormatKind);
+        Assert.Equal(query, vm.FormattedText);
+
+        vm.UpdateFormat(DashboardUIHelpers.SqlFormat);
+        Assert.Equal(DashboardUIHelpers.SqlFormat, vm.FormatKind);
+        Assert.Equal(query, vm.FormattedText);
+    }
+
+    [Theory]
+    [InlineData("""{"query":"SELECT 1"}""")]
+    [InlineData("<query>SELECT 1</query>")]
+    public void Create_KnownSqlFormat_TakesPriorityOverStructuredFormats(string text)
+    {
+        var vm = new TextVisualizerViewModel(text, indentText: true, knownFormat: DashboardUIHelpers.SqlFormat);
+
+        Assert.Equal(DashboardUIHelpers.SqlFormat, vm.FormatKind);
+        Assert.Equal(text, vm.FormattedText);
+        Assert.All(vm.FormattedLines, line => Assert.Equal(DashboardUIHelpers.SqlFormat, line.FormatKind));
+    }
+
+    [Fact]
     public void Create_PlainText_NotFormatted()
     {
         // Arrange & Act

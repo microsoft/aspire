@@ -1,8 +1,9 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import { findRunningAppHost, getCommandInvocationCount, getResources, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, reloadWorkspaceForE2E, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper } from './helpers/fixtures';
+import { assertClipboardMatchesLastExpectationForE2E, captureWorkspaceAppHostPathClipboardExpectationForE2E, executeE2eControlCommand, getCliWrapperInvocationCount, getCliWrapperInvocations, getPsFollowProcesses, getWorkspaceSettingsPath, isProcessAlive, reloadWorkspaceForE2E, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, touchPrimaryAppHostProject, writeDelayedPsCliWrapper, writeGatedStreamingDiscoveryCliWrapper, writeStreamingDiscoveryCliWrapper, writeTrackedDelayedPsCliWrapper, writeTrackedStreamingDiscoveryCliWrapper, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForAppHostsTreePath, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, cancelAppHostsSectionTextTransition, clickTreeItem, executeCommandFromPalette, getNotificationMessages, observeVisibleSideBarSectionTitles, openAspireView, startAppHostsSectionTextTransition, waitForAppHostsSectionTextAfterTransition, waitForAppHostsTreePath, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText } from './helpers/vscode';
 
 const cliStartupTimeoutMs = getCliStartupTimeoutMs();
 
@@ -55,6 +56,103 @@ suite('Aspire AppHost tree E2E', function () {
                 `Aspire stole sidebar focus after reload. Visible sections: ${visibleSectionTitles.join(', ')}`);
         } finally {
             await executeE2eControlCommand({ name: 'closeAllEditors' });
+        }
+    });
+
+    test('owns at most one ps follower through view, editor, settings, and reload transitions', async () => {
+        await openAspireView();
+        await waitForWorkspaceAppHost();
+        await waitForRepositoryIdle();
+
+        const pollingSetting = 'aspire.appHostsPollingInterval';
+        const settings: unknown = JSON.parse(fs.readFileSync(getWorkspaceSettingsPath(), 'utf8'));
+        assert.ok(settings !== null && typeof settings === 'object' && !Array.isArray(settings));
+        const previousPollingInterval = pollingSetting in settings ? settings[pollingSetting] : undefined;
+        let observationFailure: unknown;
+        const liveFollowers = () => {
+            const live = getPsFollowProcesses()
+                .filter(record => !record.exited && isProcessAlive(record.pid));
+            assert.ok(live.length <= 1, `Overlapping owned ps followers: ${JSON.stringify(live)}`);
+            return live;
+        };
+        const observe = setInterval(() => {
+            try {
+                liveFollowers();
+            } catch (error) {
+                // Timers cannot reject the awaited UI operation. Preserve and surface the first
+                // failure at its next boundary instead of losing a short-lived overlap.
+                observationFailure ??= error;
+            }
+        }, 10);
+        const waitForFollowers = async (count: number, minimumInvocations = 0) => {
+            await waitForExtensionState(() => {
+                if (observationFailure !== undefined) {
+                    throw observationFailure;
+                }
+                const live = liveFollowers();
+                return live.length === count
+                    && getPsFollowProcesses().length >= minimumInvocations;
+            }, `${count} owned ps follower(s) after at least ${minimumInvocations} starts`, 30_000);
+        };
+
+        try {
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+            await openAspireView();
+            await waitForRepositoryIdle();
+            // The debugger-install hint service holds a keep-alive lease for the discovered
+            // AppHost even with the panel hidden. Settings exercise actual follower replacements.
+            writeWorkspaceSetting(pollingSetting, 1000);
+            await waitForFollowers(1);
+
+            await executeCommandFromPalette('workbench.view.explorer');
+            await waitForFollowers(1);
+            await openAspireView();
+            await waitForFollowers(1);
+            await executeE2eControlCommand({ name: 'switchToGlobalView' });
+            await waitForFollowers(1);
+            await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+            await waitForFollowers(1);
+
+            await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+            await executeE2eControlCommand({ name: 'openFile', filePath: getWorkspaceSettingsPath() });
+            await executeCommandFromPalette('workbench.view.explorer');
+            await waitForFollowers(1);
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+            await waitForFollowers(1);
+
+            await openAspireView();
+            await waitForFollowers(1);
+            const startsBeforeSettingsChange = getPsFollowProcesses().length;
+            writeWorkspaceSetting(pollingSetting, 1100);
+            await waitForFollowers(1, startsBeforeSettingsChange + 1);
+
+            await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+            await executeCommandFromPalette('workbench.view.explorer');
+            const previousOwner = liveFollowers();
+            const previousStarts = getPsFollowProcesses().length;
+            await reloadWorkspaceForE2E();
+            await waitForExtensionState(() => previousOwner.every(previous =>
+                getPsFollowProcesses().some(current => current.id === previous.id && current.exited)),
+            'previous extension-host ps followers to exit', 30_000);
+            await waitForFollowers(1, previousStarts + 1);
+            await executeE2eControlCommand({ name: 'closeAllEditors' });
+            await waitForFollowers(1);
+            assert.strictEqual(observationFailure, undefined);
+        } finally {
+            try {
+                await runE2eTeardown([
+                    () => executeE2eControlCommand({ name: 'closeAllEditors' }),
+                    () => executeCommandFromPalette('workbench.view.explorer'),
+                    async () => { writeWorkspaceSetting(pollingSetting, previousPollingInterval); },
+                    async () => {
+                        const previousStarts = getPsFollowProcesses().length;
+                        await reloadWorkspaceForE2E();
+                        await waitForFollowers(1, previousStarts + 1);
+                    },
+                ], 'ps follower lifecycle cleanup failed.');
+            } finally {
+                clearInterval(observe);
+            }
         }
     });
 
@@ -324,6 +422,16 @@ suite('Aspire AppHost tree E2E', function () {
         const workerItem = await waitForTreeItem(section, 'e2e-worker');
         assert.ok(workerItem);
         assert.ok(getResources(workerState.state).some(resource => (resource.displayName ?? resource.name) === 'e2e-worker'));
+
+        // The resource row ends with the CLI-reported source. For a project resource that is the
+        // project file name, so the row identifies what the resource actually runs without
+        // rendering an absolute path. Waiting on the description also pins the segment order
+        // (type, state, then source) rather than just the presence of the file name.
+        const workerDescription = await waitForTreeItemDescription(
+            section,
+            'e2e-worker',
+            'Project · Running · AspireE2E.Worker.csproj');
+        assert.strictEqual(await workerDescription.getDescription(), 'Project · Running · AspireE2E.Worker.csproj');
 
         await executeE2eControlCommand({ name: 'executeResourceCommand', resourceName: 'e2e-worker' }, { waitFor: 'started' });
         await cancelActiveInput();
