@@ -1,0 +1,16 @@
+{
+  "id": "devtunnels-devtunnelmonitor-hostoutputallocatesports-objectdisposed",
+  "type": "flaky-test",
+  "title": "Flaky: DevTunnelMonitorTests.HostOutputAllocatesPortsWithoutQueryingServiceStatus throws ObjectDisposedException on disposed IServiceProvider",
+  "test_name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelMonitorTests.HostOutputAllocatesPortsWithoutQueryingServiceStatus",
+  "error_pattern": "System.ObjectDisposedException : Cannot access a disposed object.\nObject name: 'IServiceProvider'.\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ThrowHelper.ThrowObjectDisposedException()\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.get_Configuration()",
+  "occurrences": [
+    {
+      "run_id": 37985207190,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37985207190",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T20:53:17Z"
+    }
+  ]
+}

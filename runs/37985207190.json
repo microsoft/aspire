@@ -1,0 +1,99 @@
+{
+  "run_id": 37985207190,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37985207190",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-09T20:53:17Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20086,
+    "title": "[WIP] Fix Go AppHost start timeout error",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/go-apphost-fail-to-start",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20086",
+    "merged_at": "2026-10-09T20:10:35Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      },
+      {
+        "sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "message": "[WIP] Fix Go AppHost start timeout error (#20086) - [x] Identify the Go AppHost startup failure from logs and code. - [x] Implement a focused fix with regression coverage. - [x] Run targeted validation and review the final changes. <!-- START COPILOT CODING AGENT SUFFIX --> - Fixes #20056 --------- Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: David Pine <7679720+IEvangelist",
+        "html_url": "https://github.com/microsoft/aspire/commit/c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "pull_request": {
+          "number": 20086,
+          "title": "[WIP] Fix Go AppHost start timeout error",
+          "url": "https://github.com/microsoft/aspire/pull/20086",
+          "merged_at": "2026-10-09T20:10:35Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 114006191519,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37985207190/job/114006191519",
+      "classification": "transient-infra",
+      "reason": "Test host crashed with exit code 137 (SIGKILL) after recovering 4726 succeeded/39 skipped/0 failed results from the TRX sidecar; no failing test, matches known recurring macOS hang-dump/OOM-kill infra issue.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "id": 114006199881,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37985207190/job/114006199881",
+      "classification": "flaky-test",
+      "reason": "DevTunnelMonitorTests.HostOutputAllocatesPortsWithoutQueryingServiceStatus failed with ObjectDisposedException on a disposed IServiceProvider during background DevTunnelMonitor teardown; none of the candidate merges touch DevTunnels or ResourceNotificationService, and a near-identical disposal race was seen the day before in a sibling test in the same class.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelMonitorTests.HostOutputAllocatesPortsWithoutQueryingServiceStatus",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "error": "System.ObjectDisposedException : Cannot access a disposed object.\nObject name: 'IServiceProvider'.",
+      "stack_trace": "at Microsoft.Extensions.DependencyInjection.ServiceLookup.ThrowHelper.ThrowObjectDisposedException()\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService[T](IServiceProvider provider)\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.get_Configuration() in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 34\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.RecordResourceLifecycleMilestones(IResource resource, String resourceId, ResourceNotificationState notificationState, CustomResourceSnapshot previousSnapshot, CustomResourceSnapshot snapshot) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 998\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, String resourceId, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 923\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1271\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs, DateTimeOffset now) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 811\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass40_0.<<RefreshAccessAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 356\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass55_0`1.<<InvokeAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 724\n--- End of stack trace from previo",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Background DevTunnelMonitor refresh callback races against test host disposal, hitting a disposed IServiceProvider; unrelated to any candidate merge in this run, and matches a known recurring disposal-race pattern in this same test class."
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-macos-testhost-sigkill-137",
+    "devtunnels-devtunnelmonitor-hostoutputallocatesports-objectdisposed"
+  ]
+}
