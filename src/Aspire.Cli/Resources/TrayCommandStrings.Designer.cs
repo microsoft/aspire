@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class TrayCommandStrings {
+    internal class TrayCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.TrayCommandStrings", typeof(TrayCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion..
         /// </summary>
-        public static string BundleRequired {
+        internal static string BundleRequired {
             get {
                 return ResourceManager.GetString("BundleRequired", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Manage the Windows or macOS tray companion (Experimental).
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Aspire tray &apos;{0}&apos; helper failed with exit code {1}..
         /// </summary>
-        public static string HelperFailed {
+        internal static string HelperFailed {
             get {
                 return ResourceManager.GetString("HelperFailed", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Aspire tray &apos;{0}&apos; helper did not acknowledge completion within 30 seconds..
         /// </summary>
-        public static string HelperTimedOut {
+        internal static string HelperTimedOut {
             get {
                 return ResourceManager.GetString("HelperTimedOut", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and &apos;dotnet aspire.dll&apos; are not supported..
         /// </summary>
-        public static string NativeCliRequired {
+        internal static string NativeCliRequired {
             get {
                 return ResourceManager.GetString("NativeCliRequired", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Could not complete Aspire tray &apos;{0}&apos;: {1}.
         /// </summary>
-        public static string OperationFailed {
+        internal static string OperationFailed {
             get {
                 return ResourceManager.GetString("OperationFailed", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run &apos;aspire setup --force&apos; to repair an incomplete extraction..
         /// </summary>
-        public static string PayloadMissing {
+        internal static string PayloadMissing {
             get {
                 return ResourceManager.GetString("PayloadMissing", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Start or restore the tray icon (Experimental).
         /// </summary>
-        public static string StartDescription {
+        internal static string StartDescription {
             get {
                 return ResourceManager.GetString("StartDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The experimental Aspire tray is ready..
         /// </summary>
-        public static string Started {
+        internal static string Started {
             get {
                 return ResourceManager.GetString("Started", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stop the tray without stopping AppHosts (Experimental).
         /// </summary>
-        public static string StopDescription {
+        internal static string StopDescription {
             get {
                 return ResourceManager.GetString("StopDescription", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Aspire tray is stopped. AppHosts were not stopped..
         /// </summary>
-        public static string Stopped {
+        internal static string Stopped {
             get {
                 return ResourceManager.GetString("Stopped", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported..
         /// </summary>
-        public static string UnsupportedPlatform {
+        internal static string UnsupportedPlatform {
             get {
                 return ResourceManager.GetString("UnsupportedPlatform", resourceCulture);
             }

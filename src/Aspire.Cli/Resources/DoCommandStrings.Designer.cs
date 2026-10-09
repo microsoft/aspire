@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class DoCommandStrings {
+    internal class DoCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.DoCommandStrings", typeof(DoCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Execute a specific pipeline step and its dependencies.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Executing pipeline....
         /// </summary>
-        public static string GeneratingArtifacts {
+        internal static string GeneratingArtifacts {
             get {
                 return ResourceManager.GetString("GeneratingArtifacts", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The &apos;step&apos; argument is required when using --list-steps. Example: &apos;aspire do deploy --list-steps&apos;. Common starting steps are &apos;build&apos;, &apos;publish&apos; and &apos;deploy&apos;. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps..
         /// </summary>
-        public static string ListStepsRequiresStep {
+        internal static string ListStepsRequiresStep {
             get {
                 return ResourceManager.GetString("ListStepsRequiresStep", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The operation was canceled..
         /// </summary>
-        public static string OperationCanceled {
+        internal static string OperationCanceled {
             get {
                 return ResourceManager.GetString("OperationCanceled", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to OPERATION COMPLETED.
         /// </summary>
-        public static string OperationCompletedPrefix {
+        internal static string OperationCompletedPrefix {
             get {
                 return ResourceManager.GetString("OperationCompletedPrefix", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to OPERATION FAILED.
         /// </summary>
-        public static string OperationFailedPrefix {
+        internal static string OperationFailedPrefix {
             get {
                 return ResourceManager.GetString("OperationFailedPrefix", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The optional output path for artifacts.
         /// </summary>
-        public static string OutputPathArgumentDescription {
+        internal static string OutputPathArgumentDescription {
             get {
                 return ResourceManager.GetString("OutputPathArgumentDescription", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the step to execute.
         /// </summary>
-        public static string StepArgumentDescription {
+        internal static string StepArgumentDescription {
             get {
                 return ResourceManager.GetString("StepArgumentDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The &apos;step&apos; argument is required..
         /// </summary>
-        public static string StepArgumentRequired {
+        internal static string StepArgumentRequired {
             get {
                 return ResourceManager.GetString("StepArgumentRequired", resourceCulture);
             }

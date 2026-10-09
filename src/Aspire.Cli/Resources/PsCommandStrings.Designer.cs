@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class PsCommandStrings {
+    internal class PsCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.PsCommandStrings", typeof(PsCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to List running AppHosts.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Keep running and emit updates as running AppHosts change. JSON output uses newline-delimited changed AppHost records by default, or full snapshots with --output snapshot..
         /// </summary>
-        public static string FollowOptionDescription {
+        internal static string FollowOptionDescription {
             get {
                 return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --follow option only supports JSON output. Use --format json..
         /// </summary>
-        public static string FollowRequiresJson {
+        internal static string FollowRequiresJson {
             get {
                 return ResourceManager.GetString("FollowRequiresJson", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to CLI PID.
         /// </summary>
-        public static string HeaderCliPid {
+        internal static string HeaderCliPid {
             get {
                 return ResourceManager.GetString("HeaderCliPid", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard.
         /// </summary>
-        public static string HeaderDashboard {
+        internal static string HeaderDashboard {
             get {
                 return ResourceManager.GetString("HeaderDashboard", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
-        public static string HeaderPath {
+        internal static string HeaderPath {
             get {
                 return ResourceManager.GetString("HeaderPath", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to PID.
         /// </summary>
-        public static string HeaderPid {
+        internal static string HeaderPid {
             get {
                 return ResourceManager.GetString("HeaderPid", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to SDK.
         /// </summary>
-        public static string HeaderSdk {
+        internal static string HeaderSdk {
             get {
                 return ResourceManager.GetString("HeaderSdk", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --output option must be default or snapshot..
         /// </summary>
-        public static string InvalidOutputMode {
+        internal static string InvalidOutputMode {
             get {
                 return ResourceManager.GetString("InvalidOutputMode", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Output format (Table or Json).
         /// </summary>
-        public static string JsonOptionDescription {
+        internal static string JsonOptionDescription {
             get {
                 return ResourceManager.GetString("JsonOptionDescription", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Output mode: default preserves the standard AppHost output; snapshot emits full AppHost snapshots with resource health, heartbeats, and errors. Snapshot requires --follow --format json..
         /// </summary>
-        public static string OutputOptionDescription {
+        internal static string OutputOptionDescription {
             get {
                 return ResourceManager.GetString("OutputOptionDescription", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --output snapshot option requires --follow --format json..
         /// </summary>
-        public static string SnapshotRequiresFollowJson {
+        internal static string SnapshotRequiresFollowJson {
             get {
                 return ResourceManager.GetString("SnapshotRequiresFollowJson", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Unknown.
         /// </summary>
-        public static string UnknownPath {
+        internal static string UnknownPath {
             get {
                 return ResourceManager.GetString("UnknownPath", resourceCulture);
             }

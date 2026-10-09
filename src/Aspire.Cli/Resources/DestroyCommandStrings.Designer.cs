@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class DestroyCommandStrings {
+    internal class DestroyCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.DestroyCommandStrings", typeof(DestroyCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Destroy a previously deployed AppHost environment.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The destroy operation was canceled..
         /// </summary>
-        public static string DestroyCanceled {
+        internal static string DestroyCanceled {
             get {
                 return ResourceManager.GetString("DestroyCanceled", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The destroy command requires --yes when the --non-interactive option is specified..
         /// </summary>
-        public static string NonInteractiveRequiresYes {
+        internal static string NonInteractiveRequiresYes {
             get {
                 return ResourceManager.GetString("NonInteractiveRequiresYes", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Destroy completed.
         /// </summary>
-        public static string OperationCompletedPrefix {
+        internal static string OperationCompletedPrefix {
             get {
                 return ResourceManager.GetString("OperationCompletedPrefix", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Destroy failed.
         /// </summary>
-        public static string OperationFailedPrefix {
+        internal static string OperationFailedPrefix {
             get {
                 return ResourceManager.GetString("OperationFailedPrefix", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The output path containing the deployment artifacts to destroy.
         /// </summary>
-        public static string OutputPathArgumentDescription {
+        internal static string OutputPathArgumentDescription {
             get {
                 return ResourceManager.GetString("OutputPathArgumentDescription", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Do not prompt for confirmation before destroying resources.
         /// </summary>
-        public static string YesOptionDescription {
+        internal static string YesOptionDescription {
             get {
                 return ResourceManager.GetString("YesOptionDescription", resourceCulture);
             }

@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class StopCommandStrings {
+    internal class StopCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.StopCommandStrings", typeof(StopCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The {0} and {1} options cannot be used together..
         /// </summary>
-        public static string AllAndProjectMutuallyExclusive {
+        internal static string AllAndProjectMutuallyExclusive {
             get {
                 return ResourceManager.GetString("AllAndProjectMutuallyExclusive", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stop all running AppHosts.
         /// </summary>
-        public static string AllOptionDescription {
+        internal static string AllOptionDescription {
             get {
                 return ResourceManager.GetString("AllOptionDescription", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Multiple AppHost connections match PID {0}. No AppHosts were stopped..
         /// </summary>
-        public static string AmbiguousAppHostPid {
+        internal static string AmbiguousAppHostPid {
             get {
                 return ResourceManager.GetString("AmbiguousAppHostPid", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to {0} (PID {1}).
         /// </summary>
-        public static string AppHostIdentifierWithProcessId {
+        internal static string AppHostIdentifierWithProcessId {
             get {
                 return ResourceManager.GetString("AppHostIdentifierWithProcessId", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No running AppHost at &apos;{0}&apos; with PID {1} was found. No AppHosts were stopped..
         /// </summary>
-        public static string AppHostNotRunningAtPathWithPid {
+        internal static string AppHostNotRunningAtPathWithPid {
             get {
                 return ResourceManager.GetString("AppHostNotRunningAtPathWithPid", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No running AppHost with PID {0} was found. No AppHosts were stopped..
         /// </summary>
-        public static string AppHostNotRunningWithPid {
+        internal static string AppHostNotRunningWithPid {
             get {
                 return ResourceManager.GetString("AppHostNotRunningWithPid", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to {0} stopped successfully..
         /// </summary>
-        public static string AppHostStoppedSuccessfully {
+        internal static string AppHostStoppedSuccessfully {
             get {
                 return ResourceManager.GetString("AppHostStoppedSuccessfully", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Cleaning up persistent resources for {0}....
         /// </summary>
-        public static string CleaningPersistentResources {
+        internal static string CleaningPersistentResources {
             get {
                 return ResourceManager.GetString("CleaningPersistentResources", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Could not determine the AppHost project path..
         /// </summary>
-        public static string CouldNotDetermineAppHostPath {
+        internal static string CouldNotDetermineAppHostPath {
             get {
                 return ResourceManager.GetString("CouldNotDetermineAppHostPath", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted..
         /// </summary>
-        public static string DcpCleanupCompatibilityCheckFailed {
+        internal static string DcpCleanupCompatibilityCheckFailed {
             get {
                 return ResourceManager.GetString("DcpCleanupCompatibilityCheckFailed", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to DCP cleanup exited with code {0}..
         /// </summary>
-        public static string DcpCleanupExitCode {
+        internal static string DcpCleanupExitCode {
             get {
                 return ResourceManager.GetString("DcpCleanupExitCode", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Failed to clean up persistent resources for {0}. {1}.
         /// </summary>
-        public static string DcpCleanupFailed {
+        internal static string DcpCleanupFailed {
             get {
                 return ResourceManager.GetString("DcpCleanupFailed", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Could not find the DCP executable needed to clean up persistent resources..
         /// </summary>
-        public static string DcpCleanupUnavailable {
+        internal static string DcpCleanupUnavailable {
             get {
                 return ResourceManager.GetString("DcpCleanupUnavailable", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted..
         /// </summary>
-        public static string DcpCleanupUnsupportedAppHostVersion {
+        internal static string DcpCleanupUnsupportedAppHostVersion {
             get {
                 return ResourceManager.GetString("DcpCleanupUnsupportedAppHostVersion", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to This AppHost uses Aspire.Hosting {0}, which might not support persistent volume cleanup. Persistent volume cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent volume cleanup will still be attempted..
         /// </summary>
-        public static string DcpVolumeCleanupUnsupportedAppHostVersion {
+        internal static string DcpVolumeCleanupUnsupportedAppHostVersion {
             get {
                 return ResourceManager.GetString("DcpVolumeCleanupUnsupportedAppHostVersion", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stop a running AppHost.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Failed to stop {0}..
         /// </summary>
-        public static string FailedToStopAppHost {
+        internal static string FailedToStopAppHost {
             get {
                 return ResourceManager.GetString("FailedToStopAppHost", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stop the AppHost and clean up its persistent resources, preserving volumes by default.
         /// </summary>
-        public static string ForceOptionDescription {
+        internal static string ForceOptionDescription {
             get {
                 return ResourceManager.GetString("ForceOptionDescription", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Found running AppHost: {0}.
         /// </summary>
-        public static string FoundRunningAppHost {
+        internal static string FoundRunningAppHost {
             get {
                 return ResourceManager.GetString("FoundRunningAppHost", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them..
         /// </summary>
-        public static string MultipleAppHostsNonInteractive {
+        internal static string MultipleAppHostsNonInteractive {
             get {
                 return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:.
         /// </summary>
-        public static string MultipleAppHostsRunning {
+        internal static string MultipleAppHostsRunning {
             get {
                 return ResourceManager.GetString("MultipleAppHostsRunning", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Persistent resources for {0} cleaned up..
         /// </summary>
-        public static string PersistentResourcesCleaned {
+        internal static string PersistentResourcesCleaned {
             get {
                 return ResourceManager.GetString("PersistentResourcesCleaned", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --pid option must be a positive integer..
         /// </summary>
-        public static string PidMustBePositive {
+        internal static string PidMustBePositive {
             get {
                 return ResourceManager.GetString("PidMustBePositive", resourceCulture);
             }
@@ -270,7 +270,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stop only the AppHost with this positive process ID (not the CLI process ID). With --apphost, the project file path must also match exactly. Cannot be combined with --all or --force..
         /// </summary>
-        public static string PidOptionDescription {
+        internal static string PidOptionDescription {
             get {
                 return ResourceManager.GetString("PidOptionDescription", resourceCulture);
             }
@@ -279,7 +279,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
         /// </summary>
-        public static string ProjectArgumentDescription {
+        internal static string ProjectArgumentDescription {
             get {
                 return ResourceManager.GetString("ProjectArgumentDescription", resourceCulture);
             }
@@ -288,7 +288,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The experimental tray protocol requires --protocol-version 1 --format json --apphost with an absolute file path, a positive --pid, and a positive --started-at in Unix milliseconds. --all and --force are not allowed..
         /// </summary>
-        public static string ProtocolRequiresExactIdentity {
+        internal static string ProtocolRequiresExactIdentity {
             get {
                 return ResourceManager.GetString("ProtocolRequiresExactIdentity", resourceCulture);
             }
@@ -297,7 +297,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to stop.
         /// </summary>
-        public static string SelectAppHostAction {
+        internal static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
@@ -306,7 +306,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Sending stop signal to {0}....
         /// </summary>
-        public static string SendingStopSignal {
+        internal static string SendingStopSignal {
             get {
                 return ResourceManager.GetString("SendingStopSignal", resourceCulture);
             }
@@ -315,7 +315,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stopping {0}....
         /// </summary>
-        public static string StoppingAppHost {
+        internal static string StoppingAppHost {
             get {
                 return ResourceManager.GetString("StoppingAppHost", resourceCulture);
             }
@@ -324,7 +324,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to an unknown version.
         /// </summary>
-        public static string UnknownAspireHostingVersion {
+        internal static string UnknownAspireHostingVersion {
             get {
                 return ResourceManager.GetString("UnknownAspireHostingVersion", resourceCulture);
             }
@@ -333,7 +333,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Also remove persistent volumes created by Aspire (requires --force).
         /// </summary>
-        public static string VolumesOptionDescription {
+        internal static string VolumesOptionDescription {
             get {
                 return ResourceManager.GetString("VolumesOptionDescription", resourceCulture);
             }
@@ -342,7 +342,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The {0} option requires the {1} option..
         /// </summary>
-        public static string VolumesRequiresForce {
+        internal static string VolumesRequiresForce {
             get {
                 return ResourceManager.GetString("VolumesRequiresForce", resourceCulture);
             }

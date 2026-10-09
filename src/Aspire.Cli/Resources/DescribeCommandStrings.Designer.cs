@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class DescribeCommandStrings {
+    internal class DescribeCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.DescribeCommandStrings", typeof(DescribeCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Describe resources in a running AppHost.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Continuously stream resource state changes.
         /// </summary>
-        public static string FollowOptionDescription {
+        internal static string FollowOptionDescription {
             get {
                 return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Health.
         /// </summary>
-        public static string HeaderHealth {
+        internal static string HeaderHealth {
             get {
                 return ResourceManager.GetString("HeaderHealth", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Name.
         /// </summary>
-        public static string HeaderName {
+        internal static string HeaderName {
             get {
                 return ResourceManager.GetString("HeaderName", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to State.
         /// </summary>
-        public static string HeaderState {
+        internal static string HeaderState {
             get {
                 return ResourceManager.GetString("HeaderState", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
-        public static string HeaderType {
+        internal static string HeaderType {
             get {
                 return ResourceManager.GetString("HeaderType", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to URLs.
         /// </summary>
-        public static string HeaderURLs {
+        internal static string HeaderURLs {
             get {
                 return ResourceManager.GetString("HeaderURLs", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Include hidden resources in the output.
         /// </summary>
-        public static string IncludeHiddenOptionDescription {
+        internal static string IncludeHiddenOptionDescription {
             get {
                 return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Output format (Table, Json, or Mermaid).
         /// </summary>
-        public static string JsonOptionDescription {
+        internal static string JsonOptionDescription {
             get {
                 return ResourceManager.GetString("JsonOptionDescription", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot..
         /// </summary>
-        public static string MermaidFollowNotSupported {
+        internal static string MermaidFollowNotSupported {
             get {
                 return ResourceManager.GetString("MermaidFollowNotSupported", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No AppHost project found..
         /// </summary>
-        public static string NoAppHostFound {
+        internal static string NoAppHostFound {
             get {
                 return ResourceManager.GetString("NoAppHostFound", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the resource to display. If not specified, all resources are shown..
         /// </summary>
-        public static string ResourceArgumentDescription {
+        internal static string ResourceArgumentDescription {
             get {
                 return ResourceManager.GetString("ResourceArgumentDescription", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; not found..
         /// </summary>
-        public static string ResourceNotFound {
+        internal static string ResourceNotFound {
             get {
                 return ResourceManager.GetString("ResourceNotFound", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to describe.
         /// </summary>
-        public static string SelectAppHostAction {
+        internal static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
