@@ -207,6 +207,24 @@ path_rules:
     targets: [ALL]
     reason: shared test build inputs and fixtures are consumed across multiple test lanes
 
+  - paths:
+      - src/Aspire.Cli/Aspire.Cli.csproj
+      - src/Aspire.Cli/Resources/*.resx
+      - src/Aspire.Dashboard/Aspire.Dashboard.csproj
+      - src/Aspire.Dashboard/Resources/*.resx
+      - src/Aspire.Hosting/Aspire.Hosting.csproj
+      - src/Aspire.Hosting/Resources/*.resx
+      - src/Aspire.Hosting.Azure/Aspire.Hosting.Azure.csproj
+      - src/Aspire.Hosting.Azure/Resources/*.resx
+      - src/Aspire.Hosting.Browsers/Aspire.Hosting.Browsers.csproj
+      - src/Aspire.Hosting.Browsers/Resources/*.resx
+      - src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj
+      - src/Aspire.Hosting.DevTunnels/Resources/*.resx
+      - src/Aspire.Hosting.Testing/Aspire.Hosting.Testing.csproj
+      - src/Aspire.Hosting.Testing/Properties/*.resx
+    targets: [test:Infrastructure.Tests]
+    reason: resource metadata tests read project configuration and resource filenames at runtime
+
   # Local composite actions used by regular PR CI. Route each action to the work it can affect; when
   # the blast radius is not precise enough, keep the conservative full-matrix target.
   - paths:

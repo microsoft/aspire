@@ -28,6 +28,7 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
         var neutralResources = Directory.GetFiles(Path.Combine(projectDirectory, resourceDirectory), "*.resx")
             .Select(Path.GetFileName)
             .Append("NewResource.resx")
+            .Append("Errors.Validation.resx")
             .Select(name => Path.Combine(resourceDirectory, name!))
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -35,21 +36,33 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
         {
             Path.Combine(resourceDirectory, "NewResource.fr.resx"),
             Path.Combine(resourceDirectory, "NewResource.zh-Hans.resx"),
+            Path.Combine(resourceDirectory, "WithoutDesigner.resx"),
             Path.Combine("Other", "Unrelated.resx"),
             Path.Combine(resourceDirectory, "xlf", "Unrelated.resx"),
             Path.Combine("..", "Shared", "Linked.resx")
         };
         var designers = neutralResources.Select(path => Path.ChangeExtension(path, ".Designer.cs")).ToArray();
+        var settingsDesignerPath = Path.Combine(resourceDirectory, "Settings.Designer.cs");
         var otherSources = new[]
         {
             Path.Combine(resourceDirectory, "Unrelated.cs"),
+            Path.Combine(resourceDirectory, "Unrelated.Designer.cs"),
+            settingsDesignerPath,
             Path.Combine("Other", "Unrelated.Designer.cs"),
             Path.Combine(resourceDirectory, "Nested", "Unrelated.Designer.cs"),
             Path.Combine("..", "Shared", "Linked.Designer.cs")
         };
 
+        // Pair detection needs real sibling files, but only in the isolated workspace.
+        Directory.CreateDirectory(Path.Combine(workspace.Path, resourceDirectory));
+        foreach (var path in neutralResources.Concat(designers).Append(Path.Combine(resourceDirectory, "WithoutDesigner.resx"))
+            .Append(settingsDesignerPath).Append(Path.Combine(resourceDirectory, "Settings.settings")))
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, path), string.Empty);
+        }
+
         // Evaluate the real metadata rules against explicit items, including files that
-        // are not in either project yet, without modifying the shared repository.
+        // are not in the project yet, without modifying the shared repository.
         var project = new XDocument(new XElement("Project",
             new XElement("PropertyGroup", configuration.Root!.Elements("PropertyGroup").Elements("ResxCodeGenerator").Select(property => new XElement(property))),
             new XElement("PropertyGroup", source.Root!.Elements("PropertyGroup").Elements("ResxCodeGenerator").Select(property => new XElement(property))),
@@ -59,6 +72,11 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
             new XElement("ItemGroup", source.Root.Elements("ItemGroup").Elements()
                 .Where(item => item.Element("Generator") is not null || item.Element("AutoGen") is not null)
                 .Select(item => new XElement(item)))));
+        var settingsDesigner = project.Root!.Elements("ItemGroup").Elements("Compile")
+            .Single(item => item.Attribute("Include")?.Value == settingsDesignerPath);
+        settingsDesigner.Add(new XElement("DependentUpon", "Settings.settings"));
+        settingsDesigner.Add(new XElement("DesignTime", "True"));
+        settingsDesigner.Add(new XElement("AutoGen", "True"));
         var linkedResource = project.Root!.Elements("ItemGroup").Elements("EmbeddedResource")
             .Single(item => item.Attribute("Include")?.Value == otherResources[^1]);
         linkedResource.Add(new XElement("Link", Path.Combine(resourceDirectory, "Linked.resx")));
@@ -112,9 +130,18 @@ public sealed class ResourceGeneratorMetadataTests(ITestOutputHelper output)
         }
         foreach (var sourceItem in compileItems.Skip(designers.Length))
         {
-            Assert.False(sourceItem.TryGetProperty("DependentUpon", out _));
-            Assert.False(sourceItem.TryGetProperty("DesignTime", out _));
-            Assert.False(sourceItem.TryGetProperty("AutoGen", out _));
+            if (sourceItem.GetProperty("Identity").GetString() == settingsDesignerPath)
+            {
+                Assert.Equal("Settings.settings", sourceItem.GetProperty("DependentUpon").GetString());
+                Assert.Equal("True", sourceItem.GetProperty("DesignTime").GetString());
+                Assert.Equal("True", sourceItem.GetProperty("AutoGen").GetString());
+            }
+            else
+            {
+                Assert.False(sourceItem.TryGetProperty("DependentUpon", out _));
+                Assert.False(sourceItem.TryGetProperty("DesignTime", out _));
+                Assert.False(sourceItem.TryGetProperty("AutoGen", out _));
+            }
         }
     }
 }

@@ -22,17 +22,18 @@
 
   <ItemGroup>
     <Compile Update="Resources\*.Designer.cs;Properties\*.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>$([System.IO.Path]::ChangeExtension('%(Filename)', '.resx'))</DependentUpon>
+      <DesignTime Condition="Exists('%(RelativeDir)$([System.IO.Path]::ChangeExtension(%(Filename), .resx))')">True</DesignTime>
+      <AutoGen Condition="Exists('%(RelativeDir)$([System.IO.Path]::ChangeExtension(%(Filename), .resx))')">True</AutoGen>
+      <DependentUpon Condition="Exists('%(RelativeDir)$([System.IO.Path]::ChangeExtension(%(Filename), .resx))')">$([System.IO.Path]::ChangeExtension('%(Filename)', '.resx'))</DependentUpon>
     </Compile>
-    <!-- Only neutral files (Name.resx), not translations (Name.fr.resx), have designer classes. -->
+    <!-- Neutral resources have checked-in designers; translations do not. Match pairs instead
+         of parsing culture suffixes so dotted neutral names such as Errors.Validation.resx work. -->
     <EmbeddedResource Update="Resources\*.resx;Properties\*.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
       <XlfOutputItem>EmbeddedResource</XlfOutputItem>
-      <SubType Condition="!$([System.String]::Copy('%(Filename)').Contains('.'))">Designer</SubType>
-      <Generator Condition="!$([System.String]::Copy('%(Filename)').Contains('.'))">$(ResxCodeGenerator)</Generator>
-      <LastGenOutput Condition="!$([System.String]::Copy('%(Filename)').Contains('.'))">%(Filename).Designer.cs</LastGenOutput>
+      <SubType Condition="Exists('%(RelativeDir)%(Filename).Designer.cs')">Designer</SubType>
+      <Generator Condition="Exists('%(RelativeDir)%(Filename).Designer.cs')">$(ResxCodeGenerator)</Generator>
+      <LastGenOutput Condition="Exists('%(RelativeDir)%(Filename).Designer.cs')">%(Filename).Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
 
