@@ -5,6 +5,7 @@ using System.Diagnostics;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Shared;
 using Aspire.Shared.Telemetry;
+using Aspire.Tests.Shared.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -173,6 +174,59 @@ public class DashboardTelemetryManagerTests
 
         Assert.False(manager.IsInitialized);
         Assert.Throws<ObjectDisposedException>(manager.Initialize);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    public async Task StopAsync_UsesBoundedServiceShutdownEvenAfterHostDeadline(bool cancelled, bool shutdownSucceeds)
+    {
+        var sink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(sink)));
+        using var telemetry = new DashboardTelemetryService(loggerFactory.CreateLogger<DashboardTelemetryService>(),
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true });
+        var calls = new System.Collections.Concurrent.ConcurrentQueue<(string Signal, int Timeout)>();
+        bool Shutdown(string signal, int timeout)
+        {
+            calls.Enqueue((signal, timeout));
+            return shutdownSucceeds;
+        }
+        var traceProcessor = new TestTelemetryProcessor<Activity> { ShutdownCallback = timeout => Shutdown("trace", timeout) };
+        var logProcessor = new TestTelemetryProcessor<LogRecord> { ShutdownCallback = timeout => Shutdown("log", timeout) };
+        await using var manager = new DashboardTelemetryManager(
+            new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = true },
+            loggerFactory.CreateLogger<DashboardTelemetryManager>(), telemetry,
+            (resource, _) => AzureMonitorTelemetryProvider.Create(new ServiceCollection(), resource,
+                DashboardTelemetryService.EventLogCategoryName,
+                () => Sdk.CreateTracerProviderBuilder().AddProcessor(traceProcessor).Build(),
+                provider => provider.AddProcessor(logProcessor)));
+        manager.Initialize();
+        using var cancellation = new CancellationTokenSource();
+        if (cancelled)
+        {
+            cancellation.Cancel();
+        }
+
+        var shutdown = manager.StopAsync(cancellation.Token);
+        Assert.Same(shutdown, manager.DisposeAsync().AsTask());
+        await shutdown;
+
+        Assert.Equal([("log", 5000), ("trace", 5000)], calls.OrderBy(call => call.Signal).ToArray());
+        Assert.Equal(1, traceProcessor.DisposeCount);
+        Assert.Equal(1, logProcessor.DisposeCount);
+        Assert.False(manager.IsInitialized);
+        if (shutdownSucceeds)
+        {
+            Assert.Empty(sink.Writes);
+        }
+        else
+        {
+            var warning = Assert.Single(sink.Writes);
+            Assert.Equal(LogLevel.Warning, warning.LogLevel);
+            Assert.Equal("Timed out flushing dashboard product telemetry.", warning.Message);
+        }
     }
 
     [Theory]

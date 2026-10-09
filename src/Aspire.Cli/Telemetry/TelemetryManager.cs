@@ -41,12 +41,17 @@ internal sealed class TelemetryManager : IDisposable
 
 #if DEBUG
     // No timeout in debug builds
-    private const int ShutDownTimeoutMilliseconds = -1;
+    private const int DiagnosticShutdownTimeoutMilliseconds = -1;
 #else
     // Chosen to provide time to send remaining telemetry without noticeably delaying exit.
-    private const int ShutDownTimeoutMilliseconds = 200;
+    private const int DiagnosticShutdownTimeoutMilliseconds = 200;
 #endif
     private const int ProfilingForceFlushTimeoutMilliseconds = 5000;
+    private const int ReportedCIShutdownTimeoutMilliseconds = 5000;
+    private const int ReportedFailureShutdownTimeoutMilliseconds = 300;
+    private const string ShutdownDrainBudgetKey = "Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds";
+    private const string PersistOnForceFlushSwitchName = "Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush";
+    private const string DisablePersistOnShutdownSwitchName = "Azure.Monitor.OpenTelemetry.Exporter.DisablePersistOnShutdown";
 
     // Agent hooks flush to durable exporter storage before returning. Give persistence its own
     // budget rather than truncating it to the normal Release shutdown window.
@@ -67,18 +72,18 @@ internal sealed class TelemetryManager : IDisposable
     /// <summary>
     /// Configures exporter persistence before any providers are created in the CLI process.
     /// </summary>
-    internal static void ConfigureExporterForProcess(bool isAgentTelemetryInvocation)
+    internal static ReportedTelemetryMode ConfigureExporterForProcess(bool isAgentTelemetryInvocation, bool isCIEnvironment)
     {
         // These switches are process-wide, so configure them only at the entry point, not in DI.
-        // Agent hooks must persist before exiting without waiting for ingestion. Keep ordinary
-        // commands' existing shutdown behavior; the exporter owns storage, leases, and retries.
+        // CI cannot rely on a later invocation to drain storage. Agent hooks retain their fast
+        // persistence-before-uploader contract even in CI, rather than waiting on every tool call.
         // https://github.com/Azure/azure-sdk-for-net/blob/Azure.Monitor.OpenTelemetry.Exporter_1.9.0/sdk/monitor/Azure.Monitor.OpenTelemetry.Exporter/README.md#telemetry-delivery-on-shutdown
-        AppContext.SetSwitch("Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush", isAgentTelemetryInvocation);
-        AppContext.SetSwitch("Azure.Monitor.OpenTelemetry.Exporter.DisablePersistOnShutdown", !isAgentTelemetryInvocation);
-        if (isAgentTelemetryInvocation)
-        {
-            AppContext.SetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds", 0);
-        }
+        var mode = isAgentTelemetryInvocation ? ReportedTelemetryMode.Agent
+            : isCIEnvironment ? ReportedTelemetryMode.CI : ReportedTelemetryMode.Local;
+        AppContext.SetSwitch(PersistOnForceFlushSwitchName, mode != ReportedTelemetryMode.CI);
+        AppContext.SetSwitch(DisablePersistOnShutdownSwitchName, mode == ReportedTelemetryMode.CI);
+        AppContext.SetData(ShutdownDrainBudgetKey, 0);
+        return mode;
     }
 
     /// <summary>
@@ -374,7 +379,7 @@ internal sealed class TelemetryManager : IDisposable
     /// <summary>
     /// Shuts down initialized telemetry providers, or returns false when initialization was skipped.
     /// </summary>
-    public Task<bool> TryShutdownAsync()
+    public Task<bool> TryShutdownAsync(int exitCode, ReportedTelemetryMode mode)
     {
         lock (_lifecycleLock)
         {
@@ -397,24 +402,54 @@ internal sealed class TelemetryManager : IDisposable
             {
                 // Flush signals independently so adding log export does not extend the exit budget.
                 await Task.WhenAll(
-                    Task.Run(() => profilingProvider?.Shutdown(ShutDownTimeoutMilliseconds)),
-                    Task.Run(() => debugDiagnosticProvider?.Shutdown(ShutDownTimeoutMilliseconds)),
-                    ShutdownReportedProviderAsync(azureMonitorProvider)).ConfigureAwait(false);
+                    Task.Run(() => profilingProvider?.Shutdown(DiagnosticShutdownTimeoutMilliseconds)),
+                    Task.Run(() => debugDiagnosticProvider?.Shutdown(DiagnosticShutdownTimeoutMilliseconds)),
+                    ShutdownReportedProviderAsync(azureMonitorProvider, exitCode, mode)).ConfigureAwait(false);
                 return true;
             });
             return _shutdownTask;
         }
     }
 
-    private async Task ShutdownReportedProviderAsync(AzureMonitorTelemetryProvider? provider)
+    private async Task ShutdownReportedProviderAsync(AzureMonitorTelemetryProvider? provider, int exitCode, ReportedTelemetryMode mode)
     {
         using (provider)
         {
-            if (provider is not null && !await provider.ShutdownAsync(ShutDownTimeoutMilliseconds).ConfigureAwait(false))
+            if (provider is null)
             {
-                _logger.LogWarning("Timed out flushing CLI reported telemetry.");
+                return;
+            }
+
+            var isLocalFailure = mode == ReportedTelemetryMode.Local &&
+                exitCode is not (CliExitCodes.Success or CliExitCodes.Cancelled);
+            var timeout = mode == ReportedTelemetryMode.CI ? ReportedCIShutdownTimeoutMilliseconds
+                : isLocalFailure ? ReportedFailureShutdownTimeoutMilliseconds : Timeout.Infinite;
+            var previousDrainBudget = AppContext.GetData(ShutdownDrainBudgetKey);
+            if (isLocalFailure)
+            {
+                // Match the SDK's initial failure budget: persistence consumes part of this window,
+                // and any remaining time allows an upload attempt. This is not a delivery guarantee.
+                // https://github.com/dotnet/sdk/pull/56274
+                AppContext.SetData(ShutdownDrainBudgetKey, ReportedFailureShutdownTimeoutMilliseconds);
+            }
+            try
+            {
+                // An infinite provider timeout lets local queue persistence finish; the zero drain
+                // budget configured at startup still prevents waiting for network delivery.
+                if (!await provider.ShutdownAsync(timeout).ConfigureAwait(false))
+                {
+                    _logger.LogWarning("Timed out shutting down CLI reported telemetry.");
+                }
+            }
+            finally
+            {
+                if (isLocalFailure)
+                {
+                    AppContext.SetData(ShutdownDrainBudgetKey, previousDrainBudget);
+                }
             }
         }
+
     }
 
     public void Dispose()
@@ -443,4 +478,11 @@ internal sealed class TelemetryManager : IDisposable
         ShuttingDown,
         Disposed
     }
+}
+
+internal enum ReportedTelemetryMode
+{
+    Local,
+    CI,
+    Agent
 }

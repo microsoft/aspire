@@ -55,6 +55,9 @@ internal static class AspireTelemetryExporter
         options.EnableLiveMetrics = false;
         options.EnableStandardMetrics = false;
         options.EnablePerformanceCounters = false;
+        // Product usage/error events must be reported regardless of ambient trace sampling.
+        options.EnableTraceBasedLogsSampler = false;
+        options.Retry.NetworkTimeout = TimeSpan.FromSeconds(5);
         // These options do not disable Statsbeat's separate hosting metadata collection/export.
         // TODO: Disable Statsbeat for product exporters when a public per-exporter API is available,
         // without changing process-wide environment variables: https://github.com/Azure/azure-sdk-for-net/issues/63651.

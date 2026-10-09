@@ -132,18 +132,29 @@ Azure Monitor exporter 1.9 caches its transmitter by connection string. Each pro
 
 Both signals use the Azure Monitor exporter registration extensions so their exporter-specific batch processors honor shutdown persistence and the process-level `PersistOnForceFlush` switch. A generic OpenTelemetry batch processor around an Azure Monitor exporter does not provide this persistence behavior.
 
+Trace-based log sampling is explicitly disabled: product usage and error logs are not dropped when an ambient activity is unsampled.
+
 The Azure exporter owns batching, disk storage, retries, retention, and cross-process leases. Buffering and storage are best effort: abrupt termination, storage limits, filesystem failures, and ingestion errors can prevent delivery.
 
 `AzureMonitorTelemetryProvider` owns the tracer provider, log provider, and private logging services. Force flush and shutdown run concurrently for traces and logs and combine their success results. Shutdown is idempotent and waits for in-flight force flushes before shutting down either provider. Disposal releases the product providers without disposing the application's logger factory.
 
-| Operation | SDK timeout per provider |
-| --- | --- |
-| Dashboard shutdown | 5,000 ms |
-| CLI reported force flush | 3,000 ms |
-| CLI normal shutdown, Release | 200 ms |
-| CLI normal shutdown, DEBUG | No timeout |
+| Operation | SDK timeout per provider | Product delivery policy |
+| --- | --- | --- |
+| Dashboard shutdown | 5,000 ms | Persist first, then use the exporter's default two-second drain opportunity within the remaining shutdown budget. |
+| CLI local success or user cancellation | No timeout | Finish queue persistence without waiting for ingestion; shutdown drain budget is zero. |
+| CLI local failure | 300 ms | Persist first, then spend any remaining provider budget on an upload attempt. Persistence consumes part of the same budget. |
+| CLI CI shutdown | 5,000 ms | Attempt delivery rather than relying on later replay from a disposable runner. |
+| CLI agent reported force flush | 3,000 ms | Persist before starting the uploader, without waiting for ingestion. |
+| CLI agent shutdown, including CI hooks | No timeout | Finish persistence without an ingestion wait; retain the hook's fast eventual-delivery contract. |
+| CLI profiling/diagnostic shutdown | 200 ms in Release; no timeout in DEBUG | Independent of Azure Monitor product policy. Explicit profile capture retains its separate five-second OTLP force flush. |
+
+Both product exporters use a five-second network timeout. The CLI configures process-wide exporter switches once before provider initialization, using the existing process-environment CI detector. Local and agent invocations enable persistence on shutdown and reported force flush. Ordinary CI invocations disable persist-first shutdown and use network-backed force flush. Agent mode takes precedence over CI detection so every agent tool call does not incur a CI delivery wait.
+
+CLI shutdown receives the final command result; cancellation is distinct from failure. Its initial 300 ms failure budget follows the .NET SDK policy, not a measured Aspire delivery threshold. The failure drain override is restored after both signals finish. Debug and Release use the same product-telemetry policy.
 
 These are SDK operation timeouts, not guarantees of total wall-clock shutdown time or successful ingestion. Pending force flushes and disposal can add time. Managers log a local warning when reported-provider shutdown times out.
+
+Dashboard shutdown retains its service-style policy, even when the host's cancellation token is already cancelled: cancelling an await would not stop the synchronous SDK drain. The manager completes bounded shutdown and disposal. A terminated process or discarded container filesystem can still lose pending telemetry; replay requires surviving storage and an accessible exporter partition. Storage failures can cause network fallback, so zero drain does not guarantee a network-free exit when persistence is unavailable.
 
 ## Agent usage telemetry
 
