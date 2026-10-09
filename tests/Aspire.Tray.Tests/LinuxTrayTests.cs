@@ -57,6 +57,23 @@ public class LinuxTrayTests
     }
 
     [Fact]
+    public void EmptyAppHostShowsNoResourcesWithANeutralIcon()
+    {
+        var host = new AppHostMenuItem(new(Path.GetFullPath("apphost.cs"), 1, 2),
+            "Example", "PID 1", "Example", true, true, false, null) { Health = AppHostHealth.NoResources };
+        var row = LinuxTrayMenu.Build(new(DiscoveryState.Live, [host], ""), true, false)[0];
+
+        Assert.Equal("Example - No resources", row.Label);
+        Assert.Equal(LinuxTrayIcon.Unknown, row.Icon);
+        Assert.Equal("No resources", row.Children![^2].Label);
+        Assert.Equal("Example - Stopped",
+            LinuxTrayMenu.Build(new(DiscoveryState.Live, [host with { IsRunning = false }], ""), true, false)[0].Label);
+        Assert.Equal("Example - Discovery unavailable",
+            LinuxTrayMenu.Build(new(DiscoveryState.Disconnected, [host], ""), true, false)
+                .Single(item => item.Host == host).Label);
+    }
+
+    [Fact]
     public void OfflinePinsHaveExplicitStartAndDisconnectedActionsStayDisabled()
     {
         var host = new AppHostMenuItem(new(Path.GetFullPath("apphost.cs"), 0, null),

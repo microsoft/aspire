@@ -303,6 +303,7 @@ internal sealed unsafe partial class TrayApplication
         NativeSmokeHarness.Require(GetMenuStatusText(host, true) == "Running - all resources healthy"
             && GetMenuStatusText(host with { Health = AppHostHealth.Warning }, true) == "Running - resources need attention"
             && GetMenuStatusText(host with { Health = AppHostHealth.Unhealthy }, true) == "Running - unhealthy resources"
+            && GetMenuStatusText(host with { Health = AppHostHealth.NoResources }, true) == "Running - no resources"
             && GetMenuStatusText(host with { Health = AppHostHealth.Unknown }, true) == "Running - resource health unknown",
             "AppHost menus must expose resource health in text as well as color.");
         NativeSmokeHarness.Require(GetMenuStatusText(host with { IsStarting = true }, true) == "Starting AppHost..."
@@ -317,6 +318,7 @@ internal sealed unsafe partial class TrayApplication
             (AppHostHealth.Healthy, MenuStatus.Healthy),
             (AppHostHealth.Warning, MenuStatus.Warning),
             (AppHostHealth.Unhealthy, MenuStatus.Unhealthy),
+            (AppHostHealth.NoResources, MenuStatus.Unknown),
             (AppHostHealth.Unknown, MenuStatus.Unknown)
         })
         {

@@ -21,6 +21,12 @@ repository build, analyzer, versioning, and test infrastructure. Shared code is
 source-linked into each executable; no separate UI framework or shared runtime
 assembly is deployed.
 
+An AppHost with a successfully loaded resource snapshot containing no visible
+resources shows **No resources**, rather than unknown health. Unknown health
+remains reserved for unavailable health data or resources without applicable
+aggregate health. An empty `appHosts` discovery snapshot means no AppHosts were
+discovered, not that a running AppHost has no resources.
+
 ## Try the bundled companion
 
 The native CLI bundle includes `tray/Aspire Tray.app` on macOS,

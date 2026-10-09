@@ -218,6 +218,7 @@ internal sealed unsafe partial class TrayApplication
         { Health: AppHostHealth.Healthy } => "Running - all resources healthy",
         { Health: AppHostHealth.Warning } => "Running - resources need attention",
         { Health: AppHostHealth.Unhealthy } => "Running - unhealthy resources",
+        { Health: AppHostHealth.NoResources } => "Running - no resources",
         _ => "Running - resource health unknown"
     };
 

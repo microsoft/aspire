@@ -103,6 +103,7 @@ internal static class LinuxTrayMenu
                 AppHostHealth.Healthy => "Healthy",
                 AppHostHealth.Warning => "Waiting / degraded",
                 AppHostHealth.Unhealthy => "Unhealthy",
+                AppHostHealth.NoResources => "No resources",
                 _ => "Health unknown"
             };
 }
