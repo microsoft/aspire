@@ -11,11 +11,11 @@ on:
   # or steal any secrets you use in your workflow. This event allows your workflow to do things
   # like label or comment on pull requests from forks.
   #
-  # Predict area labels when pull requests are first opened. Assignment events keep the
-  # needs-assignee label on Copilot-authored pull requests in sync.
+  # Predict area labels when pull requests are first opened. Assignment and lifecycle events
+  # keep the needs-assignee label on Copilot-authored pull requests in sync.
   pull_request_target:
     # zizmor: ignore[dangerous-triggers] - the workflow uses base-controlled actions and never executes pull request code
-    types: [opened, assigned, unassigned]
+    types: [opened, reopened, closed, assigned, unassigned]
 
     # Configure the branches that need to have PRs labeled
     branches:
@@ -61,8 +61,9 @@ jobs:
       - name: "Checkout label script"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # This pull_request_target job has write permissions, so never check out the pull request head.
-          ref: ${{ github.event.pull_request.base.sha }}
+          # pull_request_target sources the workflow from the default branch. Use the matching
+          # trusted event SHA so release-targeted pull requests can load this helper too.
+          ref: ${{ github.sha }}
           sparse-checkout: .github/workflows/labeler-predict-pulls.js
           sparse-checkout-cone-mode: false
           persist-credentials: false
