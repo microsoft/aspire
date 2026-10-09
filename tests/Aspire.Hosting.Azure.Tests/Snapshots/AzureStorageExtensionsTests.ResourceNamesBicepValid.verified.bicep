@@ -1,7 +1,7 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource storage 'Microsoft.Storage/storageAccounts@2025-06-01' = {
   name: take('storage${uniqueString(resourceGroup().id)}', 24)
   kind: 'StorageV2'
   location: location
@@ -22,22 +22,22 @@ resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   }
 }
 
-resource blobs 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' = {
+resource blobs 'Microsoft.Storage/storageAccounts/blobServices@2025-06-01' = {
   name: 'default'
   parent: storage
 }
 
-resource myContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+resource myContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-06-01' = {
   name: 'my-blob-container'
   parent: blobs
 }
 
-resource queues 'Microsoft.Storage/storageAccounts/queueServices@2024-01-01' = {
+resource queues 'Microsoft.Storage/storageAccounts/queueServices@2025-06-01' = {
   name: 'default'
   parent: storage
 }
 
-resource myqueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2024-01-01' = {
+resource myqueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2025-06-01' = {
   name: 'my-queue'
   parent: queues
 }
