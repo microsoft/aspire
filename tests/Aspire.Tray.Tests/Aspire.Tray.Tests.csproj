@@ -8,6 +8,7 @@
     <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="System.IO.Hashing" />
+    <PackageReference Include="Verify.XunitV3" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Common/*.cs" Link="Common/%(Filename)%(Extension)" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Mac/SingleInstance.cs" Link="Mac/SingleInstance.cs" />
     <Compile Include="$(RepoRoot)src/Aspire.Tray/Mac/MacTrayLog.cs" Link="Mac/MacTrayLog.cs" />
@@ -20,7 +21,12 @@
     <Compile Include="$(SharedDir)HeldFileLease.cs" Link="Shared/HeldFileLease.cs" />
     <Compile Include="$(SharedDir)DirectoryHelper.cs" Link="Shared/DirectoryHelper.cs" />
     <Compile Include="$(SharedDir)TrayCliProtocol.cs" Link="Shared/TrayCliProtocol.cs" />
+    <Compile Include="$(SharedDir)LinuxTrayPayload.cs" Link="Shared/LinuxTrayPayload.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayMenu.cs" Link="Linux/LinuxTrayMenu.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayStartupSettings.cs" Link="Linux/LinuxTrayStartupSettings.cs" />
+    <Compile Include="$(RepoRoot)src/Aspire.Tray/Linux/LinuxTrayRuntime.cs" Link="Linux/LinuxTrayRuntime.cs" />
     <Compile Include="$(RepoRoot)tests/Shared/WindowsTrayTestPayload.cs" Link="Shared/WindowsTrayTestPayload.cs" />
+    <Compile Include="$(RepoRoot)tests/Shared/LinuxTrayTestPayload.cs" Link="Shared/LinuxTrayTestPayload.cs" />
     <Using Include="Xunit" />
     <Content Include="$(RepoRoot)tools/CreateLayout/verify-tray-payload.sh" Link="verify-tray-payload.sh" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

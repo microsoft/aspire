@@ -6,7 +6,7 @@
 
     This project:
     1. Publishes Aspire.Managed as self-contained and the Dashboard with Native AOT
-    2. Publishes the native Windows/macOS tray (even with SkipNativeBuild=true)
+    2. Publishes the native desktop tray (even with SkipNativeBuild=true)
     3. Restores DCP package
     4. Runs CreateLayout to assemble the bundle
     5. Publishes native CLI with the embedded payload (unless SkipNativeBuild=true)
@@ -17,6 +17,7 @@
     - SkipTrayBuild=true: Use a pre-built native tray (required after official signing)
     - TrayAppPath: Override the pre-built macOS app directory
     - WindowsTrayPath: Override the pre-built Windows tray publish directory
+    - LinuxTrayPath: Override the pre-built glibc Linux tray publish directory
     - CliPublishDir: Override the final native CLI publish directory (e.g. for isolated local validation)
     - BundleVersion: Version string for the bundle (auto-computed in CI if not set)
   -->
@@ -50,6 +51,8 @@
     <TrayAppPath Condition="'$(TrayAppPath)' == ''">$(ArtifactsDir)bin\Aspire.Tray.Mac\$(Configuration)\net10.0\$(TargetRid)\app\Aspire Tray.app</TrayAppPath>
     <WindowsTrayProjectPath>$(RepoRoot)src\Aspire.Tray\Windows\Aspire.Tray.Windows.csproj</WindowsTrayProjectPath>
     <WindowsTrayPath Condition="'$(WindowsTrayPath)' == ''">$(ArtifactsDir)bin\Aspire.Tray.Windows\$(Configuration)\net10.0\$(TargetRid)\publish</WindowsTrayPath>
+    <LinuxTrayProjectPath>$(RepoRoot)src\Aspire.Tray\Linux\Aspire.Tray.Linux.csproj</LinuxTrayProjectPath>
+    <LinuxTrayPath Condition="'$(LinuxTrayPath)' == ''">$(ArtifactsDir)bin\Aspire.Tray.Linux\$(Configuration)\net10.0\$(TargetRid)\publish</LinuxTrayPath>
     <RequireWindowsTraySignature Condition="'$(RequireWindowsTraySignature)' == ''">false</RequireWindowsTraySignature>
     <RequireMacTraySignature Condition="'$(RequireMacTraySignature)' == ''">false</RequireMacTraySignature>
 
@@ -123,7 +126,7 @@
 
   <!-- SkipNativeBuild skips the outer CLI publish, not native payload components.
        Official builds publish/sign the app first, then reuse it with SkipTrayBuild. -->
-  <Target Name="_PublishNativeTray" Condition="($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-'))) and '$(SkipTrayBuild)' != 'true'">
+  <Target Name="_PublishNativeTray" Condition="($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-')) or '$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64') and '$(SkipTrayBuild)' != 'true'">
     <PropertyGroup>
       <_TrayBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishTray.binlog</_TrayBinlog>
     </PropertyGroup>
@@ -134,6 +137,7 @@
     <Message Importance="high" Text="Publishing native tray for $(TargetRid)..." />
     <Exec Condition="$(TargetRid.StartsWith('osx-'))" Command="dotnet publish &quot;$(TrayProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:TrayAppPath=&quot;$(TrayAppPath)&quot; $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_TrayBinlog)" />
     <Exec Condition="$(TargetRid.StartsWith('win-'))" Command="dotnet publish &quot;$(WindowsTrayProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained --output &quot;$(WindowsTrayPath)&quot; $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_TrayBinlog)" />
+    <Exec Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'" Command="dotnet publish &quot;$(LinuxTrayProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained --output &quot;$(LinuxTrayPath)&quot; $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_TrayBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">
@@ -171,6 +175,7 @@
       <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --configuration $(Configuration) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
       <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('osx-'))">$(_CreateLayoutArgs) --tray-app "$(TrayAppPath)"</_CreateLayoutArgs>
       <_CreateLayoutArgs Condition="$(TargetRid.StartsWith('win-'))">$(_CreateLayoutArgs) --tray-windows "$(WindowsTrayPath)"</_CreateLayoutArgs>
+      <_CreateLayoutArgs Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'">$(_CreateLayoutArgs) --tray-linux "$(LinuxTrayPath)"</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout..." />
@@ -185,6 +190,10 @@
 
   <Target Name="_VerifyWindowsTrayArchive" AfterTargets="_RunCreateLayout" Condition="$(TargetRid.StartsWith('win-'))">
     <Exec Command="pwsh -NoProfile -File &quot;$(RepoRoot)tools/CreateLayout/verify-windows-tray-payload.ps1&quot; -Archive &quot;$(ArtifactsDir)bundle/aspire-$(BundleVersion)-$(TargetRid).tar.gz&quot; -Rid &quot;$(TargetRid)&quot; -RequireSignature $(RequireWindowsTraySignature)" />
+  </Target>
+
+  <Target Name="_VerifyLinuxTrayArchive" AfterTargets="_RunCreateLayout" Condition="'$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64'">
+    <Exec Command="bash &quot;$(RepoRoot)tools/CreateLayout/verify-linux-tray-payload.sh&quot; &quot;$(ArtifactsDir)bundle/aspire-$(BundleVersion)-$(TargetRid).tar.gz&quot; &quot;$(TargetRid)&quot;" />
   </Target>
 
 </Project>

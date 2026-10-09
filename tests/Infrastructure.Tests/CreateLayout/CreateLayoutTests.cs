@@ -15,7 +15,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     public void FindPublishPath_UsesOnlyRequestedConfiguration(string configuration, string otherConfiguration)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", configuration, "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", configuration, "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
         var expectedPaths = GetPublishPaths(workspace.Path, configuration);
 
         foreach (var path in expectedPaths.Concat(GetPublishPaths(workspace.Path, otherConfiguration)))
@@ -36,7 +36,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     public void FindPublishPath_RequireRidSpecific_IgnoresNonRidPublish()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
         var nonRidPath = GetPublishPaths(workspace.Path, "Debug")[^1];
         Directory.CreateDirectory(nonRidPath);
 
@@ -100,7 +100,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
 
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         builder.CopyDashboard();
 
@@ -122,7 +122,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         var wwwrootPath = Path.Combine(publishPath, "wwwroot");
         Directory.Delete(wwwrootPath, recursive: true);
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -148,7 +148,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
 
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, "win-x64", "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 
@@ -178,7 +178,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
         }
 
         var outputPath = Path.Combine(workspace.Path, "layout");
-        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null);
+        using var builder = new LayoutBuilder(outputPath, workspace.Path, rid, "Debug", "1.0.0", verbose: false, trayAppPath: null, windowsTrayPath: null, linuxTrayPath: null);
 
         var exception = Assert.Throws<InvalidOperationException>(builder.CopyDashboard);
 

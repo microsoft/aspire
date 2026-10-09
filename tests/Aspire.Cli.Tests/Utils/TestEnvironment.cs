@@ -53,6 +53,9 @@ internal sealed class TestEnvironment : IEnvironment
     public static TestEnvironment CreateLinux(IReadOnlyDictionary<string, string?>? variables = null)
         => new(variables) { ReportRuntimeIdentifier = "linux-x64", ReportIsWindows = false, ReportIsLinux = true, ReportIsMacOS = false };
 
+    public static TestEnvironment CreateLinuxMusl()
+        => new() { ReportRuntimeIdentifier = "linux-musl-x64", ReportIsWindows = false, ReportIsLinux = true, ReportIsMacOS = false };
+
     public static TestEnvironment CreateMacOS(IReadOnlyDictionary<string, string?>? variables = null)
         => new(variables) { ReportRuntimeIdentifier = "osx-arm64", ReportIsWindows = false, ReportIsLinux = false, ReportIsMacOS = true };
 }

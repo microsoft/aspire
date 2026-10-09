@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</source>
-        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install a Windows or macOS Aspire bundle that includes the tray companion.</target>
+        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="new">The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the Windows or macOS tray companion (Experimental)</source>
-        <target state="new">Manage the Windows or macOS tray companion (Experimental)</target>
+        <source>Manage the desktop tray companion (Experimental)</source>
+        <target state="new">Manage the desktop tray companion (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
@@ -33,8 +33,8 @@
         <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
       </trans-unit>
       <trans-unit id="PayloadMissing">
-        <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="new">The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</target>
+        <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
+        <target state="new">The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
@@ -58,8 +58,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</source>
-        <target state="new">The experimental Aspire tray supports Windows and macOS x64/ARM64 installations. Linux is not supported.</target>
+        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <target state="new">The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</target>
         <note />
       </trans-unit>
     </body>

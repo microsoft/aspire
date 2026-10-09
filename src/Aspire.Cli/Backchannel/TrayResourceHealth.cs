@@ -13,6 +13,7 @@ internal static class TrayResourceHealth
     public static string? Aggregate(IEnumerable<ResourceSnapshot> resources)
     {
         string? aggregate = null;
+        var hasVisibleResources = false;
         foreach (var resource in resources)
         {
             if (ResourceSnapshotMapper.IsHiddenResource(resource))
@@ -20,6 +21,7 @@ internal static class TrayResourceHealth
                 continue;
             }
 
+            hasVisibleResources = true;
             var health = GetHealth(resource);
             if (health == "unhealthy")
             {
@@ -30,7 +32,9 @@ internal static class TrayResourceHealth
                 aggregate = health;
             }
         }
-        return aggregate;
+        // An empty successful snapshot is different from an unavailable health stream.
+        // Visible neutral resources still have no applicable aggregate health.
+        return hasVisibleResources ? aggregate : "no_resources";
     }
 
     private static string? GetHealth(ResourceSnapshot resource)

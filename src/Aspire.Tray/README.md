@@ -1,8 +1,10 @@
 # Aspire Tray
 
-An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS and Windows.
+An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS, Windows, and glibc Linux.
 It uses native AppKit status items on macOS and Win32 notification icons and menus
-on Windows through small platform interop layers. It does not require a Swift build
+on Windows through small platform interop layers. Linux uses GTK 3 and the system
+Ayatana AppIndicator (or compatible AppIndicator) library to export a
+StatusNotifierItem and D-Bus menus. It does not require a Swift build
 step, a WebView, a macOS .NET workload, Windows Forms, or an installed .NET runtime
 on the machine running the published app.
 
@@ -11,6 +13,7 @@ on the machine running the published app.
 - `src/Aspire.Tray/Common/`: shared protocol client, controller, and lifecycle code.
 - `src/Aspire.Tray/Mac/`: native AppKit frontend and macOS app packaging.
 - `src/Aspire.Tray/Windows/`: native Win32 frontend and Windows publishing.
+- `src/Aspire.Tray/Linux/`: native GTK/AppIndicator frontend.
 - `tests/Aspire.Tray.Tests/`: protocol, controller, and lifecycle tests in the normal test matrix.
 
 The platform projects and tests are included in `Aspire.slnx` and inherit the
@@ -18,10 +21,17 @@ repository build, analyzer, versioning, and test infrastructure. Shared code is
 source-linked into each executable; no separate UI framework or shared runtime
 assembly is deployed.
 
+An AppHost with a successfully loaded resource snapshot containing no visible
+resources shows **No resources**, rather than unknown health. Unknown health
+remains reserved for unavailable health data or resources without applicable
+aggregate health. An empty `appHosts` discovery snapshot means no AppHosts were
+discovered, not that a running AppHost has no resources.
+
 ## Try the bundled companion
 
-The native CLI bundle includes `tray/Aspire Tray.app` on macOS or
-`tray/aspire-tray.exe` and `tray/Aspire.ico` on Windows. No separate tray installer
+The native CLI bundle includes `tray/Aspire Tray.app` on macOS,
+`tray/aspire-tray.exe` and `tray/Aspire.ico` on Windows, or
+`tray/aspire-tray` and `tray/Aspire.png` on glibc Linux. No separate tray installer
 or private CLI installation is required:
 
 ```sh
@@ -33,7 +43,7 @@ aspire tray stop   # Quit the companion, not the AppHosts.
 Use a native CLI built from this branch. To try a PR build after its native
 archive job finishes, use [PR dogfooding](../../docs/dogfooding-pull-requests.md)
 in archive mode and invoke that PR's CLI explicitly, rather than an older
-`aspire` on PATH. Linux remains unsupported.
+`aspire` on PATH. Linux musl and headless sessions are unsupported.
 Managed development CLIs cannot start the bundled companion.
 
 Start extracts the payload into the CLI installation's versioned bundle layout.
@@ -71,6 +81,77 @@ log pathname. Symlinked log files or parent directories are rejected.
 Quit the tray using its original CLI or **Quit Aspire** before upgrading from an
 earlier preview. The state directory has been renamed; a still-running older
 preview uses a separate control endpoint and must be stopped before starting this build.
+
+## Linux desktop support
+
+The Linux frontend exports `org.kde.StatusNotifierItem` and
+`com.canonical.dbusmenu` through GTK 3 and the distribution's AppIndicator library.
+The panel renders the menu in its own theme. No custom GNOME extension, Plasma
+widget, bar configuration, or additional application runtime is installed.
+
+| Desktop | Requirement |
+| --- | --- |
+| KDE Plasma | A running system tray with StatusNotifierItem support |
+| GNOME | An enabled AppIndicator/KStatusNotifierItem extension; stock GNOME does not provide a tray watcher |
+| Waybar / Hyprland | Waybar's `tray` module enabled by the user |
+
+The graphical session must provide a session D-Bus, GTK 3, and
+`libayatana-appindicator3.so.1` or `libappindicator3.so.1`. For example, Debian
+and Ubuntu provide `libayatana-appindicator3-1`; Fedora provides
+`libayatana-appindicator-gtk3`. These are **host dependencies**, not bundled
+copies. The tray never installs packages or changes desktop/bar configuration.
+X11 and Wayland are handled by GTK; Linux musl and headless sessions are not supported.
+
+Menus expose health as colored dots (a gray square for stopped projects) and text
+(including unknown, waiting/degraded, and unhealthy). Documentation and Settings
+use desktop theme icons. Icons are exported through D-Bus menus, while text
+remains available on panel hosts that omit menu artwork. Menus include
+dashboard launch, confirmed exact-instance stop, explicit start for offline
+projects, pinning, recent history, folder and clipboard actions, and VS Code when
+`code` is on PATH. Opening a submenu never starts a project. The dashboard opens
+in the default browser, not inside the popup. GTK confirmations default to Cancel.
+Stopping the tray cancels open dialogs without accepting their actions or saving settings.
+Settings include stop confirmation, version information, and opt-in login startup.
+Some GNOME AppIndicator extension versions omit icons on submenu headers, so
+AppHost health remains text-only there even though the icon is exported.
+Unlike the macOS/Windows frontends, this initial Linux frontend has no custom
+connection-badge artwork, Settings keyboard shortcut, or additional editor discovery.
+
+Login startup writes only the owned
+`$XDG_CONFIG_HOME/autostart/dev.aspire.tray.desktop` file (default
+`~/.config/autostart`). It invokes the verified stable native CLI's `tray start`,
+not the extracted executable. Foreign or modified registrations are preserved.
+Quit does not disable login startup, and startup never starts an AppHost.
+
+The per-user control socket, persistent singleton lock, and private diagnostic
+log are under `~/.aspire/tray/runtime/`, independent of the invoking installation.
+Startup is acknowledged only after the GTK loop processes successful
+StatusNotifierWatcher registration and the GUI holds its bundle lease. Missing
+tray hosts fail with setup guidance rather than reporting an invisible tray as
+ready. The AppIndicator library re-registers after a watcher restart. Repeated
+start restores the existing item; stop shuts down only the tray and its discovery
+child. Settings/history use the shared Aspire configuration rules above.
+
+### Build and run on Linux
+
+After bootstrapping the repository SDK, publish on a matching Linux architecture:
+
+```bash
+dotnet publish src/Aspire.Tray/Linux/Aspire.Tray.Linux.csproj -c Release -r linux-x64
+```
+
+Use `linux-arm64` on ARM64. The native toolchain is required at build time, but
+GTK development headers and .NET desktop workloads are not. For a foreground
+development run, pass an absolute compatible Aspire CLI executable:
+
+```bash
+artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish/aspire-tray \
+    --cli /absolute/path/to/aspire
+```
+
+CI builds and verifies the Linux native payload and runs the shared unit tests.
+Native desktop interactions, including dialog focus/scaling and live
+GNOME/KDE/Waybar behavior, require manual validation.
 
 ## Build and run on macOS
 
@@ -483,7 +564,7 @@ consumers. See [CLI output formats](../../docs/specs/cli-output-formats.md).
 Restarting AppHosts, resource details, search, and automatic tray
 upgrade handoff are outside this POC. The companion's own projects remain
 workload-free and isolated from the product's managed build configuration, but
-the macOS and Windows native bundles build and ship them.
+the supported desktop native bundles build and ship them.
 
 The undocumented icon-placement recovery is not a supported macOS positioning
 API, and very long home-directory paths can exceed macOS's Unix socket path

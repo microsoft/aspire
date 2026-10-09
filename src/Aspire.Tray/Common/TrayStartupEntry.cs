@@ -3,6 +3,7 @@
 
 using System.Buffers.Binary;
 using System.Reflection.PortableExecutable;
+using Aspire.Shared;
 
 namespace Aspire.Tray;
 
@@ -13,7 +14,7 @@ internal static class TrayStartupEntry
 {
     internal const string Unavailable = "Launch at sign-in requires a verified stable native CLI installation. Start the tray from a script/PR-installed Aspire CLI; package-manager, unmanaged, and development paths cannot be registered automatically.";
 
-    internal static string? GetUnavailableReason(TrayOptions options, bool nativeFrontend, bool windows)
+    internal static string? GetUnavailableReason(TrayOptions options, bool nativeFrontend, bool windows, bool linux)
     {
         if (!nativeFrontend || options.SmokeSeconds is not null || options.StartupCliPath is not { } startup || options.BundleRoot is null
             || !Path.IsPathFullyQualified(startup) || !File.Exists(startup))
@@ -33,7 +34,7 @@ internal static class TrayStartupEntry
                 return "Launch at sign-in cannot use a CLI inside an extracted version bundle.";
             }
             if (!string.Equals(resolved, Resolve(options.CliPath), windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-                || !IsNativeExecutable(resolved, windows, requireGui: false))
+                || !(linux ? LinuxTrayPayload.IsNativeExecutable(resolved, machine: null) : IsNativeExecutable(resolved, windows, requireGui: false)))
             {
                 return Unavailable;
             }

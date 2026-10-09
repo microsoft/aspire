@@ -80,6 +80,7 @@
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="Aspire.Dashboard.exe" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-managed" CertificateName="Microsoft400" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-tray" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="Aspire.Dashboard" CertificateName="Microsoft400" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire" CertificateName="MacDeveloperHardenWithNotarization" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire-managed" CertificateName="MacDeveloperHardenWithNotarization" />
@@ -119,6 +120,7 @@
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Tray.Linux/**/publish/aspire-tray" />
     <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <!-- The whole macOS tray app is signed/notarized separately by
          eng/pipelines/SignTray.proj, without Arcade's extra ZIP wrapping. -->

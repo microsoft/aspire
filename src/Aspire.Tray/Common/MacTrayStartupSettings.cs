@@ -15,7 +15,7 @@ internal sealed class MacTrayStartupSettings(TrayOptions options, bool nativeFro
     internal const string Label = "dev.aspire.tray.login";
     internal const string FileName = Label + ".plist";
 
-    protected override string? UnavailableReason => TrayStartupEntry.GetUnavailableReason(options, nativeFrontend, windows: false);
+    protected override string? UnavailableReason => TrayStartupEntry.GetUnavailableReason(options, nativeFrontend, windows: false, linux: false);
 
     protected override string CreateRegistration() => Serialize(options.StartupCliPath!);
 

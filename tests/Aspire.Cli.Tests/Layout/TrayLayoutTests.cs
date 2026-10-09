@@ -30,7 +30,8 @@ public sealed class TrayLayoutTests(ITestOutputHelper output)
         File.WriteAllText(Path.Combine(components, "dashboard", BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), "");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(Path.Combine(components, "dcp")), "");
         var trayPath = Path.Combine(components, OperatingSystem.IsWindows()
-            ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
+            ? WindowsTrayPayload.ExecutablePath : OperatingSystem.IsLinux()
+                ? LinuxTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
         if (hasTray)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(trayPath)!);
@@ -56,6 +57,32 @@ public sealed class TrayLayoutTests(ITestOutputHelper output)
 
         Assert.Null(layout.Components.Tray);
         Assert.Null(layout.GetTrayPath());
+    }
+
+    [Theory]
+    [InlineData("linux-x64")]
+    [InlineData("linux-arm64")]
+    public async Task LinuxTrayPayloadSurvivesProductionExtraction(string rid)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Linux payload extraction restores Unix file permissions.");
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var source = Path.Combine(workspace.Path, "publish");
+        LinuxTrayTestPayload.Create(source, rid);
+        using var payload = new MemoryStream();
+        using (var gzip = new GZipStream(payload, CompressionMode.Compress, leaveOpen: true))
+        using (var writer = new TarWriter(gzip, leaveOpen: true))
+        {
+            foreach (var file in new[] { LinuxTrayPayload.ExecutableName, LinuxTrayPayload.IconName })
+            {
+                writer.WriteEntry(Path.Combine(source, file), $"{rid}/tray/{file}");
+            }
+        }
+        payload.Position = 0;
+        var extracted = Path.Combine(workspace.Path, "extracted");
+        await BundleService.ExtractPayloadAsync(payload, extracted, TestEnvironment.CreateLinux(), CancellationToken.None);
+        LinuxTrayPayload.Validate(Path.Combine(extracted, "tray"), rid);
+        Assert.Equal(["Aspire.png", "aspire-tray"],
+            Directory.GetFiles(Path.Combine(extracted, "tray")).Select(Path.GetFileName).Order(StringComparer.Ordinal));
     }
 
     [Theory]

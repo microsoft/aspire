@@ -106,7 +106,7 @@ jobs:
 
       - name: Build bundle payload archive
         # SkipNativeBuild skips only the outer CLI. Bundle.proj still publishes
-        # native tray payloads on Windows/macOS and verifies the actual archive.
+        # native desktop tray payloads and verifies the actual archive.
         run: >
           ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
           msbuild

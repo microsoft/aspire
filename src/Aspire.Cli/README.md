@@ -144,9 +144,9 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
-### Experimental macOS and Windows tray companion
+### Experimental desktop tray companion
 
-The native macOS and Windows CLI bundles include the experimental Aspire menu
+The native macOS, Windows, and glibc Linux CLI bundles include the experimental Aspire menu
 bar or system tray companion:
 
 ```bash
@@ -164,7 +164,8 @@ it prematurely. The command then reports the helper's result.
 
 The companion comes from the leased CLI bundle at
 `tray/Aspire Tray.app/Contents/MacOS/aspire-tray` on macOS, or
-`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows. Starting it passes the absolute
+`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows, or
+`tray/aspire-tray` alongside `tray/Aspire.png` on Linux. Starting it passes the absolute
 invoking CLI executable and the leased version directory; it never copies a
 private CLI, searches `PATH`, or falls back to a checkout-relative executable.
 The CLI holds its bundle lease until the helper exits, and the native GUI holds
@@ -172,11 +173,16 @@ its own lease for its lifetime. If readiness fails, the helper terminates and
 waits for its newly launched GUI process before releasing the launcher lease;
 an already-running companion is not terminated by a failed start.
 
-These commands are experimental and available on macOS and Windows (x64/ARM64).
+These commands are experimental and available on macOS, Windows, and glibc Linux (x64/ARM64).
 Starting the companion requires an interactive desktop and
 a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
 bundle or tray payload fails explicitly; install a platform-matching bundle containing the
 companion rather than using a standalone CLI binary.
+
+Linux additionally requires GTK 3, an Ayatana/compatible AppIndicator library,
+and a StatusNotifierItem-capable panel. GNOME needs an AppIndicator extension;
+Waybar needs its `tray` module enabled. Missing desktop support is reported rather
+than installed automatically. See [Linux desktop requirements](../Aspire.Tray/README.md#linux-desktop-support).
 
 Before upgrading from an older preview, quit its running companion using its
 **Quit** menu action. Preview single-instance identifiers have changed, so

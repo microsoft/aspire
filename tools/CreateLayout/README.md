@@ -1,6 +1,6 @@
 # CreateLayout Tool
 
-This tool creates the Aspire bundle layout for distribution. It assembles Aspire.Managed, the Native AOT Dashboard, DCP, and (on macOS and Windows) the native tray companion into a payload that the build embeds in the Native AOT Aspire CLI. The payload does not require a globally-installed .NET SDK or a separate shared runtime.
+This tool creates the Aspire bundle layout for distribution. It assembles Aspire.Managed, the Native AOT Dashboard, DCP, and (on macOS, Windows, and glibc Linux) the native tray companion into a payload that the build embeds in the Native AOT Aspire CLI. The payload does not require a globally-installed .NET SDK or a separate shared runtime.
 
 ## Purpose
 
@@ -9,7 +9,7 @@ The bundle layout enables polyglot app hosts (TypeScript, Python, Go, etc.) to u
 - **Aspire.Managed** - Self-contained executable containing the AppHost server and terminal host
 - **Dashboard** - Native AOT compiled Blazor-based monitoring UI, native dependencies, and static assets
 - **DCP** - Developer Control Plane (orchestrator)
-- **Tray** - Experimental native macOS or Windows companion
+- **Tray** - Experimental native macOS, Windows, or glibc Linux companion
 
 ## Prerequisites
 
@@ -23,6 +23,7 @@ Before running CreateLayout, you must:
   - When publishing with `PlatformName={rid}`, the path includes an additional `{rid}/` immediately after the project name. The bundle build uses this layout for the Dashboard.
 4. Restore the DCP NuGet package for the target RID. CreateLayout searches `NUGET_PACKAGES`, or the default NuGet package cache when that variable is not set.
 5. For macOS and Windows, publish and sign the matching native tray payload before assembling the layout. The app or executable is copied as-is; CreateLayout does not sign it.
+6. For glibc Linux, publish `src/Aspire.Tray/Linux/Aspire.Tray.Linux.csproj` for the matching RID. Only the executable and PNG icon are copied; GTK/AppIndicator remain host desktop dependencies.
 
 After the initial restore, the build scripts (`./build.sh -bundle` / `./build.cmd -bundle`) handle publishing components and restoring DCP automatically. See the troubleshooting commands below for manual publishing.
 
@@ -42,6 +43,7 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- [options]
 | `-c, --configuration <name>` | Build configuration of the published components, such as `Debug` or `Release`. Output from other configurations is not used. |
 | `--tray-app <path>` | Prepared macOS `.app` directory; required for macOS RIDs |
 | `--tray-windows <path>` | Prepared Windows directory containing `aspire-tray.exe` and `Aspire.ico`; required for Windows RIDs |
+| `--tray-linux <path>` | Prepared Linux directory containing `aspire-tray` and `Aspire.png`; required for `linux-x64` and `linux-arm64` |
 
 Unsupported runtime identifiers, including `win-x86`, are rejected before the output directory is changed.
 
@@ -62,6 +64,7 @@ dotnet run --project tools/CreateLayout/CreateLayout.csproj -- \
   --artifacts ./artifacts \
   --rid linux-x64 \
   --configuration Release \
+  --tray-linux ./artifacts/bin/Aspire.Tray.Linux/Release/net10.0/linux-x64/publish \
   --bundle-version 13.5.0 \
   --archive \
   --verbose
@@ -101,22 +104,22 @@ The tool creates the following layout:
 │   ├── <other non-symbol publish files>
 │   └── wwwroot/             # Dashboard static assets
 ├── dcp/                     # DCP binaries
-└── tray/                    # macOS app or Windows executable and icon
+└── tray/                    # macOS app or Windows/Linux executable and icon
 ```
 
-Linux layouts have no tray directory. The macOS app is copied as a complete bundle to preserve its resources and signature. Windows layout assembly validates the executable architecture against the requested RID and copies only the executable and icon.
+Linux musl layouts have no tray directory. The macOS app is copied as a complete bundle to preserve its resources and signature. Windows and glibc Linux layout assembly validate the executable architecture against the requested RID and copy only the executable and icon.
 
 ## How It Works
 
 1. **Copies aspire-managed** - Copies the self-contained AppHost server and terminal host executable
 2. **Copies Dashboard** - Copies the complete Native AOT Dashboard publish payload, including native libraries and `wwwroot` static assets, excluding `.pdb`, `.dbg`, and `.dSYM` debug symbols
-3. **Copies tray payload** - Copies the prepared macOS app or validated Windows executable and icon
+3. **Copies tray payload** - Copies the prepared macOS app or validated Windows/Linux executable and icon
 4. **Copies DCP** - Finds DCP binaries from NuGet package restore output
 5. **Creates Archive** - Optionally creates `aspire-{version}-{rid}.tar.gz` beside the output directory on all platforms, including Windows
 
 Dashboard packaging requires the executable, a nonempty `wwwroot/_framework/blazor.web.js`, and a nonempty SQLite native library for the target RID: `e_sqlite3.dll` on Windows, `libe_sqlite3.so` on Linux, or `libe_sqlite3.dylib` on macOS. CreateLayout fails before copying the Dashboard if any of these requirements is not met.
 
-`Bundle.proj` verifies the macOS or Windows tray in the resulting archive before CLI embedding. These checks validate payload structure, not native UI behavior or signing service readiness.
+`Bundle.proj` verifies the platform's tray in the resulting archive before CLI embedding. These checks validate payload structure, not native UI behavior or signing service readiness.
 
 ## Integration with Build Scripts
 

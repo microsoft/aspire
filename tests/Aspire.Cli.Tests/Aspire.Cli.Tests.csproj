@@ -63,6 +63,7 @@
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspaceGitExtensions.cs" Link="shared\TemporaryWorkspaceGitExtensions.cs" />
     <Compile Include="$(TestsSharedDir)WindowsTrayTestPayload.cs" Link="shared/WindowsTrayTestPayload.cs" />
+    <Compile Include="$(TestsSharedDir)LinuxTrayTestPayload.cs" Link="shared/LinuxTrayTestPayload.cs" />
     <Compile Include="$(TestsSharedDir)TestProcesses.cs" Link="shared\TestProcesses.cs" />
   </ItemGroup>
 

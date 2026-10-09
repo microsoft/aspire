@@ -18,10 +18,55 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     [Theory]
     [InlineData("linux-x64")]
     [InlineData("linux-arm64")]
-    public void LinuxLayoutsDoNotPackageTray(string rid)
+    public void LinuxLayoutsRequireExplicitNativePayload(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, "missing.app", "missing-windows");
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null, null);
+        Assert.Equal("The Linux bundle requires --tray-linux pointing to the pre-built native tray publish directory.",
+            Assert.Throws<InvalidOperationException>(builder.CopyTray).Message);
+    }
+
+    [Theory]
+    [InlineData("linux-x64")]
+    [InlineData("linux-arm64")]
+    [UnsupportedOSPlatform("windows")]
+    public async Task LinuxPayloadCopyAndArchivePreserveOnlyNativeRuntimeFiles(string rid)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Linux bundles preserve Unix modes.");
+        using var workspace = TemporaryWorkspace.Create(output);
+        var source = Path.Combine(workspace.Path, "publish");
+        LinuxTrayTestPayload.Create(source, rid);
+        File.WriteAllText(Path.Combine(source, "aspire-tray.dbg"), "symbols");
+        var layout = Path.Combine(workspace.Path, rid);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, null, source);
+        builder.CopyTray();
+        var archivePath = await builder.CreateArchiveAsync();
+        await using var archive = File.OpenRead(archivePath);
+        await using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        await using var tar = new TarReader(gzip);
+        List<string> names = [];
+        while (await tar.GetNextEntryAsync() is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                continue;
+            }
+            names.Add(entry.Name);
+            var original = Path.Combine(source, Path.GetFileName(entry.Name));
+            Assert.Equal(File.GetUnixFileMode(original), entry.Mode);
+            using var bytes = new MemoryStream();
+            await entry.DataStream!.CopyToAsync(bytes);
+            Assert.Equal(File.ReadAllBytes(original), bytes.ToArray());
+        }
+        Assert.Equal(new[] { $"{rid}/tray/Aspire.png", $"{rid}/tray/aspire-tray" }.Order(), names.Order());
+    }
+
+    [Theory]
+    [InlineData("linux-musl-x64")]
+    public void MuslLayoutsDoNotPackageTray(string rid)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, "missing.app", "missing-windows", "missing-linux");
 
         builder.CopyTray();
 
@@ -34,7 +79,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     public void MacLayoutRequiresExplicitTrayInput(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(output);
-        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null);
+        using var builder = new LayoutBuilder(workspace.Path, workspace.Path, rid, "Debug", "test", false, null, null, null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -51,7 +96,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         File.Delete(Path.Combine(source, missingFile));
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -66,7 +111,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var source = MacTrayTestPayload.Create(workspace.Path);
         File.SetUnixFileMode(Path.Combine(source, "Contents/MacOS/aspire-tray"), UnixFileMode.UserRead);
-        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null);
+        using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
 
         var error = Assert.Throws<InvalidOperationException>(builder.CopyTray);
 
@@ -82,7 +127,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var source = MacTrayTestPayload.Create(workspace.Path);
         var layout = Path.Combine(workspace.Path, "osx-arm64");
         var destination = Path.Combine(layout, "tray", "Aspire Tray.app");
-        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "Debug", "test", false, source, null);
+        using var builder = new LayoutBuilder(layout, workspace.Path, "osx-arm64", "Debug", "test", false, source, null, null);
 
         builder.CopyTray();
 
@@ -127,7 +172,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         var build = Target(project, "Build");
         var dependencies = build.Attribute("DependsOnTargets")!.Value.Split(';', StringSplitOptions.TrimEntries);
         Assert.True(Array.IndexOf(dependencies, "_PublishNativeTray") < Array.IndexOf(dependencies, "_RunCreateLayout"));
-        Assert.Equal("($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-'))) and '$(SkipTrayBuild)' != 'true'", Target(project, "_PublishNativeTray").Attribute("Condition")!.Value);
+        Assert.Equal("($(TargetRid.StartsWith('osx-')) or $(TargetRid.StartsWith('win-')) or '$(TargetRid)' == 'linux-x64' or '$(TargetRid)' == 'linux-arm64') and '$(SkipTrayBuild)' != 'true'", Target(project, "_PublishNativeTray").Attribute("Condition")!.Value);
         Assert.Equal("'$(SkipNativeBuild)' != 'true'", Target(project, "_PublishNativeCli").Attribute("Condition")!.Value);
         Assert.Contains("--tray-app \"$(TrayAppPath)\"", Target(project, "_RunCreateLayout").Value);
         Assert.Contains("--tray-windows \"$(WindowsTrayPath)\"", Target(project, "_RunCreateLayout").Value);
@@ -147,7 +192,8 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.Contains(restore.Elements("Exec"), exec => exec.Attribute("Command")!.Value.Contains("anchor apple generic", StringComparison.Ordinal));
 
         var signing = LoadProject("eng/Signing.props");
-        Assert.Equal([@"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe"],
+        Assert.Equal([@"$(ArtifactsBinDir)Aspire.Tray.Windows\**\publish\aspire-tray.exe",
+            "$(ArtifactsBinDir)Aspire.Tray.Linux/**/publish/aspire-tray"],
             signing.Descendants("ItemsToSign")
                 .Select(element => element.Attribute("Include")!.Value)
                 .Where(include => include.Contains("Aspire.Tray.", StringComparison.Ordinal)));
@@ -239,6 +285,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
     [Theory]
     [InlineData("Aspire.Tray.Mac", true)]
     [InlineData("Aspire.Tray.Windows", true)]
+    [InlineData("Aspire.Tray.Linux", true)]
     public void NativeTrayChangesSelectSharedAndPackagingTests(string project, bool bundled)
     {
         var selector = new TestSelector(
@@ -280,7 +327,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         WindowsTrayTestPayload.Create(source, rid);
         File.WriteAllText(Path.Combine(source, "smoke.stdout.log"), "not runtime content");
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source, null);
 
         builder.CopyTray();
 
@@ -329,7 +376,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         }
         using var builder = new LayoutBuilder(Path.Combine(workspace.Path, "layout"), workspace.Path,
             scenario == "unsupported-rid" ? "win-x86" : "win-x64", "Debug", "test", false, null,
-            scenario == "missing-input" ? null : source);
+            scenario == "missing-input" ? null : source, null);
 
         if (scenario == "missing-input")
         {
@@ -340,6 +387,19 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         {
             Assert.Throws<InvalidDataException>(builder.CopyTray);
         }
+    }
+
+    [Fact]
+    public void LinuxSigningIncludesPublishedTray()
+    {
+        var signing = LoadProject("eng/Signing.props");
+        var certificate = Assert.Single(signing.Descendants("FileSignInfo"),
+            element => element.Attribute("Include")?.Value == "aspire-tray");
+        Assert.Equal("Microsoft400", certificate.Attribute("CertificateName")!.Value);
+        Assert.Equal("$([System.OperatingSystem]::IsLinux())", certificate.Attribute("Condition")!.Value);
+        var input = Assert.Single(signing.Descendants("ItemsToSign"),
+            element => element.Attribute("Include")?.Value == "$(ArtifactsBinDir)Aspire.Tray.Linux/**/publish/aspire-tray");
+        Assert.Equal("$([System.OperatingSystem]::IsLinux())", input.Attribute("Condition")!.Value);
     }
 
     [Fact]
@@ -357,7 +417,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         Assert.All(verify.Elements("Exec"),
             exec => Assert.Contains("verify-windows-tray-payload.ps1", exec.Attribute("Command")!.Value));
         var pipeline = File.ReadAllText(Path.Combine(RepoRoot.Path, "eng/pipelines/templates/build_sign_native.yml"));
-        Assert.Contains("if in(parameters.agentOs, 'macos', 'windows')", pipeline);
+        Assert.Contains("if or(in(parameters.agentOs, 'macos', 'windows'), in(targetRid, 'linux-x64', 'linux-arm64'))", pipeline);
         Assert.Contains("/p:RequireWindowsTraySignature=${{ parameters.codeSign }}", pipeline);
         Assert.True(pipeline.IndexOf("/t:_PublishNativeTray", StringComparison.Ordinal) <
             pipeline.IndexOf("SignManaged.binlog", StringComparison.Ordinal));
@@ -429,7 +489,7 @@ public sealed class TrayBundleTests(ITestOutputHelper output)
         WindowsTrayTestPayload.Create(source, rid);
         File.Copy(Path.Combine(RepoRoot.Path, "src/Shared/Aspire.ico"), Path.Combine(source, "Aspire.ico"), overwrite: true);
         var layout = Path.Combine(workspace.Path, rid);
-        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source);
+        using var builder = new LayoutBuilder(layout, workspace.Path, rid, "Debug", "test", false, null, source, null);
         builder.CopyTray();
         var tray = Path.Combine(layout, "tray");
         switch (scenario)

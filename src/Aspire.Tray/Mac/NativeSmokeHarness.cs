@@ -601,6 +601,7 @@ internal sealed class NativeSmokeHarness
                 AppHostHealth.Healthy => "All resources healthy",
                 AppHostHealth.Warning => "Resources waiting or degraded",
                 AppHostHealth.Unhealthy => "Resources failed or unhealthy",
+                AppHostHealth.NoResources => "No resources",
                 _ => "Resource health unavailable"
             };
             Require(native.AccessibilityLabel == $"{row.DisplayName}, {healthDescription}, {row.Subtitle}, AppHost actions",
