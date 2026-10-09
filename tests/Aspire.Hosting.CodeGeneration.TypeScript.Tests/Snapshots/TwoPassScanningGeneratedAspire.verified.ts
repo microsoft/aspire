@@ -1,4 +1,4 @@
-// aspire.mts - Capability-based Aspire SDK
+﻿// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -1313,6 +1313,8 @@ export interface ResourceUrlAnnotation {
     displayText?: string | null;
     /** The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint. */
     endpoint?: EndpointReference;
+    /** Gets or sets the display order of the URL. Higher values mean sort higher in the list. */
+    displayOrder?: number | null;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
     displayLocation?: UrlDisplayLocation;
 }
@@ -2549,6 +2551,11 @@ export interface ContainerBuildOptionsCallbackContext {
     };
     /**
      * Gets or sets the output path for the container archive.
+     *
+     * For .NET SDK publishing, a non-existent path with any filename extension is an archive filename.
+     * End a directory path with the platform's directory separator to make directory intent explicit,
+     * especially when its name contains a period. Prefer an explicit archive filename to avoid ambiguity.
+     * Other container image builders may interpret this path as an output directory.
      * @experimental
      */
     outputPath: {
@@ -6624,41 +6631,27 @@ const LogFacadePromiseImpl = $aspireCreateFluentPromiseClass<LogFacade, LogFacad
 /** Provides contextual information for pipeline configuration callbacks. */
 export interface PipelineConfigurationContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the pipeline editor used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the pipeline editor used by polyglot callbacks. */
     pipeline(): PipelineEditorPromise;
-    /**
-     * Gets the logger facade used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the logger facade used by polyglot callbacks. */
     log(): LogFacadePromise;
     /**
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
-     * @experimental
      */
     getSteps(tag: string): Promise<PipelineStep[]>;
 }
 
 export interface PipelineConfigurationContextPromise extends PromiseLike<PipelineConfigurationContext> {
-    /**
-     * Gets the pipeline editor used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the pipeline editor used by polyglot callbacks. */
     pipeline(): PipelineEditorPromise;
-    /**
-     * Gets the logger facade used by polyglot callbacks.
-     * @experimental
-     */
+    /** Gets the logger facade used by polyglot callbacks. */
     log(): LogFacadePromise;
     /**
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
-     * @experimental
      */
     getSteps(tag: string): Promise<PipelineStep[]>;
 }
@@ -6700,7 +6693,6 @@ class PipelineConfigurationContextImpl implements PipelineConfigurationContext {
      * Gets all pipeline steps with the specified tag.
      * @param tag The tag to search for.
      * @returns A collection of steps that have the specified tag.
-     * @experimental
      */
     async getSteps(tag: string): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, tag };
@@ -6726,30 +6718,15 @@ const PipelineConfigurationContextPromiseImpl = $aspireCreateFluentPromiseClass<
 /** Provides contextual information and services for the pipeline execution process of a distributed application. */
 export interface PipelineContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations. */
     logger(): LoggerPromise;
-    /**
-     * Gets the cancellation token for the pipeline operation.
-     * @experimental
-     */
+    /** Gets the cancellation token for the pipeline operation. */
     cancellationToken: {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
@@ -6759,38 +6736,24 @@ export interface PipelineContext {
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
 
 export interface PipelineContextPromise extends PromiseLike<PipelineContext> {
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations. */
     logger(): LoggerPromise;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
@@ -6898,14 +6861,12 @@ export interface PipelineEditor {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
-     * @experimental
      */
     steps(): Promise<PipelineStep[]>;
     /**
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
-     * @experimental
      */
     stepsByTag(tag: string): Promise<PipelineStep[]>;
 }
@@ -6914,14 +6875,12 @@ export interface PipelineEditorPromise extends PromiseLike<PipelineEditor> {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
-     * @experimental
      */
     steps(): Promise<PipelineStep[]>;
     /**
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
-     * @experimental
      */
     stepsByTag(tag: string): Promise<PipelineStep[]>;
 }
@@ -6940,7 +6899,6 @@ class PipelineEditorImpl implements PipelineEditor {
     /**
      * Gets all configured pipeline steps.
      * @returns The configured pipeline steps.
-     * @experimental
      */
     async steps(): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
@@ -6954,7 +6912,6 @@ class PipelineEditorImpl implements PipelineEditor {
      * Gets all pipeline steps that have the specified tag.
      * @param tag The tag to search for.
      * @returns The matching pipeline steps.
-     * @experimental
      */
     async stepsByTag(tag: string): Promise<PipelineStep[]> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, tag };
@@ -6979,99 +6936,67 @@ const PipelineEditorPromiseImpl = $aspireCreateFluentPromiseClass<PipelineEditor
 /** Represents a step in the deployment pipeline. */
 export interface PipelineStep {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets or initializes the unique name of the step.
-     * @experimental
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
      * Gets or initializes the description of the step.
      *
      * The description provides human-readable context about what the step does,
      * helping users and tools understand the purpose of the step.
-     * @experimental
      */
     description(): Promise<string | null>;
-    /**
-     * Gets or initializes the list of step names that this step depends on.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that this step depends on. */
     dependsOnSteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
     requiredBySteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of tags that categorize this step.
-     * @experimental
-     */
+    /** Gets or initializes the list of tags that categorize this step. */
     tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
-     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise;
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
-     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise;
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
-     * @experimental
      */
     addTag(tag: string): PipelineStepPromise;
 }
 
 export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
-    /**
-     * Gets or initializes the unique name of the step.
-     * @experimental
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
      * Gets or initializes the description of the step.
      *
      * The description provides human-readable context about what the step does,
      * helping users and tools understand the purpose of the step.
-     * @experimental
      */
     description(): Promise<string | null>;
-    /**
-     * Gets or initializes the list of step names that this step depends on.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that this step depends on. */
     dependsOnSteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
-     * @experimental
-     */
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
     requiredBySteps(): Promise<AspireList<string>>;
-    /**
-     * Gets or initializes the list of tags that categorize this step.
-     * @experimental
-     */
+    /** Gets or initializes the list of tags that categorize this step. */
     tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
-     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise;
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
-     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise;
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
-     * @experimental
      */
     addTag(tag: string): PipelineStepPromise;
 }
@@ -7153,7 +7078,6 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
-     * @experimental
      */
     dependsOn(stepName: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._dependsOnInternal(stepName), this._client);
@@ -7172,7 +7096,6 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
      * @param stepName The name of the step that requires this step.
-     * @experimental
      */
     requiredBy(stepName: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._requiredByInternal(stepName), this._client);
@@ -7191,7 +7114,6 @@ class PipelineStepImpl implements PipelineStep {
     /**
      * Adds a tag to the step.
      * @param tag The tag to add.
-     * @experimental
      */
     addTag(tag: string): PipelineStepPromise {
         return new PipelineStepPromiseImpl(this._addTagInternal(tag), this._client);
@@ -7223,93 +7145,49 @@ const PipelineStepPromiseImpl = $aspireCreateFluentPromiseClass<PipelineStep, Pi
  */
 export interface PipelineStepContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the pipeline context shared across all steps.
-     * @experimental
-     */
+    /** Gets the pipeline context shared across all steps. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the publishing step associated with this specific step execution.
-     * @experimental
-     */
+    /** Gets the publishing step associated with this specific step execution. */
     reportingStep(): ReportingStepPromise;
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
     logger(): LoggerPromise;
-    /**
-     * Gets the cancellation token for the pipeline operation.
-     * @experimental
-     */
+    /** Gets the cancellation token for the pipeline operation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
 
 export interface PipelineStepContextPromise extends PromiseLike<PipelineStepContext> {
-    /**
-     * Gets the pipeline context shared across all steps.
-     * @experimental
-     */
+    /** Gets the pipeline context shared across all steps. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the publishing step associated with this specific step execution.
-     * @experimental
-     */
+    /** Gets the publishing step associated with this specific step execution. */
     reportingStep(): ReportingStepPromise;
-    /**
-     * Gets the distributed application model to be deployed.
-     * @experimental
-     */
+    /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
-    /**
-     * Gets the execution context for the distributed application.
-     * @experimental
-     */
+    /** Gets the execution context for the distributed application. */
     executionContext(): DistributedApplicationExecutionContextPromise;
-    /**
-     * Gets the service provider for dependency resolution.
-     * @experimental
-     */
+    /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
-     * @experimental
-     */
+    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
     logger(): LoggerPromise;
-    /**
-     * Gets the cancellation token for the pipeline operation.
-     * @experimental
-     */
+    /** Gets the cancellation token for the pipeline operation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
      * Pipeline steps can add key-value pairs to the summary to provide useful information
      * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
-     * @experimental
      */
     summary(): PipelineSummaryPromise;
 }
@@ -7436,28 +7314,16 @@ const PipelineStepContextPromiseImpl = $aspireCreateFluentPromiseClass<PipelineS
 /** Provides contextual information for creating pipeline steps from a {@link PipelineStepAnnotation}. */
 export interface PipelineStepFactoryContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the pipeline context that has the model and other properties.
-     * @experimental
-     */
+    /** Gets the pipeline context that has the model and other properties. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the resource that this factory is associated with.
-     * @experimental
-     */
+    /** Gets the resource that this factory is associated with. */
     resource(): ResourcePromise;
 }
 
 export interface PipelineStepFactoryContextPromise extends PromiseLike<PipelineStepFactoryContext> {
-    /**
-     * Gets the pipeline context that has the model and other properties.
-     * @experimental
-     */
+    /** Gets the pipeline context that has the model and other properties. */
     pipelineContext(): PipelineContextPromise;
-    /**
-     * Gets the resource that this factory is associated with.
-     * @experimental
-     */
+    /** Gets the resource that this factory is associated with. */
     resource(): ResourcePromise;
 }
 
@@ -7524,7 +7390,6 @@ export interface PipelineSummary {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
-     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise;
     /**
@@ -7540,7 +7405,6 @@ export interface PipelineSummaryPromise extends PromiseLike<PipelineSummary> {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
-     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise;
     /**
@@ -7587,7 +7451,6 @@ class PipelineSummaryImpl implements PipelineSummary {
      * Adds a key-value pair to the pipeline summary with a plain-text value.
      * @param key The key or label for the item (e.g., "Namespace", "URL").
      * @param value The plain-text value for the item.
-     * @experimental
      */
     add(key: string, value: string): PipelineSummaryPromise {
         return new PipelineSummaryPromiseImpl(this._addInternal(key, value), this._client);
@@ -9656,7 +9519,6 @@ export interface DistributedApplicationBuilder {
      *
      * The pipeline allows adding custom deployment steps that execute during the deploy process.
      * Steps can declare dependencies on other steps to control execution order.
-     * @experimental
      */
     pipeline(): DistributedApplicationPipelinePromise;
     /**
@@ -9664,7 +9526,6 @@ export interface DistributedApplicationBuilder {
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
-     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -9793,7 +9654,7 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @experimental
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -9889,7 +9750,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The pipeline allows adding custom deployment steps that execute during the deploy process.
      * Steps can declare dependencies on other steps to control execution order.
-     * @experimental
      */
     pipeline(): DistributedApplicationPipelinePromise;
     /**
@@ -9897,7 +9757,6 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      *
      * The `UserSecretsManager` provides a centralized way to manage user secrets
      * used by Aspire, enabling testability and consistent secret management.
-     * @experimental
      */
     userSecretsManager(): UserSecretsManagerPromise;
     /**
@@ -10026,7 +9885,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @experimental
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10537,7 +10396,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
-     * @experimental
+     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
@@ -10880,7 +10739,6 @@ export interface DistributedApplicationPipeline {
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
-     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
@@ -10905,7 +10763,6 @@ export interface DistributedApplicationPipelinePromise extends PromiseLike<Distr
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
-     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise;
     /**
@@ -10950,7 +10807,6 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
      * `PublishWithStaticFiles` when possible.
      * @returns The distributed application pipeline for chaining.
-     * @experimental
      */
     disableBuildOnlyContainerValidation(): DistributedApplicationPipelinePromise {
         return new DistributedApplicationPipelinePromiseImpl(this._disableBuildOnlyContainerValidationInternal(), this._client);
@@ -12757,20 +12613,15 @@ export interface UserSecretsManager {
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
-     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /**
-     * Gets the path to the user secrets file.
-     * @experimental
-     */
+    /** Gets the path to the user secrets file. */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12779,7 +12630,6 @@ export interface UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12802,20 +12652,15 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * Gets a value indicating whether user secrets are available.
      *
      * Returns `true` if the project has a user secrets ID configured; otherwise, `false`.
-     * @experimental
      */
     isAvailable(): Promise<boolean>;
-    /**
-     * Gets the path to the user secrets file.
-     * @experimental
-     */
+    /** Gets the path to the user secrets file. */
     filePath(): Promise<string>;
     /**
      * Attempts to set a user secret value synchronously.
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     trySetSecret(name: string, value: string): Promise<boolean>;
     /**
@@ -12824,7 +12669,6 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     tryDeleteSecret(name: string): Promise<boolean>;
     /**
@@ -12872,7 +12716,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * @param name The name of the secret.
      * @param value The value of the secret.
      * @returns True if the secret was set successfully; otherwise, false.
-     * @experimental
      */
     async trySetSecret(name: string, value: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name, value };
@@ -12888,7 +12731,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * The default implementation returns `false` so existing implementations remain compatible.
      * @param name The name of the secret.
      * @returns True if the secret was deleted successfully; otherwise, false.
-     * @experimental
      */
     async tryDeleteSecret(name: string): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, name };
@@ -13176,14 +13018,12 @@ export interface ContainerRegistryResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -13508,14 +13348,12 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise;
     /**
@@ -14345,7 +14183,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -14374,7 +14211,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -15606,7 +15442,6 @@ export interface ContainerResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -15671,14 +15506,12 @@ export interface ContainerResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -16439,7 +16272,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise;
     /**
@@ -16504,14 +16336,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise;
     /**
@@ -18553,7 +18383,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -18747,7 +18576,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -18776,7 +18604,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -19977,7 +19804,6 @@ export interface CSharpAppResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -20042,14 +19868,12 @@ export interface CSharpAppResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -20633,7 +20457,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise;
     /**
@@ -20698,14 +20521,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise;
     /**
@@ -22318,7 +22139,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -22512,7 +22332,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -22541,7 +22360,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -23772,7 +23590,6 @@ export interface DotnetToolResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -23837,14 +23654,12 @@ export interface DotnetToolResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -24456,7 +24271,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise;
     /**
@@ -24521,14 +24335,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise;
     /**
@@ -26231,7 +26043,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -26425,7 +26236,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -26454,7 +26264,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -27638,7 +27447,6 @@ export interface ExecutableResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -27703,14 +27511,12 @@ export interface ExecutableResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -28283,7 +28089,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise;
     /**
@@ -28348,14 +28153,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise;
     /**
@@ -29948,7 +29751,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -30142,7 +29944,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -30171,7 +29972,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -31118,14 +30918,12 @@ export interface ExternalServiceResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -31455,14 +31253,12 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise;
     /**
@@ -32316,7 +32112,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -32345,7 +32140,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -33179,14 +32973,12 @@ export interface ParameterResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -33524,14 +33316,12 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise;
     /**
@@ -34403,7 +34193,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -34432,7 +34221,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -35488,7 +35276,6 @@ export interface ProjectResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -35553,14 +35340,12 @@ export interface ProjectResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -36144,7 +35929,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise;
     /**
@@ -36209,14 +35993,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise;
     /**
@@ -37830,7 +37612,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -38024,7 +37805,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -38053,7 +37833,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -39428,7 +39207,6 @@ export interface TestDatabaseResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -39493,14 +39271,12 @@ export interface TestDatabaseResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -40261,7 +40037,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise;
     /**
@@ -40326,14 +40101,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise;
     /**
@@ -42374,7 +42147,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -42568,7 +42340,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -42597,7 +42368,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -43992,7 +43762,6 @@ export interface TestRedisResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -44057,14 +43826,12 @@ export interface TestRedisResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -44909,7 +44676,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise;
     /**
@@ -44974,14 +44740,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise;
     /**
@@ -47126,7 +46890,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -47320,7 +47083,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -47349,7 +47111,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -49021,7 +48782,6 @@ export interface TestVaultResource {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -49086,14 +48846,12 @@ export interface TestVaultResource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -49856,7 +49614,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise;
     /**
@@ -49921,14 +49678,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise;
     /**
@@ -51971,7 +51726,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -52165,7 +51919,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -52194,7 +51947,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -53461,14 +53213,12 @@ export interface Resource {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     /**
@@ -53793,14 +53543,12 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise;
     /**
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise;
     /**
@@ -54631,7 +54379,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param callback The callback to execute when the step runs.
      * @param options Additional options.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise {
         const dependsOn = options?.dependsOn;
@@ -54660,7 +54407,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
      * @param callback The callback function to execute during the configuration phase.
      * @returns The resource builder for chaining.
-     * @experimental
      */
     withPipelineConfiguration(callback: (obj: PipelineConfigurationContext) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._withPipelineConfigurationInternal(callback), this._client);
@@ -55711,7 +55457,6 @@ export interface ResourceWithEndpoints {
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -55813,7 +55558,6 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /**
@@ -56217,7 +55961,6 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     /**
      * Adds an HTTP health probe to the resource
      * @param options Additional options.
-     * @experimental
      */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise {
         const path = options?.path;

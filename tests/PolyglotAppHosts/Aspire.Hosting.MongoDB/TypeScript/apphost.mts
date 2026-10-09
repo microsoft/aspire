@@ -51,15 +51,25 @@ await mongoChained.addDatabase("analytics-db", { databaseName: "analytics" });
 await builder.addMongoDB("mongo-bind-all")
     .withBindIpAll();
 
-// Test 12: Test withReplicaSet with KeyFile and TLS configuration
-const keyFileParam = await builder.addParameter("rs-keyfile", { secret: true, value: "my-secret-key" });
-await builder.addMongoDB("mongo-rs-member")
-    .withReplicaSet("rs0")
+// Test 12: Initialize a single-member replica set with the resource name and a generated keyfile.
+await builder.addMongoDB("mongo-single")
+    .withReplicaSet()
+    .addDatabase("single-db");
+
+// Test 13: Initialize a single-member replica set with an explicit set name.
+await builder.addMongoDB("mongo-single-named")
+    .withReplicaSet({ name: "app-rs" })
+    .addDatabase("single-named-db");
+
+// Test 14: Supply a keyfile before initialization; TLS options are separate export coverage, not prerequisites.
+const keyFileParam = await builder.addParameter("rs-keyfile", { secret: true, value: "bW9uZ29kYmtleWZpbGUxMjM0" });
+await builder.addMongoDB("mongo-rs-configured")
     .withKeyFile(keyFileParam, { keyFilePath: "/etc/rs.key" })
+    .withReplicaSet({ name: "configured-rs" })
     .withTlsMode()
     .withTlsAllowInvalidCertificates();
 
-// Test 13: Test AddMongoDBReplicaSet with WithMember
+// Test 15: Advanced local multi-member experiments use plain servers, not withReplicaSet single-member sets.
 // NOTE: The members are not given a key file of their own here. withMember gives them the replica set's shared one,
 // and a member carrying a different key file is rejected.
 const mongo1 = await builder.addMongoDB("mongo-rs-1");

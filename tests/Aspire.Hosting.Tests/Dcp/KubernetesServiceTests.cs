@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService is for evaluation purposes only.
-
 using System.Globalization;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -165,6 +163,34 @@ public class KubernetesServiceTests
             await server.WaitForRequestCancellationAsync(cts.Token);
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchTask);
         }
+    }
+
+    [Fact]
+    public async Task WatchAsync_RemainsActiveBeyondApiRetryTimeout()
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            maxRetryDuration: TimeSpan.FromMilliseconds(100),
+            kubernetesInitializationTimeout: TimeSpan.FromMilliseconds(250));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+
+        await using var server = await TestDcpApiServer.StartAsync(cts.Token);
+        server.BlockWatchResponses();
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        await using var watchEnumerator = service.WatchAsync<Container>(cancellationToken: watchCts.Token).GetAsyncEnumerator();
+        var watchTask = watchEnumerator.MoveNextAsync().AsTask();
+        await server.WaitForWatchRequestAsync(cts.Token);
+
+        await server.WaitForWatchRequestCountAsync(2, cts.Token);
+        Assert.False(watchTask.IsCompleted);
+
+        watchCts.Cancel();
+        await server.WaitForRequestCancellationAsync(cts.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchTask);
     }
 
     // Verifies that establishing the connection survives a partially-written kubeconfig: when the file exists
@@ -403,6 +429,14 @@ public class KubernetesServiceTests
             return _responseState.WatchRequestArrived.Task.WaitAsync(cancellationToken);
         }
 
+        public async Task WaitForWatchRequestCountAsync(int expectedCount, CancellationToken cancellationToken)
+        {
+            while (Volatile.Read(ref _responseState.WatchRequestCount) < expectedCount)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(10), cancellationToken);
+            }
+        }
+
         public Task WaitForRequestCancellationAsync(CancellationToken cancellationToken)
         {
             return _responseState.RequestCancellationObserved.Task.WaitAsync(cancellationToken);
@@ -431,6 +465,7 @@ public class KubernetesServiceTests
                     && string.Equals(watchValues.ToString(), "true", StringComparison.OrdinalIgnoreCase);
                 if (isWatchRequest && Volatile.Read(ref responseState.BlockWatchResponses))
                 {
+                    Interlocked.Increment(ref responseState.WatchRequestCount);
                     responseState.WatchRequestArrived.TrySetResult(true);
                     try
                     {
@@ -487,6 +522,7 @@ public class KubernetesServiceTests
         {
             public bool BlockWatchResponses;
             public int RequestCount;
+            public int WatchRequestCount;
             public TaskCompletionSource<bool> RequestCancellationObserved { get; } =
                 new(TaskCreationOptions.RunContinuationsAsynchronously);
             public long ResponseDelayTicks;

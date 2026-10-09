@@ -4,7 +4,7 @@
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed")" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+<div class="layout @(_isNavMenuExpanded ? "nav-expanded" : "nav-collapsed") @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
         @* Full-width top header. The Aspire logo leads the header so the logo, app name, and page
@@ -67,7 +67,7 @@
            toggle stays pinned to the bottom, matching the common sidebar pattern. Toggle state/persistence
            still lives in MainLayout. *@
         <div class="desktop-nav-rail">
-            <DesktopNavMenu/>
+            <DesktopNavMenu HasResourceTerminals="@_hasResourceTerminals"/>
             <FluentButton Class="nav-toggle-button nav-toggle-bottom"
                           Appearance="ButtonAppearance.Default" OnClick="@ToggleNavMenuExpandedAsync"
                           Title="@(_isNavMenuExpanded ? Loc[nameof(Layout.NavMenuToggleCollapse)] : Loc[nameof(Layout.NavMenuToggleExpand)])"
@@ -119,6 +119,7 @@
         </header>
 
         <MobileNavMenu
+            HasResourceTerminals="@_hasResourceTerminals"
             IsNavMenuOpen="_isNavMenuOpen"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
@@ -147,7 +148,18 @@
     <DashboardDialogProvider/>
     <FluentTooltipProvider />
     <InteractionsProvider />
+    @if (IsTerminalDockEnabled)
+    {
+        @* Removing the dock cancels its selected-run subscription and shortcut. Returning to the live run starts a
+           new subscription rather than reusing the stream chosen for a previous selection. *@
+        <TerminalDock @key="RunSelection.SelectedRun.RunId" />
+    }
     <ResourceServiceConnectionProvider />
+    @if (IsTerminalDockEnabled)
+    {
+        <ResourceTerminalsAvailabilityProvider @key="(typeof(ResourceTerminalsAvailabilityProvider), RunSelection.SelectedRun.RunId)"
+                                               AvailabilityChanged="@(available => _hasResourceTerminals = available)" />
+    }
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>

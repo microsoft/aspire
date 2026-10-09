@@ -7,7 +7,7 @@
         @* Render every highlighted-command position as a fixed-width slot: a button when the resource has a
            command at this index, otherwise an empty spacer of the same width. Buttons and spacers previously
            had different intrinsic widths (28px vs 32px), so any row that mixed them shifted the trailing
-           console-logs, divider, and overflow-menu controls out of column. Uniform slot widths keep every
+           output, divider, and overflow-menu controls out of column. Uniform slot widths keep every
            action icon aligned in the same column across all rows, regardless of how many highlighted commands
            a given resource exposes. *@
         @for (var i = 0; i < MaxHighlightedCount; i++)
@@ -25,12 +25,15 @@
         }
 
         <div class="resource-action-slot">
-            <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
-                <FluentIcon Value="@s_consoleLogsIcon" Width="16px" Color="Color.Primary" />
+            @{
+                var outputAction = ResourceMenuBuilder.CreateViewOutputMenuItem(Resource, ResourceByName);
+            }
+            <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Title="@outputAction.Text" OnClick="@(outputAction.OnClick!)">
+                <FluentIcon Value="@outputAction.Icon" Width="16px" Color="Color.Primary" />
             </FluentButton>
         </div>
 
-        <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <FluentDivider Class="action-divider" Orientation="Orientation.Vertical" />
     }
 
     <div class="resource-action-slot">

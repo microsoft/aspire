@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,7 @@ using MongoDB.Driver;
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREMONGODB001
+#pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
 
@@ -81,7 +83,8 @@ public static class MongoDBBuilderExtensions
                 name: healthCheckKey,
                 clientFactory: sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
                 // NOTE: Without a database as the target of the healthcheck, the healthcheck runs a `listDatabases` command against the Mongo server. This is problematic in cases where the Mongo server is a replica set secondary node, because during the phase in which the replica set is being initialized, the secondary node will return an error when `listDatabases` is called. To avoid this, we specify a database to use for the healthcheck. The healthcheck will then run a `ping` command against the specified database instead of `listDatabases`, which works even on a secondary node during replica set initialization.
-                databaseNameFactory: _ => mongoServerResource.Databases.Values.FirstOrDefault(defaultValue: MongoDBServerResource.DefaultAuthenticationDatabase)
+                databaseNameFactory: _ => mongoServerResource.Databases.Values.FirstOrDefault(defaultValue: MongoDBServerResource.DefaultAuthenticationDatabase),
+                singleMemberReplicaSetFactory: _ => mongoServerResource.TryGetLastAnnotation<MongoDBSingleMemberReplicaSetAnnotation>(out var replicaSet) ? replicaSet : null
             );
 
         var mongoBuilder = builder
@@ -108,6 +111,12 @@ public static class MongoDBBuilderExtensions
                 {
                     context.Arguments.Add("--tlsCAFile");
                     context.Arguments.Add(context.CertificateBundlePath);
+                    if (context.ExecutionContext.IsRunMode)
+                    {
+                        // docker/podman exec inherits this environment. mongosh needs an explicit CA bundle,
+                        // because Node.js does not use the OpenSSL certificate directories configured by Aspire.
+                        context.EnvironmentVariables["ASPIRE_MONGODB_REPL_CA_FILE"] = context.CertificateBundlePath;
+                    }
                 }
 
                 return Task.CompletedTask;
@@ -166,6 +175,79 @@ public static class MongoDBBuilderExtensions
         }
 
         return mongoBuilder;
+    }
+
+    /// <summary>
+    /// Adds a REPL command that opens an authenticated MongoDB shell in the dashboard terminal dock.
+    /// </summary>
+    /// <param name="builder">The MongoDB server resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="builder"/> is null.</exception>
+    /// <remarks>
+    /// This command is opt-in and available only in run mode. Dashboard users who can execute resource commands
+    /// can run commands with the resource's configured credentials. Enable it only for trusted dashboard users,
+    /// especially when sharing the dashboard through a tunnel or remote development environment.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddMongoDB("mongo").WithRepl();
+    /// </code>
+    /// </example>
+    [AspireExport]
+    public static IResourceBuilder<MongoDBServerResource> WithRepl(this IResourceBuilder<MongoDBServerResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithReplCommand(ct => CreateReplOptionsAsync(builder.Resource, ct));
+    }
+
+    /// <summary>
+    /// Creates the in-container MongoDB shell launch options.
+    /// </summary>
+    internal static async Task<TerminalLaunchOptions> CreateReplOptionsAsync(MongoDBServerResource resource, CancellationToken cancellationToken)
+    {
+        var port = resource.PrimaryEndpoint.TargetPort
+            ?? throw new DistributedApplicationException("The MongoDB REPL port is not available.");
+        var credentials = "";
+        if (resource.PasswordParameter is { } passwordParameter)
+        {
+            var username = await resource.UserNameReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var password = await passwordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                throw new DistributedApplicationException("The MongoDB REPL credentials are not available.");
+            }
+
+            credentials = $"{Uri.EscapeDataString(username)}:{Uri.EscapeDataString(password)}@";
+        }
+
+        // Connect directly over loopback even for replica set members: their advertised addresses can refer
+        // to host-side proxies. localhost also matches the developer certificate's subject alternative name.
+        var connectionString = $"mongodb://{credentials}localhost:{port.ToString(CultureInfo.InvariantCulture)}/admin?directConnection=true";
+        if (resource.PasswordParameter is not null)
+        {
+            connectionString += "&authSource=admin&authMechanism=SCRAM-SHA-256";
+        }
+
+        if (resource.TlsEnabled)
+        {
+            connectionString += "&tls=true";
+        }
+
+        return new TerminalLaunchOptions
+        {
+            Title = $"mongosh ({resource.Name})",
+            Executable = "mongosh",
+            // --nodb avoids connecting before the script can read credentials from the environment.
+            // --shell keeps the authenticated connection interactive after --eval completes.
+            // https://www.mongodb.com/docs/mongodb-shell/reference/options/
+            Arguments = ["--quiet", "--nodb", "--shell", "--eval", """
+                const uri = process.env.ASPIRE_MONGODB_REPL_CONNECTION_STRING;
+                const ca = process.env.ASPIRE_MONGODB_REPL_CA_FILE;
+                db = new Mongo(ca ? `${uri}&tlsCAFile=${encodeURIComponent(ca)}` : uri).getDB("admin");
+                """],
+            EnvironmentVariables = { ["ASPIRE_MONGODB_REPL_CONNECTION_STRING"] = connectionString }
+        };
     }
 
     /// <summary>
@@ -242,11 +324,38 @@ public static class MongoDBBuilderExtensions
             .WithImageRegistry(MongoDBContainerImageTags.MongoExpressRegistry)
             .WithIconName("WindowDatabase")
             .WithEnvironment(context => ConfigureMongoExpressContainer(context, builder.Resource))
-            .WithHttpEndpoint(targetPort: 8081, name: "http")
+            .WithHttpEndpoint(targetPort: 8081, name: MongoExpressContainerResource.PrimaryEndpointName)
             .WithParentRelationship(builder)
+            .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
+            // NOTE: Mongo Express lists collections as soon as it connects and exits if that fails. The image's entrypoint
+            // only waits for the TCP port, which a replica set member opens before it is initialized or elected primary,
+            // and the member rejects reads until then (`NotPrimaryNoSecondaryOk`). For single-member sets, the server's
+            // health check covers initialization and primary election.
+            .WaitFor(builder)
             .ExcludeFromManifest();
 
+        resourceBuilder.WithHidden();
+        builder.WithUrlForEndpoint(mongoExpressContainer.PrimaryEndpoint, url =>
+        {
+            url.DisplayText = "Manage";
+            url.DisplayOrder = 1;
+        });
+
         configureContainer?.Invoke(resourceBuilder);
+
+        builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, ct) =>
+        {
+            // WithMember can be called after WithMongoExpress. Resolve membership once the model is complete:
+            // advanced members' health checks only ping, so the companion must also wait for the set to be healthy.
+            var replicaSet = @event.Model.Resources.OfType<MongoDBReplicaSetResource>()
+                .SingleOrDefault(r => r.Members.Contains(builder.Resource));
+            if (replicaSet is not null)
+            {
+                resourceBuilder.WaitFor(builder.ApplicationBuilder.CreateResourceBuilder(replicaSet));
+            }
+
+            return Task.CompletedTask;
+        });
 
         return builder;
     }
@@ -369,32 +478,85 @@ public static class MongoDBBuilderExtensions
     }
 
     /// <summary>
-    /// Annotates a MongoDB server resource as a member of a replica set with the specified name. This will configure the necessary command line arguments on the MongoDB container to initialize it as a member of the replica set.
+    /// Configures and initializes the MongoDB server as a single-member replica set for local development.
     /// </summary>
     /// <remarks>
-    /// This method will normally be called by the replica set resource builder when you add a MongoDB server resource as a member of the replica set using <see cref="MongoDBReplicaSetBuilderExtensions.WithMember(IResourceBuilder{MongoDBReplicaSetResource}, IResourceBuilder{MongoDBServerResource})"/>. It can also be called directly if you are looking for lower-level control.
+    /// <para>
+    /// Enables transactions and change streams without changing database resources or references. The server becomes
+    /// healthy only after initialization and primary election. Connections use the server's normal endpoint directly;
+    /// a developer certificate, topology discovery, and fixed host ports are not required.
+    /// </para>
+    /// <para>
+    /// A key file is generated for authentication unless <see cref="WithKeyFile"/> was called first.
+    /// Existing single-member data is reused without reconfiguration. Keep the set name and credentials unchanged when
+    /// reusing a data volume. Publishing and deploying this configuration are not supported.
+    /// </para>
+    /// <para>
+    /// Unlike the previous low-level behavior of this experimental method, this method initializes the set.
+    /// For multiple members, use <see cref="MongoDBReplicaSetBuilderExtensions.AddMongoDBReplicaSet"/> and
+    /// <see cref="MongoDBReplicaSetBuilderExtensions.WithMember"/> instead, without calling this method on the members.
+    /// </para>
     /// </remarks>
     /// <param name="builder">The MongoDB server resource builder.</param>
-    /// <param name="name">The name of the replica set the server is a member of.</param>
+    /// <param name="name">The replica set name. Defaults to the resource name, or the name previously configured by this method.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="ArgumentException">The name is empty or whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The server is configured for a different set or for advanced membership.</exception>
+    /// <exception cref="NotSupportedException">The application is running in publish mode.</exception>
+    /// <example>
+    /// <code lang="csharp">
+    /// var mongo = builder.AddMongoDB("mongo").WithReplicaSet();
+    /// var database = mongo.AddDatabase("orders");
+    /// builder.AddProject&lt;Projects.Api&gt;("api").WithReference(database).WaitFor(database);
+    /// </code>
+    /// </example>
     [AspireExport]
     [Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string name)
+    public static IResourceBuilder<MongoDBServerResource> WithReplicaSet(this IResourceBuilder<MongoDBServerResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(name);
+        name ??= builder.Resource.ReplicaSetName ?? builder.Resource.Name;
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ThrowIfPublishMode(builder.ApplicationBuilder, nameof(WithReplicaSet));
 
-        // NOTE: `mongod` refuses to start when `--replSet` is given more than once, so calling this twice has to either be
-        // a no-op or an error rather than appending a second option.
         if (builder.Resource.ReplicaSetName is { } existingName)
         {
-            return string.Equals(existingName, name, StringComparisons.ResourceName)
+            if (!builder.Resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
+            {
+                throw new InvalidOperationException($"The MongoDB server resource '{builder.Resource.Name}' belongs to the advanced replica set '{existingName}'. Configure it with WithMember instead of WithReplicaSet.");
+            }
+
+            return string.Equals(existingName, name, StringComparison.Ordinal)
                 ? builder
                 : throw new InvalidOperationException($"The MongoDB server resource '{builder.Resource.Name}' is already configured as a member of the replica set '{existingName}' and cannot also be a member of '{name}'.");
         }
 
+        if (!builder.Resource.HasAnnotationOfType<MongoDBServerKeyFileAnnotation>())
+        {
+            builder.WithKeyFile(CreateReplicaSetKeyFile(builder.ApplicationBuilder, builder.Resource.Name));
+        }
+
+        var annotation = new MongoDBSingleMemberReplicaSetAnnotation(name);
+        return ConfigureReplicaSetMember(builder, name)
+            .WithAnnotation(annotation)
+            .OnInitializeResource((resource, evt, ct) => MongoDBSingleMemberReplicaSet.InitializeAsync(resource, annotation, evt, ct));
+    }
+
+    internal static ParameterResource CreateReplicaSetKeyFile(IDistributedApplicationBuilder builder, string name) =>
+        ParameterResourceBuilderExtensions.CreateGeneratedParameter(builder, $"{name}-keyfile-content", secret: true,
+            new GenerateParameterDefault
+            {
+                // MongoDB key files require 6-1024 base64 characters:
+                // https://www.mongodb.com/docs/manual/tutorial/deploy-replica-set-with-keyfile-access-control/#create-a-keyfile
+                MinLength = 512,
+                Special = false,
+            });
+
+    // Only configures mongod. The single-member initializer and the advanced facade own their respective initialization.
+    internal static IResourceBuilder<MongoDBServerResource> ConfigureReplicaSetMember(IResourceBuilder<MongoDBServerResource> builder, string name)
+    {
         builder.Resource.ReplicaSetName = name;
         return builder
             .WithAnnotation(new MongoDBServerReplicaSetAnnotation(name))
@@ -571,6 +733,55 @@ public static class MongoDBBuilderExtensions
 
     private static void ConfigureMongoExpressContainer(EnvironmentCallbackContext context, MongoDBServerResource resource)
     {
+        if (resource.HasAnnotationOfType<MongoDBSingleMemberReplicaSetAnnotation>())
+        {
+            ConfigureMongoExpressConnectionUrl(context, resource);
+        }
+        else
+        {
+            ConfigureMongoExpressServerAndPort(context, resource);
+        }
+
+        if (resource.TlsEnabled)
+        {
+            // NOTE: The server only accepts TLS connections, and Mongo Express defaults to plain TCP, so it has to be told
+            // to speak TLS as well or it cannot connect at all. These are driver options, so Mongo Express applies them
+            // whether it builds its connection string from the individual variables or takes `ME_CONFIG_MONGODB_URL`.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSL"] = "true";
+            // NOTE: Mongo Express reaches the server at its resource name on the container network, which is not a name that
+            // any certificate Aspire can issue for the server will carry, and it exposes no way to keep chain validation
+            // while relaxing only the host name check. This mirrors the relaxation that replica set members need for the
+            // connections they make to each other.
+            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSLVALIDATE"] = "false";
+        }
+    }
+
+    private static void ConfigureMongoExpressConnectionUrl(EnvironmentCallbackContext context, MongoDBServerResource resource)
+    {
+        // NOTE: A single-member replica set is initialized with a `localhost:<port>` member address (see
+        // `MongoDBSingleMemberReplicaSet`), so a client that performs replica set discovery replaces its seed with that
+        // address and, from inside the Mongo Express container, ends up connecting to itself. Mongo Express has to use
+        // `directConnection=true`, so it is given the same connection string that Aspire gives to applications. The
+        // endpoint in that expression resolves to the server's address on the container network, because it is
+        // evaluated for the Mongo Express container.
+        //
+        // Mongo Express 1.0.2 only honors `ME_CONFIG_MONGODB_URL` when `ME_CONFIG_MONGODB_SERVER` is unset, and it builds
+        // its own URL without any options otherwise, so the individual server, port and credential variables must not be
+        // set here. See https://github.com/mongo-express/mongo-express/blob/v1.0.2/config.default.js
+        //
+        // The image's entrypoint also parses this URL to wait for the server before starting Mongo Express. It strips the
+        // scheme, then everything from the first '/', then everything up to the first '@', and treats the remainder as
+        // `host:port`, e.g.:
+        //   mongodb://admin:p%40ss@mongo.dev.internal:27017/?authSource=admin&...  ->  mongo.dev.internal:27017
+        // The connection string URI-escapes the credentials, and it puts a '/' before the query whenever the server has a
+        // password, which `AddMongoDB` always assigns.
+        // See https://github.com/mongo-express/mongo-express-docker/blob/master/docker-entrypoint.sh
+        context.EnvironmentVariables["ME_CONFIG_MONGODB_URL"] = resource.BuildConnectionString();
+        context.EnvironmentVariables["ME_CONFIG_BASICAUTH"] = "false";
+    }
+
+    private static void ConfigureMongoExpressServerAndPort(EnvironmentCallbackContext context, MongoDBServerResource resource)
+    {
         // Mongo Express assumes Mongo is being accessed over a default Aspire container network and hardcodes the resource address
         // This will need to be refactored once updated service discovery APIs are available
         context.EnvironmentVariables["ME_CONFIG_MONGODB_SERVER"] = resource.Name;
@@ -592,18 +803,6 @@ public static class MongoDBBuilderExtensions
         {
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINUSERNAME"] = resource.UserNameReference;
             context.EnvironmentVariables["ME_CONFIG_MONGODB_ADMINPASSWORD"] = resource.PasswordParameter;
-        }
-
-        if (resource.TlsEnabled)
-        {
-            // NOTE: The server only accepts TLS connections, and Mongo Express defaults to plain TCP, so it has to be told
-            // to speak TLS as well or it cannot connect at all.
-            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSL"] = "true";
-            // NOTE: Mongo Express reaches the server at its resource name on the container network, which is not a name that
-            // any certificate Aspire can issue for the server will carry, and it exposes no way to keep chain validation
-            // while relaxing only the host name check. This mirrors the relaxation that replica set members need for the
-            // connections they make to each other.
-            context.EnvironmentVariables["ME_CONFIG_MONGODB_SSLVALIDATE"] = "false";
         }
     }
 }
@@ -677,6 +876,7 @@ internal static class MyMongoDbHealthCheckBuilderExtensions
 
     public static IHealthChecksBuilder AddMyMongoDb(
         this IHealthChecksBuilder builder,
+        Func<IServiceProvider, MongoDBSingleMemberReplicaSetAnnotation?> singleMemberReplicaSetFactory,
         Func<IServiceProvider, IMongoClient>? clientFactory = default,
         Func<IServiceProvider, string>? databaseNameFactory = default,
         string? name = default,
@@ -686,18 +886,18 @@ internal static class MyMongoDbHealthCheckBuilderExtensions
     {
         return builder.Add(new HealthCheckRegistration(
             name ?? NAME,
-            sp => Factory(sp, clientFactory, databaseNameFactory),
+            sp => Factory(sp, clientFactory, databaseNameFactory, singleMemberReplicaSetFactory),
             failureStatus,
             tags,
             timeout));
 
-        static MyMongoDbHealthCheck Factory(IServiceProvider sp, Func<IServiceProvider, IMongoClient>? clientFactory, Func<IServiceProvider, string>? databaseNameFactory)
+        static MyMongoDbHealthCheck Factory(IServiceProvider sp, Func<IServiceProvider, IMongoClient>? clientFactory, Func<IServiceProvider, string>? databaseNameFactory, Func<IServiceProvider, MongoDBSingleMemberReplicaSetAnnotation?> singleMemberReplicaSetFactory)
         {
             // The user might have registered a factory for MongoClient type, but not for the abstraction (IMongoClient).
             // That is why we try to resolve MongoClient first.
             IMongoClient client = clientFactory?.Invoke(sp) ?? sp.GetService<MongoClient>() ?? sp.GetRequiredService<IMongoClient>();
             string? databaseName = databaseNameFactory?.Invoke(sp);
-            return new(client, databaseName);
+            return new(client, databaseName, singleMemberReplicaSetFactory(sp));
         }
     }
 }
@@ -715,11 +915,13 @@ internal class MyMongoDbHealthCheck : IHealthCheck
     private static readonly Lazy<BsonDocumentCommand<BsonDocument>> s_command = new(() => new(BsonDocument.Parse("{ping:1}")));
     private readonly IMongoClient _client;
     private readonly string? _specifiedDatabase;
+    private readonly MongoDBSingleMemberReplicaSetAnnotation? _singleMemberReplicaSet;
 
-    public MyMongoDbHealthCheck(IMongoClient client, string? databaseName = default)
+    public MyMongoDbHealthCheck(IMongoClient client, string? databaseName, MongoDBSingleMemberReplicaSetAnnotation? singleMemberReplicaSet)
     {
         _client = client;
         _specifiedDatabase = databaseName;
+        _singleMemberReplicaSet = singleMemberReplicaSet;
     }
 
     /// <inheritdoc />
@@ -727,6 +929,22 @@ internal class MyMongoDbHealthCheck : IHealthCheck
     {
         try
         {
+            if (_singleMemberReplicaSet is { } replicaSet)
+            {
+                if (replicaSet.InitializationError is { } error)
+                {
+                    return HealthCheckResult.Unhealthy(error);
+                }
+
+                var status = await _client.GetDatabase(MongoDBServerResource.DefaultAuthenticationDatabase)
+                    .RunCommandAsync<BsonDocument>(new BsonDocument("replSetGetStatus", 1), ReadPreference.Nearest, cancellationToken)
+                    .ConfigureAwait(false);
+
+                return MongoDBSingleMemberReplicaSet.IsPrimary(status, replicaSet.Name)
+                    ? HealthCheckResult.Healthy()
+                    : HealthCheckResult.Unhealthy($"MongoDB replica set '{replicaSet.Name}' is not a writable single-member primary.");
+            }
+
             if (!string.IsNullOrEmpty(_specifiedDatabase))
             {
                 // some users can't list all databases depending on database privileges, with

@@ -315,19 +315,15 @@ public class MongoDBPublicApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void WithReplicaSetShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    [InlineData("")]
+    [InlineData(" ")]
+    public void WithReplicaSetShouldThrowWhenNameIsEmptyOrWhitespace(string name)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var mongo = builder.AddMongoDB("mongo1");
-        var name = isNull ? null! : string.Empty;
-
         var action = () => mongo.WithReplicaSet(name);
 
-        var exception = isNull
-            ? Assert.Throws<ArgumentNullException>(action)
-            : Assert.Throws<ArgumentException>(action);
+        var exception = Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
     }
 

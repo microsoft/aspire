@@ -11,8 +11,14 @@
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
 
-    <!-- DenoTelemetryFunctionalTests launches the dashboard executable from the repository build output. -->
-    <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj" ReferenceOutputAssembly="false" IsAspireProjectResource="false" Private="false" />
+    <!-- DenoTelemetryFunctionalTests launches the dashboard executable from the repository build output.
+      Build it for its own framework without requiring compatibility with the test project's framework. -->
+    <ProjectReference Include="..\..\src\Aspire.Dashboard\Aspire.Dashboard.csproj"
+          ReferenceOutputAssembly="false"
+          IsAspireProjectResource="false"
+          Private="false"
+          SkipGetTargetFrameworkProperties="true"
+          UndefineProperties="TargetFramework;RuntimeIdentifier;PlatformTarget;SelfContained" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />

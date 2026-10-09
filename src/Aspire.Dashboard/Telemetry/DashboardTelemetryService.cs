@@ -1,402 +1,212 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
+using System.Globalization;
+using Aspire.Dashboard.Utils;
 using Aspire.Shared;
+using Aspire.Shared.Telemetry;
 
 namespace Aspire.Dashboard.Telemetry;
 
-public sealed class DashboardTelemetryService
+/// <summary>
+/// Records dashboard usage and errors independently of an IDE debug session.
+/// </summary>
+public sealed class DashboardTelemetryService : AspireTelemetryBase
 {
-    private readonly SemaphoreSlim _lock = new SemaphoreSlim(1);
-    private readonly ILogger<DashboardTelemetryService> _logger;
-    private readonly IDashboardTelemetrySender _telemetrySender;
+    internal const string ReportedActivitySourceName = "Aspire.Dashboard.Reported";
+    internal const string DiagnosticsActivitySourceName = ReportedActivitySourceName + ".Diagnostics";
+    internal const string EventLogCategoryName = "Aspire.Dashboard.Reported.Events";
+    internal const string TelemetryOptOutConfigKey = "ASPIRE_DASHBOARD_TELEMETRY_OPTOUT";
+    private readonly DashboardTelemetryConfiguration _configuration;
+    private readonly IReadOnlyList<KeyValuePair<string, object?>> _defaultTags;
 
-    // Internal for testing.
-    internal readonly Dictionary<string, AspireTelemetryProperty> _defaultProperties;
-
-    public DashboardTelemetryService(
-        ILogger<DashboardTelemetryService> logger,
-        IDashboardTelemetrySender telemetrySender)
+    /// <summary>
+    /// Initializes dashboard product instrumentation with resolved telemetry settings.
+    /// </summary>
+    /// <param name="logger">The logger for local dashboard errors.</param>
+    /// <param name="configuration">The resolved product telemetry settings.</param>
+    public DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration)
+        : this(logger, configuration, ReportedActivitySourceName, DiagnosticsActivitySourceName)
     {
-        _logger = logger;
-        _telemetrySender = telemetrySender;
+    }
 
-        _defaultProperties = new Dictionary<string, AspireTelemetryProperty>
-        {
-            // This is consistent with CLI version data.
-            { TelemetryPropertyKeys.DashboardVersion, new AspireTelemetryProperty(AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly)) },
-            { TelemetryPropertyKeys.DashboardBuildId, new AspireTelemetryProperty(AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly)) },
-        };
+    internal DashboardTelemetryService(ILogger<DashboardTelemetryService> logger, DashboardTelemetryConfiguration configuration, string reportedSourceName, string diagnosticsSourceName)
+        : base(logger, reportedSourceName, diagnosticsSourceName, TelemetryEventKeys.Error)
+    {
+        _configuration = configuration;
+        _defaultTags =
+        [
+            new(TelemetryPropertyKeys.DashboardVersion, AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardWebApplication).Assembly)),
+            new(TelemetryPropertyKeys.DashboardBuildId, AssemblyVersionHelper.GetFileVersion(typeof(DashboardWebApplication).Assembly))
+        ];
     }
 
     /// <summary>
-    /// Whether the telemetry service has been initialized. This will be true if <see cref="InitializeAsync"/> has completed.
+    /// Gets whether dashboard product reporting is enabled by the resolved settings.
     /// </summary>
-    public bool IsTelemetryInitialized => _telemetrySender.State != TelemetrySessionState.Uninitialized;
+    public bool IsTelemetryEnabled => _configuration.ReportedTelemetryEnabled;
 
     /// <summary>
-    /// Whether telemetry is enabled in the current environment. This will be false if:
-    /// <list type="bullet">
-    /// <item>The user is not running the Aspire dashboard through a supported IDE version</item>
-    /// <item>The dashboard resource contains a telemetry opt-out config entry</item>
-    /// <item>The IDE instance has opted out of telemetry</item>
-    /// </list>
+    /// Starts a dashboard operation whose duration ends when the caller disposes its activity.
     /// </summary>
-    public bool IsTelemetryEnabled => _telemetrySender.State == TelemetrySessionState.Enabled;
-
-    /// <summary>
-    /// Call before using any telemetry methods. This will initialize the telemetry service and ensure that <see cref="DashboardTelemetryService.IsTelemetryEnabled"/> is set
-    /// by making a request to the debug session, if one exists.
-    /// </summary>
-    public async Task InitializeAsync()
+    /// <param name="eventName">The operation name.</param>
+    /// <param name="startEventProperties">The operation properties.</param>
+    /// <returns>The activity, or <see langword="null"/> when telemetry is disabled or not sampled.</returns>
+    public Activity? StartOperation(string eventName, Dictionary<string, AspireTelemetryProperty> startEventProperties)
     {
-        if (IsTelemetryInitialized)
+        if (!IsTelemetryEnabled)
+        {
+            return null;
+        }
+
+        var activity = StartReportedActivity(eventName);
+        if (activity is not null)
+        {
+            AddReportedActivityProperties(activity, properties: null);
+            SetActivityProperties(activity, startEventProperties);
+        }
+
+        return activity;
+    }
+
+    /// <summary>
+    /// Sets classified dashboard activity properties using the shared privacy policy.
+    /// </summary>
+    /// <param name="activity">The activity, or <see langword="null"/> when not recorded.</param>
+    /// <param name="properties">The classified dashboard properties.</param>
+    /// <exception cref="ArgumentNullException">The properties collection is null.</exception>
+    /// <exception cref="ArgumentException">A property name is empty or whitespace.</exception>
+    public void SetActivityProperties(Activity? activity, IReadOnlyDictionary<string, AspireTelemetryProperty> properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        base.SetActivityProperties(activity, GetProperties(properties));
+    }
+
+    /// <summary>
+    /// Sets an operation's status without ending its activity.
+    /// </summary>
+    /// <param name="activity">The operation activity, or <see langword="null"/> when not recorded.</param>
+    /// <param name="status">The operation status.</param>
+    public void SetOperationStatus(Activity? activity, ActivityStatusCode status)
+    {
+        if (activity is not null)
+        {
+            // Keep the legacy result values for existing telemetry queries while using
+            // OpenTelemetry's standard status code as the API and activity status.
+            var result = status switch
+            {
+                ActivityStatusCode.Ok => "Success",
+                ActivityStatusCode.Error => "Failure",
+                ActivityStatusCode.Unset => "None",
+                _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown activity status.")
+            };
+            SetActivityProperty(activity, "aspire.dashboard.result", result);
+            activity.SetStatus(status);
+        }
+    }
+
+    /// <summary>
+    /// Records a sanitized dashboard event as a structured log.
+    /// </summary>
+    /// <param name="eventName">The event name.</param>
+    /// <param name="properties">The event properties.</param>
+    public void RecordEvent(string eventName, Dictionary<string, AspireTelemetryProperty>? properties = null)
+    {
+        if (!IsTelemetryEnabled)
         {
             return;
         }
 
-        // Async lock to ensure that telemetry is only initialized once.
-        await _lock.WaitAsync().ConfigureAwait(false);
+        RecordEventCore(eventName, GetProperties(properties));
+    }
 
-        try
+    /// <summary>
+    /// Records a dashboard fault as a sanitized structured log.
+    /// </summary>
+    /// <param name="message">The local log message.</param>
+    /// <param name="exception">The exception to record.</param>
+    /// <param name="writeToLogging">Whether to also log the exception locally.</param>
+    public void RecordError(string message, Exception exception, bool writeToLogging)
+    {
+        RecordErrorCore(message, exception, writeToLogging);
+    }
+
+    /// <inheritdoc />
+    public override void RecordError(string message, Exception exception) => RecordError(message, exception, writeToLogging: true);
+
+    protected override IReadOnlyList<KeyValuePair<string, object?>> GetDefaultTags() => _defaultTags;
+
+    protected override bool IsReportedTelemetryEnabled => IsTelemetryEnabled;
+
+    protected override ActivityTagsCollection CreateErrorTags(Exception exception) => new()
+    {
+        // Preserve the IDE bridge's privacy policy: exception messages and stack traces
+        // can contain resource names, secrets and workspace paths, so only report the type.
+        [TelemetryPropertyKeys.ExceptionType] = exception.GetType().FullName,
+        [TelemetryPropertyKeys.ExceptionRuntimeVersion] = VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty
+    };
+
+    /// <inheritdoc />
+    protected override bool TrySanitizeProperty(string key, object? value, out object? sanitizedValue)
+    {
+        sanitizedValue = null;
+        if (value is AspireTelemetryProperty property)
         {
-            if (IsTelemetryInitialized)
+            // Product telemetry must not export arbitrary application data. The old IDE
+            // bridge enforced a key allowlist and excluded free-form diagnostic fields.
+            if (property.PropertyType == AspireTelemetryPropertyType.Pii || !IsAllowedProperty(key))
             {
-                return;
+                return false;
             }
 
-            _logger.LogDebug("Initializing telemetry service.");
-            await _telemetrySender.TryStartTelemetrySessionAsync().ConfigureAwait(false);
-            _logger.LogDebug("Initialized telemetry service. Telemetry sender state: {TelemetrySenderState}", _telemetrySender.State);
-
-            // Post session property values after initialization, if telemetry has been enabled.
-            if (IsTelemetryEnabled)
+            if (property.PropertyType == AspireTelemetryPropertyType.Metric)
             {
-                foreach (var (key, value) in _defaultProperties)
+                if (double.TryParse(Convert.ToString(property.Value, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out var number) && double.IsFinite(number))
                 {
-                    PostProperty(key, value);
+                    sanitizedValue = number;
+                    return true;
                 }
+
+                return false;
             }
-        }
-        finally
-        {
-            _lock.Release();
-        }
-    }
 
-    private bool SkipQueuingRequests()
-    {
-        // Don't queue requests if we know the sender isn't enabled. This is a performance optimization.
-        // Queue requests if enabled or not yet initialized.
-        return !IsTelemetryEnabled;
-    }
-
-    /// <summary>
-    /// Begin a long-running user operation. Prefer this over <see cref="PostOperation"/>. If an explicit user task caused this operation to start,
-    /// use <see cref="StartUserTask"/> instead. Duration will be automatically calculated and the end event posted after <see cref="DashboardTelemetryService.EndOperation"/> is called.
-    /// </summary>
-    public OperationContext StartOperation(string eventName, Dictionary<string, AspireTelemetryProperty> startEventProperties, TelemetrySeverity severity = TelemetrySeverity.Normal, bool isOptOutFriendly = false, bool postStartEvent = true, IEnumerable<OperationContextProperty>? correlations = null)
-    {
-        if (SkipQueuingRequests())
+            value = property.Value;
+        }
+        else if (key is not (TelemetryPropertyKeys.DashboardVersion or TelemetryPropertyKeys.DashboardBuildId or
+            TelemetryPropertyKeys.ExceptionType or TelemetryPropertyKeys.ExceptionRuntimeVersion or "aspire.dashboard.result"))
         {
-            return OperationContext.Empty;
+            return false;
         }
 
-        var context = OperationContext.Create(propertyCount: 2, name: GetCompositeEventName(eventName, TelemetryEndpoints.TelemetryStartOperation));
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
+        sanitizedValue = value switch
         {
-            var scopeSettings = new AspireTelemetryScopeSettings(
-                IncludeDefaultProperties(startEventProperties),
-                severity,
-                isOptOutFriendly,
-                correlations?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray(),
-                postStartEvent);
+            string text => text.Length <= 1024 ? text : text[..1024],
+            bool or int or double => value,
+            _ => null
+        };
 
-            var response = await PostRequestAsync<StartOperationRequest, StartOperationResponse>(client, TelemetryEndpoints.TelemetryStartOperation, new StartOperationRequest(eventName, scopeSettings)).ConfigureAwait(false);
-            context.Properties[0].SetValue(response.OperationId);
-            context.Properties[1].SetValue(response.Correlation);
-        });
-
-        return context;
+        return sanitizedValue is not null;
     }
 
-    /// <summary>
-    /// Ends a long-running operation. This will post the end event and calculate the duration.
-    /// </summary>
-    public void EndOperation(OperationContextProperty operationId, TelemetryResult result, string? errorMessage = null)
+    private static IEnumerable<KeyValuePair<string, object?>> GetProperties(IReadOnlyDictionary<string, AspireTelemetryProperty>? properties)
     {
-        if (SkipQueuingRequests())
+        if (properties is not null)
         {
-            return;
-        }
-
-        var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryEndOperation);
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryEndOperation, new EndOperationRequest(Id: (string)propertyGetter(operationId), Result: result, ErrorMessage: errorMessage)).ConfigureAwait(false);
-        });
-    }
-
-    /// <summary>
-    /// Begin a long-running user task. This will post the start event and calculate the duration.
-    /// Duration will be automatically calculated and the end event posted after <see cref="EndUserTask"/> is called.
-    /// </summary>
-    public OperationContext StartUserTask(string eventName, Dictionary<string, AspireTelemetryProperty> startEventProperties, TelemetrySeverity severity = TelemetrySeverity.Normal, bool isOptOutFriendly = false, bool postStartEvent = true, IEnumerable<OperationContextProperty>? correlations = null)
-    {
-        if (SkipQueuingRequests())
-        {
-            return OperationContext.Empty;
-        }
-
-        var context = OperationContext.Create(propertyCount: 2, name: GetCompositeEventName(eventName, TelemetryEndpoints.TelemetryStartUserTask));
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            var scopeSettings = new AspireTelemetryScopeSettings(
-                IncludeDefaultProperties(startEventProperties),
-                severity,
-                isOptOutFriendly,
-                correlations?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray(),
-                postStartEvent);
-
-            var response = await PostRequestAsync<StartOperationRequest, StartOperationResponse>(client, TelemetryEndpoints.TelemetryStartUserTask, new StartOperationRequest(eventName, scopeSettings)).ConfigureAwait(false);
-            context.Properties[0].SetValue(response.OperationId);
-            context.Properties[1].SetValue(response.Correlation);
-        });
-
-        return context;
-    }
-
-    /// <summary>
-    /// Ends a long-running user task. This will post the end event and calculate the duration.
-    /// </summary>
-    public void EndUserTask(OperationContextProperty operationId, TelemetryResult result, string? errorMessage = null)
-    {
-        if (SkipQueuingRequests())
-        {
-            return;
-        }
-
-        var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryEndUserTask);
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryEndUserTask, new EndOperationRequest(Id: (string)propertyGetter(operationId), Result: result, ErrorMessage: errorMessage)).ConfigureAwait(false);
-        });
-    }
-
-    /// <summary>
-    /// Posts a short-lived operation. If duration needs to be calculated, use <see cref="DashboardTelemetryService.StartOperation"/> and <see cref="DashboardTelemetryService.EndOperation"/> instead.
-    /// If an explicit user task caused this operation to start, use <see cref="DashboardTelemetryService.PostUserTask"/> instead.
-    /// <returns>Guid corresponding to the (as-of-yet-uncompleted) correlation returned from this request.</returns>
-    /// </summary>
-    public OperationContext PostOperation(string eventName, TelemetryResult result, string? resultSummary = null, Dictionary<string, AspireTelemetryProperty>? properties = null, IEnumerable<OperationContextProperty>? correlatedWith = null)
-    {
-        if (SkipQueuingRequests())
-        {
-            return OperationContext.Empty;
-        }
-
-        var context = OperationContext.Create(propertyCount: 1, name: GetCompositeEventName(eventName, TelemetryEndpoints.TelemetryPostOperation));
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            var request = new PostOperationRequest(
-                eventName,
-                result,
-                resultSummary,
-                IncludeDefaultProperties(properties),
-                correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
-
-            var response = await PostRequestAsync<PostOperationRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostOperation, request).ConfigureAwait(false);
-            context.Properties[0].SetValue(response);
-        });
-
-        return context;
-    }
-
-    /// <summary>
-    /// Posts a short-lived user task. If duration needs to be calculated, use <see cref="DashboardTelemetryService.StartUserTask"/> and <see cref="DashboardTelemetryService.EndUserTask"/> instead.
-    /// <returns>Guid corresponding to the (as-of-yet-uncompleted) correlation returned from this request.</returns>
-    /// </summary>
-    public OperationContext PostUserTask(string eventName, TelemetryResult result, string? resultSummary = null, Dictionary<string, AspireTelemetryProperty>? properties = null, IEnumerable<OperationContextProperty>? correlatedWith = null)
-    {
-        if (SkipQueuingRequests())
-        {
-            return OperationContext.Empty;
-        }
-
-        var context = OperationContext.Create(propertyCount: 1, name: GetCompositeEventName(eventName, TelemetryEndpoints.TelemetryPostUserTask));
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            var request = new PostOperationRequest(
-                eventName,
-                result,
-                resultSummary,
-                IncludeDefaultProperties(properties),
-                correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
-
-            var response = await PostRequestAsync<PostOperationRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostUserTask, request).ConfigureAwait(false);
-            context.Properties[0].SetValue(response);
-        });
-
-        return context;
-    }
-
-    /// <summary>
-    /// Posts a fault event.
-    /// <returns>Guid corresponding to the (as-of-yet-uncompleted) correlation returned from this request.</returns>
-    /// </summary>
-    public OperationContext PostFault(string eventName, string description, FaultSeverity severity, Dictionary<string, AspireTelemetryProperty>? properties = null, IEnumerable<OperationContextProperty>? correlatedWith = null)
-    {
-        if (SkipQueuingRequests())
-        {
-            return OperationContext.Empty;
-        }
-
-        var context = OperationContext.Create(propertyCount: 1, name: GetCompositeEventName(eventName, TelemetryEndpoints.TelemetryPostFault));
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            var request = new PostFaultRequest(
-                eventName,
-                description,
-                severity,
-                IncludeDefaultProperties(properties),
-                correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
-
-            var response = await PostRequestAsync<PostFaultRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostFault, request).ConfigureAwait(false);
-            context.Properties[0].SetValue(response);
-        });
-
-        return context;
-    }
-
-    /// <summary>
-    /// Posts an asset event. This is used to track events that are related to a specific asset, whose correlations can be sent along with other events.
-    /// Currently not used.
-    /// <returns>Guid corresponding to the (as-of-yet-uncompleted) correlation returned from this request.</returns>
-    /// </summary>
-    public OperationContext PostAsset(string eventName, string assetId, int assetEventVersion, Dictionary<string, AspireTelemetryProperty>? additionalProperties = null, IEnumerable<OperationContextProperty>? correlatedWith = null)
-    {
-        if (SkipQueuingRequests())
-        {
-            return OperationContext.Empty;
-        }
-
-        var context = OperationContext.Create(propertyCount: 1, name: GetCompositeEventName(eventName, TelemetryEndpoints.TelemetryPostAsset));
-        _telemetrySender.QueueRequest(context, async (client, propertyGetter) =>
-        {
-            var request = new PostAssetRequest(
-                eventName,
-                assetId,
-                assetEventVersion,
-                IncludeDefaultProperties(additionalProperties),
-                correlatedWith?.Select(propertyGetter).Cast<TelemetryEventCorrelation>().ToArray());
-
-            var response = await PostRequestAsync<PostAssetRequest, TelemetryEventCorrelation>(client, TelemetryEndpoints.TelemetryPostAsset, request).ConfigureAwait(false);
-            context.Properties[0].SetValue(response);
-        });
-
-        return context;
-    }
-
-    /// <summary>
-    /// Post a session property.
-    /// </summary>
-    public void PostProperty(string propertyName, AspireTelemetryProperty propertyValue)
-    {
-        if (SkipQueuingRequests())
-        {
-            return;
-        }
-
-        var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryPostProperty);
-        _telemetrySender.QueueRequest(context, async (client, _) =>
-        {
-            var request = new PostPropertyRequest(propertyName, propertyValue);
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryPostProperty, request).ConfigureAwait(false);
-        });
-    }
-
-    /// <summary>
-    /// Post a session recurring property.
-    /// </summary>
-    public void PostRecurringProperty(string propertyName, AspireTelemetryProperty propertyValue)
-    {
-        if (SkipQueuingRequests())
-        {
-            return;
-        }
-
-        var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryPostRecurringProperty);
-        _telemetrySender.QueueRequest(context, async (client, _) =>
-        {
-            var request = new PostPropertyRequest(propertyName, propertyValue);
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryPostRecurringProperty, request).ConfigureAwait(false);
-        });
-    }
-
-    /// <summary>
-    /// Currently not used.
-    /// </summary>
-    public void PostCommandLineFlags(List<string> flagPrefixes, Dictionary<string, AspireTelemetryProperty> additionalProperties)
-    {
-        if (SkipQueuingRequests())
-        {
-            return;
-        }
-
-        var context = OperationContext.Create(propertyCount: 0, name: TelemetryEndpoints.TelemetryPostCommandLineFlags);
-        _telemetrySender.QueueRequest(context, async (client, _) =>
-        {
-            var request = new PostCommandLineFlagsRequest(flagPrefixes, additionalProperties);
-            await client.PostAsJsonAsync(TelemetryEndpoints.TelemetryPostCommandLineFlags, request).ConfigureAwait(false);
-        });
-    }
-
-    private static async Task<TResponse> PostRequestAsync<TRequest, TResponse>(HttpClient client, string endpoint, TRequest request)
-    {
-        var httpResponseMessage = await client.PostAsJsonAsync(endpoint, request).ConfigureAwait(false);
-        httpResponseMessage.EnsureSuccessStatusCode();
-        var response = await httpResponseMessage.Content.ReadFromJsonAsync<TResponse>().ConfigureAwait(false);
-        if (response is null)
-        {
-            throw new InvalidOperationException("Response was null.");
-        }
-        return response;
-    }
-
-    private static string GetCompositeEventName(string eventName, string endpoint)
-    {
-        return $"{endpoint} - ${eventName}";
-    }
-
-    [return: NotNullIfNotNull(nameof(properties))]
-    private Dictionary<string, AspireTelemetryProperty>? IncludeDefaultProperties(Dictionary<string, AspireTelemetryProperty>? properties)
-    {
-        if (properties != null)
-        {
-            foreach (var (key, value) in _defaultProperties)
+            foreach (var (key, property) in properties)
             {
-                properties[key] = value;
+                yield return new(key, property);
             }
         }
-
-        return properties;
     }
-}
 
-public static class TelemetryEndpoints
-{
-    public const string TelemetryEnabled = "/telemetry/enabled";
-    public const string TelemetryStart = "/telemetry/start";
-    public const string TelemetryStartOperation = "/telemetry/startOperation";
-    public const string TelemetryEndOperation = "/telemetry/endOperation";
-    public const string TelemetryStartUserTask = "/telemetry/startUserTask";
-    public const string TelemetryEndUserTask = "/telemetry/endUserTask";
-    public const string TelemetryPostOperation = "/telemetry/operation";
-    public const string TelemetryPostUserTask = "/telemetry/userTask";
-    public const string TelemetryPostFault = "/telemetry/fault";
-    public const string TelemetryPostAsset = "/telemetry/asset";
-    public const string TelemetryPostProperty = "/telemetry/property";
-    public const string TelemetryPostRecurringProperty = "/telemetry/recurringProperty";
-    public const string TelemetryPostCommandLineFlags = "/telemetry/commandLineFlags";
+    private static bool IsAllowedProperty(string key) => key is
+        TelemetryPropertyKeys.DashboardComponentId or TelemetryPropertyKeys.DashboardComponentType or
+        TelemetryPropertyKeys.ConsoleLogsShowTimestamp or TelemetryPropertyKeys.MetricsResourceIsReplica or
+        TelemetryPropertyKeys.MetricsInstrumentsCount or TelemetryPropertyKeys.MetricsSelectedDuration or
+        TelemetryPropertyKeys.MetricsSelectedView or TelemetryPropertyKeys.ResourceType or TelemetryPropertyKeys.ResourceView or
+        TelemetryPropertyKeys.ErrorRequestId or TelemetryPropertyKeys.StructuredLogsSelectedLogLevel or
+        TelemetryPropertyKeys.StructuredLogsFilterCount or TelemetryPropertyKeys.CommandName or
+        TelemetryPropertyKeys.TerminalDockTrigger;
+
 }

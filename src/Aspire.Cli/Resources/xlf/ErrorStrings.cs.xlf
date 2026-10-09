@@ -73,9 +73,9 @@
         <note>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</note>
       </trans-unit>
       <trans-unit id="CodegenVersionSkewWarning">
-        <source>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</source>
-        <target state="new">The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</target>
-        <note>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</note>
+        <source>The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</source>
+        <target state="new">The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</target>
+        <note>{0} is the CLI version, {1} is the SDK version used for code generation, including the target version during aspire update.</note>
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>

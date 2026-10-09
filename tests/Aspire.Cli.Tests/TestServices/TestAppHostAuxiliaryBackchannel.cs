@@ -17,6 +17,9 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 {
     private int _getResourceSnapshotsCallCount;
     private int _lastGetResourceSnapshotsIncludeHidden = -1;
+    private int _disposeCallCount;
+
+    public string Hash { get; set; } = "test-hash";
 
     private IAppHostSocket _socket = new TestAppHostSocket("/tmp/test.sock");
 
@@ -47,11 +50,13 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the dashboard URLs state to return from GetDashboardUrlsAsync.
     /// </summary>
     public DashboardUrlsState? DashboardUrlsState { get; set; }
+    public Func<CancellationToken, Task<DashboardUrlsState?>>? GetDashboardUrlsHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
     /// </summary>
     public GetAppHostInfoResponse? AppHostInfoResponse { get; set; }
+    public Func<CancellationToken, Task<GetAppHostInfoResponse?>>? GetAppHostInfoV2Handler { get; set; }
 
     public WaitForAppHostReadyResponse? WaitForAppHostReadyResponse { get; set; }
     public Func<CancellationToken, Task<WaitForAppHostReadyResponse?>>? WaitForAppHostReadyHandler { get; set; }
@@ -65,6 +70,10 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the result to return from StopAppHostAsync.
     /// </summary>
     public bool StopAppHostResult { get; set; } = true;
+
+    private int _stopAppHostCallCount;
+    public int StopAppHostCallCount => Volatile.Read(ref _stopAppHostCallCount);
+    public Func<CancellationToken, Task<bool>>? StopAppHostHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the function to call when CallResourceMcpToolAsync is invoked.
@@ -81,6 +90,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets the number of snapshot requests made through this backchannel.
     /// </summary>
     public int GetResourceSnapshotsCallCount => Volatile.Read(ref _getResourceSnapshotsCallCount);
+    public int DisposeCallCount => Volatile.Read(ref _disposeCallCount);
 
     /// <summary>
     /// Gets the include-hidden value from the latest snapshot request.
@@ -118,12 +128,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(DashboardUrlsState);
+        return GetDashboardUrlsHandler?.Invoke(cancellationToken) ?? Task.FromResult(DashboardUrlsState);
     }
 
     public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
     {
-        _ = cancellationToken;
+        if (GetAppHostInfoV2Handler is not null)
+        {
+            return GetAppHostInfoV2Handler(cancellationToken);
+        }
 
         if (AppHostInfoResponse is not null)
         {
@@ -282,7 +295,8 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(StopAppHostResult);
+        Interlocked.Increment(ref _stopAppHostCallCount);
+        return StopAppHostHandler?.Invoke(cancellationToken) ?? Task.FromResult(StopAppHostResult);
     }
 
     /// <summary>
@@ -313,6 +327,9 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public WaitForResourceResponse WaitForResourceResult { get; set; } = new WaitForResourceResponse { Success = true, State = "Running" };
 
+    /// <summary>
+    /// Gets or sets the function invoked by WaitForResourceAsync.
+    /// </summary>
     public Func<string, string, int, CancellationToken, Task<WaitForResourceResponse>>? WaitForResourceHandler { get; set; }
 
     public Task<WaitForResourceResponse> WaitForResourceAsync(
@@ -361,8 +378,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public GetTerminalInfoResponse TerminalInfoResponse { get; set; } = new GetTerminalInfoResponse { IsAvailable = false };
 
+    public Func<string, CancellationToken, Task<GetTerminalInfoResponse>>? GetTerminalInfoHandler { get; set; }
+
     public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
     {
+        if (GetTerminalInfoHandler is not null)
+        {
+            return GetTerminalInfoHandler(resourceName, cancellationToken);
+        }
+
         return Task.FromResult(TerminalInfoResponse);
     }
 
@@ -370,7 +394,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the response returned by ListTerminalsAsync. Defaults to an empty list so
     /// existing tests that don't care about the new RPC don't have to set anything.
     /// </summary>
-    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { Terminals = Array.Empty<TerminalSummary>() };
+    public ListTerminalsResponse ListTerminalsResponse { get; set; } = new ListTerminalsResponse { ResourceTerminals = [], AppHostTerminals = [] };
 
     public Task<ListTerminalsResponse> ListTerminalsAsync(CancellationToken cancellationToken = default)
     {
@@ -379,6 +403,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public void Dispose()
     {
-        // Nothing to dispose in the test implementation
+        Interlocked.Increment(ref _disposeCallCount);
     }
 }

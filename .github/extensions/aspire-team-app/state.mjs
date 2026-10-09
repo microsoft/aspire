@@ -11,8 +11,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { DEFAULT_REPOS, DEFAULT_EMU_REPOS, CURRENT_RELEASE } from "./github.mjs";
-import { isEmuAccountId } from "./accounts.mjs";
+import { DEFAULT_PROXIMA_REPOS, DEFAULT_REPOS, CURRENT_RELEASE } from "./github.mjs";
+import { isProximaAccountId } from "./accounts.mjs";
 
 const COPILOT_HOME = process.env.COPILOT_HOME || join(homedir(), ".copilot");
 const ARTIFACT_DIR = join(COPILOT_HOME, "extensions", "aspire-team-app", "artifacts");
@@ -118,12 +118,13 @@ export function updatePrefs(mutator) {
 // Per-account helpers
 // ---------------------------------------------------------------------------
 
-// The default repo watch set for an account that the user has not configured. EMU
-// accounts default to the private first-party repos; everyone else gets the public
-// Aspire repos. This only fills in the fallback — it never overrides repos a user
-// has explicitly configured (see accountConfig/setAccountRepos below).
+// The default repo watch set for an account that the user has not configured. The Proxima host
+// receives its first-party repository; all other accounts get the public Aspire repos. This only
+// fills in the fallback — it never overrides repos a user has explicitly configured
+// (see accountConfig/setAccountRepos below).
 function defaultReposForId(id) {
-  return isEmuAccountId(id) ? DEFAULT_EMU_REPOS : DEFAULT_REPOS;
+  if (isProximaAccountId(id)) return DEFAULT_PROXIMA_REPOS;
+  return DEFAULT_REPOS;
 }
 
 export function accountConfig(prefs, id, legacyId = legacyIdFor(id)) {
@@ -159,6 +160,15 @@ export function activeIds(prefs) {
   return Object.entries(prefs.accounts || {})
     .filter(([, c]) => c && c.active)
     .map(([id]) => id);
+}
+
+export function activateNewProximaAccounts(prefs, accounts) {
+  for (const account of Array.isArray(accounts) ? accounts : []) {
+    if (!isProximaAccountId(account?.id) || account.status === "failed" || account.accessible <= 0) continue;
+    if (Object.prototype.hasOwnProperty.call(prefs.accounts || {}, account.id)) continue;
+    setAccountActive(prefs, account.id, true);
+  }
+  return prefs;
 }
 
 export function normalizeAzurePipelines(value) {

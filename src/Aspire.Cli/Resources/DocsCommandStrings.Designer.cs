@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class DocsCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal DocsCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,124 +59,34 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Browse and search Aspire documentation from aspire.dev..
+        ///   Looks up a localized string similar to Browse and search Aspire documentation and API reference from aspire.dev.
         /// </summary>
         internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to List all available Aspire documentation pages..
-        /// </summary>
-        internal static string ListDescription {
-            get {
-                return ResourceManager.GetString("ListDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Search Aspire documentation by keywords..
-        /// </summary>
-        internal static string SearchDescription {
-            get {
-                return ResourceManager.GetString("SearchDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Get the full content of a documentation page by its slug..
-        /// </summary>
-        internal static string GetDescription {
-            get {
-                return ResourceManager.GetString("GetDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to The search query..
-        /// </summary>
-        internal static string QueryArgumentDescription {
-            get {
-                return ResourceManager.GetString("QueryArgumentDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to The slug of the documentation page (e.g., 'redis-integration')..
-        /// </summary>
-        internal static string SlugArgumentDescription {
-            get {
-                return ResourceManager.GetString("SlugArgumentDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Output format (Table or Json)..
-        /// </summary>
-        internal static string FormatOptionDescription {
-            get {
-                return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Maximum number of search results to return (default: 5, max: 10)..
-        /// </summary>
-        internal static string LimitOptionDescription {
-            get {
-                return ResourceManager.GetString("LimitOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Return only the specified section of the page..
-        /// </summary>
-        internal static string SectionOptionDescription {
-            get {
-                return ResourceManager.GetString("SectionOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Loading documentation....
-        /// </summary>
-        internal static string LoadingDocumentation {
-            get {
-                return ResourceManager.GetString("LoadingDocumentation", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No documentation available. The aspire.dev docs may not have loaded correctly..
-        /// </summary>
-        internal static string NoDocumentationAvailable {
-            get {
-                return ResourceManager.GetString("NoDocumentationAvailable", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No results found for '{0}'. Try different search terms..
-        /// </summary>
-        internal static string NoResultsFound {
-            get {
-                return ResourceManager.GetString("NoResultsFound", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Documentation page '{0}' not found. Use 'aspire docs list' to see available pages..
+        ///   Looks up a localized string similar to Documentation page &apos;{0}&apos; not found. Use &apos;aspire docs list&apos; to see available pages..
         /// </summary>
         internal static string DocumentNotFound {
             get {
                 return ResourceManager.GetString("DocumentNotFound", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Output format (Table or Json).
+        /// </summary>
+        internal static string FormatOptionDescription {
+            get {
+                return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Found {0} documentation pages..
         /// </summary>
@@ -185,9 +95,9 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FoundDocumentationPages", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Found {0} results for '{1}'..
+        ///   Looks up a localized string similar to Found {0} results for &apos;{1}&apos;..
         /// </summary>
         internal static string FoundSearchResults {
             get {
@@ -195,33 +105,138 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string HeaderTitle {
+        /// <summary>
+        ///   Looks up a localized string similar to Get the full content of a documentation page by its slug.
+        /// </summary>
+        internal static string GetDescription {
             get {
-                return ResourceManager.GetString("HeaderTitle", resourceCulture);
+                return ResourceManager.GetString("GetDescription", resourceCulture);
             }
         }
 
-        internal static string HeaderSlug {
+        /// <summary>
+        ///   Looks up a localized string similar to Score.
+        /// </summary>
+        internal static string HeaderScore {
             get {
-                return ResourceManager.GetString("HeaderSlug", resourceCulture);
+                return ResourceManager.GetString("HeaderScore", resourceCulture);
             }
         }
 
-        internal static string HeaderSummary {
-            get {
-                return ResourceManager.GetString("HeaderSummary", resourceCulture);
-            }
-        }
-
+        /// <summary>
+        ///   Looks up a localized string similar to Section.
+        /// </summary>
         internal static string HeaderSection {
             get {
                 return ResourceManager.GetString("HeaderSection", resourceCulture);
             }
         }
 
-        internal static string HeaderScore {
+        /// <summary>
+        ///   Looks up a localized string similar to Slug.
+        /// </summary>
+        internal static string HeaderSlug {
             get {
-                return ResourceManager.GetString("HeaderScore", resourceCulture);
+                return ResourceManager.GetString("HeaderSlug", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Summary.
+        /// </summary>
+        internal static string HeaderSummary {
+            get {
+                return ResourceManager.GetString("HeaderSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Title.
+        /// </summary>
+        internal static string HeaderTitle {
+            get {
+                return ResourceManager.GetString("HeaderTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Maximum number of search results to return (default: 5, max: 10).
+        /// </summary>
+        internal static string LimitOptionDescription {
+            get {
+                return ResourceManager.GetString("LimitOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to List all available Aspire documentation pages.
+        /// </summary>
+        internal static string ListDescription {
+            get {
+                return ResourceManager.GetString("ListDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Loading documentation....
+        /// </summary>
+        internal static string LoadingDocumentation {
+            get {
+                return ResourceManager.GetString("LoadingDocumentation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No documentation available. The aspire.dev docs may not have loaded correctly..
+        /// </summary>
+        internal static string NoDocumentationAvailable {
+            get {
+                return ResourceManager.GetString("NoDocumentationAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No results found for &apos;{0}&apos;. Try different search terms..
+        /// </summary>
+        internal static string NoResultsFound {
+            get {
+                return ResourceManager.GetString("NoResultsFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The search query.
+        /// </summary>
+        internal static string QueryArgumentDescription {
+            get {
+                return ResourceManager.GetString("QueryArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Search Aspire documentation by keywords.
+        /// </summary>
+        internal static string SearchDescription {
+            get {
+                return ResourceManager.GetString("SearchDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Return only the specified section of the page.
+        /// </summary>
+        internal static string SectionOptionDescription {
+            get {
+                return ResourceManager.GetString("SectionOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The slug of the documentation page (e.g., &apos;redis-integration&apos;).
+        /// </summary>
+        internal static string SlugArgumentDescription {
+            get {
+                return ResourceManager.GetString("SlugArgumentDescription", resourceCulture);
             }
         }
     }

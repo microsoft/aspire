@@ -21,17 +21,6 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
-# TODO: once go is not an experiment feature, remove 
-cat << 'EOF' > aspire.config.json
-{
-  "appHost": {},
-  "features": {
-    "experimentalPolyglot:go": true
-  },
-  "packages": {}
-}
-EOF
-
 aspire init --language go --non-interactive -d
 
 cat <<'EOF' > appsettings.json

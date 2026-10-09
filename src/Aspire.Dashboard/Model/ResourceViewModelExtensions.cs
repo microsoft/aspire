@@ -3,7 +3,6 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using Aspire.Dashboard.Utils;
 
 namespace Aspire.Dashboard.Model;
@@ -106,35 +105,6 @@ internal static class ResourceViewModelExtensions
     public static bool HasTerminal(this ResourceViewModel resource)
     {
         return resource.Properties.ContainsKey(KnownProperties.Terminal.Enabled);
-    }
-
-    /// <summary>
-    /// Tries to get the per-replica terminal info: the stable replica index and the
-    /// total replica count for the parent resource. Both values are stamped onto
-    /// each replica snapshot by the AppHost when the resource has
-    /// <c>WithTerminal()</c> applied. The pair is sufficient for the dashboard to
-    /// build a <c>?resource=&lt;name&gt;&amp;replica=&lt;index&gt;</c> URL that the
-    /// terminal WebSocket proxy can resolve to a per-replica HMP v1 producer
-    /// socket without exposing the socket path to the browser.
-    /// </summary>
-    public static bool TryGetTerminalReplicaInfo(this ResourceViewModel resource, out int replicaIndex, out int replicaCount)
-    {
-        replicaIndex = 0;
-        replicaCount = 0;
-
-        if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaIndex, out var indexString) ||
-            !int.TryParse(indexString, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex))
-        {
-            return false;
-        }
-
-        if (!resource.TryGetCustomDataString(KnownProperties.Terminal.ReplicaCount, out var countString) ||
-            !int.TryParse(countString, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaCount))
-        {
-            return false;
-        }
-
-        return true;
     }
 
     /// <summary>

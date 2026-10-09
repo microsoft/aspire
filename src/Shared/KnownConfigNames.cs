@@ -24,6 +24,7 @@ internal static class KnownConfigNames
     public const string ResourceServiceEndpointUrl = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
+    public const string ContainerTunnelBaseImage = "ASPIRE_CONTAINER_TUNNEL_BASE_IMAGE";
     public const string DependencyCheckTimeout = "ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
     public const string ProxylessEndpointPortRange = "ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE";
     public const string ServiceStartupWatchTimeout = "ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
@@ -47,6 +48,7 @@ internal static class KnownConfigNames
     public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";
     public const string TerminalHostParentProcessStartedStable = "ASPIRE_TERMINAL_HOST_PARENT_STARTED_STABLE";
     public const string TerminalHostTelemetryEnabled = "ASPIRE_TERMINAL_HOST_TELEMETRY_ENABLED";
+    public const string TerminalWatchBufferCapacity = "ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY";
 
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the

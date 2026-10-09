@@ -2,7 +2,7 @@
   Initialize Aspire in an existing codebase
 
 Usage:
-  Aspire.Cli.Tests init [options]
+  aspire init [options]
 
 Options:
   --language <language>                                                  The programming language for the AppHost (csharp, typescript)

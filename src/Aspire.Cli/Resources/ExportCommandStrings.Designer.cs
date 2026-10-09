@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class ExportCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal ExportCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Dashboard is not available. Telemetry data (structured logs, traces) will not be included in the export..
         /// </summary>
@@ -68,16 +68,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DashboardNotAvailable", resourceCulture);
             }
         }
-        
+
         /// <summary>
-        ///   Looks up a localized string similar to Export telemetry and resource data to a zip file..
+        ///   Looks up a localized string similar to Export telemetry and resource data to a zip file.
         /// </summary>
         internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Export saved to {0}.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ExportComplete", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Failed to export resource and telemetry data: {0}.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FailedToExport", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Gathering console logs....
         /// </summary>
@@ -105,12 +105,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        internal static string IncludeHiddenOptionDescription {
-            get {
-                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
-            }
-        }
-        
         /// <summary>
         ///   Looks up a localized string similar to Gathering resource data....
         /// </summary>
@@ -119,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GatheringResources", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Gathering structured logs....
         /// </summary>
@@ -128,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GatheringStructuredLogs", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Gathering traces....
         /// </summary>
@@ -137,7 +131,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GatheringTraces", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Include hidden resources in the output.
+        /// </summary>
+        internal static string IncludeHiddenOptionDescription {
+            get {
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to No resources found..
         /// </summary>
@@ -146,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoResourcesFound", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The output file path for the export zip file.
         /// </summary>
@@ -155,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputOptionDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; not found..
         /// </summary>
@@ -164,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ResourceNotFound", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Export data only for the specified resource.
         /// </summary>
@@ -173,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ResourceOptionDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to export data from.
         /// </summary>

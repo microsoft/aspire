@@ -24,7 +24,10 @@
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
 #   job:nix-package            tests.yml nix_package
 #   job:cli-starter-validation tests.yml cli_starter_validation_* (6 platforms)
+#   job:native-dashboard-validation tests.yml native_dashboard_validation_* (6 platforms)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
+#   DOTNET_TESTS               every .NET test project in the PR run-tests.yml matrix, but no
+#                              non-.NET PR-gated jobs
 #   ALL                        full test matrix + all jobs
 #   <GROUP_NAME>               a named group (see groups:) expanding recursively to its members
 version: 1
@@ -37,6 +40,30 @@ groups:
     - job:extension-e2e
     # The WinGet/Homebrew installer artifacts package and ship this CLI bundle, so a change to the
     # bundle (eng/Bundle.proj) must regenerate/validate them too.
+    - job:winget-installer
+    - job:homebrew-installer
+
+  # Everything downstream of the build_packages artifact producer in tests.yml. Derived from the
+  # regular-PR requiresNugets test buckets plus jobs whose `needs:` include build_packages.
+  BUILD_PACKAGE_CONSUMERS:
+    - test:Aspire.Cli.EndToEnd.Tests
+    - test:Aspire.Templates.Tests
+    - job:polyglot
+    - job:cli-starter-validation
+    - job:extension-e2e
+    - job:winget-installer
+    - job:homebrew-installer
+
+  # Everything downstream of the build_cli_archive_* artifact producers in tests.yml. Derived from
+  # the regular-PR requiresCliArchive test bucket plus jobs whose `needs:` include a native CLI
+  # archive producer.
+  CLI_ARCHIVE_CONSUMERS:
+    - test:Aspire.Cli.EndToEnd.Tests
+    - test:Aspire.Templates.Tests
+    - job:polyglot
+    - job:cli-starter-validation
+    - job:native-dashboard-validation
+    - job:extension-e2e
     - job:winget-installer
     - job:homebrew-installer
 
@@ -75,6 +102,8 @@ ignore:
   # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
   - eng/scripts/verify-cli-npm-package.ps1
   - eng/scripts/verify-cli-tool-nupkg.ps1
+  # SDK registration diagnostics run with the unconditional native Windows archive smoke.
+  - eng/scripts/tray-registration-control/**
   # The stabilization job invokes this script independently of the tests selector.
   - eng/scripts/stabilization-smoke-init-restore.sh
   # Dev/AzDO-only eng/scripts with NO test consumer and no GH-CI build/test path: local debug-channel
@@ -100,42 +129,72 @@ ignore:
 # Path rules: a glob set -> a target set. One mechanism; the comment headers below are organization
 # only. targets may be test: / job: / a GROUP name / ALL.
 path_rules:
+  - paths:
+      - Aspire.slnx
+    targets: [ALL]
+    reason: solution membership can add an existing project without touching that project's files, so run everything
+
+  - paths:
+      - src/Aspire.Dashboard/Components/Controls/TerminalView.razor.js
+      - src/Aspire.Dashboard/Components/Controls/TerminalTitle.razor.js
+      - src/Aspire.Dashboard/Components/Layout/TerminalDock.razor.js
+      - src/Aspire.Dashboard/wwwroot/js/app.js
+      - src/Aspire.Dashboard/wwwroot/js/app-terminalwindow.js
+      - src/Aspire.Dashboard/package.json
+      - src/Aspire.Dashboard/package-lock.json
+      - src/Aspire.Dashboard/wwwroot/js/hex1b-web-terminal/**
+      - tests/Aspire.Dashboard.Components.Tests/JavaScript/**
+    targets: [test:Infrastructure.Tests]
+    reason: DashboardTerminalScriptTests executes the terminal lifecycle JavaScript and reads the paired package assets outside its MSBuild graph.
 
   # --- catch-all: build infrastructure & broadly shared code -> ALL --------------------------
+
+  # Repository-wide build/restore inputs. These can affect every .NET test project and, for the
+  # restore/build entry points, the non-.NET jobs that consume built packages or archives.
   - paths:
       - global.json
       - NuGet.config
       - .gitattributes
-      - .config/dotnet-tools.json
       - Directory.Build.props
       - Directory.Build.targets
       - Directory.Packages.props
-      - Aspire.slnx
       - build.sh
       - restore.sh
+    targets: [ALL]
+    reason: repo-wide build/restore inputs can affect every test project and non-.NET job
+
+  # Shared MSBuild infrastructure imported across the source/test graph. Keep AzDO-publish-only props
+  # out of ALL; eng/Signing.props and eng/Publishing.props are routed to Infrastructure.Tests below.
+  - paths:
       - src/Directory.Build.props
       - src/Directory.Build.targets
       - tests/Directory.Build.props
       - tests/Directory.Build.targets
       - tests/Directory.Packages.props
-      # Root-level eng build props that affect every build/test -> ALL. Listed explicitly (not eng/*.props)
-      # so the AzDO-publish-only props (Publishing.props, Signing.props) are NOT swept into ALL; those are
-      # consumed only by eng/pipelines (no GH-CI build/test path) and are routed to Infrastructure.Tests below.
       - eng/Build.props
       - eng/Testing.props
       - eng/Versions.props
-      - eng/*.targets    # any root-level eng build target (Testing, AfterSigning, ReplaceText, ...) -> err toward ALL
-      - eng/OuterPreBuild.proj   # build-wide project-name validation traversal -> err toward ALL
-      - eng/WarningPolicy.proj   # evaluated before warnings-as-errors builds, except SDK-free cleanup
+      - eng/*.targets
+      - eng/OuterPreBuild.proj
+      - eng/WarningPolicy.proj
       - eng/build.ps1
       - eng/build.sh
-      - eng/Version.Details.xml
+    targets: [ALL]
+    reason: shared MSBuild/build infrastructure is imported across the build and test graph
+
+  # eng/common is shared Arcade/build infrastructure. It can be updated as a unit by Arcade SDK
+  # flows, so any change under it should conservatively rebuild and retest the full PR matrix.
+  - paths:
       - eng/common/**
-      # tests/Shared build & fixture infra that is NOT link-compiled source (Layer 1 cannot attribute
-      # these the way it does the *.cs here, and they are imported/consumed broadly): props/targets/
-      # packages, the EmptyProject/InstallSdk/RepoTesting closure, Docker e2e images, Playwright config,
-      # template fixtures, and test certificates -> err toward ALL. The link-compiled tests/Shared/**/*.cs
-      # are handled precisely by Layer 1 (see the `ignore` section), NOT routed here.
+    targets: [ALL]
+    reason: shared Arcade/build infrastructure can affect build, restore, and test execution across the repo
+
+  # tests/Shared build & fixture infra that is NOT link-compiled source (Layer 1 cannot attribute
+  # these the way it does the *.cs here, and they are imported/consumed broadly): props/targets/
+  # packages, the EmptyProject/InstallSdk/RepoTesting closure, Docker e2e images, Playwright config,
+  # template fixtures, and test certificates -> err toward ALL. The link-compiled tests/Shared/**/*.cs
+  # are handled precisely by Layer 1 (see the `ignore` section), NOT routed here.
+  - paths:
       - tests/Shared/**/*.props
       - tests/Shared/**/*.targets
       - tests/Shared/**/*.proj
@@ -145,11 +204,32 @@ path_rules:
       - tests/Shared/**/*.pfx
       - tests/Shared/**/Dockerfile*
       - tests/Shared/TemplatesTesting/data/**
-      - .github/actions/**   # local composite actions are CI-load-bearing (the skip gate, the test
-                             # runner's keychain unlock, enumerate-tests, ...) and a change to one can
-                             # affect any job. They would hit the run-all fallback anyway as unmapped
-                             # leftovers, but route them to ALL explicitly so the intent is recorded
-                             # and pinned by TestTriggerMapTests.EveryLocalActionUsedByAWorkflowIsRoutedToAll.
+    targets: [ALL]
+    reason: shared test build inputs and fixtures are consumed across multiple test lanes
+
+  # Local composite actions used by regular PR CI. Route each action to the work it can affect; when
+  # the blast radius is not precise enough, keep the conservative full-matrix target.
+  - paths:
+      - .github/actions/check-changed-files/**
+      - .github/actions/create-pull-request/**
+      - .github/actions/select-tests/**
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests validates these composite actions' behavior
+  - paths:
+      - .github/actions/enumerate-tests/**
+    targets: [DOTNET_TESTS]
+    reason: enumerate-tests only builds the managed .NET test-project matrix, not non-.NET PR-gated jobs
+  - paths:
+      - .github/actions/setup-deno/**
+    targets: [test:Aspire.Hosting.JavaScript.Tests, job:extension-e2e]
+    reason: setup-deno is consumed by the Hosting.JavaScript test lane and extension E2E workflow
+  - paths:
+      - .github/actions/unlock-macos-keychain/**
+    targets: [ALL]
+    reason: macOS test keychain setup is shared across regular run-tests lanes, so keep it conservative
+
+  # Matrix, enumeration, and runner infrastructure can silently omit or misclassify arbitrary tests.
+  - paths:
       - eng/scripts/split-test-matrix-by-deps.ps1
       - eng/scripts/split-test-projects-for-ci.ps1   # discovers every split project's partitions/classes
       - eng/scripts/gha-testreport.ps1   # invoked by the shared MTP targets after every GitHub test run
@@ -162,11 +242,23 @@ path_rules:
       - eng/testing/CITestsProperties.props
       - .github/workflows/tests.yml
       - .github/workflows/run-tests.yml
-      - .github/workflows/specialized-test-runner.yml
-      - .github/workflows/build-packages.yml
-      - .github/workflows/build-cli-native-archives.yml
     targets: [ALL]
-    reason: build infrastructure / broadly shared code -> run everything
+    reason: matrix, enumeration, and runner infrastructure can affect any regular PR test lane
+
+  - paths:
+      - .github/workflows/normalize-mtp-exit-code.*
+    targets: [ALL, job:deployment-e2e]
+    reason: shared MTP exit normalization is consumed by regular test lanes and Deployment E2E
+
+  - paths:
+      - .github/workflows/build-packages.yml
+    targets: [BUILD_PACKAGE_CONSUMERS]
+    reason: this reusable workflow only produces NuGet artifacts, so only jobs/tests that list build_packages or require NuGets are affected
+
+  - paths:
+      - .github/workflows/build-cli-native-archives.yml
+    targets: [CLI_ARCHIVE_CONSUMERS]
+    reason: this reusable workflow only produces native CLI archives, so only jobs/tests that list build_cli_archive_* or require CLI archives are affected
 
   # --- convention misses: integration dirs whose covering test is NOT the same-named one ------
   - paths: [src/Aspire.Hosting.Azure.*/**]
@@ -217,8 +309,9 @@ path_rules:
       - .vscode/tasks.json
       - .github/scripts/assert-extension-e2e-bridge-vsix.ps1
       - .github/workflows/extension-unit-tests.yml
+      - .github/workflows/extension-e2e-tests.yml
     targets: [job:extension-unit]
-    reason: extension_tests_win validates the root launch/task workspace wiring and extension tests; extension_bootstrap_linux builds the extension and validates the e2e bridge VSIX
+    reason: extension tests validate workspace wiring and the E2E workflow contract; bootstrap builds validate the E2E bridge VSIX
   - paths:
       - extension/**
       - src/Aspire.AppHost.Sdk/**
@@ -247,6 +340,7 @@ path_rules:
       - tests/Aspire.Deployment.EndToEnd.Tests/**
       - src/Aspire.ProjectTemplates/**
       - .github/workflows/deployment-tests.yml
+      - .github/workflows/run-deployment-test.sh
     targets: [job:deployment-e2e]
     reason: SCHEDULE/DISPATCH-ONLY today; ProjectTemplates is a Layer-1 blind spot; Azure/Cli/TypeSystem/Managed production projects are in affected_project_rules
   - paths:
@@ -259,6 +353,16 @@ path_rules:
       - eng/scripts/get-aspire-cli-pr.ps1
     targets: [job:cli-starter-validation]
     reason: the reusable workflow, PR installer, and scenario script implement starter validation
+  - paths:
+      - .github/workflows/native-dashboard-validation.yml
+      - eng/scripts/test-native-dashboard.ps1
+      - tests/Aspire.Dashboard.Tests/Integration/Playwright/NativeAotDashboardTests.cs
+    targets: [job:native-dashboard-validation]
+    reason: native Dashboard archive production and packaged runtime validation
+  - paths:
+      - eng/scripts/verify-native-dashboard-warnings.ps1
+    targets: [test:Infrastructure.Tests, job:native-dashboard-validation]
+    reason: validates the Native AOT Dashboard publish warning policy
 
   # --- outerloop / e2e test targets: loose paths (production projects in affected_project_rules) --------
   - paths:
@@ -309,15 +413,16 @@ path_rules:
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
-    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script
   - paths:
+      - eng/scripts/pack-cli-npm-package.pointer.README.md
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/Pipelines/NpmCliPackageTests renders this template and verifies the packaged README
+  - paths:
+      - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package.json
       - src/Aspire.ProjectTemplates/templates/aspire-ts-cs-starter/frontend/package-lock.json
     targets: [test:Aspire.Cli.Tests]
-    reason: >-
-      Cli.Tests/Templating/TemplatePackageLockTests.ProjectTemplateFrontendPackageLock_UsesPublicNpmRegistry
-      reads this shipped lockfile to guard its registry host. Additive with the src/Aspire.ProjectTemplates/**
-      -> Aspire.Templates.Tests rule below, which does NOT build Aspire.Cli.Tests, so a lockfile-only edit here
-      would otherwise skip the guard.
+    reason: TemplatePackageLockTests reads the shipped frontend manifest and lockfile to guard dependency versions and registry hosts.
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix
@@ -359,8 +464,8 @@ path_rules:
     reason: the Homebrew installer artifact job invokes this installed-CLI smoke test
   - paths:
       - eng/dashboardpack/**
-    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, job:extension-e2e]
-    reason: Dashboard package consumers; the broad match keeps new packaging inputs covered
+    targets: [test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, CLI_BUNDLE, job:native-dashboard-validation]
+    reason: Native Dashboard publishing and packaging inputs
   - paths:
       - eng/dcppack/**
     targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Hosting.Sdk.Tests, test:Aspire.Templates.Tests, test:Aspire.TerminalHost.Tests, job:extension-e2e]
@@ -391,6 +496,10 @@ path_rules:
     targets: [test:QuarantineTools.Tests]
     reason: QuarantineTools.Tests exercises the quarantine/disable source-rewriting logic
   - paths:
+      - tools/CreateFailingTestIssue/**
+    targets: [test:Infrastructure.Tests]
+    reason: Infrastructure.Tests/CreateFailingTestIssue builds and invokes the tool dynamically, without a ProjectReference edge in the solution graph
+  - paths:
       - tools/SelectTests/**
       - eng/github-ci/test-trigger-map.yml
       - eng/github-ci/ci-skip-entirely-patterns.txt
@@ -399,6 +508,8 @@ path_rules:
     reason: Infrastructure.Tests validates the selector map, prefilter, and root ignore behavior
   - paths:
       - .github/workflows/**
+      - .github/actionlint.yaml
+      - .github/actionlint-version.json
       - eng/pipelines/**
       - eng/Signing.props
       - eng/Publishing.props
@@ -407,8 +518,16 @@ path_rules:
   - paths:
       - eng/Bundle.proj
       - tools/CreateLayout/**
-    targets: [CLI_BUNDLE]
-    reason: CreateLayout assembles the CLI bundle consumed by CLI e2e, extension e2e, and installers
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: assembles and validates native CLI bundle payloads
+  - paths: [src/Aspire.Tray/Windows/publish.ps1]
+    targets: [CLI_BUNDLE, test:Infrastructure.Tests]
+    reason: Windows native publishing and smoke invocation
+  - paths:
+      - eng/scripts/generate-template-cgmanifest.ps1
+      - src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
+    targets: [test:Infrastructure.Tests]
+    reason: template manifest wrapper and restore workspace cleanup coverage
 
 # Project rules: an affected production/non-test project (Layer 1, matched by project-NAME glob) -> targets.
 # This follows the graph's transitive closure: a change to a project's dependency marks it affected,
@@ -419,6 +538,12 @@ path_rules:
 # triggers.
 # Project Name == the .csproj base name (what Layer 1 emits).
 affected_project_rules:
+  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+    targets: [test:Aspire.Tray.Tests, test:Infrastructure.Tests]
+    reason: native platform changes must retain shared tray contracts and the packaging/signing invariants; tests source-link common code rather than referencing the platform executables
+  - projects: [Aspire.Tray.Mac, Aspire.Tray.Windows]
+    targets: [CLI_BUNDLE]
+    reason: native tray payloads are embedded in the CLI bundle
   - projects: [CreateLayout]
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs
@@ -455,6 +580,7 @@ affected_project_rules:
       - Aspire.Hosting.Azure.ContainerRegistry
       - Aspire.Hosting.Azure.CosmosDB
       - Aspire.Hosting.Azure.EventHubs
+      - Aspire.Hosting.Azure.FrontDoor
       - Aspire.Hosting.Azure.Functions
       - Aspire.Hosting.Azure.KeyVault
       - Aspire.Hosting.Azure.Kubernetes
@@ -508,8 +634,8 @@ affected_project_rules:
     targets: [job:typescript-api-compat]
     reason: compares checked-in *.ats.txt baselines vs fresh `aspire sdk dump --format ci`
   - projects: [Aspire.Dashboard]
-    targets: [test:Aspire.Templates.Tests]
-    reason: Templates.Tests launches generated AppHosts with the packaged dashboard
+    targets: [test:Aspire.Templates.Tests, job:native-dashboard-validation]
+    reason: Templates.Tests and native validation launch the packaged dashboard
   - projects:
       - Aspire.AppHost.Sdk
       - Aspire.Cli
@@ -528,9 +654,9 @@ affected_project_rules:
       - Aspire.Managed
     targets: [job:extension-e2e]
     reason: direct runtime and build dependencies of extension e2e
-  - projects: [Aspire.Hosting.Azure*, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
+  - projects: [Aspire.Hosting.Azure*, Aspire.Hosting.Dotnet, Aspire.Hosting.Foundry, Aspire.Cli, Aspire.TypeSystem, Aspire.Managed]
     targets: [job:deployment-e2e]
-    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps to Azure
+    reason: SCHEDULE/DISPATCH-ONLY today; deploys generated apps with packages added dynamically by tests
   - projects: [Aspire.Hosting, Aspire.Hosting.AppHost, Aspire.Hosting.PostgreSQL, Aspire.Hosting.Redis]
     targets: [test:Aspire.EndToEnd.Tests]
     reason: OUTERLOOP-ONLY today; builds testproject apphost against built nugets

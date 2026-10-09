@@ -8,6 +8,8 @@ Use this integration to model, configure, and orchestrate Blazor WebAssembly app
 
 An existing Blazor WebAssembly project and any backend API projects it calls. The example below assumes the API exposes an endpoint named `http`.
 
+Publishing requires the client's selected .NET SDK (8 through 11) to be available locally. The build image downloads that SDK alongside the gateway SDK, preserving client SDK selection; network access is required.
+
 ### Add the integration
 
 From your AppHost directory, add the `Aspire.Hosting.Blazor` integration with the Aspire CLI:

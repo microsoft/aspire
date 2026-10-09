@@ -8,12 +8,12 @@ using Azure.Provisioning.Storage;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureStoragePrivateEndpointLockdownTests
+public class AzureStoragePrivateEndpointLockdownTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AddAzureStorage_WithPrivateEndpoint_CanOverrideWithConfigureInfrastructure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -38,7 +38,7 @@ public class AzureStoragePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureStorage_WithPrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -57,7 +57,7 @@ public class AzureStoragePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureStorage_WithTablePrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
@@ -74,7 +74,7 @@ public class AzureStoragePrivateEndpointLockdownTests
     [Fact]
     public async Task AddAzureStorage_WithDataLakePrivateEndpoint_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
         var subnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");

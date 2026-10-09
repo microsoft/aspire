@@ -17,6 +17,81 @@ namespace Aspire.Cli.Tests.Processes;
 
 public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task StopAppHostByConnectionAsync_DoesNotStopLauncher(bool rpcResult)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The shell process is Unix-specific.");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionFactory = new TestProcessExecutionFactory();
+        var signaler = CreateService(workspace, workspace.WorkspaceRoot.FullName, executionFactory);
+        using var cliProcess = StartTerminatingShellProcess();
+        try
+        {
+            var requests = 0;
+            var result = await signaler.StopAppHostByConnectionAsync(
+                new AppHostInformation
+                {
+                    AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"),
+                    ProcessId = int.MaxValue,
+                    CliProcessId = cliProcess.Id,
+                    CliStartedAt = GetRuntimeProcessStartTime(cliProcess)
+                },
+                _ =>
+                {
+                    requests++;
+                    return Task.FromResult(rpcResult);
+                },
+                CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(rpcResult, result);
+            Assert.Equal(1, requests);
+            Assert.False(cliProcess.HasExited);
+            Assert.Empty(executionFactory.CreatedExecutions);
+        }
+        finally
+        {
+            await StopProcessAsync(cliProcess);
+        }
+    }
+
+    [Fact]
+    public async Task StopAppHostByConnectionAsync_TimeoutDoesNotEscalate()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "The shell processes are Unix-specific.");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionFactory = new TestProcessExecutionFactory();
+        var timeProvider = new FakeTimeProvider { AutoAdvanceAmount = TimeSpan.FromSeconds(20) };
+        var signaler = CreateService(workspace, workspace.WorkspaceRoot.FullName, executionFactory, timeProvider: timeProvider);
+        using var appHostProcess = StartTerminatingShellProcess();
+        using var cliProcess = StartTerminatingShellProcess();
+        try
+        {
+            var result = await signaler.StopAppHostByConnectionAsync(
+                new AppHostInformation
+                {
+                    AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"),
+                    ProcessId = appHostProcess.Id,
+                    StartedAt = GetRuntimeProcessStartTime(appHostProcess),
+                    CliProcessId = cliProcess.Id,
+                    CliStartedAt = GetRuntimeProcessStartTime(cliProcess)
+                },
+                _ => Task.FromResult(true),
+                CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.False(result);
+            Assert.False(appHostProcess.HasExited);
+            Assert.False(cliProcess.HasExited);
+            Assert.Empty(executionFactory.CreatedExecutions);
+        }
+        finally
+        {
+            await StopProcessAsync(appHostProcess);
+            await StopProcessAsync(cliProcess);
+        }
+    }
+
     [Fact]
     public async Task TryStopProcessTreeWithDcpAsync_UsesDcpStopProcessTreeArguments()
     {

@@ -937,11 +937,28 @@ public sealed class SelectTestsCliTests
             var unrelatedSha = RunGit(repoRoot, "rev-parse", "HEAD");
 
             var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
-            var exit = Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true));
+            var previousOut = Console.Out;
+            using var consoleOutput = new StringWriter();
+            Console.SetOut(consoleOutput);
+            int exit;
+            try
+            {
+                exit = Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true));
+            }
+            finally
+            {
+                Console.SetOut(previousOut);
+            }
 
             Assert.Equal(0, exit);
             // ALL selected -> enforce writes no restriction props, so enumerate-tests runs everything.
             Assert.False(File.Exists(propsPath));
+
+            // The warning is part of the selector contract, but capture it so an intentionally simulated
+            // failure does not become a real warning annotation when this test runs in GitHub Actions.
+            Assert.Contains("::warning::SelectTests:", consoleOutput.ToString());
+            Assert.Contains("no common ancestor", consoleOutput.ToString());
+            Assert.Contains("Falling back to running ALL tests", consoleOutput.ToString());
 
             // The fallback is recorded in the run summary (the durable record historical audits read),
             // naming the merge-base as the cause.

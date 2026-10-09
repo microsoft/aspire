@@ -226,7 +226,12 @@ public static class RabbitMQBuilderExtensions
 
         if (handled)
         {
-            builder.WithHttpEndpoint(port: port, targetPort: 15672, name: RabbitMQServerResource.ManagementEndpointName);
+            builder.WithHttpEndpoint(port: port, targetPort: 15672, name: RabbitMQServerResource.ManagementEndpointName)
+                   .WithUrlForEndpoint(RabbitMQServerResource.ManagementEndpointName, c =>
+                   {
+                       c.DisplayText = "Manage";
+                       c.DisplayOrder = 1;
+                   });
             return builder;
         }
 

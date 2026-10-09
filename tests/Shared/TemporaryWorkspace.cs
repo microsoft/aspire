@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using Xunit;
 
 using IOPath = System.IO.Path;
@@ -17,39 +16,13 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
 
     public DirectoryInfo WorkspaceRoot => workspaceDirectory;
 
+    public ITestOutputHelper TestOutputHelper => outputHelper;
+
     public string Path => workspaceDirectory.FullName;
 
     public DirectoryInfo CreateDirectory(string name)
     {
         return workspaceDirectory.CreateSubdirectory(name);
-    }
-
-    public async Task InitializeGitAsync(CancellationToken cancellationToken = default)
-    {
-        outputHelper.WriteLine($"Initializing git repository at: {workspaceDirectory.FullName}");
-
-        using var process = new Process
-        {
-            StartInfo = new ProcessStartInfo
-            {
-                FileName = "git",
-                Arguments = "init",
-                WorkingDirectory = workspaceDirectory.FullName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        process.Start();
-        await process.WaitForExitAsync(cancellationToken);
-
-        if (process.ExitCode != 0)
-        {
-            var error = await process.StandardError.ReadToEndAsync(cancellationToken);
-            throw new InvalidOperationException($"Failed to initialize git repository: {error}");
-        }
     }
 
     public void Dispose()
@@ -220,10 +193,17 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         var workspaceDirectory = parentDir.CreateSubdirectory(IOPath.GetRandomFileName());
         outputHelper.WriteLine($"Temporary workspace created at: {workspaceDirectory.FullName}");
 
-        // Register workspace path for CaptureWorkspaceOnFailure attribute
+        // CaptureWorkspaceOnFailure runs after method-local disposal. Preserve the workspace
+        // immediately so disposal defers deletion until the attribute has copied or released it.
         TestContext.Current?.KeyValueStorage["WorkspacePath"] = workspaceDirectory.FullName;
+        var workspace = new TemporaryWorkspace(outputHelper, workspaceDirectory);
+        if (TestContext.Current?.KeyValueStorage.TryGetValue("PreserveWorkspaceOnFailure", out var preserveValue) == true &&
+            preserveValue is true)
+        {
+            workspace.Preserve();
+        }
 
-        return new TemporaryWorkspace(outputHelper, workspaceDirectory);
+        return workspace;
     }
 
     /// <summary>

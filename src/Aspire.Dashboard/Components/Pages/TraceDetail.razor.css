@@ -218,8 +218,7 @@
     grid-area: details;
     align-items: center;
     min-width: 0;
-    min-height: 32px;
-    gap: 8px;
+    --fluent-overflow-gap: 8px;
 }
 
 ::deep .trace-header-details .fluent-overflow-item {
@@ -309,11 +308,6 @@
 
 ::deep .span-log-entry-selected.span-log-entry-error {
     background: color-mix(in srgb, var(--button-color), white 30%);
-}
-
-::deep .log-tooltip {
-    max-width: 350px;
-    flex-direction: column;
 }
 
 ::deep .log-tooltip-title {

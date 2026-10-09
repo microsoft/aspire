@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIREDOCKERFILEBUILDER001
-#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;

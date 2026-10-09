@@ -130,109 +130,56 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// <summary>
     /// Creates the project .csproj content using project references to the local Aspire repository.
     /// </summary>
-    private XDocument CreateProjectFile(IEnumerable<IntegrationReference> integrations)
+    private CSharpProjectFile CreateProjectFile(IEnumerable<IntegrationReference> integrations)
     {
         // Determine OS/architecture for DCP package name
-        var (buildOs, buildArch) = GetBuildPlatform();
+        var (buildOs, buildArch) = GetBuildPlatform(_environment);
         var dcpPackageName = $"microsoft.developercontrolplane.{buildOs}-{buildArch}";
         var dcpVersion = GetDcpVersionFromRepo(_repoRoot, buildOs, buildArch);
 
-        var template = $"""
-            <Project Sdk="Microsoft.NET.Sdk">
-                <PropertyGroup>
-                    <OutputType>exe</OutputType>
-                    <TargetFramework>{TargetFramework}</TargetFramework>
-                    <AssemblyName>{AssemblyName}</AssemblyName>
-                    <OutDir>{BuildFolder}</OutDir>
-                    <UserSecretsId>{_userSecretsId}</UserSecretsId>
-                    <IsAspireHost>true</IsAspireHost>
-                    <IsPublishable>false</IsPublishable>
-                    <SelfContained>false</SelfContained>
-                    <ImplicitUsings>enable</ImplicitUsings>
-                    <Nullable>enable</Nullable>
-                    <WarningLevel>0</WarningLevel>
-                    <EnableNETAnalyzers>false</EnableNETAnalyzers>
-                    <EnableRoslynAnalyzers>false</EnableRoslynAnalyzers>
-                    <RunAnalyzers>false</RunAnalyzers>
-                    <NoWarn>$(NoWarn);1701;1702;1591;CS8019;CS1591;CS1573;CS0168;CS0219;CS8618;CS8625;CS1998;CS1999</NoWarn>
-                    <!-- Properties for in-repo building -->
-                    <RepoRoot>{_repoRoot}</RepoRoot>
-                    <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
-                    <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
-                    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
-                    <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
-                    <!-- DCP and Dashboard paths for local development -->
-                    <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>
-                    <AspireDashboardDir>{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net8.0/</AspireDashboardDir>
-                </PropertyGroup>
-                <ItemGroup>
-                    <PackageReference Include="StreamJsonRpc" />
-                    <PackageReference Include="Google.Protobuf" />
-                </ItemGroup>
-            </Project>
-            """;
-
-        var doc = XDocument.Parse(template);
+        var projectFile = new CSharpProjectFile();
+        projectFile.AddProperty("OutputType", "exe");
+        projectFile.AddProperty("TargetFramework", TargetFramework);
+        projectFile.AddProperty("AssemblyName", AssemblyName);
+        projectFile.AddProperty("OutDir", BuildFolder);
+        projectFile.AddProperty("UserSecretsId", _userSecretsId);
+        projectFile.AddProperty("IsAspireHost", "true");
+        projectFile.AddProperty("IsPublishable", "false");
+        projectFile.AddProperty("SelfContained", "false");
+        projectFile.AddProperty("ImplicitUsings", "enable");
+        projectFile.AddProperty("Nullable", "enable");
+        projectFile.AddProperty("WarningLevel", "0");
+        projectFile.AddProperty("EnableNETAnalyzers", "false");
+        projectFile.AddProperty("EnableRoslynAnalyzers", "false");
+        projectFile.AddProperty("RunAnalyzers", "false");
+        projectFile.AddProperty("NoWarn", "$(NoWarn);1701;1702;1591;CS8019;CS1591;CS1573;CS0168;CS0219;CS8618;CS8625;CS1998;CS1999");
+        projectFile.AddProperty("RepoRoot", _repoRoot);
+        projectFile.AddProperty("SkipValidateAspireHostProjectResources", "true");
+        projectFile.AddProperty("SkipAddAspireDefaultReferences", "true");
+        projectFile.AddProperty("SkipAspireIntegrationAnalyzersReference", "true");
+        projectFile.AddProperty("AspireHostingSDKVersion", "42.42.42");
+        projectFile.AddProperty("DcpDir", $"$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/");
+        projectFile.AddProperty("AspireDashboardDir", $"{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net11.0/");
+        projectFile.PackageReferences.Add(new CSharpPackageReference("StreamJsonRpc"));
+        projectFile.PackageReferences.Add(new CSharpPackageReference("Google.Protobuf"));
 
         // Add project references for Aspire.Hosting.* packages, NuGet for others
-        var projectRefGroup = new XElement("ItemGroup");
-        var addedProjects = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var otherPackages = new List<(string Name, string Version)>();
+        var addedProjects = new HashSet<string>(StringComparers.FileSystemPath);
+        projectFile.AddIntegrationReferences(
+            integrations,
+            _repoRoot,
+            isAspireProjectResource: false,
+            addedProjectPaths: addedProjects,
+            packageVersionAttributeName: CSharpPackageReference.VersionOverrideAttributeName);
 
-        foreach (var integration in integrations)
-        {
-            if (integration.IsProjectReference)
-            {
-                // Explicit project reference from settings.json
-                if (addedProjects.Add(integration.Name))
-                {
-                    projectRefGroup.Add(new XElement("ProjectReference",
-                        new XAttribute("Include", integration.ProjectPath!),
-                        new XElement("IsAspireProjectResource", "false")));
-                }
-            }
-            else if (integration.Name.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase) &&
-                     !integration.DisableLocalProjectSubstitution)
-            {
-                var projectPath = Path.Combine(_repoRoot, "src", integration.Name, $"{integration.Name}.csproj");
-                if (File.Exists(projectPath) && addedProjects.Add(integration.Name))
-                {
-                    projectRefGroup.Add(new XElement("ProjectReference",
-                        new XAttribute("Include", projectPath),
-                        new XElement("IsAspireProjectResource", "false")));
-                }
-            }
-            else
-            {
-                if (integration.Version is null)
-                {
-                    throw new InvalidOperationException($"Integration '{integration.Name}' is neither a project reference nor a package reference (both Version and ProjectPath are null).");
-                }
-                otherPackages.Add((integration.Name, integration.Version));
-            }
-        }
-
-        // Always add Aspire.Hosting project reference
-        var hostingPath = Path.Combine(_repoRoot, "src", "Aspire.Hosting", "Aspire.Hosting.csproj");
-        if (File.Exists(hostingPath) && addedProjects.Add("Aspire.Hosting"))
-        {
-            projectRefGroup.Add(new XElement("ProjectReference",
-                new XAttribute("Include", hostingPath),
-                new XElement("IsAspireProjectResource", "false")));
-        }
-
-        if (projectRefGroup.HasElements)
-        {
-            doc.Root!.Add(projectRefGroup);
-        }
-
-        if (otherPackages.Count > 0)
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                otherPackages.Select(p => new XElement("PackageReference",
-                    new XAttribute("Include", p.Name),
-                    new XAttribute("VersionOverride", p.Version)))));
-        }
+        // Aspire configuration synthesizes the base Aspire.Hosting reference and ignores configured
+        // replacements. Add it defensively for direct callers that omit the base; path de-duplication
+        // handles the normal synthesized reference.
+        projectFile.AddRepositoryProjectReferenceIfExists(
+            _repoRoot,
+            "Aspire.Hosting",
+            isAspireProjectResource: false,
+            addedProjectPaths: addedProjects);
 
         // Add imports for in-repo AppHost building
         var appHostInTargets = Path.Combine(_repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets");
@@ -240,33 +187,24 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (File.Exists(appHostInTargets))
         {
-            doc.Root!.Add(new XElement("Import", new XAttribute("Project", appHostInTargets)));
+            projectFile.Imports.Add(new CSharpProjectImport(appHostInTargets));
         }
         if (File.Exists(sdkInTargets))
         {
-            doc.Root!.Add(new XElement("Import", new XAttribute("Project", sdkInTargets)));
+            projectFile.Imports.Add(new CSharpProjectImport(sdkInTargets));
         }
 
-        // Add Dashboard and RemoteHost project references
-        var dashboardProject = Path.Combine(_repoRoot, "src", "Aspire.Dashboard", "Aspire.Dashboard.csproj");
-        if (File.Exists(dashboardProject))
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                new XElement("ProjectReference", new XAttribute("Include", dashboardProject))));
-        }
-
-        var remoteHostProject = Path.Combine(_repoRoot, "src", "Aspire.Hosting.RemoteHost", "Aspire.Hosting.RemoteHost.csproj");
-        if (File.Exists(remoteHostProject))
-        {
-            doc.Root!.Add(new XElement("ItemGroup",
-                new XElement("ProjectReference", new XAttribute("Include", remoteHostProject))));
-        }
+        // The Dashboard is a standalone net11 process and isn't loaded by the net10 AppHost scanner.
+        projectFile.AddRepositoryProjectReferenceIfExists(
+            _repoRoot,
+            "Aspire.Hosting.RemoteHost",
+            isAspireProjectResource: false);
 
         // Disable Aspire SDK code generation
-        doc.Root!.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteHostProjectMetadataSources")));
-        doc.Root!.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteProjectMetadataSources")));
+        projectFile.Targets.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteHostProjectMetadataSources")));
+        projectFile.Targets.Add(new XElement("Target", new XAttribute("Name", "_CSharpWriteProjectMetadataSources")));
 
-        return doc;
+        return projectFile;
     }
 
     /// <summary>
@@ -320,7 +258,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Handle NuGet config and channel resolution
         string? channelName = null;
 
-        var userNugetConfig = _restoreRootConfigDirectory is null ? FindNuGetConfig(_appPath) : null;
+        var userNugetConfig = _restoreRootConfigDirectory is null ? await FindNuGetConfigAsync(_appPath, cancellationToken) : null;
         var nugetConfigContent = userNugetConfig is not null
             ? File.ReadAllText(userNugetConfig)
             : null;
@@ -328,11 +266,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var configuredChannelName = requestedChannel
             ?? AspireConfigFile.Load(_appPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
         var channelSources = new List<string>();
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
         var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
             ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
             : channels.Where(c => c.Type == PackageChannelType.Explicit);
@@ -367,29 +305,24 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
 
         // Create the project file
-        var doc = CreateProjectFile(integrations);
+        var projectFile = CreateProjectFile(integrations);
 
         if (_restoreRootConfigDirectory is not null)
         {
             // Read configs in their original hierarchy so relative feeds and inherited settings
             // retain their meaning even though the scanner project is generated elsewhere.
-            doc.Root!.Descendants("PropertyGroup").First()
-                .Add(new XElement("RestoreRootConfigDirectory", _restoreRootConfigDirectory));
+            projectFile.AddProperty("RestoreRootConfigDirectory", _restoreRootConfigDirectory);
         }
 
         // Add channel sources to the project
         if (channelSources.Count > 0)
         {
             var sourceList = string.Join(";", channelSources);
-            doc.Root!.Descendants("PropertyGroup").First()
-                .Add(new XElement("RestoreAdditionalProjectSources", sourceList));
+            projectFile.AddProperty("RestoreAdditionalProjectSources", sourceList);
         }
 
         // Add appsettings.json to output
-        doc.Root!.Add(new XElement("ItemGroup",
-            new XElement("None",
-                new XAttribute("Include", "appsettings.json"),
-                new XAttribute("CopyToOutputDirectory", "PreserveNewest"))));
+        projectFile.NoneItems.Add(new CSharpNoneItem("appsettings.json", CopyToOutputDirectory: "PreserveNewest"));
 
         // Create Directory.Packages.props to enable central package management
         // This ensures transitive dependencies use versions from the repo's Directory.Packages.props
@@ -406,6 +339,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             """;
 
         var projectFileName = Path.Combine(_projectModelPath, ProjectFileName);
+        var doc = projectFile.ToXDocument();
 
         // Log the full project XML for debugging
         _logger.LogTrace("Generated AppHostServer project file:\n{ProjectXml}", doc.ToString());
@@ -608,9 +542,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
         var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
-        // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
-        // only if the isolated path is requested. Sharing the env/arg construction avoids drift
-        // between the two branches — every env var and argument lives in exactly one place.
+        // Only the command line, working directory and environment of this ProcessStartInfo reach the
+        // child; ProcessExecutionFactory derives the launch mode (stdio, console, job) from the
+        // ProcessInvocationOptions below so every child is spawned the same way.
         var startInfo = new ProcessStartInfo(dotnetExe)
         {
             WorkingDirectory = _projectModelPath,
@@ -729,35 +663,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
-    private static string? FindNuGetConfig(string workingDirectory)
+    private async Task<string?> FindNuGetConfigAsync(string workingDirectory, CancellationToken cancellationToken)
     {
         try
         {
-            var startInfo = new ProcessStartInfo("dotnet")
-            {
-                Arguments = "nuget config paths",
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+            var (exitCode, configPaths) = await _dotNetCliRunner.GetNuGetConfigPathsAsync(
+                new DirectoryInfo(workingDirectory),
+                new ProcessInvocationOptions(),
+                cancellationToken);
 
-            using var process = Process.Start(startInfo);
-            if (process is null)
+            if (exitCode != 0)
             {
                 return null;
             }
 
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                return null;
-            }
-
-            var configPaths = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             var workingDirFullPath = Path.GetFullPath(workingDirectory);
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var globalNuGetPath = Path.Combine(userProfile, ".nuget");
@@ -781,16 +700,16 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
             return null;
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
         }
     }
 
-    private (string Os, string Arch) GetBuildPlatform()
+    internal static (string Os, string Arch) GetBuildPlatform(IEnvironment environment)
     {
-        var os = _environment.IsLinux() ? "linux"
-            : _environment.IsMacOS() ? "darwin"
+        var os = environment.IsLinux() ? "linux"
+            : environment.IsMacOS() ? "darwin"
             : "windows";
 
         var arch = RuntimeInformation.OSArchitecture switch
@@ -804,7 +723,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         return (os, arch);
     }
 
-    private static string GetDcpVersionFromRepo(string repoRoot, string buildOs, string buildArch)
+    internal static string GetDcpVersionFromRepo(string repoRoot, string buildOs, string buildArch)
     {
         const string fallbackVersion = "0.21.1";
 

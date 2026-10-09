@@ -495,28 +495,25 @@ public static class AzureCosmosExtensions
         // exposing this endpoint does not silently depend on the image's default remaining "true".
         builder.WithEnvironment("ENABLE_EXPLORER", "true");
 
-        var result = builder.WithEndpoint(endpointName: KnownUrls.DataExplorer.EndpointName, endpoint =>
+        const string dataExplorerEndpointName = "data-explorer";
+
+        var result = builder.WithEndpoint(endpointName: dataExplorerEndpointName, endpoint =>
             {
                 endpoint.UriScheme = "http";
                 endpoint.TargetPort = 1234;
                 endpoint.Port = port;
             })
-            .WithUrls(context =>
+            .WithUrlForEndpoint(dataExplorerEndpointName, c =>
             {
-                var url = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == KnownUrls.DataExplorer.EndpointName);
-#pragma warning disable IDE0031 // Use null propagation (IDE0031)
-                if (url is not null)
-#pragma warning restore IDE0031
-                {
-                    url.DisplayText = KnownUrls.DataExplorer.DisplayText;
-                }
+                c.DisplayText = "Manage";
+                c.DisplayOrder = 1;
             });
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             builder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                builder.WithEndpoint(KnownUrls.DataExplorer.EndpointName, ep =>
+                builder.WithEndpoint(dataExplorerEndpointName, ep =>
                 {
                     ep.UriScheme = "https";
                 });

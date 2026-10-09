@@ -3,8 +3,10 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var api = builder.addProject("api", "./src/Api");
+        var dotnetApi = builder.addDotnetProject("dotnet-api", "./src/Api/Api.csproj");
         var apiMigrations = builder.addProject("api-migrations-project", "./src/Api.Migrations");
 
+        dotnetApi.addEFMigrations("dotnet-api-migrations");
         api.addEFMigrations("api-migrations")
             .withMigrationsProject("./src/Api.Migrations");
         api.addEFMigrations("api-dbcontext-migrations", "Api.Data.AppDbContext")

@@ -16,10 +16,10 @@ public class DeprecatedWorkloadCheckTests
     {
         ProcessStartInfo? capturedStartInfo = null;
         var environment = new TestEnvironment();
-        var check = new DeprecatedWorkloadCheck(NullLogger<DeprecatedWorkloadCheck>.Instance, environment, startInfo =>
+        var check = new DeprecatedWorkloadCheck(NullLogger<DeprecatedWorkloadCheck>.Instance, environment, (startInfo, _) =>
         {
             capturedStartInfo = startInfo;
-            return null;
+            return Task.FromResult(new ProcessTextOutput(new ProcessExitStatus(1, canceled: false), string.Empty, string.Empty, processId: 0));
         });
 
         await check.CheckAsync(TestContext.Current.CancellationToken).DefaultTimeout();

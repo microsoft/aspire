@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -24,7 +21,6 @@ namespace Aspire.Hosting.Azure;
 /// publisher options, and execution context. It handles resource configuration and ensures
 /// that the bicep template is created in the specified output path.
 /// </remarks>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzurePublishingContext(
     string outputPath,
     AzureProvisioningOptions provisioningOptions,
@@ -270,7 +266,7 @@ public sealed class AzurePublishingContext(
         {
             BicepOutputReference b => GetOutputs(moduleMap[b.Resource], b.Name),
             ParameterResource p => ParameterLookup[p],
-            ConnectionStringReference r => Eval(r.Resource.ConnectionStringExpression),
+            ConnectionStringReference r => Eval(r.ConnectionStringExpression),
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
             ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),

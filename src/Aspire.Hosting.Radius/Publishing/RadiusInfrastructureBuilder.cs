@@ -3,8 +3,11 @@
 
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
 #pragma warning disable ASPIRECOMPUTE002 // GetEndpointPropertyExpression/GetHostAddressExpression are experimental compute-environment APIs the publisher relies on.
 #pragma warning disable ASPIRERADIUS006 // Secret-store model types (RadiusSecretStoreResource, etc.) are experimental; consumed internally by the publisher.
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -98,10 +101,6 @@ internal sealed class RadiusInfrastructureBuilder
     // a projection off a construct, and no construct publishes this.
     private readonly HashSet<ParameterResource> _emptyCredentialSubstitutions = [];
     private readonly Dictionary<ParameterResource, (IResource Owner, bool IsProjectionSubstitution)> _recipeCredentialOwners = [];
-
-    // The prefix WithReference gives the connection string it injects: "ConnectionStrings__<connectionName>".
-    // Read (not written) here, to recover the connection name a reference was aliased to.
-    private const string ConnectionStringEnvironmentPrefix = "ConnectionStrings__";
 
     // Tracks (resource, parameter) pairs that have already produced an unrelated-use warning, so a
     // parameter referenced by the same resource in multiple env vars only warns once.
@@ -1715,7 +1714,7 @@ internal sealed class RadiusInfrastructureBuilder
             resolved[resource] = resolvedType;
             var resourceType = resolvedType.ResourceType;
 
-            if (resource is ProjectResource ||
+            if (resource is IDotnetProgramResource ||
                 (resource is ContainerResource && resourceType == RadiusResourceTypes.Containers))
             {
                 compute.Add(resource);
@@ -2066,19 +2065,19 @@ internal sealed class RadiusInfrastructureBuilder
             return image;
         }
 
-        // ProjectResource has no ContainerImageAnnotation by default — the integration does
+        // .NET program resources have no ContainerImageAnnotation by default — the integration does
         // not (yet) build and push project images. Failing fast at publish time with a clear
         // remediation prevents the silent `aspire publish && aspire deploy` → in-cluster
         // ImagePullBackOff failure mode, which is opaque to the user (Radius/Kubernetes
         // surface it, not Aspire). Mirrors the CLI behaviour guideline that errors should
         // name the specific action the user must take.
-        if (resource is ProjectResource)
+        if (resource is IDotnetProgramResource)
         {
             throw new InvalidOperationException(
-                $"Project resource '{resource.Name}' cannot be published to Radius because no container image " +
+                $".NET program resource '{resource.Name}' cannot be published to Radius because no container image " +
                 "has been associated with it. The Aspire.Hosting.Radius integration does not yet build or push " +
                 "project images. As a workaround, build and push an image to a registry the target cluster can " +
-                "pull from, then attach it via WithContainerImage(\"<registry>/<image>:<tag>\") on the project " +
+                "pull from, then attach it via WithContainerImage(\"<registry>/<image>:<tag>\") on the .NET program " +
                 "resource. Tracking issue: https://github.com/microsoft/aspire/issues/16844.");
         }
 
@@ -3098,24 +3097,15 @@ internal sealed class RadiusInfrastructureBuilder
     /// prefixes that <c>WithReference</c>'s connection-property splat used for it.
     /// </summary>
     /// <remarks>
-    /// The prefix is <c>&lt;ENCODED_CONNECTION_NAME&gt;_</c>, and <c>connectionName</c> defaults to the
-    /// referenced resource's name but can be overridden per reference — an override
-    /// <c>WithReference</c> records nowhere in the model. It is recoverable anyway, because the same
-    /// call emits the connection string under <c>ConnectionStrings__&lt;connectionName&gt;</c> as a
-    /// <see cref="ConnectionStringReference"/> that names the resource, so the consumer's own
-    /// environment carries the alias. Reading it from there keeps an aliased reference
-    /// (<c>WithReference(cache, "admin")</c> → <c>ADMIN_PASSWORD</c>) attributable without having to
-    /// accept an arbitrary prefix, which is what would let an unrelated variable pass.
+    /// Use the logical name carried by <see cref="ConnectionStringReference"/> environment values, not the
+    /// projected physical alias: <c>db__primary</c> splats to <c>DB__PRIMARY_*</c> even though its
+    /// portable connection-string alias is <c>ConnectionStrings__db_primary</c>.
     /// <para>
-    /// The resource name is always included as well: a consumer that suppresses the connection
-    /// string via <see cref="ReferenceEnvironmentInjectionFlags"/>, or a resource that overrides
-    /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, leaves no
-    /// alias to read, and in both cases the splat used the default.
+    /// Reference relationships retain the resource-name fallback when connection-string injection
+    /// is suppressed via <see cref="ReferenceEnvironmentInjectionFlags"/>.
     /// </para>
     /// </remarks>
-    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(
-        IResource resource,
-        Dictionary<string, object> environmentVariables)
+    private static Dictionary<IResource, HashSet<string>> BuildReferencePrefixes(IResource resource, Dictionary<string, object> environmentVariables)
     {
         var prefixes = new Dictionary<IResource, HashSet<string>>();
 
@@ -3132,14 +3122,11 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
-        foreach (var (key, value) in environmentVariables)
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>())
         {
-            // ConnectionStrings__<connectionName>, written by the same WithReference call that
-            // splatted the properties. Anything else cannot tell us about an alias.
-            if (value is ConnectionStringReference connectionStringReference &&
-                key.StartsWith(ConnectionStringEnvironmentPrefix, StringComparison.Ordinal))
+            if (reference.EnvironmentVariableNames is { } names)
             {
-                Add(connectionStringReference.Resource, key[ConnectionStringEnvironmentPrefix.Length..]);
+                Add(reference.Resource, names.LogicalName);
             }
         }
 
@@ -3676,6 +3663,9 @@ internal sealed class RadiusInfrastructureBuilder
             }
         }
 
+        var referencePrefixes = BuildReferencePrefixes(resource, context.EnvironmentVariables);
+        ProjectPortableConnectionStringAliases(context.EnvironmentVariables);
+
         // Drop HTTPS service-discovery variables: containers in the cluster don't terminate TLS
         // (ingress/service mesh does), so an https `services__*` URL would be unreachable. This
         // matches RemoveHttpsServiceDiscoveryVariables in the Kubernetes/Docker Compose publishers.
@@ -3689,8 +3679,6 @@ internal sealed class RadiusInfrastructureBuilder
         {
             context.EnvironmentVariables.Remove(key);
         }
-
-        var referencePrefixes = BuildReferencePrefixes(resource, context.EnvironmentVariables);
 
         // Created on demand: a container with no credential-bearing variable emits no secret.
         RadiusSecuritySecretConstruct? containerSecret = null;
@@ -3785,6 +3773,27 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         return result;
+    }
+
+    private static void ProjectPortableConnectionStringAliases(Dictionary<string, object> environmentVariables)
+    {
+        // Snapshot the references before projecting aliases in the same dictionary.
+        foreach (var reference in environmentVariables.Values.OfType<ConnectionStringReference>().Distinct().ToArray())
+        {
+            if (reference.EnvironmentVariableNames is not { } names ||
+                string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase) ||
+                !environmentVariables.ContainsKey(names.PortableName))
+            {
+                continue;
+            }
+
+            // Radius renders these values as Kubernetes container environment variables. Deploy only
+            // the portable generated alias, preserving any later override of the original alias.
+            if (environmentVariables.Remove(names.OriginalName, out var originalValue))
+            {
+                environmentVariables[names.PortableName] = originalValue;
+            }
+        }
     }
 
     /// <summary>
@@ -4158,7 +4167,7 @@ internal sealed class RadiusInfrastructureBuilder
                 // context is canonicalized to the parent — otherwise `ConnectionStrings__appdb`
                 // would report the server's own password as an unrelated use.
                 RecordConnectionStringConsumption(connectionStringReference.Resource, owner);
-                await ResolveEnvPartsAsync(connectionStringReference.Resource.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
+                await ResolveEnvPartsAsync(connectionStringReference.ConnectionStringExpression, owner, parts, ResolveToParent(connectionStringReference.Resource), allowRecipeSubstitutions).ConfigureAwait(false);
                 return;
             case IResourceWithConnectionString resourceWithConnectionString:
                 RecordConnectionStringConsumption(resourceWithConnectionString, owner);
@@ -4545,7 +4554,7 @@ internal sealed class RadiusInfrastructureBuilder
                 return false;
 
             case ConnectionStringReference connectionStringReference:
-                return IsDeploymentSubstituted(connectionStringReference.Resource.ConnectionStringExpression, visited);
+                return IsDeploymentSubstituted(connectionStringReference.ConnectionStringExpression, visited);
 
             case IResourceWithConnectionString resourceWithConnectionString:
                 return IsDeploymentSubstituted(resourceWithConnectionString.ConnectionStringExpression, visited);

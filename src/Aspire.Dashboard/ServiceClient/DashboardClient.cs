@@ -165,7 +165,9 @@ internal sealed class DashboardClient : IDashboardClient
                     ClientCertificates = certificates
                 };
 
-                configuration.Bind("Dashboard:ResourceServiceClient:Ssl", httpHandler.SslOptions);
+                BindSslClientAuthenticationOptions(
+                    configuration.GetSection("Dashboard:ResourceServiceClient:Ssl"),
+                    httpHandler.SslOptions);
             }
 
             // https://learn.microsoft.com/aspnet/core/grpc/retries
@@ -207,11 +209,11 @@ internal sealed class DashboardClient : IDashboardClient
                 var filePath = _dashboardOptions.ResourceServiceClient.ClientCertificate.FilePath;
                 var password = _dashboardOptions.ResourceServiceClient.ClientCertificate.Password;
 
-#if NET9_0_OR_GREATER
+                // Intentionally accept only PKCS#12/PFX files for client authentication. Other
+                // formats accepted by the old constructor generally cannot supply a private key;
+                // certificate-store loading remains available for those configurations.
+                // https://github.com/microsoft/aspire/pull/5688#issuecomment-2350856704
                 return [X509CertificateLoader.LoadPkcs12FromFile(filePath, password)];
-#else
-                return [new X509Certificate2(filePath, password)];
-#endif
             }
 
             X509CertificateCollection GetKeyStoreCertificate()
@@ -238,6 +240,34 @@ internal sealed class DashboardClient : IDashboardClient
                 return certificates;
             }
         }
+
+    }
+
+    internal static void BindSslClientAuthenticationOptions(
+        IConfigurationSection configuration,
+        SslClientAuthenticationOptions options)
+    {
+        // SslClientAuthenticationOptions exposes certificate collections and callback properties
+        // that the configuration binding generator cannot construct. Preserve the supported scalar
+        // overrides without falling back to reflection under Native AOT.
+        options.AllowRenegotiation = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.AllowRenegotiation),
+            options.AllowRenegotiation);
+        options.AllowTlsResume = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.AllowTlsResume),
+            options.AllowTlsResume);
+        options.CertificateRevocationCheckMode = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.CertificateRevocationCheckMode),
+            options.CertificateRevocationCheckMode);
+        options.EnabledSslProtocols = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.EnabledSslProtocols),
+            options.EnabledSslProtocols);
+        options.EncryptionPolicy = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.EncryptionPolicy),
+            options.EncryptionPolicy);
+        options.TargetHost = configuration.GetValue(
+            nameof(SslClientAuthenticationOptions.TargetHost),
+            options.TargetHost);
     }
 
     internal sealed class KeyStoreProperties
@@ -307,10 +337,6 @@ internal sealed class DashboardClient : IDashboardClient
                     _whenConnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
 
-                if (_initialDataReceivedTcs.Task.IsCompleted)
-                {
-                    _initialDataReceivedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-                }
             }
         }
 
@@ -355,12 +381,12 @@ internal sealed class DashboardClient : IDashboardClient
             await Task.WhenAll(
                 Task.Run(async () =>
                 {
-                    await WatchWithRecoveryAsync(WatchResourcesAsync, "resources", cancellationToken).ConfigureAwait(false);
+                    await WatchWithRecoveryAsync(WatchResourcesAsync, "resources", onRetry: ResetResourceReadiness, cancellationToken).ConfigureAwait(false);
                     _resourceWatchCompleteTcs.TrySetResult();
                 }, cancellationToken),
                 Task.Run(async () =>
                 {
-                    await WatchWithRecoveryAsync(WatchInteractionsAsync, "interactions", cancellationToken).ConfigureAwait(false);
+                    await WatchWithRecoveryAsync(WatchInteractionsAsync, "interactions", onRetry: null, cancellationToken).ConfigureAwait(false);
                     _interactionWatchCompleteTcs.TrySetResult();
                 }, cancellationToken)).ConfigureAwait(false);
         }
@@ -462,7 +488,20 @@ internal sealed class DashboardClient : IDashboardClient
         public int ErrorCount { get; set; }
     }
 
-    private async Task WatchWithRecoveryAsync(Func<RetryContext, CancellationToken, Task<RetryResult>> action, string actionName, CancellationToken cancellationToken)
+    private void ResetResourceReadiness()
+    {
+        lock (_lock)
+        {
+            // Only a resource-stream restart requires another snapshot. Interaction failures don't invalidate
+            // resource data, and retries before a snapshot must retain the task existing callers are awaiting.
+            if (_initialDataReceivedTcs.Task.IsCompleted)
+            {
+                _initialDataReceivedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+    }
+
+    private async Task WatchWithRecoveryAsync(Func<RetryContext, CancellationToken, Task<RetryResult>> action, string actionName, Action? onRetry, CancellationToken cancellationToken)
     {
         // Track the number of errors we've seen since the last successfully received message.
         // As this number climbs, we extend the amount of time between reconnection attempts, in
@@ -543,6 +582,8 @@ internal sealed class DashboardClient : IDashboardClient
 
                 _logger.LogError(ex, "Error #{ErrorCount} watching {WatchName}. For troubleshooting, see {TroubleshootingUrl}", retryContext.ErrorCount, actionName, TroubleshootingUrl);
             }
+
+            onRetry?.Invoke();
         }
 
         static TimeSpan ExponentialBackOff(int errorCount, double maxSeconds)
@@ -573,6 +614,7 @@ internal sealed class DashboardClient : IDashboardClient
             List<ResourceViewModelChange>? changes = null;
             ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannels = [];
             var shouldUpdateConnectionState = false;
+            var initialDataReceivedTcs = _initialDataReceivedTcs;
 
             lock (_lock)
             {
@@ -607,7 +649,6 @@ internal sealed class DashboardClient : IDashboardClient
                         changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                     }
 
-                    _initialDataReceivedTcs.TrySetResult();
                 }
                 else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
                 {
@@ -667,6 +708,9 @@ internal sealed class DashboardClient : IDashboardClient
             if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
             {
                 await _resourceRepositoryWriter.ReplaceResourcesAsync(response.InitialData.Resources).ConfigureAwait(false);
+                // SelectedDashboardClient reads the persisted repository, not the in-memory map.
+                // Complete this snapshot's readiness only after both contain the initial resources.
+                initialDataReceivedTcs.TrySetResult();
             }
             else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
             {
@@ -815,12 +859,25 @@ internal sealed class DashboardClient : IDashboardClient
 
     public string ApplicationName
     {
-        get => _applicationName
-            ?? _dashboardOptions.ApplicationName
-            ?? "Aspire";
+        get => string.IsNullOrWhiteSpace(_applicationName)
+            ? _dashboardOptions.GetApplicationNameOrDefault()
+            : _applicationName;
     }
 
     public string? MinRequiredVersion => _minRequiredVersion;
+
+    public Task WhenResourcesReady
+    {
+        get
+        {
+            EnsureInitialized();
+
+            lock (_lock)
+            {
+                return _initialDataReceivedTcs.Task;
+            }
+        }
+    }
 
     public ResourceViewModel? GetResource(string resourceName)
     {
@@ -851,7 +908,7 @@ internal sealed class DashboardClient : IDashboardClient
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
         // Wait for initial data to be received from the server. This allows initial data to be returned with subscription when client is starting.
-        await _initialDataReceivedTcs.Task.WaitAsync(cts.Token).ConfigureAwait(false);
+        await WhenResourcesReady.WaitAsync(cts.Token).ConfigureAwait(false);
 
         // There are two types of channel in this class. This is not a gRPC channel.
         // It's a producer-consumer queue channel, used to push updates to subscribers
@@ -1152,6 +1209,114 @@ internal sealed class DashboardClient : IDashboardClient
 
         var response = await call.ResponseAsync.ConfigureAwait(false);
         return response.FileId;
+    }
+
+    public async IAsyncEnumerable<WatchTerminalsUpdate> SubscribeTerminalsAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        var errorCount = 0;
+
+        // Each subscriber owns its RPC, including recovery. Reopening it supplies a fresh snapshot, so neither the
+        // dock nor a detached window has to reconstruct changes missed during a disconnect.
+        while (true)
+        {
+            await WhenConnected.WaitAsync(cts.Token).ConfigureAwait(false);
+
+            var unsupported = false;
+            var updates = WatchTerminalsCoreAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+            await using (updates.ConfigureAwait(false))
+            {
+                while (true)
+                {
+                    bool hasNext;
+                    try
+                    {
+                        hasNext = await updates.MoveNextAsync().ConfigureAwait(false);
+                    }
+                    catch (RpcException ex)
+                    {
+                        cts.Token.ThrowIfCancellationRequested();
+                        unsupported = ex.StatusCode == StatusCode.Unimplemented;
+                        if (unsupported)
+                        {
+                            // Older AppHosts can serve the dashboard without implementing the terminal RPC.
+                            _logger.LogWarning("Server does not support terminals.");
+                        }
+                        else
+                        {
+                            _logger.LogWarning(ex, "Terminal watch stream disconnected. Retrying.");
+                        }
+                        break;
+                    }
+
+                    if (!hasNext)
+                    {
+                        break;
+                    }
+
+                    errorCount = 0;
+                    yield return updates.Current;
+                }
+            }
+
+            if (unsupported)
+            {
+                yield break;
+            }
+
+            // Normal stream completion also needs recovery. Dispose the old RPC before backing off, and cancel
+            // both connection waits and backoff when the subscriber goes away or the dashboard client is disposed.
+            var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, errorCount), 15));
+            errorCount = Math.Min(errorCount + 1, 4);
+            await Task.Delay(delay, cts.Token).ConfigureAwait(false);
+        }
+    }
+
+    private async IAsyncEnumerable<WatchTerminalsUpdate> WatchTerminalsCoreAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var call = _client!.WatchTerminals(new WatchTerminalsRequest(), headers: _headers, cancellationToken: cancellationToken);
+        await foreach (var update in call.ResponseStream.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+        {
+            yield return update;
+        }
+    }
+
+    public async Task CloseTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        await _client!.CloseTerminalAsync(
+            new CloseTerminalRequest { TerminalId = terminalId },
+            headers: _headers,
+            cancellationToken: cts.Token).ConfigureAwait(false);
+    }
+
+    public async Task<Stream> AttachTerminalAsync(string terminalId, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        // The call outlives this method, so the linked CTS cannot be scoped with `using` here. Link to the client
+        // token anyway so a dashboard-wide disconnect tears the tunnel down instead of leaking it.
+        var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        var call = _client!.AttachTerminal(headers: _headers, cancellationToken: combinedTokens.Token);
+        var stream = new GrpcTerminalClientStream(call, terminalId, combinedTokens);
+
+        try
+        {
+            // The AppHost blocks on the selector frame before wiring the call to Hex1b, so send it eagerly rather than
+            // waiting for the browser's first HMP1 frame — otherwise nothing streams until the user types.
+            await stream.SendSelectorAsync(combinedTokens.Token).ConfigureAwait(false);
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
+
+        return stream;
     }
 
     public async ValueTask DisposeAsync()

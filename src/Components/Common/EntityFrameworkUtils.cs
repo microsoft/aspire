@@ -4,7 +4,6 @@
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Aspire;
@@ -40,60 +39,13 @@ internal static class EntityFrameworkUtils
     /// <summary>
     /// Ensures a <see cref="DbContext"/> is registered in DI.
     /// </summary>
-    public static ServiceDescriptor CheckDbContextRegistered<TContext>(this IHostApplicationBuilder builder, [CallerMemberName] string memberName = "")
+    public static void CheckDbContextRegistered<TContext>(this IHostApplicationBuilder builder, [CallerMemberName] string memberName = "")
         where TContext : DbContext
     {
-        // Resolving DbContext<TContextService> will resolve DbContextOptions<TContextImplementation>.
-        // We need to replace the DbContextOptions service descriptor to inject more logic. This won't be necessary once
-        // Aspire targets .NET 9 as EF will respect the calls to services.ConfigureDbContext<TContext>(). c.f. https://github.com/dotnet/efcore/pull/32518
-
-        var oldDbContextOptionsDescriptor = builder.Services.FirstOrDefault(sd => sd.ServiceType == typeof(DbContextOptions<TContext>));
-
-        if (oldDbContextOptionsDescriptor is null)
+        if (!builder.Services.Any(sd => sd.ServiceType == typeof(DbContextOptions<TContext>)))
         {
             throw new InvalidOperationException($"DbContext<{typeof(TContext).Name}> was not registered. Ensure you have registered the DbContext in DI before calling {memberName}.");
         }
-
-        return oldDbContextOptionsDescriptor;
-    }
-
-    /// <summary>
-    /// Enriches the DbContext options service descriptor with custom alterations.
-    /// </summary>
-    public static void PatchServiceDescriptor<TContext>(this IHostApplicationBuilder builder, Action<DbContextOptionsBuilder<TContext>>? configureDbContextOptions = null, [CallerMemberName] string memberName = "")
-        where TContext : DbContext
-    {
-        var oldDbContextOptionsDescriptor = builder.CheckDbContextRegistered<TContext>(memberName);
-
-        if (configureDbContextOptions == null)
-        {
-            return;
-        }
-
-        builder.Services.Remove(oldDbContextOptionsDescriptor);
-
-        var dbContextOptionsDescriptor = new ServiceDescriptor(
-            oldDbContextOptionsDescriptor.ServiceType,
-            oldDbContextOptionsDescriptor.ServiceKey,
-            factory: (sp, key) =>
-            {
-                if (oldDbContextOptionsDescriptor.ImplementationFactory?.Invoke(sp) is not DbContextOptions<TContext> dbContextOptions)
-                {
-                    throw new InvalidOperationException($"DbContext<{typeof(TContext).Name}> was not configured. Ensure you have registered the DbContext in DI before calling {memberName}.");
-                }
-
-                var optionsBuilder = dbContextOptions != null
-                    ? new DbContextOptionsBuilder<TContext>(dbContextOptions)
-                    : new DbContextOptionsBuilder<TContext>();
-
-                configureDbContextOptions(optionsBuilder);
-
-                return optionsBuilder.Options;
-            },
-            oldDbContextOptionsDescriptor.Lifetime
-            );
-
-        builder.Services.Add(dbContextOptionsDescriptor);
     }
 
     public static void EnsureDbContextNotRegistered<TContext>(this IHostApplicationBuilder builder, [CallerMemberName] string callerMemberName = "") where TContext : DbContext

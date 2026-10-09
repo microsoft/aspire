@@ -108,7 +108,9 @@ public sealed class DownloadNativeArchivesTests : IDisposable
         {
             ("Release/Shipping/aspire-cli-linux-x64-13.4.0.tar.gz", "tar-content"),
             ("Release/Shipping/Aspire.Cli.linux-x64.13.4.0.nupkg", "nupkg-content"),
+            ("Release/Shipping/Aspire.Dashboard.Sdk.linux-x64.13.4.0.nupkg", "dashboard-nupkg-content"),
             ("Release/Shipping/microsoft-aspire-cli-linux-x64-13.4.0.tgz", "tgz-content"),
+            ("Release/DashboardArtifacts/linux-x64/aspire-dashboard-linux-x64.zip", "dashboard-zip-content"),
             ("Release/Shipping/aspire-cli-linux-x64-13.4.0.tar.gz.sha512", "ignored"),
             ("Release/Shipping/SomeRandom.txt", "ignored"),
         });
@@ -135,7 +137,7 @@ public sealed class DownloadNativeArchivesTests : IDisposable
         // NupkgsTargetDir for stage-native-cli-tool-packages.ps1 to consume).
         Assert.Contains("native_archives_linux_x64", result.Output);
         Assert.Contains("native_archives_win_x64", result.Output);
-        Assert.Contains("archives=1 nupkgs=2", result.Output);
+        Assert.Contains("archives=1 nupkgs=3 dashboardArchives=1", result.Output);
 
         var extractedArchives = Directory.GetFiles(archivesDir, "*", SearchOption.AllDirectories)
             .Select(p => Path.GetRelativePath(archivesDir, p).Replace(Path.DirectorySeparatorChar, '/'))
@@ -157,11 +159,20 @@ public sealed class DownloadNativeArchivesTests : IDisposable
             new[]
             {
                 "native_archives_linux_x64/Release/Shipping/Aspire.Cli.linux-x64.13.4.0.nupkg",
+                "native_archives_linux_x64/Release/Shipping/Aspire.Dashboard.Sdk.linux-x64.13.4.0.nupkg",
                 "native_archives_linux_x64/Release/Shipping/microsoft-aspire-cli-linux-x64-13.4.0.tgz",
                 "native_archives_win_x64/Release/Shipping/Aspire.Cli.win-x64.13.4.0.nupkg",
                 "native_archives_win_x64/Release/Shipping/microsoft-aspire-cli-win-x64-13.4.0.tgz",
             },
             extractedNupkgs);
+
+        var dashboardArtifactsDir = Path.Combine(Path.GetDirectoryName(archivesDir)!, "dashboard-artifacts");
+        var extractedDashboardArtifacts = Directory.GetFiles(dashboardArtifactsDir, "*", SearchOption.AllDirectories)
+            .Select(p => Path.GetRelativePath(dashboardArtifactsDir, p).Replace(Path.DirectorySeparatorChar, '/'))
+            .ToArray();
+        Assert.Equal(
+            ["native_archives_linux_x64/Release/DashboardArtifacts/linux-x64/aspire-dashboard-linux-x64.zip"],
+            extractedDashboardArtifacts);
     }
 
     [Fact]
@@ -401,6 +412,7 @@ public sealed class DownloadNativeArchivesTests : IDisposable
             "-BuildId", $"\"{buildId}\"",
             "-ArchivesTargetDir", $"\"{archivesTargetDir}\"",
             "-NupkgsTargetDir", $"\"{nupkgsTargetDir}\"",
+            "-DashboardArtifactsTargetDir", $"\"{Path.Combine(Path.GetDirectoryName(archivesTargetDir)!, "dashboard-artifacts")}\"",
             // Keep tests fast: never sleep between retries. The mock server
             // returns its failures instantly, so backoff time is pure overhead.
             "-RetryBaseDelaySeconds", retryBaseDelaySeconds.ToString(),

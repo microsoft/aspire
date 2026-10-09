@@ -46,6 +46,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/20778")]
     public async Task DeployFoundryToolboxToAzure()
     {
         using var cts = new CancellationTokenSource(s_toolboxTestTimeout);
@@ -779,8 +780,8 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <PackageReference Include="Azure.Identity" Version="1.21.0" />
                     <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.12.0-preview.260629.1" />
                     <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
-                    <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
-                    <PackageReference Include="Azure.Core" Version="1.59.0" />
+                    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
+                    <PackageReference Include="Azure.Core" Version="1.62.0" />
                   </ItemGroup>
                 </Project>
                 """);
@@ -798,11 +799,11 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 using Microsoft.Agents.AI.Foundry.Hosting;
                 using Microsoft.Extensions.AI;
 
-                string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__projmyproject")
-                    ?? throw new InvalidOperationException("ConnectionStrings__projmyproject is not set.");
+                string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__proj_myproject")
+                    ?? throw new InvalidOperationException("ConnectionStrings__proj_myproject is not set.");
 
-                string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat")
-                    ?? throw new InvalidOperationException("ConnectionStrings__chat is not set.");
+                string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat_model")
+                    ?? throw new InvalidOperationException("ConnectionStrings__chat_model is not set.");
 
                 DbConnectionStringBuilder projectConnectionBuilder = new() { ConnectionString = projectConnectionString };
                 DbConnectionStringBuilder chatConnectionBuilder = new() { ConnectionString = chatConnectionString };
@@ -812,7 +813,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
                 if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out Uri? projectUri) || projectUri is null)
                 {
-                    throw new InvalidOperationException("ConnectionStrings__projmyproject contains an invalid Endpoint value.");
+                    throw new InvalidOperationException("ConnectionStrings__proj_myproject contains an invalid Endpoint value.");
                 }
 
                 [Description("Get a weather forecast")]
@@ -894,7 +895,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                 """
                 var foundry = builder.AddFoundry("aif-myfoundry");
                 var foundryProject = foundry.AddProject("proj-myproject");
-                var chat = foundryProject.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
+                var chat = foundryProject.AddModelDeployment("chat-model", FoundryModel.OpenAI.Gpt41);
 
                 builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
                     .WithReference(chat).WaitFor(chat)

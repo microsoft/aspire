@@ -7,11 +7,16 @@ nobody necessarily owns it. This mechanism files a single deduplicated GitHub
 issue per branch when a push is red, and **closes it automatically** when a later
 push to the same branch is green.
 
+This reporter is separate from the Copilot-based
+[`Analyze CI Failure`](analyze-ci-failure.md) workflow, which attributes failed
+runs, reports PR-caused failures, tracks recurring causes, and files
+`[Main CI Failure]` issues.
+
 It is a consumer of the shared, repo-agnostic tracking-issue engine
 ([`tracking-issue.js`](../../.github/workflows/tracking-issue.js)), alongside the
 [scheduled-workflow scanner](monitor-scheduled-workflows.md), the
 [specialized-test failure reporter](specialized-test-failure-issues.md), and the
-[nightly-pipeline failure reporter](pipeline-failure-issues.md).
+[scheduled-pipeline failure reporter](pipeline-failure-issues.md).
 
 ## Push only — PR failures are excluded
 
@@ -68,15 +73,17 @@ every push (`if: always()`) and the script opens or closes based on the aggregat
 CI result the workflow passes in env:
 
 - `CI_RED` = `contains(needs.*.result, 'failure')` — file/update the issue.
-- `CI_GREEN` = `prepare_for_ci`, `tests`, and `stabilization_check` all `success`
+- `CI_GREEN` = `prepare_for_ci` and `tests` both `success`
   — close the issue.
 
 These are derived from explicit `needs.*.result` checks rather than
-`failure()`/`success()` because `tests`/`stabilization_check` are **skipped** on
+`failure()`/`success()` because `tests` is **skipped** on
 the no-relevant-changes path (`skip_workflow`). A skipped run is neither red nor
 green, so the script leaves any open issue untouched — requiring all-`success` for
 `CI_GREEN` avoids closing a still-red issue on a docs-only push, and the failure
-check avoids filing on a skip.
+check avoids filing on a skip. Stabilization runs only on PRs when the
+`STABILIZATION_ENABLED` output in `ci.yml` is `true`; it is intentionally skipped
+on pushes and does not contribute to the push-only tracker's green result.
 
 ## Logic and tests
 

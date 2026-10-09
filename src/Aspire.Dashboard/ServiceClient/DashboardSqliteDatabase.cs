@@ -8,6 +8,8 @@ using System.Globalization;
 using Aspire.Dashboard.Utils;
 using Microsoft.Data.Sqlite;
 
+[module: DapperAot]
+
 namespace Aspire.Dashboard.ServiceClient;
 
 /// <summary>

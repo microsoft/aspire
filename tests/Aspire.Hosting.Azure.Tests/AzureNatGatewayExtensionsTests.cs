@@ -7,12 +7,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureNatGatewayExtensionsTests
+public class AzureNatGatewayExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddNatGateway_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var natGw = builder.AddNatGateway("mynat");
 
@@ -24,7 +24,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public void AddNatGateway_InRunMode_DoesNotAddToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var natGw = builder.AddNatGateway("mynat");
 
@@ -34,7 +34,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public async Task AddNatGateway_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddNatGateway("mynat");
 
@@ -46,7 +46,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public async Task AddNatGateway_WithExplicitPublicIP_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var pip = builder.AddPublicIPAddress("mypip");
         builder.AddNatGateway("mynat")
@@ -60,7 +60,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public void WithNatGateway_SetsSubnetNatGateway()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var natGw = builder.AddNatGateway("mynat");
         var vnet = builder.AddAzureVirtualNetwork("myvnet");
@@ -73,7 +73,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public void AddPublicIPAddress_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var pip = builder.AddPublicIPAddress("mypip");
 
@@ -85,7 +85,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public async Task AddPublicIPAddress_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         builder.AddPublicIPAddress("mypip");
 
@@ -97,7 +97,7 @@ public class AzureNatGatewayExtensionsTests
     [Fact]
     public void AddPublicIPAddress_HasIpAddressOutputReference()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var pip = builder.AddPublicIPAddress("mypip");
 

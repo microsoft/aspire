@@ -20,9 +20,31 @@
       },
       "additionalProperties": false
     },
+    "certificates": {
+      "description": "Developer certificate configuration.",
+      "type": "object",
+      "properties": {
+        "nssDbPaths": {
+          "description": "NSS database paths used for browser certificate trust on Linux. Separate paths with the platform path separator. Prefix a path with \"firefox=\" or \"chromium=\" to apply the trust settings expected by that browser family.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "channel": {
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
+    },
+    "containerTunnel": {
+      "description": "Container network tunnel configuration.",
+      "type": "object",
+      "properties": {
+        "baseImage": {
+          "description": "Base image used by the container network tunnel that routes traffic to host services.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "docs": {
       "description": "Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.",
@@ -66,7 +88,7 @@
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
           "default": false
         },
-        "experimentalPolyglot:go": {
+        "experimentalPolyglotGo": {
           "anyOf": [
             {
               "type": "boolean"
@@ -82,7 +104,7 @@
           "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:java": {
+        "experimentalPolyglotJava": {
           "anyOf": [
             {
               "type": "boolean"
@@ -98,7 +120,7 @@
           "description": "Enable or disable experimental Java language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:python": {
+        "experimentalPolyglotPython": {
           "anyOf": [
             {
               "type": "boolean"
@@ -114,7 +136,7 @@
           "description": "Enable or disable experimental Python language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:rust": {
+        "experimentalPolyglotRust": {
           "anyOf": [
             {
               "type": "boolean"
@@ -143,7 +165,7 @@
               ]
             }
           ],
-          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
           "default": true
         },
         "polyglotIntegrationFilterEnabled": {
@@ -208,22 +230,6 @@
             }
           ],
           "description": "Enable or disable access to the staging channel for early access to preview features and packages",
-          "default": false
-        },
-        "terminalCommandsEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
           "default": false
         },
         "updateNotificationsEnabled": {

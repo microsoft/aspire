@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001
+
 using System.Net.Http.Json;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
@@ -473,6 +475,12 @@ public static class HostedAgentResourceBuilderExtensions
         {
             target = containerResourceBuilder.Resource;
         }
+        else if (resource is IDotnetProgramResource &&
+                 resource.SupportsDotnetProgramPublishing() &&
+                 resource is IResourceWithEnvironment programTarget)
+        {
+            target = programTarget;
+        }
         else if (resource is ExecutableResource executableResource)
         {
             // Ensure we have a container resource to deploy.
@@ -489,10 +497,6 @@ public static class HostedAgentResourceBuilderExtensions
                 throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
             }
         }
-        else if (resource is ProjectResource)
-        {
-            target = resource;
-        }
         else
         {
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
@@ -500,7 +504,7 @@ public static class HostedAgentResourceBuilderExtensions
 
         EnsureDefaultHostedAgentEndpoint(builder, target);
 
-        if (target is ProjectResource projectTarget)
+        if (target is IDotnetProgramResource projectTarget)
         {
             // Foundry hosted agents are containerized and the platform owns the listening port contract.
             // Keep the user's local endpoint metadata intact, but do not emit project endpoint variables

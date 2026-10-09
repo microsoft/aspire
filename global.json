@@ -13,23 +13,15 @@
     "dotnet": "11.0.100-rc.1.26425.128",
     "runtimes": {
       "dotnet/x64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "dotnet/arm64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "aspnetcore/x64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ],
       "aspnetcore/arm64": [
-        "$(DotNetRuntimeNet8VersionForTesting)",
-        "$(DotNetRuntimeNet9VersionForTesting)",
         "$(DotNetRuntimeNet10VersionForTesting)"
       ]
     }
@@ -40,8 +32,8 @@
   "msbuild-sdks": {
     "Microsoft.Build.NoTargets": "3.7.0",
     "Microsoft.Build.Traversal": "3.2.0",
-    "Microsoft.DotNet.Arcade.Sdk": "10.0.0-beta.26423.1",
-    "Microsoft.DotNet.Helix.Sdk": "10.0.0-beta.26423.1",
-    "Microsoft.DotNet.SharedFramework.Sdk": "10.0.0-beta.26423.1"
+    "Microsoft.DotNet.Arcade.Sdk": "10.0.0-beta.26472.2",
+    "Microsoft.DotNet.Helix.Sdk": "10.0.0-beta.26472.2",
+    "Microsoft.DotNet.SharedFramework.Sdk": "10.0.0-beta.26472.2"
   }
 }

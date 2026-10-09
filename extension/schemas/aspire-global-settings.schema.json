@@ -29,7 +29,7 @@
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
           "default": false
         },
-        "experimentalPolyglot:go": {
+        "experimentalPolyglotGo": {
           "anyOf": [
             {
               "type": "boolean"
@@ -45,7 +45,7 @@
           "description": "Enable or disable experimental Go language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:java": {
+        "experimentalPolyglotJava": {
           "anyOf": [
             {
               "type": "boolean"
@@ -61,7 +61,7 @@
           "description": "Enable or disable experimental Java language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:python": {
+        "experimentalPolyglotPython": {
           "anyOf": [
             {
               "type": "boolean"
@@ -77,7 +77,7 @@
           "description": "Enable or disable experimental Python language support for polyglot Aspire applications",
           "default": false
         },
-        "experimentalPolyglot:rust": {
+        "experimentalPolyglotRust": {
           "anyOf": [
             {
               "type": "boolean"
@@ -106,7 +106,7 @@
               ]
             }
           ],
-          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
           "default": true
         },
         "polyglotIntegrationFilterEnabled": {
@@ -171,22 +171,6 @@
             }
           ],
           "description": "Enable or disable access to the staging channel for early access to preview features and packages",
-          "default": false
-        },
-        "terminalCommandsEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
           "default": false
         },
         "updateNotificationsEnabled": {

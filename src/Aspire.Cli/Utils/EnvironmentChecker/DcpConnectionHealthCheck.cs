@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
@@ -14,6 +15,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 internal sealed class DcpConnectionHealthCheck(
     ILayoutDiscovery layoutDiscovery,
+    IBundleService bundleService,
     IDcpConnectionChecker connectionTester,
     CliExecutionContext executionContext,
     ILogger<DcpConnectionHealthCheck> logger) : IEnvironmentCheck
@@ -27,9 +29,23 @@ internal sealed class DcpConnectionHealthCheck(
 
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
+        BundleLayoutLease? layoutLease = null;
         try
         {
+            // An existing layout wins, which keeps an ASPIRE_DCP_PATH override and an already
+            // extracted bundle working exactly as before.
             var dcpDirectory = layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
+            if (string.IsNullOrWhiteSpace(dcpDirectory))
+            {
+                // Layout discovery only finds a bundle that is already on disk. It used to be extracted
+                // by the time doctor ran because bundled NuGet search, which the background CLI update
+                // check runs on startup, extracted it before launching aspire-managed. NuGet now runs
+                // in-process and no longer does, so on a fresh install extract it here. The lease is
+                // held for the whole check because the connection probes below launch DCP from it.
+                layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "doctor", cancellationToken).ConfigureAwait(false);
+                dcpDirectory = layoutLease?.Layout.GetDcpPath();
+            }
+
             if (string.IsNullOrWhiteSpace(dcpDirectory))
             {
                 logger.LogDebug("Skipping DCP connection health checks because no Aspire bundle layout was discovered.");
@@ -95,6 +111,10 @@ internal sealed class DcpConnectionHealthCheck(
                 Message = DoctorCommandStrings.DcpConnectionCheckFailedMessage,
                 Details = ex.Message
             }];
+        }
+        finally
+        {
+            layoutLease?.Dispose();
         }
     }
 

@@ -263,6 +263,36 @@ def _verify_runtime_configuration_is_patch_clean(workspace: Path) -> None:
         )
 
 
+def _materialize_doc_writer(workspace: Path, remote_ref: str) -> None:
+    # Read the selected docs commit, not the working tree: trusted Aspire runtime
+    # restoration replaces .agents and .github, including the docs author's skill.
+    for source in (".agents/skills/doc-writer", ".github/skills/doc-writer"):
+        if _git(workspace, "cat-file", "-e", f"{remote_ref}:{source}/SKILL.md").returncode == 0:
+            break
+    else:
+        raise CheckoutError(
+            f"Required doc-writer/SKILL.md is missing from '{remote_ref}' "
+            "under both .agents/skills and .github/skills."
+        )
+
+    paths = _git_output(
+        workspace, "ls-tree", "-r", "-z", "--name-only", remote_ref, "--", source
+    )
+    # ls-tree emits repo-relative names such as ".../SKILL.md\0.../references/x.md\0";
+    # NUL separation preserves spaces and newlines in filenames.
+    for path in paths.split("\0"):
+        if not path:
+            continue
+        relative_path = Path(path).relative_to(source)
+        destination = workspace / ".pr-docs-check" / "doc-writer" / relative_path
+        contents = _git(workspace, "show", f"{remote_ref}:{path}")
+        if contents.returncode != 0:
+            detail = contents.stderr.decode(errors="replace").strip()
+            raise CheckoutError(f"Could not read documentation skill '{path}': {detail}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(contents.stdout)
+
+
 def prepare_workspace(
     workspace: Path,
     effective_target: str,
@@ -276,6 +306,7 @@ def prepare_workspace(
     remote_ref = _ensure_remote_ref(workspace, effective_target, repository_url)
     _check_out_work_branch(workspace, remote_ref, docs_work_branch)
     _protect_runtime_configuration(workspace)
+    _materialize_doc_writer(workspace, remote_ref)
     restore_configuration(workspace)
     _verify_runtime_configuration_is_patch_clean(workspace)
 

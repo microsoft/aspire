@@ -1,0 +1,49 @@
+<Project>
+  <!--
+    Hex1b packages ConPTY's helpers as runtimes/win-x64/native/{x64,arm64}/OpenConsole.exe.
+    The SDK flattens RID-specific native assets, but conpty.dll selects the helper relative to its
+    own directory using the OS architecture (including x64 processes running on ARM64 Windows).
+    Preserve both architecture directories, not just the publish RID's architecture:
+    https://github.com/microsoft/terminal/blob/main/src/winconpty/winconpty.cpp
+
+    Apply to build and publish assets, including publish paths that resolve packages independently
+    of the build. Remove this workaround when Hex1b ships targets preserving its native layout.
+  -->
+  <Target Name="_AspirePreserveHex1bNativeBuildLayout" AfterTargets="ResolvePackageAssets">
+    <ItemGroup>
+      <NativeCopyLocalItems Update="@(NativeCopyLocalItems)"
+                           Condition="'%(NativeCopyLocalItems.NuGetPackageId)' == 'Hex1b' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(NativeCopyLocalItems.PathInPackage)', '^runtimes/win-[^/]+/native/'))">
+        <DestinationSubPath>$([System.Text.RegularExpressions.Regex]::Replace('%(NativeCopyLocalItems.PathInPackage)', '^runtimes/win-[^/]+/native/', ''))</DestinationSubPath>
+        <DestinationSubDirectory>$([System.Text.RegularExpressions.Regex]::Replace('%(NativeCopyLocalItems.PathInPackage)', '^runtimes/win-[^/]+/native/|[^/]+$', ''))</DestinationSubDirectory>
+      </NativeCopyLocalItems>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="_AspirePreserveHex1bNativePublishLayout"
+          AfterTargets="_ResolveCopyLocalAssetsForPublish"
+          BeforeTargets="_HandlePackageFileConflictsForPublish"
+          Condition="'$(RuntimeIdentifier)' != '' and '$(PreserveStoreLayout)' != 'true'">
+    <ItemGroup>
+      <_ResolvedCopyLocalPublishAssets Update="@(_ResolvedCopyLocalPublishAssets)"
+                                      Condition="'%(_ResolvedCopyLocalPublishAssets.NuGetPackageId)' == 'Hex1b' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(_ResolvedCopyLocalPublishAssets.PathInPackage)', '^runtimes/win-[^/]+/native/'))">
+        <DestinationSubPath>$([System.Text.RegularExpressions.Regex]::Replace('%(_ResolvedCopyLocalPublishAssets.PathInPackage)', '^runtimes/win-[^/]+/native/', ''))</DestinationSubPath>
+        <DestinationSubDirectory>$([System.Text.RegularExpressions.Regex]::Replace('%(_ResolvedCopyLocalPublishAssets.PathInPackage)', '^runtimes/win-[^/]+/native/|[^/]+$', ''))</DestinationSubDirectory>
+      </_ResolvedCopyLocalPublishAssets>
+    </ItemGroup>
+  </Target>
+
+  <!--
+    WindowsPtyShimLocator searches beside the application (or under runtimes/<rid>/native), not
+    the single-file extraction directory. Keep the helper and its ConPTY payload together as
+    sidecars, even when other native libraries are embedded. Aspire's bundle layout copies them.
+    https://github.com/mitchdenny/hex1b/blob/4652df1af0bb4ba409654a92727422a54d0574c9/src/Hex1b/WindowsPtyShimLocator.cs
+  -->
+  <Target Name="_AspireKeepHex1bWindowsPtySidecars" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Update="@(ResolvedFileToPublish)"
+                             Condition="'%(ResolvedFileToPublish.NuGetPackageId)' == 'Hex1b' and $([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.PathInPackage)', '^runtimes/win-[^/]+/native/'))">
+        <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>

@@ -1,12 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -30,7 +29,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void AzureSandboxGroupUsesExplicitOutputReferenceNames()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
 
@@ -41,7 +40,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureSandboxGroupsAddDashboardLinksToDeploymentSummary()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         var firstGroup = builder.AddAzureSandboxGroup("first");
         firstGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/example-rg/providers/Microsoft.App/sandboxGroups/first-group";
         firstGroup.Resource.Outputs["location"] = "westus3";
@@ -99,7 +98,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExcludedAzureSandboxGroupDoesNotAddDashboardLinkToDeploymentSummary()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
             .ExcludeFromManifest();
 
@@ -134,7 +133,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void ExistingSandboxDataPlaneScopeUsesActualResourceOutputs()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         sandboxGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/providers/Microsoft.App/sandboxGroups/existing-group";
@@ -151,7 +150,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureSandboxResourcesGeneratesBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var hostIdentity = builder.AddAzureUserAssignedIdentity("hostmi");
         var hostGroup = builder.AddAzureSandboxGroup("hostgroup")
@@ -176,6 +175,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
+            output,
             workspace.Path);
 
         builder.AddAzureSandboxGroup("sandboxes");
@@ -190,7 +190,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxGroupNamesPreserveDigits()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandbox1 = builder.AddAzureSandboxGroup("sandbox1");
         var sandbox2 = builder.AddAzureSandboxGroup("sandbox2");
@@ -208,7 +208,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureSandboxGroupSupportsExplicitManagedIdentities()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var identity = builder.AddAzureUserAssignedIdentity("nodeidentity");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
@@ -231,7 +231,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxGroupWithoutWorkloadIdentityEmitsImagePullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
             .WithNoManagedIdentity();
@@ -244,7 +244,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxGroupWithSystemAssignedWorkloadIdentityAlsoEmitsImagePullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
             .WithSystemAssignedIdentity();
@@ -257,7 +257,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task WithNoManagedIdentityClearsGroupIdentityButPreservesComputeWorkloadIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var clearedIdentity = builder.AddAzureUserAssignedIdentity("cleared-identity");
         var computeIdentity = builder.AddAzureUserAssignedIdentity("compute-identity");
@@ -281,7 +281,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxGroupAggregatesWorkloadManagedIdentities()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var identity = builder.AddAzureUserAssignedIdentity("workload-identity");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
@@ -304,7 +304,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExistingSandboxGroupRejectsWorkloadIdentityAttachment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var identity = builder.AddAzureUserAssignedIdentity("workload-identity");
         var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity")
@@ -328,7 +328,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExistingAzureSandboxGroupDoesNotAddDeploymentPrincipalRoleAssignment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity")
             .PublishAsExisting("existing-pull-identity", "existing-rg");
@@ -351,7 +351,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExistingAzureSandboxGroupRejectsNewAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var pullIdentity = builder.AddAzureUserAssignedIdentity("pull-identity");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes")
@@ -374,7 +374,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [InlineData(true)]
     public async Task AzureSandboxGroupRejectsReusingAcrPullIdentityForWorkloads(bool configurePullIdentityFirst)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var identity = builder.AddAzureUserAssignedIdentity("shared-identity");
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
@@ -402,7 +402,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task CrossResourceGroupRegistryUsesStandaloneAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("existing-acr", "existing-rg");
@@ -442,7 +442,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExistingAzureSandboxGroupRequiresAcrPullIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         builder.AddAzureSandboxGroup("sandboxes")
             .PublishAsExisting("existing-sandboxes", "existing-rg");
@@ -460,7 +460,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void PublishAsAzureSandboxDoesNotAddDeploymentTargetInRunMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var container = builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0");
@@ -583,7 +583,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxImagePullIdentityIsOnlyUsedForConfiguredAcr()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         sandboxGroup.Resource.ContainerRegistry!.Outputs["loginServer"] = "example.azurecr.io";
@@ -827,8 +827,8 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxStableOwnerUsesAppHostPathIdentityAndPreservesIsolation()
     {
-        using var firstPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        using var secondPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var firstPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        using var secondPolyglotBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         firstPolyglotBuilder.Configuration["AppHost:DeploymentStatePathSha256"] = "POLYGLOT-APPHOST-PATH-ONE";
         secondPolyglotBuilder.Configuration["AppHost:DeploymentStatePathSha256"] = "POLYGLOT-APPHOST-PATH-TWO";
 
@@ -930,7 +930,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxStableOwnerRequiresCanonicalAppHostIdentity()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         builder.Configuration["AppHost:DeploymentStatePathSha256"] = null;
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
@@ -942,7 +942,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxSecurityChangesDisablePreviousGenerationRetention()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         var endpoints = new[]
         {
             new AzureSandboxContainerDeployment.SandboxEndpoint(
@@ -1041,7 +1041,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxDeletionRunsAfterPortRemovalFailure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         using var app = builder.Build();
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
@@ -1073,7 +1073,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExistingDeploymentDeletesDiskImageAfterPortRemovalFailure()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         using var app = builder.Build();
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
@@ -1111,7 +1111,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task ExistingDeploymentContinuesCleanupAfterRequestTimeout()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         using var app = builder.Build();
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
@@ -1165,7 +1165,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             });
         });
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         sandboxGroup.Resource.Outputs["id"] = "/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/existing-rg/providers/Microsoft.App/sandboxGroups/existing-group";
         sandboxGroup.Resource.Outputs["location"] = "eastus2";
@@ -1227,7 +1227,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxBestEffortPruneSuppressesNetworkFailures()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         using var app = builder.Build();
         var pipelineContext = new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
@@ -1987,7 +1987,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxContainerOptionsMapToRuntimeRequestShapes()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2070,7 +2070,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxAutoSuspendPolicyIsEmittedOnlyWhenExplicitlyConfigured()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var defaultResource = builder.AddContainer("default", "image")
@@ -2114,7 +2114,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public void SandboxContainerOptionsValidateTypedDurationsAndEnums()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var container = builder.AddContainer("frontend", "image");
@@ -2152,7 +2152,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxContainerRejectsUnprovisionedVolumes()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2169,7 +2169,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxContainerEndpointResolutionMapsHttp2()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2193,7 +2193,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxEndpointResolutionSupportsSameSandboxGroupReferences()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var api = builder.AddContainer("api", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2222,7 +2222,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxContainerEndpointResolutionRejectsUnknownEndpointOptions()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2255,7 +2255,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxContainerEndpointResolutionRejectsConflictingAnonymousAccessOnSharedPort()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2296,7 +2296,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxContainerEndpointResolutionRejectsTcp()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("cache", "redis", "latest")
@@ -2319,7 +2319,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     public async Task SandboxGroupAddsDeploymentTargetsAndBuildOptionsForProjects()
     {
         using var tempDir = new TemporaryDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, outputPath: tempDir.Path);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var frontend = builder.AddProject<TestProject>("frontend", launchProfileName: null)
@@ -2499,7 +2499,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     public void AddAzureSandboxGroupAddsSingleCleanupResource()
     {
         using var tempDir = new TemporaryDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, outputPath: tempDir.Path);
 
         builder.AddAzureSandboxGroup("sandboxes");
         builder.AddAzureSandboxGroup("othersandboxes");
@@ -2514,7 +2514,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     public async Task SandboxGroupUsesExplicitComputeEnvironmentWhenMultipleEnvironmentsExist()
     {
         using var tempDir = new TemporaryDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, outputPath: tempDir.Path);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddAzureSandboxGroup("othersandboxes");
@@ -2547,10 +2547,65 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         Assert.Equal("40960Mi", resources.Disk);
     }
 
+    [Theory]
+    [InlineData(AzureSandboxTier.ExtraSmall, "250m", "512Mi", "5120Mi")]
+    [InlineData(AzureSandboxTier.Small, "500m", "1024Mi", "10240Mi")]
+    [InlineData(AzureSandboxTier.Medium, "1000m", "2048Mi", "20480Mi")]
+    [InlineData(AzureSandboxTier.Large, "2000m", "4096Mi", "40960Mi")]
+    [InlineData(AzureSandboxTier.ExtraLarge, "4000m", "8192Mi", "81920Mi")]
+    public async Task SandboxTierMapsToExpectedResources(AzureSandboxTier tier, string expectedCpu, string expectedMemory, string expectedDisk)
+    {
+        var resources = await CreateSandboxResourcesForTierAsync(tier);
+
+        Assert.Equal(expectedCpu, resources.Cpu);
+        Assert.Equal(expectedMemory, resources.Memory);
+        Assert.Equal(expectedDisk, resources.Disk);
+    }
+
+    [Fact]
+    public async Task AllSandboxTiersRequestDiskWithinServiceTierMaximum()
+    {
+        // The Azure Dev Compute data plane rejects sandboxes whose disk exceeds cores x 20Gi with
+        // an InvalidResourceTier error. Iterate every enum value so newly added tiers are covered.
+        foreach (var tier in Enum.GetValues<AzureSandboxTier>())
+        {
+            var resources = await CreateSandboxResourcesForTierAsync(tier);
+
+            Assert.EndsWith("m", resources.Cpu);
+            Assert.EndsWith("Mi", resources.Disk);
+            var millicores = int.Parse(resources.Cpu[..^1], CultureInfo.InvariantCulture);
+            var diskMebibytes = int.Parse(resources.Disk[..^2], CultureInfo.InvariantCulture);
+            var maxDiskMebibytes = millicores * 20 * 1024 / 1000;
+
+            Assert.True(
+                diskMebibytes <= maxDiskMebibytes,
+                $"Tier '{tier}' requests disk '{resources.Disk}' which exceeds the tier maximum of {maxDiskMebibytes}Mi for CPU '{resources.Cpu}'.");
+        }
+    }
+
+    private async Task<AzureDevComputeSandboxResources> CreateSandboxResourcesForTierAsync(AzureSandboxTier tier)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
+            .PublishAsAzureSandbox(new AzureSandboxOptions { Tier = tier });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var computeResource = Assert.Single(model.GetComputeResources(), resource => resource.Name == "frontend");
+        var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(sandboxGroup.Resource);
+        var sandboxContainer = Assert.IsType<AzureSandboxContainerResource>(deploymentTarget?.DeploymentTarget);
+
+        return AzureSandboxContainerDeployment.CreateSandboxResources(sandboxContainer);
+    }
+
     [Fact]
     public async Task PublishAsAzureSandboxRequiresSandboxGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         builder.AddContainer("frontend", "image")
             .PublishAsAzureSandbox();
@@ -2567,7 +2622,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task PublishAsAzureSandboxRequiresMatchingSandboxGroup()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         builder.AddAzureSandboxGroup("sandboxes");
         var containerApps = builder.AddAzureContainerAppEnvironment("containerapps");
@@ -2588,7 +2643,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     public async Task SandboxGroupAutomaticallyDeploysDotNetProjectWithoutExposingEndpoints()
     {
         using var tempDir = new TemporaryDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, outputPath: tempDir.Path);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddProject<TestProject>("frontend");
@@ -2627,7 +2682,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxProjectExternalHttpEndpointUsesPlaintextHttpListener()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddProject<TestProject>("frontend", launchProfileName: null)
@@ -2654,7 +2709,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxProjectRejectsExposedHttpsEndpointWithoutPlaintextHttpEndpoint()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddProject<TestProject>("frontend", launchProfileName: null)
@@ -2678,9 +2733,28 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task SandboxDotnetProjectRejectsExposedHttpsEndpointWithoutPlaintextHttpEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        var project = builder.AddDotnetProject("frontend", "frontend.csproj", options => options.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var deploymentTarget = Assert.IsType<AzureSandboxContainerResource>(
+            project.Resource.GetDeploymentTargetAnnotation(sandboxGroup.Resource)?.DeploymentTarget);
+        var exception = Assert.Throws<NotSupportedException>(
+            () => AzureSandboxContainerDeployment.ResolveSandboxEndpoints(deploymentTarget));
+
+        Assert.Contains("terminates TLS and forwards plaintext HTTP", exception.Message);
+    }
+
+    [Fact]
     public async Task SandboxProjectSharedHttpHttpsPortUsesConfiguredAccessPolicy()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddProject<TestProject>("frontend")
@@ -2751,7 +2825,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     public async Task MultipleSandboxGroupsDeployOneDotNetProjectEach()
     {
         using var tempDir = new TemporaryDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output, outputPath: tempDir.Path);
 
         var frontendGroup = builder.AddAzureSandboxGroup("frontend-group");
         var backendGroup = builder.AddAzureSandboxGroup("backend-group");
@@ -2778,7 +2852,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxGroupAddsDeploymentTargetForContainerResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         builder.AddContainer("frontend", "mcr.microsoft.com/dotnet/runtime-deps", "10.0")
@@ -2802,7 +2876,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task PrebuiltSandboxImageDependsOnManagedRegistryLogin()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var container = builder.AddContainer("frontend", "example.azurecr.io/frontend", "latest")
@@ -2839,7 +2913,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxValueResolutionRecursesIntoReferenceExpressions()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var api = builder.AddContainer("api", "image")
@@ -2894,7 +2968,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxConnectionReferencesAreIncludedInEgressPolicy()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         builder.AddAzureSandboxGroup("sandboxes");
         var storage = builder.AddAzureStorage("storage");
@@ -2931,7 +3005,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxConnectionReferencesDoNotTreatCredentialsAsEgressHosts()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         builder.AddAzureSandboxGroup("sandboxes");
         var connection = builder.AddConnectionString(
@@ -2968,7 +3042,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxDeployStepsFollowReferencedEndpointDependencies()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var api = builder.AddContainer("api", "image")
@@ -3006,7 +3080,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxDeployStepsRejectCrossGroupEndpointDependencies()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var producerGroup = builder.AddAzureSandboxGroup("producer-group");
         var consumerGroup = builder.AddAzureSandboxGroup("consumer-group");
@@ -3045,7 +3119,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxDeployStepsRejectCircularEndpointDependencies()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var first = builder.AddContainer("first", "image")
@@ -3091,7 +3165,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxProjectArgumentsArePreserved()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var project = builder.AddProject<TestProject>("worker", launchProfileName: null)
             .WithArgs("--mode", "worker");
@@ -3126,7 +3200,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxCommandEndpointReferencesAreIncludedInEgressPolicy()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var api = builder.AddContainer("api", "image")
@@ -3175,7 +3249,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task SandboxLiteralEnvironmentValuesDoNotExpandEgressPolicy()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
 
         var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
         var secret = builder.AddParameter("secret-url", "https://attacker.example", secret: true);
@@ -3278,11 +3352,11 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         };
     }
 
-    private static async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(
+    private async Task<ResponseLossCleanupClient> RunCreateResponseLossAsync(
         bool includeSandbox,
         int emptyPollsBeforeVisible = 0)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
         using var app = builder.Build();
         using var pipelineCts = new CancellationTokenSource();
         pipelineCts.Cancel();

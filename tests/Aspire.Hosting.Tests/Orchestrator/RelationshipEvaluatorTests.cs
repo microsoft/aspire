@@ -10,6 +10,26 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 public class RelationshipEvaluatorTests
 {
     [Fact]
+    public void WithRelationshipAddsEachResourceAndTypeOnlyOnce()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var manager = builder.AddContainer("manager", "image");
+        var first = builder.AddContainer("first", "image");
+        var second = builder.AddContainer("second", "image");
+
+        manager.WithRelationship(first.Resource, "Manages")
+            .WithRelationship(first.Resource, "Manages")
+            .WithRelationship(first.Resource, "Observes")
+            .WithRelationship(second.Resource, "Manages");
+
+        Assert.Collection(manager.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(),
+            relationship => { Assert.Same(first.Resource, relationship.Resource); Assert.Equal("Manages", relationship.Type); },
+            relationship => { Assert.Same(first.Resource, relationship.Resource); Assert.Equal("Observes", relationship.Type); },
+            relationship => { Assert.Same(second.Resource, relationship.Resource); Assert.Equal("Manages", relationship.Type); });
+    }
+
+    [Fact]
     public void HandlesNestedChildren()
     {
         var builder = DistributedApplication.CreateBuilder();

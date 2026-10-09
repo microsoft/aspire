@@ -14,8 +14,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)WindowsTrayPayload.cs" Link="WindowsTrayPayload.cs" />
+    <InternalsVisibleTo Include="Infrastructure.Tests" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="System.Text.Json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Infrastructure.Tests" />
   </ItemGroup>
 
 </Project>

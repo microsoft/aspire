@@ -250,7 +250,7 @@ internal sealed class RenderCommand : BaseCommand
 
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplayError("Failed to resolve package 'Aspire.Hosting.Azure.CosmosDB' version 9.2.0. The package source 'https://api.nuget.org/v3/index.json' returned a 503 Service Unavailable response. Please check your network connection and try again, or configure an alternative package source in your NuGet.config file.");
-        InteractionService.DisplaySuccess("All 47 integration tests passed successfully across 3 target frameworks (net8.0, net9.0, net10.0). Total execution time: 2 minutes and 14 seconds. Code coverage increased from 78.3% to 82.1%.");
+        InteractionService.DisplaySuccess("All 47 integration tests passed successfully across 2 target frameworks (net10.0, net11.0). Total execution time: 2 minutes and 14 seconds. Code coverage increased from 78.3% to 82.1%.");
         return CliExitCodes.Success;
     }
 

@@ -4,14 +4,14 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
-using Aspire.Tests.Shared.Telemetry;
+using Aspire.Otlp.Serialization;
 using Google.Protobuf;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -33,6 +33,21 @@ namespace Aspire.Dashboard.Tests.Integration;
 
 public class StartupTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task Startup_HttpJsonWithoutReflection_UsesGeneratedMetadata()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.ConfigureHttpJsonOptions(options =>
+                options.SerializerOptions.TypeInfoResolverChain.Clear()));
+
+        await app.StartAsync().DefaultTimeout();
+
+        var options = app.Services.GetRequiredService<IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>().Value.SerializerOptions;
+        Assert.Equal("test-token", JsonSerializer.Deserialize<ValidateTokenRequest>("""{"token":"test-token"}""", options)!.Token);
+        Assert.Equal("test-token", JsonSerializer.Deserialize<TelemetryValidateTokenRequest>("""{"token":"test-token"}""", options)!.Token);
+    }
+
     [Fact]
     public async Task Construction_ValidatesServiceDescriptorsAndScopes()
     {
@@ -98,7 +113,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task RunAsync_TokenCancelled_ShutsDownAndReturnsZero()
     {
-        // The standalone `aspire-managed dashboard` process relies on RunAsync honoring its cancellation
+        // The standalone Dashboard process relies on RunAsync honoring its cancellation
         // token so the parent-liveness watchdog can tear the dashboard down when the launching CLI dies.
         // Verify a running dashboard shuts down gracefully and reports success when the token is cancelled.
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(testOutputHelper);
@@ -326,7 +341,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         }).DefaultTimeout();
 
         // Assert
-        Assert.Contains(fileConfigDirectory, ex.Message);
+        Assert.Contains("The root directory for the FileProvider doesn't exist", ex.Message);
     }
 
     [Fact]
@@ -349,34 +364,23 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task Configuration_OptionsMonitor_DebugSession()
+    public async Task Configuration_LegacyDebugSession_DisablesTelemetryAndIgnoresTransportSettings()
     {
-        // Arrange
-        var testCert = TelemetryTestHelpers.GenerateDummyCertificate();
-
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: initialData =>
             {
-                initialData[DashboardConfigNames.DebugSessionPortName.ConfigKey] = "8080";
-                initialData[DashboardConfigNames.DebugSessionServerCertificateName.ConfigKey] = Convert.ToBase64String(testCert.Export(X509ContentType.Cert));
-                initialData[DashboardConfigNames.DebugSessionTokenName.ConfigKey] = "token!";
-                initialData[DashboardConfigNames.DebugSessionDcpInstanceIdName.ConfigKey] = "aspire-extension-run-123-dashboard";
-                initialData[DashboardConfigNames.DebugSessionTelemetryOptOutName.ConfigKey] = "true";
+                initialData[DashboardTelemetryService.TelemetryOptOutConfigKey] = "false";
+                initialData[DashboardConfigNames.Legacy.DebugSessionPortName.ConfigKey] = "not-a-port";
+                initialData[DashboardConfigNames.Legacy.DebugSessionServerCertificateName.ConfigKey] = "not base64";
+                initialData[DashboardConfigNames.Legacy.DebugSessionTokenName.ConfigKey] = "token!";
+                initialData[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.ConfigKey] = "aspire-extension-run-123-dashboard";
+                initialData[DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.ConfigKey] = "true";
             });
 
-        // Act
         await app.StartAsync().DefaultTimeout();
 
-        // Assert
-        Assert.Equal(8080, app.DashboardOptionsMonitor.CurrentValue.DebugSession.Port);
-
-        var cert = app.DashboardOptionsMonitor.CurrentValue.DebugSession.GetServerCertificate();
-        Assert.NotNull(cert);
-        Assert.Equal(testCert.Thumbprint, cert.Thumbprint);
-
-        Assert.Equal("token!", app.DashboardOptionsMonitor.CurrentValue.DebugSession.Token);
-        Assert.Equal("aspire-extension-run-123-dashboard", app.DashboardOptionsMonitor.CurrentValue.DebugSession.DcpInstanceId);
-        Assert.Equal(true, app.DashboardOptionsMonitor.CurrentValue.DebugSession.TelemetryOptOut);
+        Assert.False(app.Services.GetRequiredService<DashboardTelemetryService>().IsTelemetryEnabled);
+        Assert.True(app.Services.GetRequiredService<DashboardTelemetryManager>().IsInitialized);
     }
 
     [Fact]
@@ -1058,6 +1062,26 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Contains(typeof(TelemetryLoggerProvider), loggerProviderTypes);
         Assert.Contains(typeof(ConsoleLoggerProvider), loggerProviderTypes);
+    }
+
+    [Fact]
+    public async Task Startup_InitializesProductTelemetryManagerAndShutdownCompletes()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        var manager = app.Services.GetRequiredService<DashboardTelemetryManager>();
+        var telemetry = app.Services.GetRequiredService<DashboardTelemetryService>();
+        Assert.False(manager.IsInitialized);
+        Assert.False(telemetry.IsTelemetryEnabled);
+
+        await app.StartAsync().DefaultTimeout();
+
+        Assert.True(manager.IsInitialized);
+        Assert.False(telemetry.IsTelemetryEnabled);
+
+        await app.StopAsync().DefaultTimeout();
+
+        Assert.False(manager.IsInitialized);
+        Assert.Throws<ObjectDisposedException>(manager.Initialize);
     }
 
     [Fact]

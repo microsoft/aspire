@@ -46,6 +46,58 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public async Task GeneratedEnums_ReserveNaturalNamesWhenDisambiguatingMembers()
+    {
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes =
+            [
+                new AtsEnumTypeInfo
+                {
+                    TypeId = "enum:CollidingAuthenticationMode",
+                    Name = nameof(CollidingAuthenticationMode),
+                    ClrType = typeof(CollidingAuthenticationMode),
+                    Values = Enum.GetNames<CollidingAuthenticationMode>()
+                }
+            ]
+        };
+
+        using var workspace = await CreateJavaProbeWorkspaceAsync(context, "aspire/CollidingAuthenticationMode.java");
+        workspace.WriteSource(
+            "external/EnumCollisionProbe.java",
+            """
+            package external;
+
+            import aspire.CollidingAuthenticationMode;
+
+            public class EnumCollisionProbe {
+                public static void main(String[] args) {
+                    for (var mode : CollidingAuthenticationMode.values()) {
+                        if (CollidingAuthenticationMode.fromValue(mode.getValue()) != mode) {
+                            throw new IllegalStateException("Enum wire value did not round-trip: " + mode);
+                        }
+                        System.out.println(mode.name() + "=" + mode.getValue());
+                    }
+                }
+            }
+            """);
+
+        await workspace.CompileAsync();
+        var run = await workspace.RunClassAsync("external.EnumCollisionProbe", TimeSpan.FromSeconds(6));
+
+        Assert.True(run.TimedOut is false, $"Probe timed out. stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
+        Assert.True(
+            run.ExitCode == 0,
+            $"Probe failed with exit code {run.ExitCode}.{Environment.NewLine}stdout:{Environment.NewLine}{run.StdOut}{Environment.NewLine}stderr:{Environment.NewLine}{run.StdErr}");
+        Assert.Equal(
+            ["AAD=AAD", "AAD3=Aad", "AAD2=AAD2"],
+            run.StdOut.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_DeclaresNumericParametersAsNumber()
     {
         var atsContext = CreateContextFromTestAssembly();
@@ -3696,6 +3748,13 @@ public class AtsJavaCodeGeneratorTests
 
         await Task.CompletedTask;
         return workspace;
+    }
+
+    private enum CollidingAuthenticationMode
+    {
+        AAD,
+        Aad,
+        AAD2
     }
 
     private sealed class JavaProbeWorkspace : IDisposable

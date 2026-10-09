@@ -4,9 +4,11 @@
     "language": "java"
   },
   "features": {
-    "experimentalPolyglot:java": true
+    "experimentalPolyglotJava": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.FrontDoor": "",
+    "Aspire.Hosting.Azure.Provisioning.Cdn": "",
     "Aspire.Hosting.Azure": "",
     "Aspire.Hosting.Azure.Provisioning": "",
     "Aspire.Hosting.Azure.Provisioning.ApplicationInsights": "",

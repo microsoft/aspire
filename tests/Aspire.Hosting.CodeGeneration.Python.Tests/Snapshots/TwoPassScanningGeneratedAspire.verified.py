@@ -2052,6 +2052,7 @@ class ResourceUrlAnnotation(typing.TypedDict, total=False):
     Url: str
     DisplayText: str | None
     Endpoint: EndpointReference
+    DisplayOrder: int | None
     DisplayLocation: UrlDisplayLocation
 
 class RunConfiguration(typing.TypedDict, total=False):
@@ -7614,6 +7615,10 @@ class AbstractContainerFilesDestinationResource(AbstractResource):
         """Configures the resource to copy container files from the specified source resource during publishing."""
 
 
+class AbstractDotnetProgramResource(AbstractResource):
+    """Abstract base class for AbstractDotnetProgramResource interface."""
+
+
 class AbstractResourceWithArgs(AbstractResource):
     """Abstract base class for AbstractResourceWithArgs interface."""
 
@@ -10420,7 +10425,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
 
-class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractResourceWithArgs, AbstractResourceWithServiceDiscovery, AbstractResourceWithWaitSupport, AbstractResourceWithProbes, AbstractComputeResource, AbstractContainerFilesDestinationResource):
+class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractResourceWithArgs, AbstractResourceWithServiceDiscovery, AbstractResourceWithWaitSupport, AbstractResourceWithProbes, AbstractComputeResource, AbstractContainerFilesDestinationResource, AbstractDotnetProgramResource):
     """ProjectResource resource."""
 
     def __repr__(self) -> str:

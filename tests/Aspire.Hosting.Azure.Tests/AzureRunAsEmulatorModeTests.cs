@@ -1,15 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureRunAsEmulatorModeTests
+public class AzureRunAsEmulatorModeTests(ITestOutputHelper testOutputHelper)
 {
     public static TheoryData<string, Func<IDistributedApplicationBuilder, Action, IResource>> RunAsEmulatorResources => new()
     {
@@ -27,7 +25,7 @@ public class AzureRunAsEmulatorModeTests
     [MemberData(nameof(RunAsEmulatorResources))]
     public void RunAsEmulator_InRunMode_ConfiguresLocalContainer(string resourceType, Func<IDistributedApplicationBuilder, Action, IResource> addResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         var callbackInvoked = false;
 
         var resource = addResource(builder, () => callbackInvoked = true);
@@ -41,7 +39,7 @@ public class AzureRunAsEmulatorModeTests
     [MemberData(nameof(RunAsEmulatorResources))]
     public void RunAsEmulator_InPublishMode_DoesNotConfigureLocalContainer(string resourceType, Func<IDistributedApplicationBuilder, Action, IResource> addResource)
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         var callbackInvoked = false;
 
         var resource = addResource(builder, () => callbackInvoked = true);
@@ -55,7 +53,7 @@ public class AzureRunAsEmulatorModeTests
     [Fact]
     public async Task RunAsEmulator_WhenAllAzureResourcesUseEmulators_HidesAzureEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         builder.AddAzureCosmosDB("cosmos").RunAsEmulator();
         builder.AddAzureStorage("storage").RunAsEmulator();
         builder.AddAzureEventHubs("eventhubs").RunAsEmulator();
@@ -74,7 +72,7 @@ public class AzureRunAsEmulatorModeTests
     [Fact]
     public async Task RunAsEmulator_WhenAzureResourceRequiresProvisioning_ShowsAzureEnvironment()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
         builder.AddAzureStorage("emulated-storage").RunAsEmulator();
         builder.AddAzureStorage("provisioned-storage");
 

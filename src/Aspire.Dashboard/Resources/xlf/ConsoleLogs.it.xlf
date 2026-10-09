@@ -102,16 +102,6 @@
         <target state="translated">Stato sconosciuto</target>
         <note />
       </trans-unit>
-      <trans-unit id="ConsoleLogsViewConsoleOption">
-        <source>Console logs</source>
-        <target state="new">Console logs</target>
-        <note>Option in the View dropdown that shows the resource's console logs.</note>
-      </trans-unit>
-      <trans-unit id="ConsoleLogsViewTerminalOption">
-        <source>Terminal</source>
-        <target state="new">Terminal</target>
-        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
-      </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
         <target state="translated">Controllo dei log in corso...</target>
@@ -136,26 +126,6 @@
         <source>Console logs capture paused at {0}</source>
         <target state="new">Console logs capture paused at {0}</target>
         <note>{0} is a time</note>
-      </trans-unit>
-      <trans-unit id="TerminalToolbarDecreaseFontSize">
-        <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarGridSize">
-        <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit</source>
-        <target state="new">Fit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarIncreaseFontSize">
-        <source>Increase font size</source>
-        <target state="new">Increase font size</target>
-        <note />
       </trans-unit>
     </body>
   </file>

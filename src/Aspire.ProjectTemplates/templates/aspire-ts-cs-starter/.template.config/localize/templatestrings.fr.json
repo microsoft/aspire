@@ -3,8 +3,6 @@
   "name": "Application de démarrage Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Modèle de projet pour créer une application Aspire avec un front-end React et un service backend d’API Minimal en C#, avec une mise en cache Redis optionnelle.",
   "symbols/Framework/description": "Infrastructure cible du projet.",
-  "symbols/Framework/choices/net8.0/description": "Cible net8.0",
-  "symbols/Framework/choices/net9.0/description": "Cible net9.0",
   "symbols/Framework/choices/net10.0/description": "Net10.0 cible",
   "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "_Use Redis pour la mise en cache (nécessite un runtime de conteneur pris en charge)",

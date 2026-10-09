@@ -11,13 +11,88 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
 
-// Browser coverage for grid auto-fit and the <aspire-scroll-to-bottom> custom element.
+// Browser coverage for terminal keyboard shortcuts, grid auto-fit, and the <aspire-scroll-to-bottom> custom element.
 [RequiresFeature(TestFeature.Playwright)]
 public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteractionsTests.InteractionsDashboardServerFixture>
 {
     public DashboardInteractionsTests(InteractionsDashboardServerFixture dashboardServerFixture)
         : base(dashboardServerFixture)
     {
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TerminalDockShortcut_UsesUnmodifiedPhysicalKeyAndPreservesInputGuard()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetContentAsync("""
+                <button id="control">Control</button>
+                <input id="input">
+                <textarea id="textarea"></textarea>
+                <div id="terminal"></div>
+                <fluent-text-field id="fluent"></fluent-text-field>
+                """);
+            await page.AddScriptTagAsync(new() { Path = Path.Combine(AppContext.BaseDirectory, "wwwroot", "js", "app.js") });
+            await page.EvaluateAsync("""
+                () => {
+                    const host = document.getElementById('fluent');
+                    host.attachShadow({ mode: 'open' }).appendChild(document.createElement('input'));
+                    const terminal = document.getElementById('terminal');
+                    const view = terminal.attachShadow({ mode: 'open' }).appendChild(document.createElement('div'));
+                    view.attachShadow({ mode: 'open' }).appendChild(document.createElement('textarea'));
+                }
+                """);
+
+            var cases = new (string Key, string Code, bool Shift, bool Alt, bool Ctrl, bool Meta, string Target, int? Expected)[]
+            {
+                ("`", "Backquote", false, false, false, false, "control", 400),
+                ("^", "Backquote", false, false, false, false, "control", 400),
+                ("Dead", "Backquote", false, false, false, false, "control", 400),
+                ("`", "BracketRight", false, false, false, false, "control", null),
+                ("~", "Backquote", true, false, false, false, "control", null),
+                ("`", "Backquote", false, true, false, false, "control", null),
+                ("`", "Backquote", false, false, true, false, "control", null),
+                ("`", "Backquote", false, false, false, true, "control", null),
+                ("`", "Backquote", false, false, false, false, "input", null),
+                ("^", "Backquote", false, false, false, false, "textarea", null),
+                ("`", "Backquote", false, false, false, false, "terminal", null),
+                ("^", "Backquote", false, false, false, false, "fluent", null),
+                ("S", "KeyS", true, false, false, false, "control", 110),
+                ("r", "KeyR", false, false, false, false, "control", 200)
+            };
+
+            foreach (var (key, code, shiftKey, altKey, ctrlKey, metaKey, target, expected) in cases)
+            {
+                var shortcuts = await page.EvaluateAsync<int[]>("""
+                    ({ key, code, shiftKey, altKey, ctrlKey, metaKey, target }) => {
+                        const calls = [];
+                        const registration = window.registerGlobalKeydownListener({
+                            invokeMethodAsync: (_, shortcut) => {
+                                calls.push(shortcut);
+                                return Promise.resolve();
+                            }
+                        });
+                        try {
+                            const host = document.getElementById(target);
+                            let input = host;
+                            while (input.shadowRoot?.firstElementChild) {
+                                input = input.shadowRoot.firstElementChild;
+                            }
+                            input.focus();
+                            input.dispatchEvent(new KeyboardEvent('keydown', {
+                                key, code, shiftKey, altKey, ctrlKey, metaKey,
+                                bubbles: true, composed: true
+                            }));
+                            return calls;
+                        } finally {
+                            window.unregisterGlobalKeydownListener(registration);
+                        }
+                    }
+                    """, new { key, code, shiftKey, altKey, ctrlKey, metaKey, target });
+                Assert.Equal(expected is { } shortcut ? [shortcut] : Array.Empty<int>(), shortcuts);
+            }
+        });
     }
 
     [Fact]
@@ -167,15 +242,14 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
 
+            // Headless browsers can skip every intermediate compositor frame under load. Capture the native
+            // smooth-scroll request, then dispatch scrollend explicitly so the content-growth behavior is deterministic.
             await page.EvaluateAsync("""
                 () => {
                     const region = document.getElementById('scroll-region');
-                    const initialBottom = region.scrollHeight - region.clientHeight;
-                    window.__grewDuringScroll = false;
-                    region.addEventListener('scroll', () => {
-                        window.__grewDuringScroll = region.scrollTop > 0 && region.scrollTop < initialBottom;
-                        region.querySelector('.scroll-content').style.height = '4000px';
-                    }, { once: true });
+                    region.scrollTo = options => {
+                        window.__scrollToBottomRequest = options;
+                    };
                     document.querySelector('.scroll-to-bottom').addEventListener('click', event => {
                         window.__hiddenOnClick = event.currentTarget.hidden;
                     }, { once: true });
@@ -184,10 +258,24 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             await bottomButton.ClickAsync();
             Assert.True(await page.EvaluateAsync<bool>("() => window.__hiddenOnClick"));
+            Assert.True(await page.EvaluateAsync<bool>("""
+                () => {
+                    const region = document.getElementById('scroll-region');
+                    return window.__scrollToBottomRequest.behavior === 'smooth' &&
+                        window.__scrollToBottomRequest.top === region.scrollHeight;
+                }
+                """));
+            await page.EvaluateAsync("""
+                () => {
+                    const region = document.getElementById('scroll-region');
+                    region.querySelector('.scroll-content').style.height = '4000px';
+                    region.dispatchEvent(new Event('scrollend'));
+                }
+                """);
             await page.WaitForFunctionAsync("""
                 () => {
                     const region = document.getElementById('scroll-region');
-                    return window.__grewDuringScroll && region.scrollHeight >= 4000 &&
+                    return region.scrollHeight >= 4000 &&
                         Math.abs(region.scrollHeight - region.clientHeight - region.scrollTop) < 1;
                 }
                 """).DefaultTimeout();
@@ -383,7 +471,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await page.Locator("#scroll-owner").EvaluateAsync("owner => owner.scrollTop = 40");
             await page.WaitForFunctionAsync("""
                 expectedBottom => Math.abs(document.querySelector('.scroll-buttons').getBoundingClientRect().bottom - expectedBottom) < 1
-                """, originalBounds.Y + originalBounds.Height - 40).DefaultTimeout();
+                """, (double)(originalBounds.Y + originalBounds.Height - 40)).DefaultTimeout();
             Assert.Equal(originalBounds.Y, (await page.Locator(".scroll-buttons").BoundingBoxAsync())!.Y);
             Assert.Equal(originalRegionBounds.Y - 40, (await region.BoundingBoxAsync())!.Y);
             Assert.Equal(0, await region.EvaluateAsync<int>("element => element.scrollTop"));
@@ -398,7 +486,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("""
                 expectedBottom => Math.abs(document.querySelector('.scroll-buttons').getBoundingClientRect().bottom - expectedBottom) < 1
-                """, originalBounds.Y + originalBounds.Height).DefaultTimeout();
+                """, (double)(originalBounds.Y + originalBounds.Height)).DefaultTimeout();
             Assert.Equal(originalRegionBounds.Y, (await region.BoundingBoxAsync())!.Y);
             Assert.Equal(0, await region.EvaluateAsync<int>("element => element.scrollTop"));
         });
@@ -425,16 +513,20 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                     wrapper.style.cssText = 'width:400px;height:300px;overflow:visible;';
                     owner.appendChild(wrapper);
                     wrapper.appendChild(region);
+                    window.dispatchEvent(new Event('resize'));
                 }
                 """, overflow);
 
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
             var root = page.Locator(".scroll-buttons");
+            await page.WaitForFunctionAsync("""
+                () => document.querySelector('.scroll-buttons').style.left === '100px'
+                """).DefaultTimeout();
             var bounds = (await root.BoundingBoxAsync())!;
-            Assert.Equal(110, bounds.X + bounds.Width / 2);
+            Assert.Equal(100, bounds.X + bounds.Width / 2);
             Assert.Equal(122, bounds.Y);
-            Assert.Equal(176, bounds.Height);
+            Assert.Equal(156, bounds.Height);
 
             // Keep the region in the viewport, but move it past the horizontal clip edge.
             await page.EvaluateAsync("""

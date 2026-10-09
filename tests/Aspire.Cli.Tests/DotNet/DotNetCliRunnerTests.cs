@@ -29,6 +29,17 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
     private static string GetDotNetExecutablePath()
     {
+        // Launch the same dotnet host that is running the tests. `dotnet test` sets DOTNET_HOST_PATH to
+        // the muxer it was started with (e.g. the repo-local .dotnet/dotnet). Falling back to `dotnet`
+        // on PATH can pick up a system installation while inheriting the runner's repo-local MSBuild
+        // environment (MSBuildExtensionsPath, MSBuildSDKsPath), and the mixed child `dotnet msbuild`
+        // fails with MSB4216/MSB4027.
+        var dotnetHostPath = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
+        if (!string.IsNullOrWhiteSpace(dotnetHostPath) && File.Exists(dotnetHostPath))
+        {
+            return dotnetHostPath;
+        }
+
         var dotnetRoot = Environment.GetEnvironmentVariable("DOTNET_ROOT");
         if (!string.IsNullOrWhiteSpace(dotnetRoot))
         {

@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Display the animated Aspire CLI welcome banner..
+        ///   Looks up a localized string similar to Display the animated Aspire CLI welcome banner.
         /// </summary>
         public static string BannerArgumentDescription {
             get {
@@ -79,15 +79,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI is emulating identity &apos;{0}&apos; version &apos;{1}&apos;. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar..
-        /// </summary>
-        public static string IdentityOverrideNotice {
-            get {
-                return ResourceManager.GetString("IdentityOverrideNotice", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Welcome to the.
         /// </summary>
         public static string BannerWelcomeText {
@@ -97,7 +88,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command..
+        ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command.
         /// </summary>
         public static string CliWaitForDebuggerArgumentDescription {
             get {
@@ -106,7 +97,43 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Enable debug logging to the console..
+        ///   Looks up a localized string similar to Write a shell completion script to standard output.
+        /// </summary>
+        public static string CompletionScriptDescription {
+            get {
+                return ResourceManager.GetString("CompletionScriptDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Generate shell completion scripts.
+        /// </summary>
+        public static string CompletionsDescription {
+            get {
+                return ResourceManager.GetString("CompletionsDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows..
+        /// </summary>
+        public static string CompletionShellDescription {
+            get {
+                return ResourceManager.GetString("CompletionShellDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;..
+        /// </summary>
+        public static string CompletionShellRequired {
+            get {
+                return ResourceManager.GetString("CompletionShellRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Enable debug logging to the console.
         /// </summary>
         public static string DebugArgumentDescription {
             get {
@@ -115,20 +142,20 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The Aspire CLI can be used to create, run, and publish Aspire-based applications..
-        /// </summary>
-        public static string Description {
-            get {
-                return ResourceManager.GetString("Description", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)..
+        ///   Looks up a localized string similar to Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical).
         /// </summary>
         public static string DebugLevelArgumentDescription {
             get {
                 return ResourceManager.GetString("DebugLevelArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI can be used to create, run, and publish Aspire-based applications.
+        /// </summary>
+        public static string Description {
+            get {
+                return ResourceManager.GetString("Description", resourceCulture);
             }
         }
 
@@ -147,7 +174,25 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Suppress the startup banner and telemetry notice..
+        ///   Looks up a localized string similar to Aspire CLI is emulating identity &apos;{0}&apos; version &apos;{1}&apos;. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar..
+        /// </summary>
+        public static string IdentityOverrideNotice {
+            get {
+                return ResourceManager.GetString("IdentityOverrideNotice", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string..
+        /// </summary>
+        public static string InvalidCompletionRequest {
+            get {
+                return ResourceManager.GetString("InvalidCompletionRequest", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Suppress the startup banner and telemetry notice.
         /// </summary>
         public static string NoLogoArgumentDescription {
             get {
@@ -156,7 +201,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Run the command in non-interactive mode, disabling all interactive prompts and spinners..
+        ///   Looks up a localized string similar to Run the command in non-interactive mode, disabling all interactive prompts and spinners.
         /// </summary>
         public static string NonInteractiveArgumentDescription {
             get {
@@ -165,7 +210,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command..
+        ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command.
         /// </summary>
         public static string WaitForDebuggerArgumentDescription {
             get {

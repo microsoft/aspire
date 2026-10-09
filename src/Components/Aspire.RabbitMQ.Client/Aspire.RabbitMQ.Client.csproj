@@ -14,16 +14,25 @@
     <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101;SYSLIB0026;SYSLIB0027;SYSLIB0028</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <!-- Binding RabbitMQ's SslOption certificate objects generates AsnEncodedData.RawData setters,
+         which .NET 11 obsoletes. Remove when the binder no longer emits those obsolete setters.
+         https://aka.ms/dotnet-warnings/SYSLIB0065 -->
+    <NoWarn>$(NoWarn);SYSLIB0065</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
     <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
+    <Compile Include="..\Common\ConnectionStringConfigurationExtensions.cs" Link="ConnectionStringConfigurationExtensions.cs" />
+    <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="EnvironmentVariableNameEncoder.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.AutoActivation" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Condition="'$(TargetFramework)' == 'net10.0'" />
     <PackageReference Include="Polly.Core" />
     <PackageReference Include="RabbitMQ.Client" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />

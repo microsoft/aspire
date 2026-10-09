@@ -389,6 +389,7 @@ public sealed partial class SqliteTelemetryRepository
         foreach (var point in pointBatch.Inserts)
         {
             point.Context.SuccessCount += point.SourcePointCount;
+            point.Dimension.PointCount++;
 
             if (ReferenceEquals(point.Dimension.PendingPoint, point))
             {
@@ -423,6 +424,7 @@ public sealed partial class SqliteTelemetryRepository
             var dimensions = connection.Query<MetricDimensionStateRecord>("""
                 SELECT
                     d.dimension_id AS DimensionId,
+                    (SELECT COUNT(*) FROM telemetry_metric_points WHERE dimension_id = d.dimension_id) AS PointCount,
                     a.attribute_key AS AttributeKey,
                     a.attribute_value AS AttributeValue,
                     p.point_id AS PointId,
@@ -451,6 +453,7 @@ public sealed partial class SqliteTelemetryRepository
                     return new MetricDimensionState
                     {
                         DimensionId = group.Key,
+                        PointCount = first.PointCount,
                         Attributes = group
                             .Where(record => record.AttributeKey is not null)
                             .Select(record => KeyValuePair.Create(record.AttributeKey!, record.AttributeValue!))
@@ -733,22 +736,27 @@ public sealed partial class SqliteTelemetryRepository
 
     private void TrimMetricDimensions(SqliteConnection connection, IDbTransaction transaction, IEnumerable<MetricDimensionState> dimensions)
     {
-        foreach (var batch in dimensions.Chunk(MaxMetricPointBatchSize))
+        foreach (var dimension in dimensions)
         {
+            var removeCount = dimension.PointCount - _otlpContext.Options.MaxMetricsCount;
+            if (removeCount <= 0)
+            {
+                continue;
+            }
+
+            // Count cached points instead of ranking the entire history on every insert. The dimension-order
+            // index lets SQLite visit only the oldest surplus points, even after the retention limit is reached.
             connection.Execute("""
                 DELETE FROM telemetry_metric_points
                 WHERE point_id IN (
                     SELECT point_id
-                    FROM (
-                        SELECT
-                            point_id,
-                            ROW_NUMBER() OVER (PARTITION BY dimension_id ORDER BY point_id DESC) AS point_rank
-                        FROM telemetry_metric_points
-                        WHERE dimension_id IN @DimensionIds
-                    )
-                    WHERE point_rank > @MaxMetricsCount
+                    FROM telemetry_metric_points
+                    WHERE dimension_id = @DimensionId
+                    ORDER BY point_id
+                    LIMIT @RemoveCount
                 );
-                """, new { DimensionIds = batch.Select(dimension => dimension.DimensionId).ToArray(), _otlpContext.Options.MaxMetricsCount }, transaction);
+                """, new { dimension.DimensionId, RemoveCount = removeCount }, transaction);
+            dimension.PointCount -= removeCount;
         }
     }
 
@@ -861,6 +869,7 @@ public sealed partial class SqliteTelemetryRepository
     private sealed class MetricDimensionState
     {
         public long DimensionId { get; set; }
+        public long PointCount { get; set; }
         public required KeyValuePair<string, string>[] Attributes { get; init; }
         public MetricPointRecord? LatestPoint { get; set; }
         public PendingMetricPoint? PendingPoint { get; set; }
@@ -902,7 +911,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record PendingMetricExemplarAttribute(long ExemplarId, int Ordinal, string Key, string Value);
 
-    private sealed class InsertedMetricExemplarRecord
+    internal sealed class InsertedMetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
         public required long PointId { get; init; }
@@ -937,9 +946,10 @@ public sealed partial class SqliteTelemetryRepository
         public List<Exemplar> Exemplars { get; } = [];
     }
 
-    private sealed class MetricDimensionStateRecord
+    internal sealed class MetricDimensionStateRecord
     {
         public required long DimensionId { get; init; }
+        public required long PointCount { get; init; }
         public string? AttributeKey { get; init; }
         public string? AttributeValue { get; init; }
         public long? PointId { get; init; }
@@ -951,7 +961,7 @@ public sealed partial class SqliteTelemetryRepository
         public byte[]? HistogramBucketCounts { get; init; }
     }
 
-    private class MetricPointRecord
+    internal class MetricPointRecord
     {
         public required long PointId { get; init; }
         public required int PointType { get; init; }

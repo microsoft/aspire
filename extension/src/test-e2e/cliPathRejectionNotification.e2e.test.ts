@@ -39,7 +39,7 @@ suite('Configured CLI path rejection E2E', function () {
         const wrapper = writeTrackedStreamingDiscoveryCliWrapper(0, 0);
 
         // Simulates pointing the setting at a build output folder such as
-        // artifacts/bin/Aspire.Cli/Debug/net10.0, which contains an `aspire` executable.
+        // artifacts/bin/Aspire.Cli/Debug/net11.0, which contains an `aspire` executable.
         const cliDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'build-output-directory');
         fs.rmSync(cliDirectory, { recursive: true, force: true });
         fs.mkdirSync(cliDirectory, { recursive: true });

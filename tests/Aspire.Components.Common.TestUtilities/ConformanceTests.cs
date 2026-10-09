@@ -431,11 +431,13 @@ public abstract class ConformanceTests<TService, TOptions>
         {
             using var config = JsonDocument.Parse(json);
             var results = schema.Evaluate(config.RootElement, DefaultEvaluationOptions);
-            // EvaluationResults.HasErrors was removed in JsonSchema.Net 8.x; use the Errors dictionary directly.
-            var detail = results.Details?.FirstOrDefault(x => x.Errors is { Count: > 0 });
 
-            Assert.NotNull(detail);
-            Assert.Equal(error, detail.Errors!.First().Value);
+            Assert.False(results.IsValid);
+            Assert.NotNull(results.Details);
+            // JsonSchema.Net 9.4 includes parent summaries (for example, "Some properties did not
+            // match the required schema:") before individual keyword errors in the flat output.
+            // Require the exact expected diagnostic, without depending on diagnostic ordering.
+            Assert.Contains(error, results.Details.SelectMany(detail => detail.Errors?.Values.AsEnumerable() ?? []));
         }
     }
 

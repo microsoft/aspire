@@ -37,14 +37,14 @@ internal static class TerminalHostPaths
     /// <summary>
     /// Name of the user-profile-relative root directory for all Aspire per-user state.
     /// </summary>
-    public const string DotAspireDirectoryName = ".aspire";
+    public const string DotAspireDirectoryName = SocketDirectoryNames.Aspire;
 
     /// <summary>
     /// Name of the sub-directory under <c>~/.aspire/</c> that holds terminal-host files.
     /// Kept short (<c>trmnl</c> instead of <c>terminals</c>) because the parent path
     /// counts against the <c>sun_path</c> limit on macOS.
     /// </summary>
-    public const string TrmnlDirectoryName = "trmnl";
+    public const string TrmnlDirectoryName = SocketDirectoryNames.Terminals;
 
     /// <summary>Sockpurpose suffix for the producer UDS (DCP → host).</summary>
     public const string ProducerSockPurpose = "dcp";

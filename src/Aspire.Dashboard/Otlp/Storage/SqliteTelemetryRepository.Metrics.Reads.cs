@@ -117,9 +117,13 @@ public sealed partial class SqliteTelemetryRepository
 
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
+        // Keep dimensions, points, exemplars, and their attributes in one snapshot
+        // so point trimming cannot change the result between queries.
+        using var transaction = connection.BeginTransaction(deferred: true);
         var knownAttributeValues = new Dictionary<string, List<string?>>();
         var dimensions = MaterializeMetricDimensions(
             connection,
+            transaction,
             instruments,
             request.StartTime,
             request.EndTime,
@@ -159,6 +163,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private List<DimensionScope> MaterializeMetricDimensions(
         SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<CachedInstrument> instruments,
         DateTime? startTime,
         DateTime? endTime,
@@ -177,6 +182,7 @@ public sealed partial class SqliteTelemetryRepository
 
         var dimensions = GetMetricDimensions(
             connection,
+            transaction,
             instruments,
             dimensionFilters,
             knownAttributeValues,
@@ -222,11 +228,12 @@ public sealed partial class SqliteTelemetryRepository
             FROM rolled_up_metric_points p
             JOIN telemetry_metric_points stored ON stored.point_id = p.point_id
             ORDER BY p.dimension_id, p.start_time_ticks, p.point_id;
-            """, queryParameters).AsList();
+            """, queryParameters, transaction).AsList();
         var points = pointRecords.ToLookup(record => record.DimensionId);
         var exemplars = includeExemplars
             ? MaterializeMetricExemplars(
                 connection,
+                transaction,
                 dimensionQueryRangesCteSql,
                 queryParameters,
                 dataPointInterval,
@@ -260,6 +267,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private List<StoredMetricDimension> GetMetricDimensions(
         SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<CachedInstrument> instruments,
         IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
         Dictionary<string, List<string?>> knownAttributeValues,
@@ -275,7 +283,7 @@ public sealed partial class SqliteTelemetryRepository
             LEFT JOIN telemetry_metric_dimension_attributes a ON a.dimension_id = d.dimension_id
             WHERE d.instrument_id IN @InstrumentIds
             ORDER BY d.dimension_id, a.ordinal;
-            """, new { InstrumentIds = instruments.Select(instrument => instrument.InstrumentId) }).AsList();
+            """, new { InstrumentIds = instruments.Select(instrument => instrument.InstrumentId) }, transaction).AsList();
         var dimensionIds = dimensionRecords.Select(record => record.DimensionId).Distinct().ToArray();
         var pointAttributes = dimensionRecords
             .Where(record => record.AttributeKey is not null)
@@ -406,6 +414,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private static ILookup<long, MetricsExemplar> MaterializeMetricExemplars(
         SqliteConnection connection,
+        SqliteTransaction transaction,
         string dimensionQueryRangesCteSql,
         DynamicParameters queryParameters,
         TimeSpan? dataPointInterval,
@@ -430,7 +439,7 @@ public sealed partial class SqliteTelemetryRepository
               AND e.start_time_ticks >= r.start_time_ticks
               AND e.start_time_ticks <= @EndTicks
             ORDER BY source.dimension_id, source.start_time_ticks, e.exemplar_id;
-            """, queryParameters).AsList();
+            """, queryParameters, transaction).AsList();
         var pointIds = points.ToDictionary(
             point => new MetricPointKey(point.DimensionId, point.PointType, point.StartTimeTicks),
             point => point.PointId);
@@ -447,7 +456,7 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
         var attributes = populateExemplarAttributes
-            ? MaterializeMetricExemplarAttributes(connection, mappedRecords.Select(item => item.Record.ExemplarId).Distinct().ToArray())
+            ? MaterializeMetricExemplarAttributes(connection, transaction, mappedRecords.Select(item => item.Record.ExemplarId).Distinct().ToArray())
             : Array.Empty<OwnedAttributeRecord>().ToLookup(record => record.OwnerId);
         return mappedRecords
             .OrderBy(item => item.PointId)
@@ -467,6 +476,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private static ILookup<long, OwnedAttributeRecord> MaterializeMetricExemplarAttributes(
         SqliteConnection connection,
+        SqliteTransaction transaction,
         IReadOnlyList<long> exemplarIds)
     {
         var attributes = new List<OwnedAttributeRecord>();
@@ -477,12 +487,12 @@ public sealed partial class SqliteTelemetryRepository
                 FROM telemetry_metric_exemplar_attributes
                 WHERE exemplar_id IN @ExemplarIds
                 ORDER BY exemplar_id, ordinal;
-                """, new { ExemplarIds = exemplarIdBatch }));
+                """, new { ExemplarIds = exemplarIdBatch }, transaction));
         }
         return attributes.ToLookup(record => record.OwnerId);
     }
 
-    private sealed class MetricPointDataRecord : MetricPointRecord
+    internal sealed class MetricPointDataRecord : MetricPointRecord
     {
         public required long DimensionId { get; init; }
         public required long StartTimeTicks { get; init; }
@@ -492,7 +502,7 @@ public sealed partial class SqliteTelemetryRepository
         public byte[]? ExplicitBounds { get; init; }
     }
 
-    private sealed class MetricDimensionAttributeRecord
+    internal sealed class MetricDimensionAttributeRecord
     {
         public required long DimensionId { get; init; }
         public required long InstrumentId { get; init; }
@@ -500,7 +510,7 @@ public sealed partial class SqliteTelemetryRepository
         public string? AttributeValue { get; init; }
     }
 
-    private sealed class MetricExemplarRecord
+    internal sealed class MetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
         public required long DimensionId { get; init; }

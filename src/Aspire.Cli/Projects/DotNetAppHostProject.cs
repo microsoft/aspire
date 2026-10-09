@@ -14,6 +14,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -24,6 +25,7 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -52,6 +54,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
+    private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -83,6 +86,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         IDotNetSdkInstaller sdkInstaller,
         IBundleService bundleService,
         IEnvironment environment,
+        AppHostConfigurationProjector appHostConfigurationProjector,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
@@ -103,6 +107,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         _sdkInstaller = sdkInstaller;
         _bundleService = bundleService;
         _environment = environment;
+        _appHostConfigurationProjector = appHostConfigurationProjector;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
@@ -1489,7 +1494,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false, aspireHostingVersion: null);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
@@ -1518,7 +1523,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
             : null;
         var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo?.AspireHostingVersion);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -1550,7 +1555,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // package add, layout, and other short-lived invocations leave these unset so
             // they continue to use the shared ladder's force-kill mode.
             IsolateConsole = true,
-            KillOnParentExit = true,
+            // dotnet run nests its own non-breakaway job inside the CLI job, preventing DCP
+            // from escaping the CLI job to finish resource cleanup. Direct launches have no
+            // intervening job and opt back into the CLI job below.
+            KillOnParentExit = false,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
             // The bundled AppHost run hook delegates dotnet run to aspire run. The SDK passes
@@ -1607,13 +1615,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
 
             using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, noRestore);
+            var appHostDirectory = effectiveAppHostFile.Directory ?? _executionContext.WorkingDirectory;
             if (directRun is not null)
             {
+                await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, appHostDirectory, cancellationToken);
+
                 // The direct command line has no "--" separator, so the forwarded-argument boundary
                 // has to be carried alongside it for logging. Clone rather than mutate because the
                 // caller may reuse runOptions for other invocations.
                 var directRunOptions = runOptions.Clone();
                 directRunOptions.AppHostArgumentStartIndex = directRun.AppHostArgumentStartIndex;
+                directRunOptions.KillOnParentExit = true;
 
                 return await _runner.RunAppHostCommandAsync(
                     effectiveAppHostFile,
@@ -1625,6 +1637,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     directRunOptions,
                     cancellationToken);
             }
+
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
 
             return await _runner.RunAsync(
                 effectiveAppHostFile,
@@ -2589,7 +2603,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private void ConfigureCliBundleEnvironment(
         Dictionary<string, string> env,
         BundleLayoutLease? layoutLease,
-        bool injectDcpAndDashboard)
+        bool injectDcpAndDashboard,
+        string? aspireHostingVersion)
     {
         var layout = layoutLease?.Layout;
         if (layout is null)
@@ -2620,11 +2635,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
-                layout.GetManagedPath() is { } layoutManagedPath &&
-                IsUsableDashboardPath(layoutManagedPath))
+            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)))
             {
-                env[BundleDiscovery.DashboardPathEnvVar] = layoutManagedPath;
+                SemVersion.TryParse(aspireHostingVersion, out var hostingVersion);
+                var supportsNativeDashboard = DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
+                if (DashboardLaunchHelper.GetDashboardPath(layout, supportsNativeDashboard) is { } dashboardPath)
+                {
+                    env[BundleDiscovery.DashboardPathEnvVar] = dashboardPath;
+                }
             }
         }
 
