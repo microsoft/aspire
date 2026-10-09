@@ -1684,7 +1684,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
         await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "daily"))).DefaultTimeout();
 
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+        Assert.True(File.Exists(Path.Combine(appHostProjectFile.DirectoryName!, "nuget.config")));
     }
 
     private static async Task<(FileInfo AppHostProjectFile, DirectoryInfo AppHostFolder)> SetupNuGetConfigTestProject(TemporaryWorkspace workspace)

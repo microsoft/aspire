@@ -75,7 +75,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 var (wasProvided, selectedDirectory, _) = PromptBinding.Resolve(context.NuGetConfigDirBinding);
                 var targetDirectory = wasProvided && selectedDirectory is not null
                     ? new DirectoryInfo(selectedDirectory)
-                    : GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths);
+                    : GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
                 var candidate = await new DotNetAppHostNuGetConfigMerger(nuGetService).PrepareAsync(
                     targetDirectory, configuration, channel.ShouldCreateNuGetConfig(),
                     CliPathHelper.StagingNuGetPackagesFolderName, cancellationToken);
@@ -87,7 +87,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
         if (configuration is not null && !channel.ShouldCreateNuGetConfig())
         {
-            var targetDirectory = GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths);
+            var targetDirectory = GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
             if (!targetDirectory.Exists || !DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDirectory, out _))
             {
                 // Stable must not create a local config. Discovery must therefore retain the
@@ -184,7 +184,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 throw new ProjectUpdaterException(UpdateCommandStrings.FailedDiscoverNuGetConfig);
             }
 
-            var recommendedNuGetConfigDirectory = GetRecommendedNuGetConfigDirectory(configPaths);
+            var recommendedNuGetConfigDirectory = GetRecommendedNuGetConfigDirectory(configPaths, projectFile.Directory!);
 
             if (!channel.ShouldCreateNuGetConfig())
             {
@@ -457,10 +457,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
     }
 
-    private DirectoryInfo GetRecommendedNuGetConfigDirectory(IReadOnlyList<string> configPaths)
-        => configPaths.Count > 1 && !IsGlobalNuGetConfig(configPaths[0])
+    private static DirectoryInfo GetRecommendedNuGetConfigDirectory(IReadOnlyList<string> configPaths, DirectoryInfo appHostDirectory)
+        => configPaths.Count > 0 && !IsGlobalNuGetConfig(configPaths[0])
             ? new DirectoryInfo(Path.GetDirectoryName(configPaths[0])!)
-            : executionContext.WorkingDirectory;
+            : appHostDirectory;
 
     private async Task<UpdateContext> GetUpdateStepsAsync(
         FileInfo projectFile,

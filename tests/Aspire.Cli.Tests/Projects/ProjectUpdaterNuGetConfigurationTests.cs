@@ -1134,19 +1134,49 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task UpdateAsync_CreatesMissingConfigurationOnlyAfterSuccessfulCandidateRestore(bool succeeds)
+    [InlineData("AppHost.csproj", true, false)]
+    [InlineData("AppHost.csproj", false, false)]
+    [InlineData("AppHost.csproj", true, true)]
+    [InlineData("AppHost.csproj", false, true)]
+    [InlineData("apphost.cs", true, false)]
+    [InlineData("apphost.cs", false, false)]
+    [InlineData("apphost.cs", true, true)]
+    [InlineData("apphost.cs", false, true)]
+    public async Task UpdateAsync_ConfigurationLocationFollowsAppHostHierarchyFromUnrelatedDirectory(
+        string fileName, bool succeeds, bool useAncestorConfig)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var project = await CreateAppHostAsync(workspace, "AppHost.csproj");
+        var invocationDirectory = workspace.CreateDirectory("invocation");
+        var repositoryDirectory = workspace.CreateDirectory("repository");
+        var appHostDirectory = repositoryDirectory.CreateSubdirectory("AppHost");
+        var project = await CreateAppHostAsync(workspace, fileName);
+        project.MoveTo(Path.Combine(appHostDirectory.FullName, fileName));
         var original = await File.ReadAllBytesAsync(project.FullName);
-        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        const string ancestorConfiguration = """<configuration><packageSources><clear /><add key="company" value="https://company.example/v3/index.json" /></packageSources></configuration>""";
+        var configPath = Path.Combine(
+            useAncestorConfig ? repositoryDirectory.FullName : appHostDirectory.FullName, "nuget.config");
+        if (useAncestorConfig)
+        {
+            await File.WriteAllTextAsync(configPath, ancestorConfiguration);
+        }
         var runner = CreateRunner(project, hasExplicitChannel: false);
-        runner.SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
-            (0, [new NuGetPackageCli { Id = query, Version = "9.4.2", Source = "https://new.example/v3/index.json" }]);
-        runner.GetNuGetConfigPathsAsyncCallback = (_, _, _) =>
-            (0, [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet.Config")]);
+        runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, _, _, _, _) =>
+        {
+            Assert.StartsWith(Path.Combine(appHostDirectory.FullName, ".aspire") + Path.DirectorySeparatorChar, directory.FullName);
+            Assert.Equal(["https://new.example/v3/index.json"],
+                NuGetTestHelper.GetEligiblePackageSources(directory.FullName, query));
+            return (0, [new NuGetPackageCli { Id = query, Version = "9.4.2", Source = "https://new.example/v3/index.json" }]);
+        };
+        var globalConfigDirectory = OperatingSystem.IsWindows()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NuGet")
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "NuGet");
+        runner.GetNuGetConfigPathsAsyncCallback = (directory, _, _) =>
+        {
+            Assert.Equal(appHostDirectory.FullName, directory.FullName);
+            return (0, useAncestorConfig
+                ? [configPath]
+                : [Path.Combine(globalConfigDirectory, "NuGet.Config")]);
+        };
         runner.AddPackageAsyncCallback = (file, _, version, _, noRestore, _, _) =>
         {
             Assert.True(noRestore);
@@ -1156,16 +1186,27 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var restored = false;
         runner.RestoreAsyncCallback = (_, options, _) =>
         {
-            Assert.False(File.Exists(configPath));
+            if (useAncestorConfig)
+            {
+                Assert.Equal(ancestorConfiguration, File.ReadAllText(configPath));
+            }
+            else
+            {
+                Assert.False(File.Exists(configPath));
+            }
             Assert.NotNull(options.NuGetRestoreTargetsFile);
+            Assert.StartsWith(Path.Combine(appHostDirectory.FullName, ".aspire") + Path.DirectorySeparatorChar,
+                options.NuGetRestoreTargetsFile.FullName);
             Assert.Contains("9.4.2", File.ReadAllText(project.FullName));
             restored = true;
             return succeeds ? 0 : 1;
         };
-        using var provider = CreateServices(workspace, runner, new FakeNuGetClient
+        var services = CreateServices(workspace, runner, new FakeNuGetClient
         {
             GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
-        }).BuildServiceProvider();
+        });
+        services.AddSingleton(TestExecutionContextHelper.CreateExecutionContext(invocationDirectory));
+        using var provider = services.BuildServiceProvider();
         var channel = PackageChannel.CreateExplicitChannel(
             "daily", PackageChannelQuality.Both, [new("Aspire*", "https://new.example/v3/index.json")],
             provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
@@ -1184,8 +1225,19 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
                 updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
             Assert.Equal(original, await File.ReadAllBytesAsync(project.FullName));
-            Assert.False(File.Exists(configPath));
+            if (useAncestorConfig)
+            {
+                Assert.Equal(ancestorConfiguration, await File.ReadAllTextAsync(configPath));
+            }
+            else
+            {
+                Assert.False(File.Exists(configPath));
+            }
         }
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal(Path.GetDirectoryName(configPath),
+            Assert.Single(interaction.FilePathPromptCalls).DefaultValue);
+        Assert.Empty(invocationDirectory.EnumerateFileSystemInfos());
         Assert.True(restored);
         Assert.Empty(Directory.EnumerateFiles(workspace.Path, ".aspire-nuget-candidate-*"));
     }
