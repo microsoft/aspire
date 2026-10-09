@@ -472,24 +472,36 @@ internal sealed class BundleNuGetService : INuGetService
         WriteNuGetConfig(overlay with { GlobalPackagesFolder = globalPackagesFolder }, outputPath, cancellationToken);
     }
 
-    internal async Task<byte[]> CreateNuGetConfigContentAsync(
+    internal async Task<byte[]> CreatePersistentNuGetConfigContentAsync(
         NuGetConfiguration configuration,
+        FileInfo targetFile,
         ReadOnlyMemory<byte>? originalContent,
         string? globalPackagesFolder,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(targetFile);
         var content = configuration.Overlay
             ?? throw new InvalidOperationException("The resolved configuration does not require a NuGet configuration change.");
         cancellationToken.ThrowIfCancellationRequested();
 
-        // NuGet's typed settings writer is file-backed. Stage serialization outside the
-        // workspace; the same writer preserves unrelated sections when a baseline is supplied.
+        var targetPath = PathNormalizer.ResolveToFilesystemPath(targetFile.FullName);
+        var paths = configuration.Settings.ConfigPaths.ToList();
+        var targetIndex = paths.FindIndex(path => string.Equals(
+            PathNormalizer.ResolveToFilesystemPath(path), targetPath, StringComparisons.FileSystemPath));
+        var inheritedPaths = targetIndex >= 0
+            ? paths.Skip(targetIndex + 1).ToArray()
+            : paths.Where(path => !IsAncestorDirectory(targetFile.DirectoryName!, Path.GetDirectoryName(path)!)).ToArray();
+
+        // NuGet's typed settings writer is file-backed. Persistence derives local edits
+        // against the target's remaining hierarchy, rather than copying projection masks.
         using var file = await TemporaryNuGetConfigFile.CreateAsync(
             path => _nuGetClient.WriteNuGetConfig(
                 content with { GlobalPackagesFolder = globalPackagesFolder },
                 path,
-                originalContent)).ConfigureAwait(false);
+                originalContent,
+                omitRedundantDisabledSources: true,
+                inheritedPaths)).ConfigureAwait(false);
         return await File.ReadAllBytesAsync(file.ConfigFile.FullName, cancellationToken).ConfigureAwait(false);
     }
 

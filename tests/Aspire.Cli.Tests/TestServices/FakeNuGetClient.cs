@@ -172,6 +172,14 @@ internal sealed class FakeNuGetClient : INuGetClient
         => WriteNuGetConfig(overlay, outputPath, originalContent: null);
 
     public void WriteNuGetConfig(NuGetConfigOverlay overlay, string outputPath, ReadOnlyMemory<byte>? originalContent)
+        => WriteNuGetConfig(overlay, outputPath, originalContent, omitRedundantDisabledSources: false, inheritedConfigPaths: []);
+
+    public void WriteNuGetConfig(
+        NuGetConfigOverlay overlay,
+        string outputPath,
+        ReadOnlyMemory<byte>? originalContent,
+        bool omitRedundantDisabledSources,
+        IReadOnlyList<string> inheritedConfigPaths)
     {
         WriteNuGetConfigCallCount++;
         LastNuGetConfigPath = outputPath;
@@ -181,6 +189,7 @@ internal sealed class FakeNuGetClient : INuGetClient
             return;
         }
 
-        NuGetTestHelper.CreateClient().WriteNuGetConfig(overlay, outputPath, originalContent);
+        NuGetTestHelper.CreateClient().WriteNuGetConfig(
+            overlay, outputPath, originalContent, omitRedundantDisabledSources, inheritedConfigPaths);
     }
 }

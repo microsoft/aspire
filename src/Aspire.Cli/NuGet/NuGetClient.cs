@@ -86,6 +86,13 @@ internal interface INuGetClient
     void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath);
 
     void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath, ReadOnlyMemory<byte>? originalContent);
+
+    void WriteNuGetConfig(
+        NuGetConfigOverlay configuration,
+        string outputPath,
+        ReadOnlyMemory<byte>? originalContent,
+        bool omitRedundantDisabledSources,
+        IReadOnlyList<string> inheritedConfigPaths);
 }
 
 internal sealed record NuGetConfigOverlay(
@@ -790,13 +797,7 @@ internal sealed class NuGetClient(
                 mapping.Key,
                 mapping.Patterns.Select(static pattern => pattern.Pattern).ToArray()))
             .ToArray();
-        var disabledPackageSourceKeys = settings
-            .GetSection(ConfigurationConstants.DisabledPackageSources)?
-            .Items
-            .OfType<AddItem>()
-            .Select(static item => item.Key)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray() ?? [];
+        var disabledPackageSourceKeys = GetDisabledPackageSourceKeys(settings);
         var credentialSourceKeys = settings
             .GetSection(ConfigurationConstants.CredentialsSectionName)?
             .Items
@@ -831,8 +832,17 @@ internal sealed class NuGetClient(
         => WriteNuGetConfig(configuration, outputPath, originalContent: null);
 
     public void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath, ReadOnlyMemory<byte>? originalContent)
+        => WriteNuGetConfig(configuration, outputPath, originalContent, omitRedundantDisabledSources: false, inheritedConfigPaths: []);
+
+    public void WriteNuGetConfig(
+        NuGetConfigOverlay configuration,
+        string outputPath,
+        ReadOnlyMemory<byte>? originalContent,
+        bool omitRedundantDisabledSources,
+        IReadOnlyList<string> inheritedConfigPaths)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(inheritedConfigPaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
 
         var outputFile = new FileInfo(outputPath);
@@ -890,16 +900,20 @@ internal sealed class NuGetClient(
                 sourceItem);
         }
 
-        if (configuration.ClearDisabledPackageSources)
+        var (clearDisabledSources, disabledSourceKeys) = omitRedundantDisabledSources
+            ? GetPersistentDisabledSourceOverride(settings, configuration, inheritedConfigPaths)
+            : (configuration.ClearDisabledPackageSources, configuration.DisabledPackageSourceKeys);
+        if (configuration.ClearDisabledPackageSources || omitRedundantDisabledSources)
         {
             foreach (var item in settings.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items.ToArray() ?? [])
             {
                 settings.Remove(ConfigurationConstants.DisabledPackageSources, item);
             }
-            settings.AddOrUpdate(
-                ConfigurationConstants.DisabledPackageSources,
-                new ClearItem());
-            foreach (var sourceKey in configuration.DisabledPackageSourceKeys)
+            if (clearDisabledSources)
+            {
+                settings.AddOrUpdate(ConfigurationConstants.DisabledPackageSources, new ClearItem());
+            }
+            foreach (var sourceKey in disabledSourceKeys)
             {
                 settings.AddOrUpdate(
                     ConfigurationConstants.DisabledPackageSources,
@@ -939,6 +953,72 @@ internal sealed class NuGetClient(
         }
 
         settings.SaveToDisk();
+    }
+
+    private static (bool Clear, IReadOnlyList<string> Keys) GetPersistentDisabledSourceOverride(
+        ISettings settings,
+        NuGetConfigOverlay configuration,
+        IReadOnlyList<string> inheritedConfigPaths)
+    {
+        // A projection masks definitions in unchanged parent files. A persisted edit can
+        // remove local definitions instead. Derive its masks from the in-memory edit and
+        // remaining hierarchy before serialization, including local <packageSources><clear />.
+        ISettings inheritedSettings = inheritedConfigPaths.Count == 0
+            ? NullSettings.Instance
+            : Settings.LoadSettingsGivenConfigPaths(inheritedConfigPaths.ToList());
+        var sourceSection = settings.GetSection(ConfigurationConstants.PackageSources);
+        var survivingSourceKeys = (sourceSection?.Items.OfType<SourceItem>()
+            .Select(static source => source.Key) ?? [])
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (sourceSection?.Items.Any(static item => item is ClearItem) != true)
+        {
+            survivingSourceKeys.UnionWith(new PackageSourceProvider(inheritedSettings).LoadPackageSources()
+                .Select(static source => source.Name));
+        }
+        var inheritedDisabledKeys = GetDisabledPackageSourceKeys(inheritedSettings)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var desiredDisabledKeys = (configuration.ClearDisabledPackageSources
+            ? configuration.DisabledPackageSourceKeys
+            : GetDisabledPackageSourceKeys(settings))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!configuration.ClearDisabledPackageSources &&
+            settings.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items.Any(static item => item is ClearItem) != true)
+        {
+            desiredDisabledKeys.UnionWith(inheritedDisabledKeys);
+        }
+        desiredDisabledKeys.RemoveWhere(key =>
+            !survivingSourceKeys.Contains(key) && !inheritedDisabledKeys.Contains(key) &&
+            (configuration.RetiredSourceKeys.Contains(key, StringComparer.OrdinalIgnoreCase) ||
+             IsGeneratedAppHostSourceKey(key)));
+        var clearInheritedDisabledKeys = inheritedDisabledKeys.Any(key => !desiredDisabledKeys.Contains(key));
+        var localDisabledKeys = clearInheritedDisabledKeys
+            ? desiredDisabledKeys
+            : desiredDisabledKeys.Except(inheritedDisabledKeys, StringComparer.OrdinalIgnoreCase);
+
+        return (clearInheritedDisabledKeys, [.. localDisabledKeys]);
+    }
+
+    private static string[] GetDisabledPackageSourceKeys(ISettings settings)
+        => settings.GetSection(ConfigurationConstants.DisabledPackageSources)?.Items
+            .OfType<AddItem>()
+            .Select(static item => item.Key)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray() ?? [];
+
+    private static bool IsGeneratedAppHostSourceKey(string key)
+    {
+        const string prefix = "aspire-apphost-";
+        if (!key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Generated aliases look like "aspire-apphost-0123456789abcdef" or that key plus "-0".
+        // Absent user-disabled aliases outside this format may be intentional.
+        var suffix = key.AsSpan(prefix.Length);
+        return suffix.Length >= 16 && suffix[..16].IndexOfAnyExcept("0123456789abcdefABCDEF") < 0 &&
+            (suffix.Length == 16 ||
+             suffix.Length > 17 && suffix[16] == '-' && suffix[17..].IndexOfAnyExcept("0123456789") < 0);
     }
 
     private static string ComputeSettingsCacheIdentity(

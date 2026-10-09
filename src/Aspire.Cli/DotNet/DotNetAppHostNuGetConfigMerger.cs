@@ -83,8 +83,9 @@ internal sealed class DotNetAppHostNuGetConfigMerger(BundleNuGetService nuGetSer
             return null;
         }
 
-        var proposedContent = await nuGetService.CreateNuGetConfigContentAsync(
+        var proposedContent = await nuGetService.CreatePersistentNuGetConfigContentAsync(
             configuration,
+            targetFile,
             originalContent is null ? default(ReadOnlyMemory<byte>?) : new ReadOnlyMemory<byte>(originalContent),
             globalPackagesFolder,
             cancellationToken);

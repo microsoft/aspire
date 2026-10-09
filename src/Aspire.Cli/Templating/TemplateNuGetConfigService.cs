@@ -201,13 +201,15 @@ internal sealed class TemplateNuGetConfigService(
             sourceOverride,
             executionContext.NuGetServiceIndexOverride,
             cancellationToken);
-        var content = await nuGetService.CreateNuGetConfigContentAsync(
+        var targetFile = new FileInfo(Path.Combine(outputDirectory.FullName, "nuget.config"));
+        var content = await nuGetService.CreatePersistentNuGetConfigContentAsync(
             configuration,
+            targetFile,
             originalContent: null,
             channel?.ConfigureGlobalPackagesFolder == true ? CliPathHelper.StagingNuGetPackagesFolderName : null,
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        await using var stream = new FileInfo(Path.Combine(outputDirectory.FullName, "nuget.config")).Open(
+        await using var stream = targetFile.Open(
             FileMode.CreateNew, FileAccess.Write, FileShare.None);
         await stream.WriteAsync(content, CancellationToken.None);
     }

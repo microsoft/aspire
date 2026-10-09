@@ -1,0 +1,16 @@
+﻿<configuration>
+  <packageSources>
+    <clear />
+    <add key="company" value="https://company.example/v3/index.json" />
+    <add key="aspire-apphost-0123456789abcdef" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-pr-19763/nuget/v3/index.json" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="company">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-apphost-0123456789abcdef">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

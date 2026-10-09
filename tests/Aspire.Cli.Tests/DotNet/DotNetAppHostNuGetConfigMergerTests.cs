@@ -1143,6 +1143,129 @@ public class DotNetAppHostNuGetConfigMergerTests
     }
 
     [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task PrepareAsync_PersistenceMasksOnlySurvivingRetiredSources(
+        bool locallyDefined, bool inheritedDefined, bool clearSources)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        const string retired = """<add key="retired" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-old/nuget/v3/index.json" />""";
+        const string userSources = """
+            <add key="company" value="https://company.example/v3/index.json" />
+            <add key="user-disabled" value="https://private.example/v3/index.json" />
+            """;
+        await WriteConfigAsync(workspace.WorkspaceRoot, $$"""
+            <configuration>
+              <packageSources><clear />{{userSources}}{{(inheritedDefined ? retired : "")}}</packageSources>
+              <disabledPackageSources><add key="user-disabled" value="true" /></disabledPackageSources>
+            </configuration>
+            """);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var target = await WriteConfigAsync(appHostDirectory, $$"""
+            <configuration>
+              <packageSources>{{(clearSources ? "<clear />" + userSources : "")}}{{(locallyDefined ? retired : "")}}</packageSources>
+              <disabledPackageSources>
+                <clear />
+                <add key="user-disabled" value="true" />
+                <add key="future-private" value="true" />
+                <add key="aspire-apphost-0e77e1652908bf0e" value="true" />
+                <add key="aspire-apphost-efc407738a41fb53-0" value="true" />
+              </disabledPackageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="retired"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="company"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            appHostDirectory, CreateChannel([new("Aspire*", "https://new.example/v3/index.json")]),
+            createIfMissing: true, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        var snapshot = NuGetTestHelper.CreateClient().GetSettings(
+            appHostDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.Equal(
+            inheritedDefined && !clearSources ? ["future-private", "retired", "user-disabled"] : ["future-private", "user-disabled"],
+            snapshot.DisabledPackageSourceKeys.Order(StringComparer.Ordinal));
+        Assert.Equal(["https://new.example/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Redis"));
+        await Verify(XDocument.Load(target.FullName).ToString(), "xml")
+            .UseParameters(locallyDefined, inheritedDefined, clearSources);
+    }
+
+    [Fact]
+    public async Task PrepareAsync_ChannelRoundTripDoesNotAccumulateProjectionMasks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        var target = await WriteConfigAsync(workspace.WorkspaceRoot, """
+            <configuration>
+              <packageSources><clear /><add key="company" value="https://company.example/v3/index.json" /></packageSources>
+            </configuration>
+            """);
+        var service = NuGetTestHelper.CreateService();
+        const string prSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-pr-19763/nuget/v3/index.json";
+        const string dailySource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
+        foreach (var source in new[] { prSource, dailySource, prSource, dailySource, prSource })
+        {
+            var configuration = service.BuildConfiguration(
+                workspace.WorkspaceRoot, "apphost-0123456789abcdef", [new("Aspire*", source)],
+                restrictToSelectedSources: false, hasAuthoritativeAspirePolicy: true,
+                cancellationToken: TestContext.Current.CancellationToken);
+            using var projection = await service.CreateConfigurationPreviewAsync(
+                workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+            Assert.Equal([source],
+                NuGetTestHelper.GetEligiblePackageSources(projection.EffectiveWorkingDirectory.FullName, "Aspire.Hosting.Redis"));
+            var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+                workspace.WorkspaceRoot, configuration, createIfMissing: true,
+                globalPackagesFolder: null, TestContext.Current.CancellationToken);
+            Assert.NotNull(candidate);
+            await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+            Assert.Empty(service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).DisabledPackageSourceKeys);
+            Assert.Equal([source], NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis"));
+        }
+
+        await Verify(XDocument.Load(target.FullName).ToString(), "xml");
+    }
+
+    [Fact]
+    public async Task PrepareAsync_PersistenceReenablesSelectedInheritedSourceWithoutEnablingOtherSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
+        await WriteConfigAsync(workspace.WorkspaceRoot, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="selected" value="https://selected.example/v3/index.json" />
+                <add key="user-disabled" value="https://private.example/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources>
+                <add key="selected" value="true" />
+                <add key="user-disabled" value="true" />
+                <add key="future-private" value="true" />
+              </disabledPackageSources>
+            </configuration>
+            """);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var candidate = await DotNetAppHostNuGetConfigTestHelper.PrepareAsync(
+            appHostDirectory, CreateChannel([new("Aspire*", "https://selected.example/v3/index.json")]),
+            createIfMissing: true, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+
+        var snapshot = NuGetTestHelper.CreateClient().GetSettings(
+            appHostDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.Equal(["future-private", "user-disabled"], snapshot.DisabledPackageSourceKeys.Order(StringComparer.Ordinal));
+        Assert.Equal(["https://selected.example/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(appHostDirectory.FullName, "Aspire.Hosting.Redis"));
+        await Verify(XDocument.Load(candidate.TargetFile.FullName).ToString(), "xml");
+    }
+
+    [Theory]
     [InlineData(null, true)]
     [InlineData(".nugetpackages", false)]
     [InlineData("company-cache", false)]

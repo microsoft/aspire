@@ -1,0 +1,17 @@
+﻿<configuration>
+  <packageSources>
+    <add key="aspire-test" value="https://new.example/v3/index.json" />
+  </packageSources>
+  <disabledPackageSources>
+    <add key="future-private" value="true" />
+  </disabledPackageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="company">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-test">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

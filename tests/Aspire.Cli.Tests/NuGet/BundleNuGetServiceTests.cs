@@ -82,7 +82,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             persistedSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"),
             previewSnapshot.PackageSourceMappings.Select(mapping => $"{mapping.SourceKey}:{string.Join(",", mapping.Patterns)}"));
-        Assert.Equal(persistedSnapshot.DisabledPackageSourceKeys, previewSnapshot.DisabledPackageSourceKeys);
+        Assert.Equal(["daily"], previewSnapshot.DisabledPackageSourceKeys);
+        Assert.Empty(persistedSnapshot.DisabledPackageSourceKeys);
         var persistedSettings = NuGetTestHelper.LoadSettings(appHostDirectory.FullName);
         Assert.Equal(
             NativeSettingsUtility.GetGlobalPackagesFolder(persistedSettings),
