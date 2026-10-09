@@ -35,6 +35,28 @@ internal static class VolumeMountPathResolver
             GetStablePathSegment(volumeName));
     }
 
+    internal static void ResetLocalPath(IAspireStore store, IResource resource, string volumeName)
+    {
+        var path = GetLocalPath(store, resource, volumeName);
+        var storePath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(store.BasePath));
+        // Refuse redirected store subdirectories rather than risking deletion outside the
+        // managed volume. Directory.Delete does not follow links within the volume itself.
+        for (var directory = new DirectoryInfo(path); directory.FullName != storePath; directory = directory.Parent!)
+        {
+            if (directory.LinkTarget is not null)
+            {
+                throw new IOException($"Cannot reset volume '{volumeName}': '{directory.FullName}' is a symbolic link.");
+            }
+        }
+
+        if (Directory.Exists(path))
+        {
+            Directory.Delete(path, recursive: true);
+        }
+
+        Directory.CreateDirectory(path);
+    }
+
     internal static string GetStablePathSegment(string value)
     {
         ArgumentException.ThrowIfNullOrEmpty(value);

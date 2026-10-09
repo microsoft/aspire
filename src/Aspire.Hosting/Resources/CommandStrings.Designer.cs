@@ -160,6 +160,42 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Permanently delete all volume data for this resource? This cannot be undone. Bind-mounted host directories will not be modified..
+        /// </summary>
+        internal static string ResetVolumesConfirmation {
+            get {
+                return ResourceManager.GetString("ResetVolumesConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Delete the resource's volume data. Running containers resume with empty storage; stopped containers remain stopped. Shared volumes cannot be reset. Bind mounts are not modified..
+        /// </summary>
+        internal static string ResetVolumesDescription {
+            get {
+                return ResourceManager.GetString("ResetVolumesDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reset volumes.
+        /// </summary>
+        internal static string ResetVolumesName {
+            get {
+                return ResourceManager.GetString("ResetVolumesName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully reset volumes for '{0}'..
+        /// </summary>
+        internal static string ResourceVolumesReset {
+            get {
+                return ResourceManager.GetString("ResourceVolumesReset", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Restart resource.
         /// </summary>
         internal static string RestartDescription {

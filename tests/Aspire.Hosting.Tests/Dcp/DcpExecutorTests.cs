@@ -24,6 +24,7 @@ using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Hosting.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
@@ -43,6 +44,678 @@ namespace Aspire.Hosting.Tests.Dcp;
 [Trait("Partition", "4")]
 public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public void ResetVolumes_OperationWireContractBindsIdentityAndDiagnostics()
+    {
+        var operation = JsonSerializer.Deserialize<ContainerVolumeReset>("""
+            {
+              "apiVersion": "usvc-dev.developer.microsoft.com/v1",
+              "kind": "ContainerVolumeReset",
+              "metadata": { "name": "reset", "uid": "operation-uid" },
+              "spec": { "containerName": "database", "containerUid": "container-uid" },
+              "status": {
+                "state": "Failed",
+                "message": "Volume is shared.",
+                "containerRemoved": false,
+                "volumes": ["reset-volume"],
+                "consumers": [{ "volumeName": "shared", "containerName": "other", "containerId": "runtime-id" }]
+              }
+            }
+            """)!;
+
+        Assert.Equal("usvc-dev.developer.microsoft.com/v1", operation.ApiVersion);
+        Assert.Equal("ContainerVolumeReset", operation.Kind);
+        Assert.Equal("operation-uid", operation.Metadata.Uid);
+        Assert.Equal("database", operation.Spec.ContainerName);
+        Assert.Equal("container-uid", operation.Spec.ContainerUid);
+        Assert.False(operation.IsActive);
+        Assert.Equal("Volume is shared.", operation.Status?.Message);
+        Assert.False(operation.Status?.ContainerRemoved);
+        Assert.Equal(["reset-volume"], operation.Status?.Volumes);
+        Assert.Collection(operation.Status!.Consumers!, consumer =>
+        {
+            Assert.Equal("shared", consumer.VolumeName);
+            Assert.Equal("other", consumer.ContainerName);
+            Assert.Equal("runtime-id", consumer.ContainerId);
+        });
+    }
+
+    [Fact]
+    public async Task ResetVolumes_OperationWatchClearsCommandGuardAfterCancelledCallerAndPreflightFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus { State = ContainerVolumeResetState.Pending }
+        };
+        var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var active = new TaskCompletionSource<CustomResourceSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource<CustomResourceSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                var snapshot = context.UpdateSnapshot(new CustomResourceSnapshot { Properties = [], ResourceType = KnownResourceTypes.Container });
+                if (snapshot.State?.Text == ContainerState.Running)
+                {
+                    running.TrySetResult();
+                    if (snapshot.Properties.Any(p => p.Name == KnownProperties.Container.VolumeResetState && p.Value is "Pending"))
+                    {
+                        active.TrySetResult(snapshot);
+                    }
+                    else if (active.Task.IsCompleted)
+                    {
+                        completed.TrySetResult(snapshot);
+                    }
+                }
+            }
+            return Task.CompletedTask;
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service, events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        container.Status = new ContainerStatus { State = ContainerState.Running, ContainerId = "unchanged" };
+        service.PushResourceModified(container);
+        await running.Task.DefaultTimeout();
+        using var cancellation = new CancellationTokenSource();
+
+        var reset = executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), cancellation.Token);
+        var activeSnapshot = await active.Task.DefaultTimeout();
+        Assert.Equal(ContainerState.Running, activeSnapshot.State?.Text);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reset).DefaultTimeout();
+        var operation = Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>());
+        operation.Status = new ContainerVolumeResetStatus { State = ContainerVolumeResetState.Failed, Message = "Preflight refused." };
+        service.PushResourceModified(operation);
+
+        var completedSnapshot = await completed.Task.DefaultTimeout();
+        Assert.Equal(ContainerState.Running, completedSnapshot.State?.Text);
+        Assert.Empty(completedSnapshot.Properties.Where(p => p.Name == KnownProperties.Container.VolumeResetState));
+        await executor.StopResourceAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.Empty(service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Theory]
+    [InlineData("start", "Pending")]
+    [InlineData("start", "Running")]
+    [InlineData("stop", "Pending")]
+    [InlineData("stop", "Running")]
+    public async Task ResetVolumes_CancelledCallerLeavesOperationAndDelegatesLifecycleToDcp(string command, string state)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var accepted = new TaskCompletionSource<ContainerVolumeReset>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = operation =>
+            {
+                var first = accepted.TrySetResult(operation);
+                return new ContainerVolumeResetStatus { State = first ? state : ContainerVolumeResetState.Succeeded };
+            }
+        };
+        var failures = new ConcurrentQueue<OnResourceFailedToStartContext>();
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceFailedToStartContext>(context =>
+        {
+            failures.Enqueue(context);
+            return Task.CompletedTask;
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service, events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        var reference = executor.GetResource(container.Metadata.Name);
+        using var cancellation = new CancellationTokenSource();
+
+        var reset = executor.ResetResourceVolumesAsync(reference, cancellation.Token);
+        var operation = await accepted.Task.DefaultTimeout();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reset).DefaultTimeout();
+
+        Assert.Equal(container.Metadata.Name, operation.Spec.ContainerName);
+        Assert.Equal(container.Metadata.Uid, operation.Spec.ContainerUid);
+        Assert.Empty(service.DeletedResources);
+        Assert.Empty(failures);
+        if (command == "start")
+        {
+            await executor.StartResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+            Assert.Equal([container.Metadata.Name], service.DeletedResources);
+            Assert.Equal(2, service.CreatedResources.OfType<Container>().Count());
+        }
+        else
+        {
+            await executor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+            Assert.True(container.Spec.Stop);
+            Assert.Empty(service.DeletedResources);
+            Assert.Single(service.CreatedResources.OfType<Container>());
+        }
+        Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Equal(state, operation.Status?.State);
+        Assert.Empty(failures);
+    }
+
+    [Theory]
+    [InlineData("Pending")]
+    [InlineData("Running")]
+    public async Task ResetVolumes_OverlappingRequestReportsDcpRefusalWithoutDeletingActiveOperation(string state)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var accepted = new TaskCompletionSource<ContainerVolumeReset>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = operation => new ContainerVolumeResetStatus
+            {
+                State = accepted.TrySetResult(operation) ? state : ContainerVolumeResetState.Failed,
+                Message = "Another volume reset is active."
+            }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        var reference = executor.GetResource(container.Metadata.Name);
+        using var cancellation = new CancellationTokenSource();
+
+        var reset = executor.ResetResourceVolumesAsync(reference, cancellation.Token);
+        var active = await accepted.Task.DefaultTimeout();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reset).DefaultTimeout();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(reference, TestContext.Current.CancellationToken)).DefaultTimeout();
+
+        Assert.Equal("Another volume reset is active. Resolve the cause before retrying.", exception.Message);
+        var attempts = service.CreatedResources.OfType<ContainerVolumeReset>().ToArray();
+        Assert.Equal(2, attempts.Length);
+        Assert.NotEqual(attempts[0].Metadata.Name, attempts[1].Metadata.Name);
+        Assert.All(attempts, attempt => Assert.Equal(container.Metadata.Uid, attempt.Spec.ContainerUid));
+        Assert.Equal([attempts[1].Metadata.Name], service.DeletedResources);
+        Assert.Equal(state, active.Status?.State);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Theory]
+    [InlineData("Succeeded")]
+    [InlineData("Failed")]
+    public async Task ResetVolumes_TerminalOperationDoesNotBlockStop(string state)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus { State = state }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        var reference = executor.GetResource(container.Metadata.Name);
+
+        if (state == ContainerVolumeResetState.Failed)
+        {
+            await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+                executor.ResetResourceVolumesAsync(reference, TestContext.Current.CancellationToken)).DefaultTimeout();
+        }
+        else
+        {
+            await executor.ResetResourceVolumesAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+        }
+
+        await executor.StopResourceAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.True(container.Spec.Stop);
+        Assert.Equal(ContainerState.Exited, container.Status?.State);
+        Assert.Equal([Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>()).Metadata.Name], service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResetVolumes_FailureReportsRecoveryAndPartialDataLoss(bool containerRemoved)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus
+            {
+                State = "Failed",
+                Message = "Volume recreation failed.",
+                ContainerRemoved = containerRemoved
+            }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken));
+
+        Assert.Equal(containerRemoved
+            ? "Volume recreation failed. The container was removed; some volume data may already have been deleted. DCP repairs owned storage before allowing startup. Resolve the cause before retrying."
+            : "Volume recreation failed. Resolve the cause before retrying.", exception.Message);
+        Assert.Equal([Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>()).Metadata.Name], service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task ResetVolumes_FailedOperationCanBeRetriedWithoutRecreatingContainer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var calls = 0;
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus
+            {
+                State = Interlocked.Increment(ref calls) == 1 ? ContainerVolumeResetState.Failed : ContainerVolumeResetState.Succeeded,
+                Message = "Volume removal failed."
+            }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        var reference = executor.GetResource(container.Metadata.Name);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(reference, TestContext.Current.CancellationToken));
+        Assert.Equal("Volume removal failed. Resolve the cause before retrying.", exception.Message);
+        await executor.ResetResourceVolumesAsync(reference, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var attempts = service.CreatedResources.OfType<ContainerVolumeReset>().ToArray();
+        Assert.Equal(2, attempts.Length);
+        Assert.NotEqual(attempts[0].Metadata.Name, attempts[1].Metadata.Name);
+        Assert.NotEqual(attempts[0].Metadata.Uid, attempts[1].Metadata.Uid);
+        Assert.All(attempts, attempt => Assert.Equal(container.Metadata.Uid, attempt.Spec.ContainerUid));
+        Assert.Equal(ContainerVolumeResetState.Failed, attempts[0].Status?.State);
+        Assert.Equal(ContainerVolumeResetState.Succeeded, attempts[1].Status?.State);
+        Assert.Equal(attempts.Select(attempt => attempt.Metadata.Name), service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task ResetVolumes_RefusesLocalReplicaStorageBeforeStoppingProcesses()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration[AspireStore.AspireStorePathKeyName] = workspace.Path;
+        AddExecutableWithPrecomputedReplicas(builder).WithVolume("data", "/data", env: "DATA_PATH");
+        var service = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), configuration: builder.Configuration, kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var executables = service.CreatedResources.OfType<Executable>().ToArray();
+        Assert.Equal(2, executables.Length);
+        var selected = executables.Single(e => e.Metadata.Name == "program-first");
+        var volumePath = Assert.Single(selected.Spec.Env!, e => e.Name == "DATA_PATH").Value!;
+        var marker = Path.Combine(volumePath, "marker.txt");
+        await File.WriteAllTextAsync(marker, "keep");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(selected.Metadata.Name), TestContext.Current.CancellationToken));
+
+        Assert.Equal("Volumes for 'program' are shared with replicas: program-second. Shared volumes cannot be reset.", exception.Message);
+        Assert.All(executables, e => Assert.Null(e.Spec.Stop));
+        Assert.Equal("keep", await File.ReadAllTextAsync(marker));
+        Assert.Empty(service.DeletedResources);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_StaleOperationUidIsNotSuccess()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var observed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new TestKubernetesService(beforeWatchEventAsync: (context, _) =>
+        {
+            if (context.Resource is ContainerVolumeReset reset)
+            {
+                reset.Metadata.Uid = "different-operation";
+                reset.Status = new ContainerVolumeResetStatus { State = ContainerVolumeResetState.Succeeded };
+                observed.TrySetResult();
+            }
+            return Task.CompletedTask;
+        })
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus { State = ContainerVolumeResetState.Pending }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        var reference = executor.GetResource(container.Metadata.Name);
+        using var cancellation = new CancellationTokenSource();
+
+        var resetTask = executor.ResetResourceVolumesAsync(reference, cancellation.Token);
+        await observed.Task.DefaultTimeout();
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => resetTask).DefaultTimeout();
+
+        Assert.Empty(service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+        Assert.Null(container.Spec.Stop);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ResetVolumes_PreservesStoppedOrExplicitStartIntent(bool explicitStart)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddContainer("database", "image").WithVolume("data", "/data");
+        if (explicitStart)
+        {
+            resource.WithLifetime(ContainerLifetime.Persistent).WithExplicitStart();
+        }
+        var service = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), configuration: builder.Configuration, kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        if (!explicitStart)
+        {
+            container.Spec.Stop = true;
+        }
+
+        await executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(explicitStart ? false : null, container.Spec.Start);
+        Assert.Equal(explicitStart ? null : true, container.Spec.Stop);
+        Assert.Equal(ContainerState.Exited, container.Status?.State);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+        Assert.Equal([Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>()).Metadata.Name], service.DeletedResources);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_LocalExecutableStopsClearsAndRecreates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration[AspireStore.AspireStorePathKeyName] = workspace.Path;
+        builder.AddExecutable("worker", "test-command", ".").WithVolume("data", "/data", env: "DATA_PATH");
+        var service = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), configuration: builder.Configuration, kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var previous = Assert.Single(service.CreatedResources.OfType<Executable>());
+        var volumePath = Assert.Single(previous.Spec.Env!, e => e.Name == "DATA_PATH").Value!;
+        await File.WriteAllTextAsync(Path.Combine(volumePath, "marker.txt"), "delete");
+
+        await executor.ResetResourceVolumesAsync(executor.GetResource(previous.Metadata.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(previous.Spec.Stop);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(volumePath));
+        Assert.Equal([previous.Metadata.Name], service.DeletedResources);
+        var replacement = service.CreatedResources.OfType<Executable>().Last();
+        Assert.NotEqual(previous.Metadata.Uid, replacement.Metadata.Uid);
+        Assert.Equal(volumePath, Assert.Single(replacement.Spec.Env!, e => e.Name == "DATA_PATH").Value);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_DeletesOnlySuccessfulOperationAndKeepsContainerIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus { State = ContainerVolumeResetState.Succeeded, Volumes = ["data"] }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var previous = Assert.Single(service.CreatedResources.OfType<Container>());
+
+        await executor.ResetResourceVolumesAsync(executor.GetResource(previous.Metadata.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var operation = Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Equal(previous.Metadata.Name, operation.Spec.ContainerName);
+        Assert.Equal(previous.Metadata.Uid, operation.Spec.ContainerUid);
+        Assert.Equal(ContainerVolumeResetState.Succeeded, operation.Status?.State);
+        Assert.Equal(["data"], operation.Status?.Volumes);
+        Assert.Equal([operation.Metadata.Name], service.DeletedResources);
+        Assert.Same(previous, Assert.Single(service.CreatedResources.OfType<Container>()));
+        Assert.Equal(ContainerState.Running, previous.Status?.State);
+        Assert.Equal("data", Assert.Single(previous.Spec.VolumeMounts!).Source);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_SuccessWaitsForNewPhysicalContainerToRun()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var startupWatch = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new TestKubernetesService(watchStarted: (type, index) =>
+        {
+            if (type == typeof(Container) && index >= 2)
+            {
+                startupWatch.TrySetResult();
+            }
+        })
+        {
+            CompleteVolumeResetStartup = false
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        container.Status = new ContainerStatus { State = ContainerState.Running, ContainerId = "before-reset" };
+
+        var reset = executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken);
+        await startupWatch.Task.DefaultTimeout();
+        Assert.False(reset.IsCompleted);
+        var operation = Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Equal(ContainerVolumeResetState.Succeeded, operation.Status?.State);
+        Assert.Equal([operation.Metadata.Name], service.DeletedResources);
+        container.Status = new ContainerStatus { State = ContainerState.Pending, ContainerId = "after-reset" };
+        service.PushResourceModified(container);
+        Assert.False(reset.IsCompleted);
+        container.Status = new ContainerStatus { State = ContainerState.Running, ContainerId = "after-reset" };
+        service.PushResourceModified(container);
+
+        await reset.DefaultTimeout();
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task ResetVolumes_FailureIncludesStructuredConsumersWithoutRecreatingContainer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService
+        {
+            VolumeResetHandler = _ => new ContainerVolumeResetStatus
+            {
+                State = ContainerVolumeResetState.Failed,
+                Message = "Volume is shared.",
+                Consumers = [new ContainerVolumeResetConsumer { VolumeName = "data", ContainerName = "other", ContainerId = "runtime-id" }]
+            }
+        };
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken));
+
+        Assert.Equal("Volume is shared. Consumers: 'other' (volume 'data'). Resolve the cause before retrying.", exception.Message);
+        Assert.Equal([Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>()).Metadata.Name], service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task ResetVolumes_RefusesSharedVolumesBeforeRequestingReset()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("shared", "/data");
+        builder.AddContainer("other", "image").WithVolume("shared", "/data");
+        var service = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = service.CreatedResources.OfType<Container>().Single(c => c.AppModelResourceName == "database");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken));
+
+        Assert.Equal("Volumes for 'database' are shared with resources: other. Shared volumes cannot be reset.", exception.Message);
+        Assert.Empty(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Empty(service.DeletedResources);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_MissingContainerUidIsRefusedBeforeCreatingOperation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+        container.Metadata.Uid = string.Empty;
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken));
+
+        Assert.Equal($"The DCP runtime did not provide the identity of container '{container.Metadata.Name}'. Its volumes cannot be reset safely.", exception.Message);
+        Assert.Empty(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Empty(service.DeletedResources);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_CreateConflictObservesOriginalAttempt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService(afterCreate: resource =>
+        {
+            if (resource is ContainerVolumeReset)
+            {
+                throw new k8s.Autorest.HttpOperationException("Already exists")
+                {
+                    Response = new k8s.Autorest.HttpResponseMessageWrapper(
+                        new HttpResponseMessage(System.Net.HttpStatusCode.Conflict), "Already exists")
+                };
+            }
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+
+        await executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+
+        var operation = Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Equal(container.Metadata.Uid, operation.Spec.ContainerUid);
+        Assert.Equal([operation.Metadata.Name], service.DeletedResources);
+        Assert.Single(service.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task ResetVolumes_CreateConflictWithDifferentTargetIsNotObservedOrDeleted()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService(afterCreate: resource =>
+        {
+            if (resource is ContainerVolumeReset operation)
+            {
+                operation.Spec = new ContainerVolumeResetSpec
+                {
+                    ContainerName = operation.Spec.ContainerName,
+                    ContainerUid = "another-container-uid"
+                };
+                throw new k8s.Autorest.HttpOperationException("Already exists")
+                {
+                    Response = new k8s.Autorest.HttpResponseMessageWrapper(
+                        new HttpResponseMessage(System.Net.HttpStatusCode.Conflict), "Already exists")
+                };
+            }
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken)).DefaultTimeout();
+
+        var operation = Assert.Single(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Equal($"Volume reset operation '{operation.Metadata.Name}' targets a different container. Its outcome cannot be used for this reset.", exception.Message);
+        Assert.Empty(service.DeletedResources);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_CreateConflictWithMissingAttemptReportsUnknownOutcomeWithoutResubmitting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        string? operationName = null;
+        var requests = 0;
+        var service = new TestKubernetesService(beforeCreate: resource =>
+        {
+            if (resource is ContainerVolumeReset operation)
+            {
+                operationName = operation.Metadata.Name;
+                requests++;
+                throw new k8s.Autorest.HttpOperationException("Already exists")
+                {
+                    Response = new k8s.Autorest.HttpResponseMessageWrapper(
+                        new HttpResponseMessage(System.Net.HttpStatusCode.Conflict), "Already exists")
+                };
+            }
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken)).DefaultTimeout();
+
+        Assert.Equal($"Volume reset operation '{operationName}' was accepted but is no longer available. Its outcome is unknown; inspect the container and storage before submitting another reset.", exception.Message);
+        Assert.Equal(1, requests);
+        Assert.Empty(service.CreatedResources.OfType<ContainerVolumeReset>());
+        Assert.Empty(service.DeletedResources);
+    }
+
+    [Fact]
+    public async Task ResetVolumes_ReportsUnsupportedDcpWithoutDeletingContainer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("database", "image").WithVolume("data", "/data");
+        var service = new TestKubernetesService(beforeCreate: resource =>
+        {
+            if (resource is ContainerVolumeReset)
+            {
+                throw new k8s.Autorest.HttpOperationException("Unknown operation API")
+                {
+                    Response = new k8s.Autorest.HttpResponseMessageWrapper(
+                        new HttpResponseMessage(System.Net.HttpStatusCode.NotFound), "Not found")
+                };
+            }
+        });
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(app.Services.GetRequiredService<DistributedApplicationModel>(), kubernetesService: service);
+        await executor.RunApplicationAsync().DefaultTimeout();
+        var container = Assert.Single(service.CreatedResources.OfType<Container>());
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            executor.ResetResourceVolumesAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken));
+
+        Assert.Equal("The DCP runtime does not support targeted volume reset. Use a DCP build with ContainerVolumeReset support.", exception.Message);
+        Assert.Empty(service.DeletedResources);
+        await executor.StopResourceAsync(executor.GetResource(container.Metadata.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.True(container.Spec.Stop);
+    }
+
     [Fact]
     public async Task ExecutableCanRestartFromResourceChangedCallback()
     {
@@ -11406,14 +12079,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var developerCertificateService = new TestDeveloperCertificateService(new List<X509Certificate2>(), false, false, false);
 
         var nameGenerator = new DcpNameGenerator(configuration, Options.Create(dcpOptions));
-        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
-        {
-            Services = new TestServiceProvider(configuration)
-                .AddService<IDeveloperCertificateService>(developerCertificateService)
-                .AddService(distributedAppModel)
-                .AddService(Options.Create(dcpOptions))
-                .AddService(resourceLoggerService)
-        });
         var ks = kubernetesService ?? new TestKubernetesService();
         var dcpEvts = events ?? new DcpExecutorEvents();
         var fileSystemService = new FileSystemService(configuration);
@@ -11425,6 +12090,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
 
         var aspireStore = new AspireStore(Path.Join(aspireStoreDirectory, ".aspire"), fileSystemService);
+        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider(configuration)
+                .AddService<IDeveloperCertificateService>(developerCertificateService)
+                .AddService<IAspireStore>(aspireStore)
+                .AddService(distributedAppModel)
+                .AddService(Options.Create(dcpOptions))
+                .AddService(resourceLoggerService)
+        });
         var hostEnv = hostEnvironment ?? new TestHostEnvironment();
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
 
@@ -11487,7 +12161,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             containerNetworkEndpointProvisioner,
             new ProfilingTelemetry(configuration),
             proxylessEndpointPortAllocator,
-            userSecretsManager ?? NoopUserSecretsManager.Instance);
+            userSecretsManager ?? NoopUserSecretsManager.Instance,
+            aspireStore);
     }
 
     private static async Task<string?> GetPlainExecutableSslCertDirAsync(Action<IResourceBuilder<TestExecutableResource>>? configure = null)

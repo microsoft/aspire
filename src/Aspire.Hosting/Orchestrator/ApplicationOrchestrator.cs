@@ -676,6 +676,12 @@ internal sealed class ApplicationOrchestrator
         await _dcpExecutor.StopResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
     }
 
+    public Task ResetResourceVolumesAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        var resourceReference = _dcpExecutor.GetResource(resourceName);
+        return _dcpExecutor.ResetResourceVolumesAsync(resourceReference, cancellationToken);
+    }
+
     private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp)
     {
         foreach (var child in _parentChildLookup[resource].Where(c => c is IResourceWithParent))

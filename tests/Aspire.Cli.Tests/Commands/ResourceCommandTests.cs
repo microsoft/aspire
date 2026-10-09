@@ -19,6 +19,47 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class ResourceCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("", true, CliExitCodes.Success, 1)]
+    [InlineData("", false, CliExitCodes.FailedToExecuteResourceCommand, 0)]
+    [InlineData("--yes", false, CliExitCodes.Success, 1)]
+    [InlineData("--non-interactive --yes", false, CliExitCodes.Success, 1)]
+    [InlineData("--non-interactive", true, CliExitCodes.MissingRequiredArgument, 0)]
+    public async Task ResourceCommand_ResetVolumesRequiresConfirmation(string options, bool confirm, int expectedExitCode, int expectedExecutions)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string warning = "Permanently delete all volume data and restart?";
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot("database", new ResourceSnapshotCommand
+                {
+                    Name = "reset-volumes",
+                    State = "Enabled",
+                    ConfirmationMessage = warning
+                })
+            ]
+        };
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (message, defaultValue) =>
+            {
+                Assert.Equal(warning, message);
+                Assert.False(defaultValue);
+                return confirm;
+            }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interaction);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse($"resource database reset-volumes {options}");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(expectedExitCode, exitCode);
+        Assert.Equal(expectedExecutions, backchannel.ExecuteResourceCommandCallCount);
+    }
+
     [Fact]
     public async Task ResourceCommand_Help_Works()
     {
