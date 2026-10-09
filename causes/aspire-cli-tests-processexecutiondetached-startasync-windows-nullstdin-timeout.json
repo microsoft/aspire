@@ -1,0 +1,16 @@
+{
+  "id": "aspire-cli-tests-processexecutiondetached-startasync-windows-nullstdin-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin times out",
+  "test_name": "Aspire.Cli.Tests.DotNet.ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Cli.Tests.DotNet.ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin() in ProcessExecutionDetachedTests.cs:line 38",
+  "occurrences": [
+    {
+      "run_id": 37870375407,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/37870375407",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-09T02:51:09Z"
+    }
+  ]
+}

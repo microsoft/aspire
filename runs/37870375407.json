@@ -1,0 +1,153 @@
+{
+  "run_id": 37870375407,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/37870375407",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-09T02:51:09Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20816,
+    "title": "Graduate deployment-state APIs (ASPIREPIPELINES002) to stable",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-stable-deployment-state-apis",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20816",
+    "merged_at": "2026-10-09T01:33:46Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d3784060b37d760f3f311b03c7ac75edb4936df8",
+    "failed_sha": "a0353f1506ccbc689d1000ce2eb6ba5a0abc196a",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4932ff6cfde773b9861b06af2b1dbc060915e369",
+        "message": "Graduate core pipeline APIs to stable (#20809) ## Description Graduate the existing `ASPIREPIPELINES001` core pipeline API family to stable so C# AppHosts and integration authors can use it without experimental-warning suppressions. This is an attribute-only graduation, not an API redesign or removal. Re-enumerated current `main` at `a3f44d274fe0866724aa2293f9f7fedd96786a86`: **29 attributed source declarations**, comprising 23 public types, `IDistributedApplicationBuilder.Pipeline`, and five in",
+        "html_url": "https://github.com/microsoft/aspire/commit/4932ff6cfde773b9861b06af2b1dbc060915e369",
+        "pull_request": {
+          "number": 20809,
+          "title": "Graduate core pipeline APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20809",
+          "merged_at": "2026-10-08T22:40:01Z"
+        }
+      },
+      {
+        "sha": "22c172e589870658e4e184f5ee4039e1131fdd22",
+        "message": "Graduate core Azure deployment APIs to stable (#20820) ## Description Consumers should no longer need `ASPIREAZURE001` suppressions to use the long-standing core Azure deployment APIs. This is the explicitly authorized, attribute-only graduation of `AzurePublishingContext`, `AzureEnvironmentResource`, and `AzureEnvironmentResourceExtensions.AddAzureEnvironment`, `WithLocation`, and `WithResourceGroup` in `Aspire.Hosting.Azure`. Remove obsolete `ASPIREAZURE001` suppressions from consumers that us",
+        "html_url": "https://github.com/microsoft/aspire/commit/22c172e589870658e4e184f5ee4039e1131fdd22",
+        "pull_request": {
+          "number": 20820,
+          "title": "Graduate core Azure deployment APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20820",
+          "merged_at": "2026-10-08T23:18:00Z"
+        }
+      },
+      {
+        "sha": "4d4bee810453b7d4f493734a5faad5245d61379c",
+        "message": "Graduate pipeline output service APIs to stable (#20814) ## Description Graduate the pipeline output-directory API family so consumers can use `IPipelineOutputService` without suppressing `ASPIREPIPELINES004`. The only actual source declarations carrying this diagnostic are `IPipelineOutputService` and the internal `PipelineOutputService`. Remove both experimental attributes, their unused imports, and all suppressions for this diagnostic in hosting, Azure deployment infrastructure, Entity Framew",
+        "html_url": "https://github.com/microsoft/aspire/commit/4d4bee810453b7d4f493734a5faad5245d61379c",
+        "pull_request": {
+          "number": 20814,
+          "title": "Graduate pipeline output service APIs to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20814",
+          "merged_at": "2026-10-08T23:41:45Z"
+        }
+      },
+      {
+        "sha": "6630da51c4e2ae6d572d68a7995cbefece61d5e8",
+        "message": "Obsolete AddCSharpApp in favor of AddDotnetProject (#20825) ## Description `AddCSharpApp` has always been experimental. Replace `ASPIRECSHARPAPPS001` with warning-level `[Obsolete]` attributes directing consumers to `AddDotnetProject` from `Aspire.Hosting.Dotnet`. Both public overloads and the internal `addCSharpApp` dispatcher are obsolete. The dispatcher directs polyglot callers to `addDotnetProject`; the TypeScript snapshot now emits `@deprecated` rather than `@experimental`. Keep all signatu",
+        "html_url": "https://github.com/microsoft/aspire/commit/6630da51c4e2ae6d572d68a7995cbefece61d5e8",
+        "pull_request": {
+          "number": 20825,
+          "title": "Obsolete AddCSharpApp in favor of AddDotnetProject",
+          "url": "https://github.com/microsoft/aspire/pull/20825",
+          "merged_at": "2026-10-09T00:27:36Z"
+        }
+      },
+      {
+        "sha": "b01702d9cec7d12ae02f57c66c3a0439570be9ac",
+        "message": "Graduate user secrets APIs from experimental to stable (#20817) ## Description Graduate the `ASPIREUSERSECRETS001` API family so consumers can use Aspire's user-secrets manager without suppressing an experimental diagnostic. Re-enumerated current `main`: the only actual source declarations are `IUserSecretsManager` and `IDistributedApplicationBuilder.UserSecretsManager`. Remove their experimental attributes and all 23 associated warning suppression directives across hosting, testing, browser, an",
+        "html_url": "https://github.com/microsoft/aspire/commit/b01702d9cec7d12ae02f57c66c3a0439570be9ac",
+        "pull_request": {
+          "number": 20817,
+          "title": "Graduate user secrets APIs from experimental to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20817",
+          "merged_at": "2026-10-09T00:51:01Z"
+        }
+      },
+      {
+        "sha": "4ace576e624ba6b56f3b2aae6b3ddd999982ce40",
+        "message": "Migrate Dashboard product telemetry and add CLI Azure Monitor log export (#20730)",
+        "html_url": "https://github.com/microsoft/aspire/commit/4ace576e624ba6b56f3b2aae6b3ddd999982ce40",
+        "pull_request": {
+          "number": 20730,
+          "title": "Migrate Dashboard product telemetry and add CLI Azure Monitor log export",
+          "url": "https://github.com/microsoft/aspire/pull/20730",
+          "merged_at": "2026-10-09T00:52:27Z"
+        }
+      },
+      {
+        "sha": "a0353f1506ccbc689d1000ce2eb6ba5a0abc196a",
+        "message": "Graduate deployment-state APIs (ASPIREPIPELINES002) to stable (#20816) ## Description Consumers can use `IDeploymentStateManager` and `DeploymentStateSection` without suppressing `ASPIREPIPELINES002`. This is an independent, attribute-only graduation from `main`, not an API redesign or removal. Re-enumerated all source declarations on main: the only two declarations carrying this diagnostic are `src/Aspire.Hosting/Pipelines/IDeploymentStateManager.cs` and `src/Aspire.Hosting/Pipelines/Deployment",
+        "html_url": "https://github.com/microsoft/aspire/commit/a0353f1506ccbc689d1000ce2eb6ba5a0abc196a",
+        "pull_request": {
+          "number": 20816,
+          "title": "Graduate deployment-state APIs (ASPIREPIPELINES002) to stable",
+          "url": "https://github.com/microsoft/aspire/pull/20816",
+          "merged_at": "2026-10-09T01:33:46Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 113636254438,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37870375407/job/113636254438",
+      "classification": "flaky-test",
+      "reason": "Run tests (Windows) step failed; structured test results show ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin timed out after 30s, an intermittent timing failure unrelated to any candidate merge.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 113636255300,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/37870375407/job/113636255300",
+      "classification": "flaky-test",
+      "reason": "Run tests (Linux/macOS) step failed; structured test results show TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(removeFirst: True, brokenPipe: False) asserting wrong reconciliation count, an exact match for a previously tracked known-flaky test.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(removeFirst: True, brokenPipe: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   7",
+      "stack_trace": "at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 925\n   at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.StalledResourceWatchDoesNotBlockReconciliationOrQuit(Boolean removeFirst, Boolean brokenPipe) in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 940\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Exact match of a previously tracked flaky test (reconciliation count race condition) with identical error signature and stack trace location, occurring repeatedly since 2026-10-06 regardless of PR."
+    },
+    {
+      "name": "Aspire.Cli.Tests.DotNet.ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Cli.Tests.DotNet.ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionDetachedTests.cs:line 38\n   at Aspire.Cli.Tests.DotNet.ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionDetachedTests.cs:line 47\n   at Aspire.Cli.Tests.DotNet.ProcessExecutionDetachedTests.StartAsync_OnWindows_ProvidesValidNullStdin() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\DotNet\\ProcessExecutionDetachedTests.cs:line 47\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timeout-based test failure unrelated to any candidate merge in this run's range (none touch process execution/detached process code); matches the repo's known pattern of intermittent Windows process-related test timeouts."
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-backchannel-traywatchstream-stalled-flaky",
+    "aspire-cli-tests-processexecutiondetached-startasync-windows-nullstdin-timeout"
+  ]
+}
