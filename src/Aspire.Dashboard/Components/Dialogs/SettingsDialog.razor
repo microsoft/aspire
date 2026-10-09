@@ -55,7 +55,7 @@
             </div>
         </div>
 
-        @if (TelemetryService is { IsTelemetryInitialized: true, IsTelemetryEnabled: true })
+        @if (TelemetryService.IsTelemetryEnabled)
         {
             <div>
                 <p class="setting-subtext">

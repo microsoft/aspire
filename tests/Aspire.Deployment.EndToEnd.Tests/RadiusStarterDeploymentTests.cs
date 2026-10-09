@@ -382,14 +382,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                 "builder.Build().Run();",
                 $"builder.AddRadiusEnvironment(\"radius\").WithNamespace(\"{appNamespace}\");\n\nbuilder.Build().Run();");
 
-            // WithContainerImage is Experimental (ASPIRERADIUS057) and the pipeline APIs used by
-            // compute environments are Experimental (ASPIREPIPELINES001); suppress both. Add each
-            // pragma independently so one already being present (e.g. a future template that emits
-            // ASPIREPIPELINES001 itself) never skips adding the other and fails the warning-as-error build.
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
-            {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
-            }
+            // WithContainerImage is experimental (ASPIRERADIUS057).
             if (!content.Contains("#pragma warning disable ASPIRERADIUS057"))
             {
                 content = "#pragma warning disable ASPIRERADIUS057\n" + content;

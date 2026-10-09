@@ -30,9 +30,9 @@ internal abstract class BaseCommand : Command
     internal bool PrefetchesTemplatePackageMetadataForInvocation
         => _prefetchesTemplatePackageMetadataForInvocation ?? PrefetchesTemplatePackageMetadata;
 
-    // JSON output cannot display update notifications, so apply this invocation-level gate outside
+    // Machine-readable output cannot display update notifications, so apply this invocation-level gate outside
     // the overridable command policy to prevent metadata-only consumers from bypassing it.
-    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isJsonFormatRequested;
+    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isMachineReadableFormatRequested;
 
     internal virtual bool RequiresCliPackageMetadata => false;
 
@@ -55,7 +55,7 @@ internal abstract class BaseCommand : Command
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
     private readonly CliExecutionContext _executionContext;
-    private bool _isJsonFormatRequested;
+    private bool _isMachineReadableFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
@@ -80,9 +80,9 @@ internal abstract class BaseCommand : Command
         {
             SelectForExecution(parseResult);
 
-            // Route human-readable output to stderr when JSON is requested so
+            // Route human-readable output to stderr when a machine-readable format is requested so
             // that only machine-readable data appears on stdout.
-            if (_isJsonFormatRequested)
+            if (_isMachineReadableFormatRequested)
             {
                 InteractionService.Console = ConsoleOutput.Error;
             }
@@ -100,7 +100,7 @@ internal abstract class BaseCommand : Command
 
     internal void SelectForExecution(ParseResult parseResult)
     {
-        _isJsonFormatRequested = IsJsonFormatRequested(parseResult);
+        _isMachineReadableFormatRequested = IsMachineReadableFormatRequested(parseResult);
         _prefetchesTemplatePackageMetadataForInvocation = PrefetchesTemplatePackageMetadata;
         PrepareForExecution(parseResult);
         _executionContext.Command = this;
@@ -250,7 +250,7 @@ internal abstract class BaseCommand : Command
             }
         }
 
-        if (UpdateNotificationsEnabled && !_isJsonFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        if (UpdateNotificationsEnabled && !_isMachineReadableFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
         {
             try
             {
@@ -270,6 +270,11 @@ internal abstract class BaseCommand : Command
     }
 
     protected abstract Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Checks whether this command requests output that must not be mixed with human-readable messages.
+    /// </summary>
+    protected virtual bool IsMachineReadableFormatRequested(ParseResult parseResult) => IsJsonFormatRequested(parseResult);
 
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.

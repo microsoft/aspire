@@ -11,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
-#pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
 #pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject is experimental
 #pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental
@@ -50,9 +49,11 @@ public static class BlazorGatewayExtensions
         [ResourceName] string name)
     {
         var gatewayPath = GetScriptPath("Gateway.cs");
+#pragma warning disable CS0618 // Preserve the gateway's ProjectResource launch and publishing behavior.
         var gateway = builder.AddCSharpApp(name, gatewayPath)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
+#pragma warning restore CS0618
 
         ConfigureGatewayToolForRunMode(gateway, builder.AppHostDirectory, builder.Environment.EnvironmentName);
         if (builder.ExecutionContext.IsPublishMode)

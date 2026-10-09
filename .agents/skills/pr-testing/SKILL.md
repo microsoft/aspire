@@ -523,7 +523,7 @@ Use the following structure:
 - **Manual triggers:** [`gh workflow run` invocations, run links, dry-run output, whether run on a fork]
 - **Results validation:** [Per behavioral change, the observable confirmed in a real run — job-log line, artifact path/layout, binlog target, or skipped job — not just that the run completed; and, for enumeration/matrix/job changes, that no *fewer* tests/jobs ran than baseline]
 - **Dependency graph:** [For a changed producing job/artifact, the consumers traced (same-run `needs:` and cross-workflow/cross-pipeline downloads) and how each was confirmed — or "n/a"]
-- **gh-aw:** [`gh aw compile --validate` result + post-recompile lock-file diff (ideally empty)]
+- **gh-aw:** [`gh aw compile --validate --schedule-seed microsoft/aspire` result + post-recompile lock-file diff (ideally empty)]
 - **Failure-modes scan:** [Gotcha rows checked and outcome — including gotchas confirmed *not* to be a problem]
 
 **Azure DevOps (only when pipelines changed):**

@@ -1151,7 +1151,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
 
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
               </PropertyGroup>
 
@@ -1204,7 +1204,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <IsAspireHost>true</IsAspireHost>
                 <AspireHostingSDKVersion>{{AspireCliVersion}}</AspireHostingSDKVersion>
                 <AspireUseCliBundle>{{aspireUseCliBundle.ToString().ToLowerInvariant()}}</AspireUseCliBundle>
@@ -1846,7 +1846,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     {
         var executableName = OperatingSystem.IsWindows() ? "AppHost.exe" : "AppHost";
 
-        return Path.Combine(project.ProjectDirectory, "bin", "Debug", "net8.0", executableName);
+        return Path.Combine(project.ProjectDirectory, "bin", "Debug", "net10.0", executableName);
     }
 
     private static string GetPathEnvironmentVariableName() => OperatingSystem.IsWindows() ? "Path" : "PATH";

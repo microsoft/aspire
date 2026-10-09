@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using Aspire.Dashboard.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,13 +13,11 @@ namespace Aspire.Dashboard.Tests.Telemetry;
 public class TelemetryLoggerProviderTests
 {
     [Fact]
-    public async Task Log_CircuitAggregateException_RecordsChildStackTraceOnce()
+    public void Log_CircuitAggregateException_RecordsSanitizedChildExceptionOnce()
     {
-        await using var telemetrySender = new TestDashboardTelemetrySender { IsTelemetryEnabled = true };
-        await telemetrySender.TryStartTelemetrySessionAsync();
+        using var fixture = new DashboardTelemetryFixture();
         using var serviceProvider = new ServiceCollection()
-            .AddSingleton<DashboardTelemetryService>()
-            .AddSingleton<IDashboardTelemetrySender>(telemetrySender)
+            .AddSingleton(fixture.Telemetry)
             .AddLogging()
             .AddSingleton<ILoggerProvider, TelemetryLoggerProvider>()
             .AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>()
@@ -32,23 +31,24 @@ public class TelemetryLoggerProviderTests
         logger.Log(LogLevel.Error, TelemetryLoggerProvider.CircuitUnhandledExceptionEventId,
             new AggregateException(exception, exception), "Unhandled exception in circuit");
 
-        var request = Assert.Single(await TelemetryErrorRecorderTests.ReadFaultRequestsAsync(telemetrySender));
-        Assert.NotNull(request.Properties);
-        Assert.Equal(new AspireTelemetryProperty(typeof(InvalidOperationException).FullName!), request.Properties[TelemetryPropertyKeys.ExceptionType]);
-        Assert.Equal(new AspireTelemetryProperty(exception.Message), request.Properties[TelemetryPropertyKeys.ExceptionMessage]);
-        Assert.Equal(new AspireTelemetryProperty(exception.StackTrace!), request.Properties[TelemetryPropertyKeys.ExceptionStackTrace]);
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        TelemetryErrorRecorderTests.AssertError(log, exception);
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 
-    [Fact]
-    public async Task Log_DifferentCategoryAndEventIds_WriteTelemetryForBlazorUnhandedErrorAsync()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Log_DifferentCategoryAndEventIds_WriteTelemetryForBlazorUnhandedErrorAsync(bool withActivity)
     {
         // Arrange
-        var telemetrySender = new TestDashboardTelemetrySender { IsTelemetryEnabled = true };
-        await telemetrySender.TryStartTelemetrySessionAsync();
+        using var fixture = new DashboardTelemetryFixture();
+        using var frameworkActivity = withActivity ? new Activity("Blazor").Start() : null;
+        var current = Activity.Current;
 
-        var serviceProvider = new ServiceCollection()
-            .AddSingleton<DashboardTelemetryService>()
-            .AddSingleton<IDashboardTelemetrySender>(telemetrySender)
+        using var serviceProvider = new ServiceCollection()
+            .AddSingleton(fixture.Telemetry)
             .AddLogging()
             .AddSingleton<ILoggerProvider, TelemetryLoggerProvider>()
             .AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>()
@@ -59,20 +59,25 @@ public class TelemetryLoggerProviderTests
         // Act & assert 1
         var testLogger = loggerProvider.CreateLogger("testLogger");
         testLogger.Log(LogLevel.Error, TelemetryLoggerProvider.CircuitUnhandledExceptionEventId, "Test message");
-        Assert.False(telemetrySender.ContextChannel.Reader.TryPeek(out _));
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
 
         // Act & assert 2
         var circuitHostLogger = loggerProvider.CreateLogger(TelemetryLoggerProvider.CircuitHostLogCategory);
         circuitHostLogger.LogInformation("Test log message");
-        Assert.False(telemetrySender.ContextChannel.Reader.TryPeek(out _));
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
 
         // Act & assert 3
         circuitHostLogger.Log(LogLevel.Error, TelemetryLoggerProvider.CircuitUnhandledExceptionEventId, "Test message");
-        Assert.False(telemetrySender.ContextChannel.Reader.TryPeek(out _));
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
 
         // Act & assert 4
         circuitHostLogger.Log(LogLevel.Error, TelemetryLoggerProvider.CircuitUnhandledExceptionEventId, new InvalidOperationException("Exception message"), "Test message");
-        Assert.True(telemetrySender.ContextChannel.Reader.TryPeek(out var context));
-        Assert.Equal("/telemetry/fault - $aspire/dashboard/error", context.Name);
+        Assert.Same(current, Activity.Current);
+        Assert.False(fixture.ActivityChannel.Reader.TryPeek(out _));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(TelemetryEventKeys.Error, log.Message);
+        Assert.Equal(current?.TraceId ?? default, log.TraceId);
+        Assert.Equal(current?.SpanId ?? default, log.SpanId);
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
     }
 }

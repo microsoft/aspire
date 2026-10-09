@@ -211,9 +211,10 @@ path_rules:
   # the blast radius is not precise enough, keep the conservative full-matrix target.
   - paths:
       - .github/actions/check-changed-files/**
+      - .github/actions/create-pull-request/**
       - .github/actions/select-tests/**
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates the changed-file gate and selector action behavior
+    reason: Infrastructure.Tests validates these composite actions' behavior
   - paths:
       - .github/actions/enumerate-tests/**
     targets: [DOTNET_TESTS]
@@ -508,6 +509,7 @@ path_rules:
   - paths:
       - .github/workflows/**
       - .github/actionlint.yaml
+      - .github/actionlint-version.json
       - eng/pipelines/**
       - eng/Signing.props
       - eng/Publishing.props

@@ -92,7 +92,7 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentKeyCode(BunitContext context)
     {
-        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true);
+        context.JSInterop.Setup<string>("Microsoft.FluentUI.Blazor.Components.KeyCode.RegisterKeyCode", _ => true).SetResult("test-keycode");
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.KeyCode.UnregisterKeyCode", _ => true).SetVoidResult();
     }
 
@@ -241,7 +241,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
         context.Services.AddSingleton<DashboardTelemetryService>();
         context.Services.AddSingleton<DashboardActivitySource>();
-        context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
+        context.Services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));

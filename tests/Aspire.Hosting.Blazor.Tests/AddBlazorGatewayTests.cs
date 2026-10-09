@@ -377,33 +377,27 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task GetPublishPropertiesAsync_UsesReleaseConfiguration()
     {
-        var directory = Directory.CreateTempSubdirectory();
-        try
-        {
-            var projectPath = Path.Combine(directory.FullName, "Client.csproj");
-            await File.WriteAllTextAsync(
-                projectPath,
-                """
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <PropertyGroup>
-                    <TargetFramework Condition="'$(Configuration)' == 'Debug'">net12.0</TargetFramework>
-                    <TargetFramework Condition="'$(Configuration)' == 'Release'">net11.0</TargetFramework>
-                  </PropertyGroup>
-                </Project>
-                """);
+        using var fileSystem = new TestFileSystemService();
+        using var directory = fileSystem.TempDirectory.CreateTempSubdirectory();
+        var projectPath = Path.Combine(directory.Path, "Client.csproj");
+        await File.WriteAllTextAsync(
+            projectPath,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework Condition="'$(Configuration)' == 'Debug'">net12.0</TargetFramework>
+                <TargetFramework Condition="'$(Configuration)' == 'Release'">net11.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
 
-            var properties = await BlazorWasmAppBuilder.GetPublishPropertiesAsync(
-                projectPath,
-                NullLogger.Instance,
-                CancellationToken.None);
+        var properties = await BlazorWasmAppBuilder.GetPublishPropertiesAsync(
+            projectPath,
+            NullLogger.Instance,
+            CancellationToken.None);
 
-            Assert.NotNull(properties);
-            Assert.Equal("net11.0", properties.TargetFramework);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
+        Assert.NotNull(properties);
+        Assert.Equal("net11.0", properties.TargetFramework);
     }
 
     [Theory]

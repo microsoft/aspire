@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Utils;
-
 namespace Aspire.Dashboard.Telemetry;
 
 /// <summary>
@@ -44,29 +42,13 @@ public sealed class TelemetryErrorRecorder : ITelemetryErrorRecorder
             {
                 foreach (var innerException in innerExceptions.DistinctBy(e => (e.GetType(), e.Message, e.StackTrace)))
                 {
-                    RecordException(innerException);
+                    _telemetryService.RecordError(message, innerException, writeToLogging: false);
                 }
 
                 return;
             }
         }
 
-        RecordException(exception);
-    }
-
-    private void RecordException(Exception exception)
-    {
-        _telemetryService.PostFault(
-            TelemetryEventKeys.Error,
-            $"{exception.GetType().FullName}: {exception.Message}",
-            FaultSeverity.Critical,
-            new Dictionary<string, AspireTelemetryProperty>
-            {
-                [TelemetryPropertyKeys.ExceptionType] = new AspireTelemetryProperty(exception.GetType().FullName!),
-                [TelemetryPropertyKeys.ExceptionMessage] = new AspireTelemetryProperty(exception.Message),
-                [TelemetryPropertyKeys.ExceptionStackTrace] = new AspireTelemetryProperty(exception.StackTrace ?? string.Empty),
-                [TelemetryPropertyKeys.ExceptionRuntimeVersion] = new AspireTelemetryProperty(VersionHelpers.RuntimeVersion?.ToString() ?? string.Empty),
-            }
-        );
+        _telemetryService.RecordError(message, exception, writeToLogging: false);
     }
 }

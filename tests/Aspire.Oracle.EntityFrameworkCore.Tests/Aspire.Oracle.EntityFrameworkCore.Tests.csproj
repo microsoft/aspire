@@ -6,6 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Exercise both runtimes without lifting the net10-only provider to EF Core 11. -->
+    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="$(MicrosoftExtensionsDiagnosticsHealthChecksEntityFrameworkCoreNet10Version)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="$(RepoRoot)src\Components\Aspire.Oracle.EntityFrameworkCore\ConfigurationSchema.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

@@ -16,7 +16,7 @@ For pull-requests in CI the tests are run via GitHub actions defined in `tests-i
     - tests cannot be run at this point as they will fail complaining about `artifacts/bin/dotnet-latest` being missing
     - Install the SDK following the steps above
     - Run/debug the tests normally now, and they will be using the SDK
-    - Also note that in this case the testproject is run from the bindir for `Aspire.EndToEnd.Tests`, so a path like `artifacts/bin/Aspire.EndToEnd.Tests/Debug/net8.0/testassets/testproject/`
+    - Also note that in this case the testproject is run from the bindir for `Aspire.EndToEnd.Tests`, so a path like `artifacts/bin/Aspire.EndToEnd.Tests/Debug/net10.0/testassets/testproject/`
 
 ### Using it from command line
 

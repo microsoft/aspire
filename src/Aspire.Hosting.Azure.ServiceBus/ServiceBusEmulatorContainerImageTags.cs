@@ -13,13 +13,4 @@ internal static class ServiceBusEmulatorContainerImageTags
 
     /// <remarks>2.0.0</remarks>
     public const string Tag = "2.0.0";
-
-    /// <remarks>mcr.microsoft.com</remarks>
-    public const string SqlServerRegistry = "mcr.microsoft.com";
-
-    /// <remarks>mssql/server</remarks>
-    public const string SqlServerImage = "mssql/server";
-
-    /// <remarks>2022-latest</remarks>
-    public const string SqlServerTag = "2022-latest";
 }
