@@ -1536,7 +1536,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             var baseline = JsonNode.Parse(baseText)!;
             baseline["metadata"] = new JsonArray(new JsonObject { ["version"] = "1.0.0" });
-            baseText = baseline.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+            baseText = baseline.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
         }
         var head = JsonNode.Parse(baseText.Replace("4.17.20", "4.17.21", StringComparison.Ordinal).Replace("22.0.0", "22.1.0", StringComparison.Ordinal))!;
         var package = head["packages"]!["node_modules/lodash"]!;
@@ -1581,7 +1581,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
                 package[scenario] = new JsonObject { ["@types/node"] = "^22.1.0" };
                 break;
         }
-        var text = head.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        var text = head.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
         if (scenario == "encoded-root-field")
         {
             text = text.Replace("\"alert-42\"", "\"\\u0061lert-42\"", StringComparison.Ordinal);
@@ -1656,7 +1656,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             baseline["packages"] = JsonNode.Parse(PublicTextBase)!["packages"]!.DeepClone();
         }
-        var baseText = baseline.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        var baseText = baseline.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) + "\n";
         var output = PublicOutputFixture("create_pull_request");
         output["body"] = output["body"]!.GetValue<string>().Replace("extension/package-lock.json", path, StringComparison.Ordinal);
         var result = await RunHarnessAsync(new JsonObject
@@ -1757,10 +1757,10 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             ["mode"] = "agent-scrub",
             ["useGitSnapshot"] = true,
-            ["baseFiles"] = new JsonObject { [path] = baseline.ToJsonString(options) },
+            ["baseFiles"] = new JsonObject { [path] = baseline.ToJsonString(options) + "\n" },
             ["generatedPatch"] = new JsonObject
             {
-                ["headFiles"] = new JsonObject { [path] = head.ToJsonString(options) },
+                ["headFiles"] = new JsonObject { [path] = head.ToJsonString(options) + "\n" },
                 ["message"] = message,
             },
             ["outputLines"] = new JsonArray(output.ToJsonString()),
@@ -1866,7 +1866,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             string[] expected = transition == "none"
                 ? ["push_to_pull_request_branch.message non-template-text", "aw-auto-sec-security-updates.patch non-template-commit-message", "aw-auto-sec-security-updates.patch no-version-transitions"]
-                : ["aw-auto-sec-security-updates.patch unbound-lockfile-metadata"];
+                : [$"aw-auto-sec-security-updates.patch {(transition == "ambiguous-owner" ? "unsupported-lockfile-text" : "unbound-lockfile-metadata")}"];
             Assert.Equal(expected,
                 result["value"]!["violations"]!.AsArray().Select(v => $"{v!["source"]} {v["reason"]}"));
             Assert.Empty(result["outputs"]!.AsArray());
@@ -1953,8 +1953,8 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         {
             ["mode"] = "agent-scrub",
             ["useGitSnapshot"] = true,
-            ["baseFiles"] = new JsonObject { [path] = baseline.ToJsonString(options) },
-            ["generatedPatch"] = new JsonObject { ["headFiles"] = new JsonObject { [path] = head.ToJsonString(options) }, ["message"] = message },
+            ["baseFiles"] = new JsonObject { [path] = baseline.ToJsonString(options) + "\n" },
+            ["generatedPatch"] = new JsonObject { ["headFiles"] = new JsonObject { [path] = head.ToJsonString(options) + "\n" }, ["message"] = message },
             ["outputLines"] = new JsonArray(output.ToJsonString()),
             ["publicationConditions"] = CompiledPublicationConditions(),
         });
@@ -2021,13 +2021,158 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
         }
         else
         {
-            Assert.Equal(["aw-auto-sec-security-updates.patch unbound-lockfile-metadata"],
+            Assert.Equal([$"aw-auto-sec-security-updates.patch {(scenario == "misplaced-hash" ? "unsupported-lockfile-text" : "unbound-lockfile-metadata")}"],
                 result["value"]!["violations"]!.AsArray().Select(v => $"{v!["source"]} {v["reason"]}"));
             Assert.Empty(result["outputs"]!.AsArray());
             Assert.Empty(result["remaining"]!.AsArray());
             Assert.Null(result["stepOutputs"]!["publication_ready"]);
             Assert.Empty(result["publications"]!.AsArray());
         }
+    }
+
+    [Theory]
+    [RequiresTools(["node", "git"])]
+    [InlineData("yarn.lock", "  note: 1.2.3\n", false)]
+    [InlineData("yarn.lock", "  'note': '1.2.3'\n", false)]
+    [InlineData("yarn.lock", "  lodash: 1.2.3\n", false)]
+    [InlineData("yarn.lock", "  dependencies:\n    lodash: ^4.17.21\n", true)]
+    [InlineData("yarn.lock", "  note:\n    lodash: ^4.17.21\n", false)]
+    [InlineData("yarn.lock", "  dependencies:\n    lodash:\n      version: 4.17.21\n", false)]
+    [InlineData("yarn.lock", "  resolution:\n    integrity: sha512-YWJj\n", false)]
+    [InlineData("yarn.lock", "  version: 4.17.21\n", false)]
+    [InlineData("pnpm-lock.yaml", "    note: 1.2.3\n", false)]
+    [InlineData("pnpm-lock.yaml", "    'note': '1.2.3'\n", false)]
+    [InlineData("pnpm-lock.yaml", "    lodash: 1.2.3\n", false)]
+    [InlineData("pnpm-lock.yaml", "    dependencies:\n      lodash: 4.17.21\n", true)]
+    [InlineData("pnpm-lock.yaml", "    note:\n      lodash: 4.17.21\n", false)]
+    [InlineData("pnpm-lock.yaml", "    version: 1.2.3\n", false)]
+    [InlineData("pnpm-lock.yaml", "    integrity: sha512-YWJj\n", false)]
+    [InlineData("pnpm-lock.yaml", "    resolution:\n      integrity: sha512-YWJj\n", true)]
+    [InlineData("pnpm-lock.yaml", "    resolution:\n      note: 1.2.3\n", false)]
+    [InlineData("pnpm-lock.yaml", "    resolution:\n      version: 1.2.3\n", false)]
+    [InlineData("pnpm-lock.yaml", "    resolution: {integrity: sha512-ZGVm}\n", true)]
+    [InlineData("pnpm-lock.yaml", "    resolution: {integrity: sha512-YWJj, integrity: sha512-ZGVm}\n", false)]
+    [InlineData("pnpm-lock.yaml", "    engines:\n      node: '>=18'\n", true)]
+    [InlineData("pnpm-lock.yaml", "    engines:\n      note: 1.2.3\n", false)]
+    public async Task AgentOutputScrubRequiresYamlLockfileSchemaLocations(string basename, string metadata, bool accepted)
+    {
+        var path = $"extension/{basename}";
+        var baseText = basename == "yarn.lock"
+            ? "\"lodash@^4.17.20\":\n  version \"4.17.20\"\n  integrity sha512-YWJj\n"
+            : "packages:\n  lodash@4.17.20:\n    resolution: {integrity: sha512-YWJj}\n";
+        var headText = baseText.Replace("4.17.20", "4.17.21", StringComparison.Ordinal);
+        if (metadata.StartsWith("    resolution:", StringComparison.Ordinal))
+        {
+            headText = headText.Replace("    resolution: {integrity: sha512-YWJj}\n", metadata, StringComparison.Ordinal);
+        }
+        else
+        {
+            headText += metadata;
+        }
+        const string message = "Update dependencies\n\nlodash 4.17.20 -> 4.17.21\n";
+        var output = PublicOutputFixture("push_to_pull_request_branch");
+        output["message"] = message;
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "agent-scrub",
+            ["useGitSnapshot"] = true,
+            ["baseFiles"] = new JsonObject { [path] = baseText },
+            ["generatedPatch"] = new JsonObject { ["headFiles"] = new JsonObject { [path] = headText }, ["message"] = message },
+            ["outputLines"] = new JsonArray(output.ToJsonString()),
+            ["publicationConditions"] = CompiledPublicationConditions(),
+        });
+
+        if (accepted)
+        {
+            Assert.Empty(result["value"]!["violations"]!.AsArray());
+            Assert.Empty(result["failures"]!.AsArray());
+            Assert.Equal("true", result["stepOutputs"]!["publication_ready"]!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Equal(["aw-auto-sec-security-updates.patch unsupported-lockfile-text"],
+                result["value"]!["violations"]!.AsArray().Select(v => $"{v!["source"]} {v["reason"]}"));
+            Assert.Empty(result["outputs"]!.AsArray());
+            Assert.Empty(result["remaining"]!.AsArray());
+            Assert.Null(result["stepOutputs"]!["publication_ready"]);
+            Assert.Empty(result["publications"]!.AsArray());
+        }
+    }
+
+    [Theory]
+    [RequiresTools(["node", "git"])]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentOutputScrubPreservesOnlyUnchangedLegacyYamlFields(bool editLegacyField)
+    {
+        const string path = "extension/yarn.lock";
+        const string baseText = "\"lodash@^4.17.20\":\n  version \"4.17.20\"\n  integrity sha512-YWJj\n  note: 1.2.3\n";
+        var headText = baseText.Replace("version \"4.17.20\"", "version \"4.17.21\"", StringComparison.Ordinal);
+        if (editLegacyField)
+        {
+            headText = headText.Replace("note: 1.2.3", "note: 1.2.4", StringComparison.Ordinal);
+        }
+        const string message = "Update dependencies\n\nlodash 4.17.20 -> 4.17.21\n";
+        var output = PublicOutputFixture("push_to_pull_request_branch");
+        output["message"] = message;
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "agent-scrub",
+            ["useGitSnapshot"] = true,
+            ["baseFiles"] = new JsonObject { [path] = baseText },
+            ["generatedPatch"] = new JsonObject { ["headFiles"] = new JsonObject { [path] = headText }, ["message"] = message },
+            ["outputLines"] = new JsonArray(output.ToJsonString()),
+            ["publicationConditions"] = CompiledPublicationConditions(),
+        });
+
+        Assert.Equal(editLegacyField ? ["aw-auto-sec-security-updates.patch unsupported-lockfile-text"] : [],
+            result["value"]!["violations"]!.AsArray().Select(v => $"{v!["source"]} {v["reason"]}"));
+        if (editLegacyField)
+        {
+            Assert.Empty(result["outputs"]!.AsArray());
+            Assert.Empty(result["remaining"]!.AsArray());
+            Assert.Null(result["stepOutputs"]!["publication_ready"]);
+            Assert.Empty(result["publications"]!.AsArray());
+        }
+        else
+        {
+            Assert.Empty(result["failures"]!.AsArray());
+            Assert.Equal("true", result["stepOutputs"]!["publication_ready"]!.GetValue<string>());
+        }
+    }
+
+    [Theory]
+    [RequiresTools(["node", "git"])]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AgentOutputScrubRejectsGitEndOfFileMarkers(bool terminateHead)
+    {
+        const string path = "extension/yarn.lock";
+        const string baseText = "\"lodash@^4.17.20\":\n  version \"4.17.20\"";
+        var headText = baseText.Replace("version \"4.17.20\"", "version \"4.17.21\"", StringComparison.Ordinal)
+            + (terminateHead ? "\n" : "");
+        const string message = "Update dependencies\n\nlodash 4.17.20 -> 4.17.21\n";
+        var output = PublicOutputFixture("push_to_pull_request_branch");
+        output["message"] = message;
+        var result = await RunHarnessAsync(new JsonObject
+        {
+            ["mode"] = "agent-scrub",
+            ["useGitSnapshot"] = true,
+            ["baseFiles"] = new JsonObject { [path] = baseText },
+            ["generatedPatch"] = new JsonObject { ["headFiles"] = new JsonObject { [path] = headText }, ["message"] = message },
+            ["outputLines"] = new JsonArray(output.ToJsonString()),
+            ["publicationConditions"] = CompiledPublicationConditions(),
+        });
+
+        Assert.Equal(["push_to_pull_request_branch.message row-not-in-patch",
+            "aw-auto-sec-security-updates.patch commit-row-not-in-patch",
+            "aw-auto-sec-security-updates.patch unsupported-file-diff",
+            "aw-auto-sec-security-updates.patch disallowed-patch-file"],
+            result["value"]!["violations"]!.AsArray().Select(v => $"{v!["source"]} {v["reason"]}"));
+        Assert.Empty(result["outputs"]!.AsArray());
+        Assert.Empty(result["remaining"]!.AsArray());
+        Assert.Null(result["stepOutputs"]!["publication_ready"]);
+        Assert.Empty(result["publications"]!.AsArray());
     }
 
     [Theory]

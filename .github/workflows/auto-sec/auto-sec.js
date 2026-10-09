@@ -2011,7 +2011,7 @@ function parsePatchFileDiffs(patchText) {
                 current.metadata.push(line);
             } else if (blobs) {
                 current.oldBlob = blobs[1];
-            } else if (!header && line !== '' && line !== '-- ' && line !== '\\ No newline at end of file'
+            } else if (!header && line !== '' && line !== '-- '
                 && !/^\d+\.\d+\.\d+(?:\.windows\.\d+| \(Apple Git-\d+\))?$/.test(line)) {
                 // Reject opaque text between hunks and in diff metadata, not just known
                 // advisory words: format-patch transport is itself a public carrier.
@@ -2031,12 +2031,10 @@ function parsePatchFileDiffs(patchText) {
             const body = lines[index + 1];
             const marker = body[0];
             if (marker === '\\') {
-                if (body !== '\\ No newline at end of file') {
-                    current.parseable = false;
-                    break;
-                }
-                index++;
-                continue;
+                // Reconstruction assumes newline-terminated lines. Never discard Git's
+                // EOF marker and validate content different from what the handler applies.
+                current.parseable = false;
+                break;
             }
             if (marker === ' ' || body === '') {
                 block = null;
@@ -2184,7 +2182,9 @@ function checkPatchContents(patchText, readBaseTexts = () => [], rebuiltFiles = 
             && !addedLines.some(hasLockfileComment)
             && (addedLines.some(line => !isPublicLockfileLine(path, line))
                 || (METADATA_LOCKFILE_BASENAMES.has(basenameOf(path).toLowerCase())
-                    && head !== null && !isPublicJsonLockfileChanges(normalizedBase, head)))) {
+                    && head !== null && !isPublicJsonLockfileChanges(normalizedBase, head))
+                || (['yarn.lock', 'pnpm-lock.yaml'].includes(basenameOf(path).toLowerCase())
+                    && head !== null && !isPublicYamlLockfileChanges(path, normalizedBase, head)))) {
             violations.push({ path, reason: 'unsupported-lockfile-text' });
         }
     }
@@ -2540,6 +2540,127 @@ function isPublicLockfileLine(path, line) {
         });
     }
     return false;
+}
+
+// A scalar such as `note: 1.2.3` is lexically indistinguishable from a dependency
+// reference. Authorize changed fields by their reconstructed indentation path:
+//   packages -> lodash@4.17.21 -> resolution -> integrity
+//   importers -> . -> dependencies -> lodash -> specifier/version
+// Yarn classic uses `version "4.17.21"`; Berry uses `version: 4.17.21`.
+// This is a closed subset, not a general YAML parser. Unchanged legacy fields can
+// remain, but new/edited unknown fields, duplicate keys, and unsupported encodings
+// fail closed. See https://github.com/pnpm/spec/blob/master/lockfile/9.0.md and
+// https://classic.yarnpkg.com/lang/en/docs/yarn-lock/.
+function isPublicYamlLockfileChanges(path, baseText, headText) {
+    const yarn = basenameOf(path).toLowerCase() === 'yarn.lock';
+    const groups = ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'];
+    const fields = {
+        yarnPackage: {
+            version: 'version', resolved: 'resolved', integrity: 'integrity', resolution: 'resolution',
+            checksum: 'checksum', languageName: 'languageName', linkType: 'linkType',
+        },
+        package: { resolution: 'artifact', engines: 'engines' },
+        snapshot: { resolution: 'artifact' },
+        artifact: { integrity: 'integrity', tarball: 'tarball' },
+        dependency: { specifier: 'version', version: 'version' },
+        metadata: { version: 'version', cacheKey: 'cacheKey' },
+    };
+    const entryKey = key => {
+        const spec = splitNpmSpec(key.replace(/^\//, '').replace(/\(.*$/, ''));
+        return PUBLIC_PACKAGE_NAME.test(spec.name) && isPublicLockfileVersion(spec.range);
+    };
+    const childKind = (kind, key) => {
+        if (kind === 'root') {
+            if (yarn) {
+                return key === '__metadata' ? 'metadata' : isPublicLockfileLine(path, `${key}:`) && key.includes('@') ? 'yarnPackage' : null;
+            }
+            return ['packages', 'snapshots', 'importers'].includes(key) ? key : key === 'lockfileVersion' ? 'version' : null;
+        }
+        if (kind === 'packages' || kind === 'snapshots') {
+            return entryKey(key) ? kind === 'packages' ? 'package' : 'snapshot' : null;
+        }
+        if (kind === 'importers') {
+            return key === '.' || isCanonicalRepoPath(key) ? 'importer' : null;
+        }
+        if (groups.includes(key) && ['yarnPackage', 'package', 'snapshot', 'importer'].includes(kind)) {
+            return kind === 'importer' ? 'importerDependencies' : 'versions';
+        }
+        if (kind === 'versions' || kind === 'importerDependencies') {
+            return PUBLIC_PACKAGE_NAME.test(key) ? kind === 'versions' ? 'version' : 'dependency' : null;
+        }
+        if (kind === 'engines') {
+            return ['node', 'npm', 'yarn', 'pnpm', 'bun', 'deno'].includes(key) ? 'version' : null;
+        }
+        return fields[kind] && Object.hasOwn(fields[kind], key) ? fields[kind][key] : null;
+    };
+    const containerKinds = new Set(['yarnPackage', 'metadata', 'packages', 'snapshots', 'importers', 'package', 'snapshot',
+        'importer', 'versions', 'importerDependencies', 'dependency', 'artifact', 'engines']);
+    const validValue = (kind, value) => {
+        if (value === '') {
+            return containerKinds.has(kind);
+        }
+        const inline = /^\{(.+)\}$/.exec(value);
+        if (inline) {
+            const keys = new Set();
+            return ['artifact', 'engines'].includes(kind) && inline[1].split(',').every(field => {
+                const pair = /^([\w-]+):\s*(.+)$/.exec(field.trim());
+                const child = pair && childKind(kind, pair[1]);
+                if (!pair || child === null || keys.has(pair[1])) {
+                    return false;
+                }
+                keys.add(pair[1]);
+                return publicLockfileScalar(child, pair[2]);
+            });
+        }
+        return !containerKinds.has(kind) && kind !== null && publicLockfileScalar(kind, value);
+    };
+    const parse = text => {
+        const entries = [];
+        const stack = [{ indent: -2, keys: [], kind: 'root' }];
+        for (const line of text.split('\n')) {
+            if (!line.trim() || line.trimStart().startsWith('#')) {
+                continue;
+            }
+            const indent = /^ */.exec(line)[0].length;
+            const text = line.slice(indent);
+            const scalar = /^(["']?[\w.@/+-]+["']?)\s*:?\s+(.+)$/.exec(text);
+            const container = text.endsWith(':');
+            const rawKey = container ? text.slice(0, -1) : scalar?.[1];
+            const key = rawKey?.replace(/^["']|["']$/g, '');
+            while (stack.length > 1 && stack.at(-1).indent >= indent) {
+                stack.pop();
+            }
+            const parent = stack.at(-1);
+            const kind = key === undefined || indent !== parent.indent + 2 ? null : childKind(parent.kind, key);
+            const keys = [...parent.keys, key ?? text];
+            entries.push({ location: JSON.stringify(keys), signature: JSON.stringify([keys, line]),
+                valid: kind !== null && validValue(kind, container ? '' : scalar[2]) });
+            // Even an unknown container keeps its children in an unknown location;
+            // they must not borrow the last recognized dependency map.
+            if (container) {
+                stack.push({ indent, keys, kind });
+            }
+        }
+        return entries;
+    };
+    const before = parse(baseText);
+    const after = parse(headText);
+    const remaining = new Map();
+    const locations = new Map();
+    for (const entry of before) {
+        remaining.set(entry.signature, (remaining.get(entry.signature) ?? 0) + 1);
+    }
+    for (const entry of after) {
+        locations.set(entry.location, (locations.get(entry.location) ?? 0) + 1);
+    }
+    return after.every(entry => {
+        const count = remaining.get(entry.signature) ?? 0;
+        if (count > 0) {
+            remaining.set(entry.signature, count - 1);
+            return true;
+        }
+        return entry.valid && locations.get(entry.location) === 1;
+    });
 }
 
 // Changed npm lockfile subtrees must occupy schema-defined locations. For example,

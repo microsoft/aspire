@@ -181,6 +181,10 @@ contents stop reconciliation before the agent can propose a duplicate fix.
   binding are checked before public artifact upload, not just before application.
   Patch transport also rejects opaque preambles, dates, diffstat text, metadata,
   and newline markers; hunk context labels must originate in the trusted base.
+  Changed yarn/pnpm fields must occupy supported schema locations in the rebuilt
+  file; version-shaped scalars in arbitrary fields and changed duplicate keys
+  cannot authorize publication. Unsupported legacy fields may remain unchanged
+  at their original locations but cannot regenerate alongside an upgrade.
   Only the canonical patch filenames are accepted; opaque bundles and symlinks
   are rejected. Framework base-commit headers are supported as typed SHAs bound,
   like output transport metadata, to the workflow snapshot or live auto-sec ref.
