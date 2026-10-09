@@ -1,0 +1,3 @@
+﻿module apphost/modules/aspire
+
+go 1.25

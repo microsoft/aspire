@@ -33,13 +33,31 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
 
         // Assert
-        Assert.Contains("aspire.go", files.Keys);
-        Assert.Contains("transport.go", files.Keys);
-        Assert.Contains("base.go", files.Keys);
-        Assert.Contains("go.mod", files.Keys);
+        Assert.Equal(
+            ["go.mod", "transport.go", "transport_windows.go", "transport_unix.go", "base.go", "aspire.go"],
+            files.Keys);
 
         await Verify(files["aspire.go"], extension: "go")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Theory]
+    [InlineData("go.mod", "txt")]
+    [InlineData("transport.go", "go")]
+    [InlineData("transport_unix.go", "go")]
+    [InlineData("transport_windows.go", "go")]
+    public async Task GeneratedCode_TransportFilesMatchSnapshots(string fileName, string extension)
+    {
+        var files = _generator.GenerateDistributedApplication(new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes = []
+        });
+
+        await Verify(files[fileName], extension: extension)
+            .UseFileName($"AtsGenerated_{fileName.Replace('.', '_')}");
     }
 
     [Fact]
