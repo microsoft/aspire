@@ -378,6 +378,13 @@ public static partial class JavaHostingExtensions
     /// the application already binds all interfaces.
     /// </para>
     /// <para>
+    /// The application serves plain HTTP by default. Call <c>WithHttpsDeveloperCertificate()</c> (or
+    /// <c>WithHttpsCertificate</c> for a specific certificate) to serve HTTPS on the allocated port instead: the
+    /// plain HTTP listener is turned off and the endpoint is switched to <c>https</c> in run mode. A resource that
+    /// references it then receives the address as <c>services__{name}__https__0</c> rather than
+    /// <c>services__{name}__http__0</c>.
+    /// </para>
+    /// <para>
     /// No health check is added. <c>/q/health</c> only exists when the application depends on
     /// <c>quarkus-smallrye-health</c>, and adding it unconditionally would leave applications without that
     /// extension permanently unhealthy and silently stall every <c>WaitFor</c> on them. Add
@@ -424,8 +431,59 @@ public static partial class JavaHostingExtensions
         // endpoint's host. QUARKUS_HTTP_PORT is the variable Quarkus reads for its listening port.
         resourceBuilder = resourceBuilder.WithHttpEndpoint(env: "QUARKUS_HTTP_PORT");
 
+        var httpEndpoint = resourceBuilder.GetEndpoint("http");
+
+        // Opt-in: switching the scheme renames the service discovery variable consumers read, which would
+        // silently break existing applications that read the http one.
+        resourceBuilder.WithoutHttpsCertificate();
+
+        resourceBuilder.WithHttpsCertificateConfiguration(async ctx =>
+        {
+            // Quarkus listens for HTTP on quarkus.http.port and for HTTPS on a separate quarkus.http.ssl-port,
+            // so serving TLS on the one endpoint Aspire allocated means moving the HTTPS listener to that port
+            // and turning the plain HTTP listener off. Otherwise the endpoint link would point at a port that
+            // only speaks HTTP while HTTPS sat on Quarkus' default 8443, which two services would both claim.
+            // See https://quarkus.io/guides/http-reference#ssl.
+            ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_PORT"] = httpEndpoint.Property(EndpointProperty.TargetPort);
+            ctx.EnvironmentVariables["QUARKUS_HTTP_INSECURE_REQUESTS"] = "disabled";
+
+            if (ctx.Password is null)
+            {
+                // Aspire writes the key as an unencrypted PEM when no password is configured, which is the only
+                // key form quarkus.http.ssl.certificate.key-files accepts.
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"] = WithForwardSlashes(ctx.CertificatePath);
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"] = WithForwardSlashes(ctx.KeyPath);
+            }
+            else
+            {
+                // An empty password cannot be passed through an environment variable, which SmallRye Config
+                // treats as unset, and the key is encrypted with it in both the PEM and the PKCS#12 form. Quarkus
+                // would start, then fail every TLS handshake, so refuse up front.
+                var password = await ctx.Password.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrEmpty(password))
+                {
+                    throw new InvalidOperationException(
+                        $"The HTTPS certificate password for Quarkus resource '{name}' resolved to an empty value. " +
+                        "Quarkus cannot read a key store opened with an empty password from an environment variable; use a non-empty password or no password.");
+                }
+
+                // With a password the PEM key is encrypted, which Quarkus cannot read, so hand it the PKCS#12
+                // key store instead. An unencrypted PKCS#12 file does not work the other way round: the JVM
+                // finds no usable key without a password and every handshake fails.
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"] = WithForwardSlashes(ctx.PfxPath);
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"] = "PKCS12";
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_PASSWORD"] = ctx.Password;
+            }
+        });
+
         if (builder.ExecutionContext.IsRunMode)
         {
+            // The HTTP listener is disabled once a certificate is configured, so the only endpoint is TLS.
+            resourceBuilder.SubscribeHttpsEndpointsUpdate(_ =>
+            {
+                resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
+            });
+
             resourceBuilder.WithEnvironment("QUARKUS_PROFILE", "dev");
 
             // Quarkus turns on its Host header validation filter whenever quarkus.http.host holds a
@@ -1614,6 +1672,12 @@ public static partial class JavaHostingExtensions
         };
     }
 
+    // Quarkus dev mode treats backslashes in a property value as escapes, so C:\Users\x\cert.crt reaches
+    // the file lookup as C:Usersxcert.crt. The JVM accepts forward slashes on Windows, where backslash is the
+    // only separator; elsewhere a backslash is an ordinary file name character and must be left alone.
+    private static ReferenceExpression WithForwardSlashes(ReferenceExpression path) =>
+        ReferenceExpression.Create($"{new ForwardSlashPath(path)}");
+
     /// <summary>
     /// Pairs the two facets Aspire needs to compose a value into a <see cref="ReferenceExpression"/>.
     /// </summary>
@@ -2226,6 +2290,22 @@ public static partial class JavaHostingExtensions
         {
             return null;
         }
+    }
+
+    private sealed class ForwardSlashPath(ReferenceExpression path) : IValueProvider, IManifestExpressionProvider, IValueWithReferences
+    {
+        public string ValueExpression => path.ValueExpression;
+
+        public IEnumerable<object> References => ((IValueWithReferences)path).References;
+
+        public async ValueTask<string?> GetValueAsync(CancellationToken cancellationToken) =>
+            ToForwardSlashes(await path.GetValueAsync(cancellationToken).ConfigureAwait(false));
+
+        public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            ToForwardSlashes(await path.GetValueAsync(context, cancellationToken).ConfigureAwait(false));
+
+        private static string? ToForwardSlashes(string? value) =>
+            OperatingSystem.IsWindows() ? value?.Replace('\\', '/') : value;
     }
 }
 
