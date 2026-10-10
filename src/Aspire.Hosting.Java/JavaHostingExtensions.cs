@@ -1664,19 +1664,10 @@ public static partial class JavaHostingExtensions
     }
 
     // Quarkus dev mode treats backslashes in a property value as escapes, so C:\Users\x\cert.crt reaches
-    // the file lookup as C:Usersxcert.crt. The JVM accepts forward slashes on Windows.
+    // the file lookup as C:Usersxcert.crt. The JVM accepts forward slashes on Windows, where backslash is the
+    // only separator; elsewhere a backslash is an ordinary file name character and must be left alone.
     private static ReferenceExpression WithForwardSlashes(ReferenceExpression path) =>
         ReferenceExpression.Create($"{new ForwardSlashPath(path)}");
-
-    private sealed class ForwardSlashPath(ReferenceExpression path) : IValueProvider, IManifestExpressionProvider
-    {
-        public string ValueExpression => path.ValueExpression;
-
-        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken) => GetValueAsync(new ValueProviderContext(), cancellationToken);
-
-        public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-            (await path.GetValueAsync(context, cancellationToken).ConfigureAwait(false))?.Replace('\\', '/');
-    }
 
     /// <summary>
     /// Pairs the two facets Aspire needs to compose a value into a <see cref="ReferenceExpression"/>.
@@ -2290,6 +2281,22 @@ public static partial class JavaHostingExtensions
         {
             return null;
         }
+    }
+
+    private sealed class ForwardSlashPath(ReferenceExpression path) : IValueProvider, IManifestExpressionProvider, IValueWithReferences
+    {
+        public string ValueExpression => path.ValueExpression;
+
+        public IEnumerable<object> References => ((IValueWithReferences)path).References;
+
+        public async ValueTask<string?> GetValueAsync(CancellationToken cancellationToken) =>
+            ToForwardSlashes(await path.GetValueAsync(cancellationToken).ConfigureAwait(false));
+
+        public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            ToForwardSlashes(await path.GetValueAsync(context, cancellationToken).ConfigureAwait(false));
+
+        private static string? ToForwardSlashes(string? value) =>
+            OperatingSystem.IsWindows() ? value?.Replace('\\', '/') : value;
     }
 }
 

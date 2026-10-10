@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Java.Tests;
 
@@ -84,6 +85,37 @@ public class AddQuarkusAppTests
     }
 
     [Fact]
+    public async Task AddQuarkusApp_SwitchesTheEndpointToHttpsWhenOptedIn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path).WithHttpsDeveloperCertificate();
+        using var application = builder.Build();
+
+        await PublishBeforeStartAsync(builder, application);
+
+        Assert.Equal("https", GetHttpEndpoint(app.Resource).UriScheme);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_KeepsTheEndpointOnHttpByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        await PublishBeforeStartAsync(builder, application);
+
+        Assert.Equal("http", GetHttpEndpoint(app.Resource).UriScheme);
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.AnyUnix, "A backslash is only a path separator on Windows")]
     public async Task AddQuarkusApp_WithWindowsCertificatePaths_ResolvesThemWithForwardSlashes()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
@@ -100,6 +132,31 @@ public class AddQuarkusAppTests
         Assert.Equal("C:/Users/dev/certs/cert.pem", await certificate.GetValueAsync(default));
         Assert.Equal("C:/Users/dev/certs/key.pem", await key.GetValueAsync(default));
     }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "A backslash is only a path separator on Windows")]
+    public async Task AddQuarkusApp_WithBackslashesInCertificatePaths_LeavesThemAloneOutsideWindows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, "/certs/a\\b");
+
+        var certificate = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"];
+        Assert.Equal("/certs/a\\b/cert.pem", await certificate.GetValueAsync(default));
+    }
+
+    private static Task PublishBeforeStartAsync(IDistributedApplicationBuilder builder, DistributedApplication application) =>
+        builder.Eventing.PublishAsync(
+            new BeforeStartEvent(application.Services, application.Services.GetRequiredService<DistributedApplicationModel>()),
+            TestContext.Current.CancellationToken);
+
+    private static EndpointAnnotation GetHttpEndpoint(IResource resource) =>
+        resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
 
     private static async Task<Dictionary<string, object>> RunHttpsCertificateCallbackAsync(IResource resource, IServiceProvider services, IValueProvider? password, string certDir)
     {
