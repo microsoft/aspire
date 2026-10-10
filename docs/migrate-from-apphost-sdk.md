@@ -49,7 +49,7 @@ The `Aspire.Hosting.AppHost` package establishes `IsAspireHost` and supplies the
 including `dotnet run` integration. It does not automatically promote ordinary project
 references into resources.
 
-## 3. Opt in to the Aspire CLI bundle
+## 3. Install the required Aspire CLI bundle
 
 ```xml
 <PropertyGroup>
@@ -57,7 +57,9 @@ references into resources.
 </PropertyGroup>
 ```
 
-With the CLI bundle enabled, the dashboard and DCP are resolved from your Aspire CLI installation
+The bundle is the default and cannot be disabled. The explicit property above can be omitted.
+Setting it to `false` produces the unsuppressible `ASPIRE010` error.
+The dashboard and DCP are resolved from your Aspire CLI installation
 (see [the CLI bundle spec](specs/bundle.md)) instead of being added as RID-specific
 `PackageReference` items. Make sure the [Aspire CLI](https://get.aspire.dev) is installed.
 

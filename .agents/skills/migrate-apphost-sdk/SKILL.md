@@ -20,7 +20,8 @@ Respect repository instructions and unrelated user changes.
 4. Preserve endpoints, launch-profile choices, references, waits, environment variables,
    secrets and chained integration configuration. Inspect overload-specific settings;
    stop for a decision if an original behavior has no verified equivalent.
-5. Enable the CLI bundle and verify its installation. Do not use warning suppression
+5. Install the matching CLI bundle, which is required by default and cannot be disabled.
+   Remove any `AspireUseCliBundle=false` setting. Do not use warning suppression
    as a substitute for migration. Do not promise SDK removal: it remains available
    for staged migration and original project resources.
 6. Restore/build and run the migrated AppHost. Verify dashboard availability,

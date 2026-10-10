@@ -200,6 +200,8 @@
     Disable validation of Aspire Host project resources to avoid loading the Aspire.Hosting.Tasks assembly.
     -->
     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
+    <!-- Source imports bypass the package version substitution used by CLI pairing. -->
+    <_AspireAppHostPackageVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</_AspireAppHostPackageVersion>
   </PropertyGroup>
 
   <ImportGroup Condition="'$(RepoRoot)' != 'null' and '$(TestsRunningOutsideOfRepo)' != 'true' and '$(IsAspireHost)' == 'true'">

@@ -342,6 +342,7 @@ path_rules:
       - src/Aspire.Hosting.JavaScript/**
       - src/Aspire.Hosting.Redis/**
       - src/Aspire.Hosting.RemoteHost/**
+      - src/Aspire.Hosting.Dotnet/**
       - src/Aspire.Managed/**
       - .github/workflows/tests.yml
       - .github/workflows/extension-unit-tests.yml
@@ -567,10 +568,14 @@ affected_project_rules:
       - Aspire.AppHost.Sdk
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.Dotnet
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.JavaScript
     targets: [job:cli-starter-validation]
     reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
+  - projects: [Aspire.Hosting.Dotnet]
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests]
+    reason: generated C# AppHosts use AddDotnetProject through a runtime-only package reference
   - projects:
       - Aspire.TypeSystem
       - Aspire.Hosting.RemoteHost
@@ -661,6 +666,7 @@ affected_project_rules:
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
+      - Aspire.Hosting.Dotnet
       - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Redis

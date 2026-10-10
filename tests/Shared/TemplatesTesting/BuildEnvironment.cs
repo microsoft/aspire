@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Diagnostics.Latency;
 using Xunit.Sdk;
@@ -151,11 +152,9 @@ public class BuildEnvironment
         }
 
         sdkForTemplatePath = Path.GetFullPath(sdkForTemplatePath);
-        // The generated AppHost project opts into the CLI bundle, so an environment variable
-        // cannot disable it: project properties override properties imported from the environment.
-        // Template tests use repo-built DCP and dashboard packages instead of an installed bundle,
-        // so pass the opt-out as a global MSBuild property that the project cannot override.
-        DefaultBuildArgs = "/p:AspireUseCliBundle=false";
+        // Exercise required bundle behavior with real repo-built runtime payloads.
+        // Direct process launch keeps the template harness in control of the AppHost lifetime.
+        DefaultBuildArgs = "/p:AspireUseCliBundle=true /p:_AspireSuppressCliRunHook=true";
         NuGetPackagesPath = UsesCustomDotNet ? Path.Combine(AppContext.BaseDirectory, $"nuget-cache-{Guid.NewGuid()}") : null;
         EnvVars = new Dictionary<string, string>();
         if (UsesCustomDotNet)
@@ -176,10 +175,38 @@ public class BuildEnvironment
         // in the tests
         EnvVars["_MSBUILDTLENABLED"] = "0";
         EnvVars["SkipAspireWorkloadManifest"] = "true";
-        // Template tests build generated apps from repo-built packages, not from an installed
-        // Aspire CLI bundle layout, so keep bundle resolution disabled for these test builds.
-        EnvVars["AspireUseCliBundle"] = "false";
-        EnvVars["NoWarn"] = "ASPIRE010";
+        var runtimeRoot = Directory.CreateTempSubdirectory("aspire-template-runtime-").FullName;
+        var dashboardRoot = ExtractRuntimePackage("Aspire.Dashboard.Sdk", "dashboard");
+        var dcpRoot = ExtractRuntimePackage("Aspire.Hosting.Orchestration", "dcp");
+        var dashboardPath = Path.Combine(dashboardRoot, "tools", OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
+        var dcpPath = Path.Combine(dcpRoot, "tools", OperatingSystem.IsWindows() ? "dcp.exe" : "dcp");
+        RequireExecutable(dashboardPath);
+        RequireExecutable(dcpPath);
+        EnvVars["AspireUseCliBundle"] = "true";
+        EnvVars["_AspireSuppressCliRunHook"] = "true";
+        EnvVars["AspireDashboardPath"] = dashboardPath;
+        EnvVars["DcpDir"] = Path.GetDirectoryName(dcpPath)!;
+
+        string ExtractRuntimePackage(string packageId, string directory)
+        {
+            var packagePath = global::Aspire.Templates.Tests.TemplatesCustomHive.GetPackagePath(BuiltNuGetsPath, $"{packageId}.{RuntimeInformation.RuntimeIdentifier}.");
+            var destination = Path.Combine(runtimeRoot, directory);
+            ZipFile.ExtractToDirectory(packagePath, destination);
+            return destination;
+        }
+
+        static void RequireExecutable(string path)
+        {
+            if (!File.Exists(path))
+            {
+                throw new XunitException($"Required native template runtime executable was not packed: {path}. Build the current-RID Dashboard and orchestration packages before running template tests.");
+            }
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+            }
+        }
 
         if (OperatingSystem.IsMacOS())
         {

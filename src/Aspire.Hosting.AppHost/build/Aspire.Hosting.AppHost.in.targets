@@ -1,7 +1,7 @@
 <Project>
 
   <PropertyGroup>
-    <_AspireAppHostPackageVersion>@VERSION@</_AspireAppHostPackageVersion>
+    <_AspireAppHostPackageVersion Condition="'$(_AspireAppHostPackageVersion)' == ''">@VERSION@</_AspireAppHostPackageVersion>
     <!-- The .NET SDK workload check requires a version >= 9 for package-only AppHosts.
          Do not hide a missing SDK version when the obsolete SDK marker is present. -->
     <AspireHostingSDKVersion Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == '' and '$(_UsingAspireAppHostSdk)' != 'true'">$(_AspireAppHostPackageVersion)</AspireHostingSDKVersion>
@@ -160,9 +160,9 @@ namespace Projects%3B
     <Warning Code="ASPIRE001" Text="The '$(Language)' language isn't fully supported by Aspire - some code generation targets will not run, so will require manual authoring." HelpLink="https://aka.ms/aspire/diagnostics/aspire001" />
   </Target>
 
-  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'false'">
-    <Warning Code="ASPIRE010"
-             Text="$(MSBuildProjectName) is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information."
+  <Target Name="_WarnOnAspireCliBundleDisabled" BeforeTargets="PrepareForBuild" Condition="'$(IsAspireHost)' == 'true' and '$(Language)' == 'C#' and '$(AspireUseCliBundle)' != 'true'">
+    <Error Code="ASPIRE010"
+             Text="$(MSBuildProjectName) requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE010 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire010 for more information."
              HelpLink="https://aka.ms/aspire/diagnostics/aspire010" />
   </Target>
 

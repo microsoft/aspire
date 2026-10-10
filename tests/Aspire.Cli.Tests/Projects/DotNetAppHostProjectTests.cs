@@ -3035,6 +3035,36 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
     }
 
+    [Theory]
+    [InlineData("Aspire.Hosting.AppHost", true)]
+    [InlineData("aspire.hosting.apphost", true)]
+    [InlineData("Aspire.Hosting.AppHost.Extra", false)]
+    public void IsLikelyAppHost_ExplicitPackageReference(string packageId, bool expected)
+    {
+        var projectFile = WriteIsLikelyAppHostProject("Orchestrator.csproj", $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <ItemGroup>
+                <PackageReference Include="{{packageId}}" Version="17.0.0" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        Assert.Equal(expected, DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Hosting.AppHost", true)]
+    [InlineData("aspire.hosting.apphost", true)]
+    [InlineData("Aspire.Hosting.AppHost.Extra", false)]
+    public void CanHandle_ExplicitPackageFileAppHost(string packageId, bool expected)
+    {
+        var appHost = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(appHost.FullName, $"#:package {packageId}@17.0.0");
+        var project = CreateDotNetAppHostProject(new TestDotNetCliRunner());
+
+        Assert.Equal(expected, project.CanHandle(appHost));
+    }
+
     [Fact]
     public void IsLikelyAppHost_SdkAttributeWithoutVersion_ReturnsTrue()
     {

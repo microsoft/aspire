@@ -31,12 +31,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     ];
 
     [Fact]
-    public async Task AddReferenceToDashboardAndDcpIsAddedWhenCliBundleIsDefaulted()
+    public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(workspace, extraProjectXml: null);
 
-        AssertDashboardAndOrchestrationReferences(packageReferences);
+        Assert.Equal(["UseSdkPickBestRid=", "RunRidToolFallback=", "Aspire.Hosting.AppHost=13.4.0"], packageReferences);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var project = await CreateRunHookProjectAsync(
             workspace.Path,
-            aspireUseCliBundle: false,
+            aspireUseCliBundle: true,
             extraProjectXml: null,
             includeBundlePaths: false);
 
@@ -129,6 +129,34 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PackagePropsDisableFileBasedAppHostAot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var propsPath = SecurityElement.Escape(Path.Combine(GetRepoRoot(),
+            "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.props"));
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "AppHost.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <FileBasedProgram>true</FileBasedProgram>
+                <PublishAot>true</PublishAot>
+              </PropertyGroup>
+              <Import Project="{{propsPath}}" />
+            </Project>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(workspace.Path,
+            ["msbuild", "-nologo", "-getProperty:PublishAot,IsAspireHost"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal("false", properties.GetProperty("PublishAot").GetString());
+        Assert.Equal("true", properties.GetProperty("IsAspireHost").GetString());
+    }
+
+    [Fact]
     public async Task MinimumSdkVersionErrorDoesNotFireForNonSdkAppHost()
     {
         // A plain Microsoft.NET.Sdk + Aspire.Hosting.AppHost PackageReference AppHost
@@ -137,7 +165,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var project = await CreateRunHookProjectAsync(
             workspace.Path,
-            aspireUseCliBundle: false,
+            aspireUseCliBundle: true,
             extraProjectXml: """
               <Target Name="RunPrepareForBuild" DependsOnTargets="PrepareForBuild" />
             """,
@@ -161,7 +189,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var project = await CreateRunHookProjectAsync(
             workspace.Path,
-            aspireUseCliBundle: false,
+            aspireUseCliBundle: true,
             extraProjectXml: """
               <Target Name="RunPrepareForBuild" DependsOnTargets="PrepareForBuild" />
             """,
@@ -244,8 +272,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             </Project>
             """);
 
-        var result = await RunDotNetAsync(projectDirectory, "msbuild -nologo -t:Build");
-
+        var result = await RunDotNetAsync(projectDirectory, "msbuild -nologo -restore -t:Build");
+        Assert.True(result.ExitCode == 0, result.Output);
         return result.Output;
     }
 
@@ -586,6 +614,25 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var properties = await GetComputeRunArgumentsPropertiesAsync(project);
 
         AssertUsesDotNetRun(properties, project);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("ASPIRE010")]
+    public async Task DisabledCliBundleFailsBuildEvenWithWarningSuppression(string? noWarn)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: false);
+        var arguments = new List<string> { "msbuild", "-nologo", "-restore", "-t:PrepareForBuild" };
+        if (noWarn is not null)
+        {
+            arguments.Add($"-p:NoWarn={noWarn}");
+        }
+        var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, [.. arguments]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("error ASPIRE010", result.Output);
+        Assert.Contains("https://get.aspire.dev", result.Output);
     }
 
     [Theory]

@@ -5,6 +5,7 @@
     <!-- Aspire hosting projects aren't publishable right now until https://github.com/microsoft/aspire/issues/147 is good -->
     <IsPublishable Condition="'$(IsPublishable)' == ''">false</IsPublishable>
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
+    <AspireUseCliBundle Condition="'$(AspireUseCliBundle)' == '' and ('$(MSBuildProjectExtension)' == '.csproj' or '$(MSBuildProjectExtension)' == '.cs' or '$(FileBasedProgram)' == 'true')">true</AspireUseCliBundle>
     <AspireUseCliBundle Condition="'$(AspireUseCliBundle)' == ''">false</AspireUseCliBundle>
   </PropertyGroup>
 
