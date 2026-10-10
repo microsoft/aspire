@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class TerminalCommandStrings {
+    internal class TerminalCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.TerminalCommandStrings", typeof(TerminalCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Discovering terminal sessions....
         /// </summary>
-        public static string DiscoveringSessions {
+        internal static string DiscoveringSessions {
             get {
                 return ResourceManager.GetString("DiscoveringSessions", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Looking up resource....
         /// </summary>
-        public static string LookingUpResource {
+        internal static string LookingUpResource {
             get {
                 return ResourceManager.GetString("LookingUpResource", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to {0} (exited code={1}).
         /// </summary>
-        public static string ReplicaExited {
+        internal static string ReplicaExited {
             get {
                 return ResourceManager.GetString("ReplicaExited", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Replica index {0} is not available for resource &apos;{1}&apos;. Available indices: {2}..
         /// </summary>
-        public static string ReplicaNotFound {
+        internal static string ReplicaNotFound {
             get {
                 return ResourceManager.GetString("ReplicaNotFound", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The 0-based replica index. Required for replicated resources in non-interactive mode..
         /// </summary>
-        public static string ReplicaOptionDescription {
+        internal static string ReplicaOptionDescription {
             get {
                 return ResourceManager.GetString("ReplicaOptionDescription", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; has {1} replicas. Pass --replica &lt;index&gt; to choose one in non-interactive mode..
         /// </summary>
-        public static string ReplicaRequired {
+        internal static string ReplicaRequired {
             get {
                 return ResourceManager.GetString("ReplicaRequired", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to {0} (running).
         /// </summary>
-        public static string ReplicaRunning {
+        internal static string ReplicaRunning {
             get {
                 return ResourceManager.GetString("ReplicaRunning", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the resource whose terminal runs the tape..
         /// </summary>
-        public static string ResourceArgumentDescription {
+        internal static string ResourceArgumentDescription {
             get {
                 return ResourceManager.GetString("ResourceArgumentDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; was not found..
         /// </summary>
-        public static string ResourceNotFound {
+        internal static string ResourceNotFound {
             get {
                 return ResourceManager.GetString("ResourceNotFound", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to A resource name is required..
         /// </summary>
-        public static string ResourceRequired {
+        internal static string ResourceRequired {
             get {
                 return ResourceManager.GetString("ResourceRequired", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select a replica of &apos;{0}&apos; to attach to:.
         /// </summary>
-        public static string SelectReplica {
+        internal static string SelectReplica {
             get {
                 return ResourceManager.GetString("SelectReplica", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The terminal connection closed before tape playback completed..
         /// </summary>
-        public static string TapeConnectionClosed {
+        internal static string TapeConnectionClosed {
             get {
                 return ResourceManager.GetString("TapeConnectionClosed", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Run VHS tape scripts against resource terminals..
         /// </summary>
-        public static string TapeDescription {
+        internal static string TapeDescription {
             get {
                 return ResourceManager.GetString("TapeDescription", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The path to the VHS .tape file to play..
         /// </summary>
-        public static string TapeFileDescription {
+        internal static string TapeFileDescription {
             get {
                 return ResourceManager.GetString("TapeFileDescription", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Could not read tape file &apos;{0}&apos;: {1}.
         /// </summary>
-        public static string TapeFileReadFailed {
+        internal static string TapeFileReadFailed {
             get {
                 return ResourceManager.GetString("TapeFileReadFailed", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Tape playback failed: {0}.
         /// </summary>
-        public static string TapePlaybackFailed {
+        internal static string TapePlaybackFailed {
             get {
                 return ResourceManager.GetString("TapePlaybackFailed", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Play a VHS tape against a running resource terminal and print its final screen..
         /// </summary>
-        public static string TapePlayDescription {
+        internal static string TapePlayDescription {
             get {
                 return ResourceManager.GetString("TapePlayDescription", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to play a terminal tape.
         /// </summary>
-        public static string TapeSelectAppHostAction {
+        internal static string TapeSelectAppHostAction {
             get {
                 return ResourceManager.GetString("TapeSelectAppHostAction", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Terminal tape playback did not finish within {0} seconds..
         /// </summary>
-        public static string TapeTimeout {
+        internal static string TapeTimeout {
             get {
                 return ResourceManager.GetString("TapeTimeout", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Maximum time in seconds to connect and play the tape. Defaults to 120 seconds..
         /// </summary>
-        public static string TapeTimeoutDescription {
+        internal static string TapeTimeoutDescription {
             get {
                 return ResourceManager.GetString("TapeTimeoutDescription", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The timeout must be between 1 and {0} seconds..
         /// </summary>
-        public static string TapeTimeoutInvalid {
+        internal static string TapeTimeoutInvalid {
             get {
                 return ResourceManager.GetString("TapeTimeoutInvalid", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The connected AppHost does not support &apos;aspire terminal&apos;. Update Aspire.Hosting to 13.4 or later..
         /// </summary>
-        public static string TerminalIncompatible {
+        internal static string TerminalIncompatible {
             get {
                 return ResourceManager.GetString("TerminalIncompatible", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; is not available for terminal attachment. Make sure the resource was registered with &apos;.WithTerminal()&apos; and that the terminal host has started..
         /// </summary>
-        public static string TerminalUnavailable {
+        internal static string TerminalUnavailable {
             get {
                 return ResourceManager.GetString("TerminalUnavailable", resourceCulture);
             }

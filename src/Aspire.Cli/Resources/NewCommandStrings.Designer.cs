@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class NewCommandStrings {
+    internal class NewCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.NewCommandStrings", typeof(NewCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, daily).
         /// </summary>
-        public static string ChannelOptionDescription {
+        internal static string ChannelOptionDescription {
             get {
                 return ResourceManager.GetString("ChannelOptionDescription", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Channel to use for templates (stable, staging, daily).
         /// </summary>
-        public static string ChannelOptionDescriptionWithStaging {
+        internal static string ChannelOptionDescriptionWithStaging {
             get {
                 return ResourceManager.GetString("ChannelOptionDescriptionWithStaging", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Directly in the selected folder.
         /// </summary>
-        public static string CreateProjectDirectlyInSelectedFolderChoice {
+        internal static string CreateProjectDirectlyInSelectedFolderChoice {
             get {
                 return ResourceManager.GetString("CreateProjectDirectlyInSelectedFolderChoice", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to In a subdirectory named &apos;{0}&apos; in the selected folder.
         /// </summary>
-        public static string CreateProjectNameSubdirectoryChoice {
+        internal static string CreateProjectNameSubdirectoryChoice {
             get {
                 return ResourceManager.GetString("CreateProjectNameSubdirectoryChoice", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Create a new app from an Aspire starter template.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Enter the output path.
         /// </summary>
-        public static string EnterTheOutputPath {
+        internal static string EnterTheOutputPath {
             get {
                 return ResourceManager.GetString("EnterTheOutputPath", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Enter the project name.
         /// </summary>
-        public static string EnterTheProjectName {
+        internal static string EnterTheProjectName {
             get {
                 return ResourceManager.GetString("EnterTheProjectName", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Invalid project name..
         /// </summary>
-        public static string InvalidProjectName {
+        internal static string InvalidProjectName {
             get {
                 return ResourceManager.GetString("InvalidProjectName", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The programming language for the AppHost.
         /// </summary>
-        public static string LanguageOptionDescription {
+        internal static string LanguageOptionDescription {
             get {
                 return ResourceManager.GetString("LanguageOptionDescription", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the project to create.
         /// </summary>
-        public static string NameArgumentDescription {
+        internal static string NameArgumentDescription {
             get {
                 return ResourceManager.GetString("NameArgumentDescription", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No channel found matching &apos;{0}&apos;. Valid options are: {1}..
         /// </summary>
-        public static string NoChannelFoundMatching {
+        internal static string NoChannelFoundMatching {
             get {
                 return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No matching local Aspire.ProjectTemplates package was found for Aspire CLI version &apos;{0}&apos;. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version..
         /// </summary>
-        public static string NoMatchingLocalTemplatePackage {
+        internal static string NoMatchingLocalTemplatePackage {
             get {
                 return ResourceManager.GetString("NoMatchingLocalTemplatePackage", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to A template must be specified when running in non-interactive mode. Use &apos;aspire new &lt;template&gt;&apos;..
         /// </summary>
-        public static string NonInteractiveTemplateRequired {
+        internal static string NonInteractiveTemplateRequired {
             get {
                 return ResourceManager.GetString("NonInteractiveTemplateRequired", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No package channels are available..
         /// </summary>
-        public static string NoPackageChannelsAvailable {
+        internal static string NoPackageChannelsAvailable {
             get {
                 return ResourceManager.GetString("NoPackageChannelsAvailable", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No template versions found in channel &apos;{0}&apos;..
         /// </summary>
-        public static string NoTemplateVersionsFoundInChannel {
+        internal static string NoTemplateVersionsFoundInChannel {
             get {
                 return ResourceManager.GetString("NoTemplateVersionsFoundInChannel", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The output path for the project.
         /// </summary>
-        public static string OutputArgumentDescription {
+        internal static string OutputArgumentDescription {
             get {
                 return ResourceManager.GetString("OutputArgumentDescription", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The output directory &apos;{0}&apos; already exists and is not empty. Specify a different location..
         /// </summary>
-        public static string OutputDirectoryNotEmptyInteractive {
+        internal static string OutputDirectoryNotEmptyInteractive {
             get {
                 return ResourceManager.GetString("OutputDirectoryNotEmptyInteractive", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The output directory &apos;{0}&apos; already exists and is not empty. Specify --output with a different location..
         /// </summary>
-        public static string OutputDirectoryNotEmptyNonInteractive {
+        internal static string OutputDirectoryNotEmptyNonInteractive {
             get {
                 return ResourceManager.GetString("OutputDirectoryNotEmptyNonInteractive", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The output path &apos;{0}&apos; contains invalid characters..
         /// </summary>
-        public static string OutputPathContainsInvalidCharacters {
+        internal static string OutputPathContainsInvalidCharacters {
             get {
                 return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resolving template version....
         /// </summary>
-        public static string ResolvingTemplateVersion {
+        internal static string ResolvingTemplateVersion {
             get {
                 return ResourceManager.GetString("ResolvingTemplateVersion", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select a template:.
         /// </summary>
-        public static string SelectAProjectTemplate {
+        internal static string SelectAProjectTemplate {
             get {
                 return ResourceManager.GetString("SelectAProjectTemplate", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select a template version:.
         /// </summary>
-        public static string SelectATemplateVersion {
+        internal static string SelectATemplateVersion {
             get {
                 return ResourceManager.GetString("SelectATemplateVersion", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Where do you want the project to be created?.
         /// </summary>
-        public static string SelectProjectCreationLocation {
+        internal static string SelectProjectCreationLocation {
             get {
                 return ResourceManager.GetString("SelectProjectCreationLocation", resourceCulture);
             }
@@ -270,7 +270,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The NuGet source to use for the project templates.
         /// </summary>
-        public static string SourceArgumentDescription {
+        internal static string SourceArgumentDescription {
             get {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
@@ -279,7 +279,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The local NuGet source directory &apos;{0}&apos; does not exist..
         /// </summary>
-        public static string SourceDirectoryNotFound {
+        internal static string SourceDirectoryNotFound {
             get {
                 return ResourceManager.GetString("SourceDirectoryNotFound", resourceCulture);
             }
@@ -288,7 +288,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --source URL includes credentials, a query string, or a fragment and cannot be written to the project&apos;s NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets..
         /// </summary>
-        public static string SourceWithCredentialsCannotBePersisted {
+        internal static string SourceWithCredentialsCannotBePersisted {
             get {
                 return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
             }
@@ -297,7 +297,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to (use pre-release templates).
         /// </summary>
-        public static string UsePrereleaseTemplates {
+        internal static string UsePrereleaseTemplates {
             get {
                 return ResourceManager.GetString("UsePrereleaseTemplates", resourceCulture);
             }
@@ -306,7 +306,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The version of the project templates to use.
         /// </summary>
-        public static string VersionArgumentDescription {
+        internal static string VersionArgumentDescription {
             get {
                 return ResourceManager.GetString("VersionArgumentDescription", resourceCulture);
             }

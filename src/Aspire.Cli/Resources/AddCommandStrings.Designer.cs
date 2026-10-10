@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class AddCommandStrings {
+    internal class AddCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.AddCommandStrings", typeof(AddCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Adding Aspire hosting integration....
         /// </summary>
-        public static string AddingAspireIntegration {
+        internal static string AddingAspireIntegration {
             get {
                 return ResourceManager.GetString("AddingAspireIntegration", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Include all integrations, even those not marked compatible with the AppHost language.
         /// </summary>
-        public static string AllArgumentDescription {
+        internal static string AllArgumentDescription {
             get {
                 return ResourceManager.GetString("AllArgumentDescription", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Add a hosting integration to the AppHost.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to An error occurred while adding the package: {0}.
         /// </summary>
-        public static string ErrorOccurredWhileAddingPackage {
+        internal static string ErrorOccurredWhileAddingPackage {
             get {
                 return ResourceManager.GetString("ErrorOccurredWhileAddingPackage", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to An error occurred while searching integrations: {0}.
         /// </summary>
-        public static string ErrorOccurredWhileSearchingIntegrations {
+        internal static string ErrorOccurredWhileSearchingIntegrations {
             get {
                 return ResourceManager.GetString("ErrorOccurredWhileSearchingIntegrations", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Output format (Table or Json).
         /// </summary>
-        public static string FormatOptionDescription {
+        internal static string FormatOptionDescription {
             get {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Found {0} integration package(s)..
         /// </summary>
-        public static string FoundIntegrationPackages {
+        internal static string FoundIntegrationPackages {
             get {
                 return ResourceManager.GetString("FoundIntegrationPackages", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Found {0} integration package(s) matching &apos;{1}&apos;..
         /// </summary>
-        public static string FoundIntegrationPackagesMatchingSearchTerm {
+        internal static string FoundIntegrationPackagesMatchingSearchTerm {
             get {
                 return ResourceManager.GetString("FoundIntegrationPackagesMatchingSearchTerm", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Name.
         /// </summary>
-        public static string HeaderName {
+        internal static string HeaderName {
             get {
                 return ResourceManager.GetString("HeaderName", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Package.
         /// </summary>
-        public static string HeaderPackage {
+        internal static string HeaderPackage {
             get {
                 return ResourceManager.GetString("HeaderPackage", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Version.
         /// </summary>
-        public static string HeaderVersion {
+        internal static string HeaderVersion {
             get {
                 return ResourceManager.GetString("HeaderVersion", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the integration to add (e.g. redis, postgres).
         /// </summary>
-        public static string IntegrationArgumentDescription {
+        internal static string IntegrationArgumentDescription {
             get {
                 return ResourceManager.GetString("IntegrationArgumentDescription", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Manage Aspire hosting integrations.
         /// </summary>
-        public static string IntegrationCommandDescription {
+        internal static string IntegrationCommandDescription {
             get {
                 return ResourceManager.GetString("IntegrationCommandDescription", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to List available Aspire hosting integrations.
         /// </summary>
-        public static string IntegrationListDescription {
+        internal static string IntegrationListDescription {
             get {
                 return ResourceManager.GetString("IntegrationListDescription", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The &apos;{0}&apos; integration is not available for {1} AppHosts because it does not expose a compatible API surface. Use --all to add it anyway..
         /// </summary>
-        public static string IntegrationNotPolyglotCompatible {
+        internal static string IntegrationNotPolyglotCompatible {
             get {
                 return ResourceManager.GetString("IntegrationNotPolyglotCompatible", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Aspire AppHost project file, or a directory to search, for channel-aware integration discovery.
         /// </summary>
-        public static string IntegrationSearchAppHostOptionDescription {
+        internal static string IntegrationSearchAppHostOptionDescription {
             get {
                 return ResourceManager.GetString("IntegrationSearchAppHostOptionDescription", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Search available Aspire hosting integrations.
         /// </summary>
-        public static string IntegrationSearchDescription {
+        internal static string IntegrationSearchDescription {
             get {
                 return ResourceManager.GetString("IntegrationSearchDescription", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The integration search query..
         /// </summary>
-        public static string IntegrationSearchQueryArgumentDescription {
+        internal static string IntegrationSearchQueryArgumentDescription {
             get {
                 return ResourceManager.GetString("IntegrationSearchQueryArgumentDescription", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No integration packages were found. Please check your internet connection or NuGet source configuration..
         /// </summary>
-        public static string NoIntegrationPackagesFound {
+        internal static string NoIntegrationPackagesFound {
             get {
                 return ResourceManager.GetString("NoIntegrationPackagesFound", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No integration packages matched &apos;{0}&apos;..
         /// </summary>
-        public static string NoIntegrationPackagesMatchedSearchTerm {
+        internal static string NoIntegrationPackagesMatchedSearchTerm {
             get {
                 return ResourceManager.GetString("NoIntegrationPackagesMatchedSearchTerm", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No exact match was found for &apos;{0}&apos;. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package..
         /// </summary>
-        public static string NonInteractiveRequiresExactPackageMatch {
+        internal static string NonInteractiveRequiresExactPackageMatch {
             get {
                 return ResourceManager.GetString("NonInteractiveRequiresExactPackageMatch", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No packages found..
         /// </summary>
-        public static string NoPackagesFound {
+        internal static string NoPackagesFound {
             get {
                 return ResourceManager.GetString("NoPackagesFound", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No packages matched your search term &apos;{0}&apos;. Showing all available packages..
         /// </summary>
-        public static string NoPackagesMatchedSearchTerm {
+        internal static string NoPackagesMatchedSearchTerm {
             get {
                 return ResourceManager.GetString("NoPackagesMatchedSearchTerm", resourceCulture);
             }
@@ -270,7 +270,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No integrations compatible with this AppHost language were found. Use --all to list all integrations..
         /// </summary>
-        public static string NoPolyglotCompatibleIntegrationsFound {
+        internal static string NoPolyglotCompatibleIntegrationsFound {
             get {
                 return ResourceManager.GetString("NoPolyglotCompatibleIntegrationsFound", resourceCulture);
             }
@@ -279,7 +279,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The package {0}::{1} was added successfully..
         /// </summary>
-        public static string PackageAddedSuccessfully {
+        internal static string PackageAddedSuccessfully {
             get {
                 return ResourceManager.GetString("PackageAddedSuccessfully", resourceCulture);
             }
@@ -288,7 +288,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The package installation failed with exit code {0}..
         /// </summary>
-        public static string PackageInstallationFailed {
+        internal static string PackageInstallationFailed {
             get {
                 return ResourceManager.GetString("PackageInstallationFailed", resourceCulture);
             }
@@ -297,7 +297,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to {0} integration(s) not compatible with this AppHost language were hidden. Use --all to show them..
         /// </summary>
-        public static string PolyglotIntegrationsHidden {
+        internal static string PolyglotIntegrationsHidden {
             get {
                 return ResourceManager.GetString("PolyglotIntegrationsHidden", resourceCulture);
             }
@@ -306,7 +306,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Aspire AppHost project file, or a directory to search, to add the integration to.
         /// </summary>
-        public static string ProjectArgumentDescription {
+        internal static string ProjectArgumentDescription {
             get {
                 return ResourceManager.GetString("ProjectArgumentDescription", resourceCulture);
             }
@@ -315,7 +315,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Searching for Aspire integrations....
         /// </summary>
-        public static string SearchingForAspirePackages {
+        internal static string SearchingForAspirePackages {
             get {
                 return ResourceManager.GetString("SearchingForAspirePackages", resourceCulture);
             }
@@ -324,7 +324,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Searching for version &apos;{1}&apos; of {0}....
         /// </summary>
-        public static string SearchingForSpecifiedPackageVersion {
+        internal static string SearchingForSpecifiedPackageVersion {
             get {
                 return ResourceManager.GetString("SearchingForSpecifiedPackageVersion", resourceCulture);
             }
@@ -333,7 +333,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select an integration to add:.
         /// </summary>
-        public static string SelectAnIntegrationToAdd {
+        internal static string SelectAnIntegrationToAdd {
             get {
                 return ResourceManager.GetString("SelectAnIntegrationToAdd", resourceCulture);
             }
@@ -342,7 +342,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select a version of {0}:.
         /// </summary>
-        public static string SelectAVersionOfPackage {
+        internal static string SelectAVersionOfPackage {
             get {
                 return ResourceManager.GetString("SelectAVersionOfPackage", resourceCulture);
             }
@@ -351,7 +351,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The NuGet source to use for the integration.
         /// </summary>
-        public static string SourceArgumentDescription {
+        internal static string SourceArgumentDescription {
             get {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
@@ -360,7 +360,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The requested version &apos;{1}&apos; was not found for package &apos;{0}&apos;..
         /// </summary>
-        public static string SpecifiedVersionNotFoundForPackage {
+        internal static string SpecifiedVersionNotFoundForPackage {
             get {
                 return ResourceManager.GetString("SpecifiedVersionNotFoundForPackage", resourceCulture);
             }
@@ -369,7 +369,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for &apos;{0}&apos;..
         /// </summary>
-        public static string SpecifiedVersionRequiresExactPackageMatch {
+        internal static string SpecifiedVersionRequiresExactPackageMatch {
             get {
                 return ResourceManager.GetString("SpecifiedVersionRequiresExactPackageMatch", resourceCulture);
             }
@@ -378,7 +378,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stopped a running Aspire AppHost instance to allow package modification..
         /// </summary>
-        public static string StoppedRunningInstance {
+        internal static string StoppedRunningInstance {
             get {
                 return ResourceManager.GetString("StoppedRunningInstance", resourceCulture);
             }
@@ -387,7 +387,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Unable to stop one or more running Aspire AppHost instances. Please stop the application and try again..
         /// </summary>
-        public static string UnableToStopRunningInstances {
+        internal static string UnableToStopRunningInstances {
             get {
                 return ResourceManager.GetString("UnableToStopRunningInstances", resourceCulture);
             }
@@ -396,7 +396,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Unexpected number of packages found..
         /// </summary>
-        public static string UnexpectedNumberOfPackagesFound {
+        internal static string UnexpectedNumberOfPackagesFound {
             get {
                 return ResourceManager.GetString("UnexpectedNumberOfPackagesFound", resourceCulture);
             }
@@ -405,7 +405,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Use pre-release packages.
         /// </summary>
-        public static string UsePrereleasePackages {
+        internal static string UsePrereleasePackages {
             get {
                 return ResourceManager.GetString("UsePrereleasePackages", resourceCulture);
             }
@@ -414,7 +414,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The version of the integration to add.
         /// </summary>
-        public static string VersionArgumentDescription {
+        internal static string VersionArgumentDescription {
             get {
                 return ResourceManager.GetString("VersionArgumentDescription", resourceCulture);
             }

@@ -84,6 +84,32 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("src/Aspire.Dashboard/Aspire.Dashboard.csproj")]
+    [InlineData("src/Aspire.Cli/Resources/NewResource.resx")]
+    [InlineData("src/Aspire.Hosting.Testing/Properties/NewResource.resx")]
+    public void ResourceMetadataInputsSelectInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+    }
+
+    [Theory]
+    [InlineData("src/Aspire.Dashboard/Resources/NewResource.Designer.cs")]
+    [InlineData("src/Aspire.Dashboard/Resources/xlf/NewResource.fr.xlf")]
+    [InlineData("src/Aspire.Dashboard/Components/NewComponent.razor")]
+    public void InputsNotReadByResourceMetadataTestsKeepExistingSelection(string path)
+    {
+        var result = SelectWithRealMap(path, "Aspire.Dashboard");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Aspire.Templates.Tests"], result.TestProjects);
+    }
+
+    [Theory]
     [InlineData("eng/WarningPolicy.proj")]
     [InlineData("eng/build.ps1")]
     [InlineData("eng/build.sh")]

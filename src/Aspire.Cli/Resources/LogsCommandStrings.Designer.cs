@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class LogsCommandStrings {
+    internal class LogsCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.LogsCommandStrings", typeof(LogsCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Display logs from resources in a running AppHost.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stream logs in real-time as they are written.
         /// </summary>
-        public static string FollowOptionDescription {
+        internal static string FollowOptionDescription {
             get {
                 return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Getting logs....
         /// </summary>
-        public static string GettingLogs {
+        internal static string GettingLogs {
             get {
                 return ResourceManager.GetString("GettingLogs", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Include hidden resources in the output.
         /// </summary>
-        public static string IncludeHiddenOptionDescription {
+        internal static string IncludeHiddenOptionDescription {
             get {
                 return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Output format (Table or Json).
         /// </summary>
-        public static string JsonOptionDescription {
+        internal static string JsonOptionDescription {
             get {
                 return ResourceManager.GetString("JsonOptionDescription", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No logs found..
         /// </summary>
-        public static string NoLogsFound {
+        internal static string NoLogsFound {
             get {
                 return ResourceManager.GetString("NoLogsFound", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No resources found..
         /// </summary>
-        public static string NoResourcesFound {
+        internal static string NoResourcesFound {
             get {
                 return ResourceManager.GetString("NoResourcesFound", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the resource to get logs for. If not specified, logs from all resources are shown..
         /// </summary>
-        public static string ResourceArgumentDescription {
+        internal static string ResourceArgumentDescription {
             get {
                 return ResourceManager.GetString("ResourceArgumentDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; was not found..
         /// </summary>
-        public static string ResourceNotFound {
+        internal static string ResourceNotFound {
             get {
                 return ResourceManager.GetString("ResourceNotFound", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to A resource name is required when not using --follow. Use --follow to stream logs from all resources..
         /// </summary>
-        public static string ResourceRequiredWithoutFollow {
+        internal static string ResourceRequiredWithoutFollow {
             get {
                 return ResourceManager.GetString("ResourceRequiredWithoutFollow", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details.
         /// </summary>
-        public static string SearchOptionDescription {
+        internal static string SearchOptionDescription {
             get {
                 return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to stream logs from.
         /// </summary>
-        public static string SelectAppHostAction {
+        internal static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --tail value must be a positive number..
         /// </summary>
-        public static string TailMustBePositive {
+        internal static string TailMustBePositive {
             get {
                 return ResourceManager.GetString("TailMustBePositive", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Number of lines to show from the end of logs (default: all).
         /// </summary>
-        public static string TailOptionDescription {
+        internal static string TailOptionDescription {
             get {
                 return ResourceManager.GetString("TailOptionDescription", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --tail option requires a resource name to be specified..
         /// </summary>
-        public static string TailRequiresResource {
+        internal static string TailRequiresResource {
             get {
                 return ResourceManager.GetString("TailRequiresResource", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Show timestamps for each log line.
         /// </summary>
-        public static string TimestampsOptionDescription {
+        internal static string TimestampsOptionDescription {
             get {
                 return ResourceManager.GetString("TimestampsOptionDescription", resourceCulture);
             }

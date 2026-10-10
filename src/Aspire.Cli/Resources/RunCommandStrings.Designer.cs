@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class RunCommandStrings {
+    internal class RunCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.RunCommandStrings", typeof(RunCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Maybe later.
         /// </summary>
-        public static string AgentConfigurationMaybeLater {
+        internal static string AgentConfigurationMaybeLater {
             get {
                 return ResourceManager.GetString("AgentConfigurationMaybeLater", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No.
         /// </summary>
-        public static string AgentConfigurationNo {
+        internal static string AgentConfigurationNo {
             get {
                 return ResourceManager.GetString("AgentConfigurationNo", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Aspire has detected {0} agentic coding environment(s) to configure. Would you like to configure now?.
         /// </summary>
-        public static string AgentConfigurationPrompt {
+        internal static string AgentConfigurationPrompt {
             get {
                 return ResourceManager.GetString("AgentConfigurationPrompt", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select agent environments to configure:.
         /// </summary>
-        public static string AgentConfigurationSelectPrompt {
+        internal static string AgentConfigurationSelectPrompt {
             get {
                 return ResourceManager.GetString("AgentConfigurationSelectPrompt", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Yes.
         /// </summary>
-        public static string AgentConfigurationYes {
+        internal static string AgentConfigurationYes {
             get {
                 return ResourceManager.GetString("AgentConfigurationYes", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
-        public static string AppHost {
+        internal static string AppHost {
             get {
                 return ResourceManager.GetString("AppHost", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting..
         /// </summary>
-        public static string AppHostConnectionLostWaitingForExit {
+        internal static string AppHostConnectionLostWaitingForExit {
             get {
                 return ResourceManager.GetString("AppHostConnectionLostWaitingForExit", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to AppHost process exited with code {0}..
         /// </summary>
-        public static string AppHostExitedWithCode {
+        internal static string AppHostExitedWithCode {
             get {
                 return ResourceManager.GetString("AppHostExitedWithCode", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to AppHost failed to build..
         /// </summary>
-        public static string AppHostFailedToBuild {
+        internal static string AppHostFailedToBuild {
             get {
                 return ResourceManager.GetString("AppHostFailedToBuild", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to AppHost started successfully..
         /// </summary>
-        public static string AppHostStartedSuccessfully {
+        internal static string AppHostStartedSuccessfully {
             get {
                 return ResourceManager.GetString("AppHostStartedSuccessfully", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Check logs for details: {0}.
         /// </summary>
-        public static string CheckLogsForDetails {
+        internal static string CheckLogsForDetails {
             get {
                 return ResourceManager.GetString("CheckLogsForDetails", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Connecting to AppHost....
         /// </summary>
-        public static string ConnectingToAppHost {
+        internal static string ConnectingToAppHost {
             get {
                 return ResourceManager.GetString("ConnectingToAppHost", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Copying user secrets for isolated mode....
         /// </summary>
-        public static string CopyingUserSecrets {
+        internal static string CopyingUserSecrets {
             get {
                 return ResourceManager.GetString("CopyingUserSecrets", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard.
         /// </summary>
-        public static string Dashboard {
+        internal static string Dashboard {
             get {
                 return ResourceManager.GetString("Dashboard", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Aspire Dashboard failed to start or is disabled..
         /// </summary>
-        public static string DashboardFailedToStart {
+        internal static string DashboardFailedToStart {
             get {
                 return ResourceManager.GetString("DashboardFailedToStart", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Run an Aspire AppHost interactively for development.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Run the AppHost in the background and exit after it starts.
         /// </summary>
-        public static string DetachArgumentDescription {
+        internal static string DetachArgumentDescription {
             get {
                 return ResourceManager.GetString("DetachArgumentDescription", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Endpoints.
         /// </summary>
-        public static string Endpoints {
+        internal static string Endpoints {
             get {
                 return ResourceManager.GetString("Endpoints", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Failed to start the AppHost..
         /// </summary>
-        public static string FailedToStartAppHost {
+        internal static string FailedToStartAppHost {
             get {
                 return ResourceManager.GetString("FailedToStartAppHost", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stop any running instance of the AppHost without prompting.
         /// </summary>
-        public static string ForceArgumentDescription {
+        internal static string ForceArgumentDescription {
             get {
                 return ResourceManager.GetString("ForceArgumentDescription", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --format option can only be used together with --detach..
         /// </summary>
-        public static string FormatRequiresDetach {
+        internal static string FormatRequiresDetach {
             get {
                 return ResourceManager.GetString("FormatRequiresDetach", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The health of the resource, eg Healthy.
         /// </summary>
-        public static string Health {
+        internal static string Health {
             get {
                 return ResourceManager.GetString("Health", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The {0} environment variable must be a positive number of seconds..
         /// </summary>
-        public static string InvalidAppHostStartupTimeoutEnvironmentVariable {
+        internal static string InvalidAppHostStartupTimeoutEnvironmentVariable {
             get {
                 return ResourceManager.GetString("InvalidAppHostStartupTimeoutEnvironmentVariable", resourceCulture);
             }
@@ -270,7 +270,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to IsCompatibleAppHost is null.
         /// </summary>
-        public static string IsCompatibleAppHostIsNull {
+        internal static string IsCompatibleAppHostIsNull {
             get {
                 return ResourceManager.GetString("IsCompatibleAppHostIsNull", resourceCulture);
             }
@@ -279,7 +279,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously.
         /// </summary>
-        public static string IsolatedArgumentDescription {
+        internal static string IsolatedArgumentDescription {
             get {
                 return ResourceManager.GetString("IsolatedArgumentDescription", resourceCulture);
             }
@@ -288,7 +288,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories..
         /// </summary>
-        public static string IsolatedModeRunningInstanceWarning {
+        internal static string IsolatedModeRunningInstanceWarning {
             get {
                 return ResourceManager.GetString("IsolatedModeRunningInstanceWarning", resourceCulture);
             }
@@ -297,7 +297,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Output format for detached AppHost results.
         /// </summary>
-        public static string JsonArgumentDescription {
+        internal static string JsonArgumentDescription {
             get {
                 return ResourceManager.GetString("JsonArgumentDescription", resourceCulture);
             }
@@ -306,7 +306,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Logs.
         /// </summary>
-        public static string Logs {
+        internal static string Logs {
             get {
                 return ResourceManager.GetString("Logs", resourceCulture);
             }
@@ -315,7 +315,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Do not build or restore the project before running.
         /// </summary>
-        public static string NoBuildArgumentDescription {
+        internal static string NoBuildArgumentDescription {
             get {
                 return ResourceManager.GetString("NoBuildArgumentDescription", resourceCulture);
             }
@@ -324,7 +324,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --no-build option cannot be used when watch mode is enabled..
         /// </summary>
-        public static string NoBuildNotSupportedWithWatchMode {
+        internal static string NoBuildNotSupportedWithWatchMode {
             get {
                 return ResourceManager.GetString("NoBuildNotSupportedWithWatchMode", resourceCulture);
             }
@@ -333,7 +333,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Press [bold]CTRL+C[/] to stop the AppHost and exit..
         /// </summary>
-        public static string PressCtrlCToStopAppHost {
+        internal static string PressCtrlCToStopAppHost {
             get {
                 return ResourceManager.GetString("PressCtrlCToStopAppHost", resourceCulture);
             }
@@ -342,7 +342,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to PID.
         /// </summary>
-        public static string ProcessId {
+        internal static string ProcessId {
             get {
                 return ResourceManager.GetString("ProcessId", resourceCulture);
             }
@@ -351,7 +351,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
         /// </summary>
-        public static string ProjectArgumentDescription {
+        internal static string ProjectArgumentDescription {
             get {
                 return ResourceManager.GetString("ProjectArgumentDescription", resourceCulture);
             }
@@ -360,7 +360,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The project could not be run. See logs at {0}.
         /// </summary>
-        public static string ProjectCouldNotBeRun {
+        internal static string ProjectCouldNotBeRun {
             get {
                 return ResourceManager.GetString("ProjectCouldNotBeRun", resourceCulture);
             }
@@ -369,7 +369,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Recent AppHost startup output.
         /// </summary>
-        public static string RecentAppHostStartupOutput {
+        internal static string RecentAppHostStartupOutput {
             get {
                 return ResourceManager.GetString("RecentAppHostStartupOutput", resourceCulture);
             }
@@ -378,7 +378,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource.
         /// </summary>
-        public static string Resource {
+        internal static string Resource {
             get {
                 return ResourceManager.GetString("Resource", resourceCulture);
             }
@@ -387,7 +387,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Running instance stopped successfully..
         /// </summary>
-        public static string RunningInstanceStopped {
+        internal static string RunningInstanceStopped {
             get {
                 return ResourceManager.GetString("RunningInstanceStopped", resourceCulture);
             }
@@ -396,7 +396,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Whether to start a debug session, if running in an Aspire Terminal.
         /// </summary>
-        public static string StartDebugSessionArgumentDescription {
+        internal static string StartDebugSessionArgumentDescription {
             get {
                 return ResourceManager.GetString("StartDebugSessionArgumentDescription", resourceCulture);
             }
@@ -405,7 +405,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Starting Aspire AppHost....
         /// </summary>
-        public static string StartingAppHost {
+        internal static string StartingAppHost {
             get {
                 return ResourceManager.GetString("StartingAppHost", resourceCulture);
             }
@@ -414,7 +414,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Starting Aspire AppHost in the background....
         /// </summary>
-        public static string StartingAppHostInBackground {
+        internal static string StartingAppHostInBackground {
             get {
                 return ResourceManager.GetString("StartingAppHostInBackground", resourceCulture);
             }
@@ -423,7 +423,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Starting dashboard....
         /// </summary>
-        public static string StartingDashboard {
+        internal static string StartingDashboard {
             get {
                 return ResourceManager.GetString("StartingDashboard", resourceCulture);
             }
@@ -432,7 +432,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code....
         /// </summary>
-        public static string StartingDebugSessionInExtension {
+        internal static string StartingDebugSessionInExtension {
             get {
                 return ResourceManager.GetString("StartingDebugSessionInExtension", resourceCulture);
             }
@@ -441,7 +441,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session..
         /// </summary>
-        public static string StartingRunSessionInExtension {
+        internal static string StartingRunSessionInExtension {
             get {
                 return ResourceManager.GetString("StartingRunSessionInExtension", resourceCulture);
             }
@@ -450,7 +450,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to State.
         /// </summary>
-        public static string State {
+        internal static string State {
             get {
                 return ResourceManager.GetString("State", resourceCulture);
             }
@@ -459,7 +459,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again..
         /// </summary>
-        public static string TimeoutWaitingForAppHost {
+        internal static string TimeoutWaitingForAppHost {
             get {
                 return ResourceManager.GetString("TimeoutWaitingForAppHost", resourceCulture);
             }
@@ -468,7 +468,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
-        public static string Type {
+        internal static string Type {
             get {
                 return ResourceManager.GetString("Type", resourceCulture);
             }
@@ -477,7 +477,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Waiting for AppHost to start....
         /// </summary>
-        public static string WaitingForAppHostToStart {
+        internal static string WaitingForAppHostToStart {
             get {
                 return ResourceManager.GetString("WaitingForAppHostToStart", resourceCulture);
             }
@@ -486,7 +486,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Start project resources in watch mode.
         /// </summary>
-        public static string WatchArgumentDescription {
+        internal static string WatchArgumentDescription {
             get {
                 return ResourceManager.GetString("WatchArgumentDescription", resourceCulture);
             }

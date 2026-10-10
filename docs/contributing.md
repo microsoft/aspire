@@ -152,6 +152,8 @@ Make sure you [build the repo](#build-the-repo) from command line at least once 
 
 ### Localization
 
+Shared metadata in `Directory.Build.targets` automatically configures resource/designer pairs in each project's `Resources` and `Properties` directories. Add a neutral resource as `Name.resx` with its matching `Name.Designer.cs`; both files must exist before the shared generator metadata applies, and no per-file project entries are needed. Dotted neutral names such as `Errors.Validation.resx` are supported. Resource classes use `ResXFileCodeGenerator` (internal) by default. The Dashboard sets `ResxCodeGenerator` to `PublicResXFileCodeGenerator` to keep its resource classes public. Culture-specific files such as `Name.fr.resx` should not have checked-in designers and are not configured for designer generation. Unrelated designers such as `Settings.Designer.cs` and linked resources outside these project-local directories are unchanged. This is still Visual Studio custom-tool generation, not build-time source generation: keep the checked-in designer file synchronized with the neutral resource file.
+
 If you are contributing to Aspire.Dashboard, please ensure that all strings are localized. If necessary,
 create a new resx file under `src/Aspire.Dashboard/Resources`. To reference a string, ensure the `IStringLocalizer` for the resx file is
 injected. An example is below:

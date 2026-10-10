@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class PublishCommandStrings {
+    internal class PublishCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.PublishCommandStrings", typeof(PublishCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Generate deployment artifacts for an AppHost.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Generating artifacts....
         /// </summary>
-        public static string GeneratingArtifacts {
+        internal static string GeneratingArtifacts {
             get {
                 return ResourceManager.GetString("GeneratingArtifacts", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Loading....
         /// </summary>
-        public static string InputPromptLoading {
+        internal static string InputPromptLoading {
             get {
                 return ResourceManager.GetString("InputPromptLoading", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Do not build or restore the project before running.
         /// </summary>
-        public static string NoBuildArgumentDescription {
+        internal static string NoBuildArgumentDescription {
             get {
                 return ResourceManager.GetString("NoBuildArgumentDescription", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to PUBLISHING COMPLETED.
         /// </summary>
-        public static string OperationCompletedPrefix {
+        internal static string OperationCompletedPrefix {
             get {
                 return ResourceManager.GetString("OperationCompletedPrefix", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to PUBLISHING FAILED.
         /// </summary>
-        public static string OperationFailedPrefix {
+        internal static string OperationFailedPrefix {
             get {
                 return ResourceManager.GetString("OperationFailedPrefix", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The output path for the generated artifacts. Defaults to the AppHost directory&apos;s &apos;aspire-output&apos; folder if not specified..
         /// </summary>
-        public static string OutputPathArgumentDescription {
+        internal static string OutputPathArgumentDescription {
             get {
                 return ResourceManager.GetString("OutputPathArgumentDescription", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The path to the Aspire AppHost project file or a directory to search.
         /// </summary>
-        public static string ProjectArgumentDescription {
+        internal static string ProjectArgumentDescription {
             get {
                 return ResourceManager.GetString("ProjectArgumentDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Select a publisher:.
         /// </summary>
-        public static string SelectAPublisher {
+        internal static string SelectAPublisher {
             get {
                 return ResourceManager.GetString("SelectAPublisher", resourceCulture);
             }

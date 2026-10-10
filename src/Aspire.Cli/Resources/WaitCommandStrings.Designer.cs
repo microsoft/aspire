@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class WaitCommandStrings {
+    internal class WaitCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.WaitCommandStrings", typeof(WaitCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Wait for a resource to reach a target status.
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Invalid status value &apos;{0}&apos;. Valid values are: healthy, up, down..
         /// </summary>
-        public static string InvalidStatusValue {
+        internal static string InvalidStatusValue {
             get {
                 return ResourceManager.GetString("InvalidStatusValue", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The name of the resource to wait for.
         /// </summary>
-        public static string ResourceArgumentDescription {
+        internal static string ResourceArgumentDescription {
             get {
                 return ResourceManager.GetString("ResourceArgumentDescription", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; entered a failed state: {1}.
         /// </summary>
-        public static string ResourceEnteredFailedState {
+        internal static string ResourceEnteredFailedState {
             get {
                 return ResourceManager.GetString("ResourceEnteredFailedState", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; was not found..
         /// </summary>
-        public static string ResourceNotFound {
+        internal static string ResourceNotFound {
             get {
                 return ResourceManager.GetString("ResourceNotFound", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; is {1}. ({2:F1}s).
         /// </summary>
-        public static string ResourceReachedTargetStatus {
+        internal static string ResourceReachedTargetStatus {
             get {
                 return ResourceManager.GetString("ResourceReachedTargetStatus", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to connect to.
         /// </summary>
-        public static string SelectAppHostAction {
+        internal static string SelectAppHostAction {
             get {
                 return ResourceManager.GetString("SelectAppHostAction", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The target status to wait for (healthy, up, down). Defaults to healthy..
         /// </summary>
-        public static string StatusOptionDescription {
+        internal static string StatusOptionDescription {
             get {
                 return ResourceManager.GetString("StatusOptionDescription", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Timeout must be a positive number of seconds..
         /// </summary>
-        public static string TimeoutMustBePositive {
+        internal static string TimeoutMustBePositive {
             get {
                 return ResourceManager.GetString("TimeoutMustBePositive", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Maximum time to wait in seconds. Defaults to 120..
         /// </summary>
-        public static string TimeoutOptionDescription {
+        internal static string TimeoutOptionDescription {
             get {
                 return ResourceManager.GetString("TimeoutOptionDescription", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Waiting for resource &apos;{0}&apos; to be {1}....
         /// </summary>
-        public static string WaitingForResource {
+        internal static string WaitingForResource {
             get {
                 return ResourceManager.GetString("WaitingForResource", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Timed out waiting for resource &apos;{0}&apos; to be {1} after {2}s..
         /// </summary>
-        public static string WaitTimedOut {
+        internal static string WaitTimedOut {
             get {
                 return ResourceManager.GetString("WaitTimedOut", resourceCulture);
             }

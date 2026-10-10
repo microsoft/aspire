@@ -200,6 +200,11 @@ the selector treats them all identically.
 
 Highlights:
 
+- **RESX metadata inputs** — the resource metadata tests read seven production
+  project configurations and top-level resource filenames at runtime. Explicit
+  paths select `Infrastructure.Tests` in addition to graph-owned consumers.
+  Keep these paths aligned with the scenarios in `ResourceGeneratorMetadataTests`;
+  the shared `Directory.Build.targets` is already covered by the `ALL` rule.
 - **convention misses** — `src/Aspire.Hosting.Azure.*/**` →
   `test:Aspire.Hosting.Azure.Tests`, and
   `src/Aspire.Hosting.Integration.Analyzers/**` →

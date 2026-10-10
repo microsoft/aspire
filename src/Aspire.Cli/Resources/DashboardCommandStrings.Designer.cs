@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class DashboardCommandStrings {
+    internal class DashboardCommandStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.DashboardCommandStrings", typeof(DashboardCommandStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -63,7 +63,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Allow anonymous access to the dashboard.
         /// </summary>
-        public static string AllowAnonymousOptionDescription {
+        internal static string AllowAnonymousOptionDescription {
             get {
                 return ResourceManager.GetString("AllowAnonymousOptionDescription", resourceCulture);
             }
@@ -72,7 +72,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The application name displayed in the dashboard and used to scope persisted dashboard data.
         /// </summary>
-        public static string ApplicationNameOptionDescription {
+        internal static string ApplicationNameOptionDescription {
             get {
                 return ResourceManager.GetString("ApplicationNameOptionDescription", resourceCulture);
             }
@@ -81,7 +81,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The &apos;aspire dashboard&apos; command requires the CLI bundle, but no bundle layout was found. The bundle provides the dashboard binary and supporting files. Run &apos;aspire setup --force&apos; to extract the bundle, or reinstall the Aspire CLI..
         /// </summary>
-        public static string BundleLayoutNotFound {
+        internal static string BundleLayoutNotFound {
             get {
                 return ResourceManager.GetString("BundleLayoutNotFound", resourceCulture);
             }
@@ -90,7 +90,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The Aspire dashboard requires the CLI bundle. The bundle was not found..
         /// </summary>
-        public static string BundleNotAvailable {
+        internal static string BundleNotAvailable {
             get {
                 return ResourceManager.GetString("BundleNotAvailable", resourceCulture);
             }
@@ -99,7 +99,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The path for a JSON configuration file.
         /// </summary>
-        public static string ConfigFilePathOptionDescription {
+        internal static string ConfigFilePathOptionDescription {
             get {
                 return ResourceManager.GetString("ConfigFilePathOptionDescription", resourceCulture);
             }
@@ -108,7 +108,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard could not start because a configured port is already in use. Use a different port or stop the conflicting process..
         /// </summary>
-        public static string DashboardExitedAddressInUse {
+        internal static string DashboardExitedAddressInUse {
             get {
                 return ResourceManager.GetString("DashboardExitedAddressInUse", resourceCulture);
             }
@@ -117,7 +117,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard exited unexpectedly due to an error. See logs for details..
         /// </summary>
-        public static string DashboardExitedUnexpectedError {
+        internal static string DashboardExitedUnexpectedError {
             get {
                 return ResourceManager.GetString("DashboardExitedUnexpectedError", resourceCulture);
             }
@@ -126,7 +126,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard configuration is invalid. Check the provided options and try again..
         /// </summary>
-        public static string DashboardExitedValidationFailure {
+        internal static string DashboardExitedValidationFailure {
             get {
                 return ResourceManager.GetString("DashboardExitedValidationFailure", resourceCulture);
             }
@@ -135,7 +135,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard exited with exit code {0}..
         /// </summary>
-        public static string DashboardExitedWithError {
+        internal static string DashboardExitedWithError {
             get {
                 return ResourceManager.GetString("DashboardExitedWithError", resourceCulture);
             }
@@ -144,7 +144,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Failed to start Aspire dashboard: {0}.
         /// </summary>
-        public static string DashboardFailedToStart {
+        internal static string DashboardFailedToStart {
             get {
                 return ResourceManager.GetString("DashboardFailedToStart", resourceCulture);
             }
@@ -153,7 +153,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard.
         /// </summary>
-        public static string DashboardLabel {
+        internal static string DashboardLabel {
             get {
                 return ResourceManager.GetString("DashboardLabel", resourceCulture);
             }
@@ -162,7 +162,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard started (PID {0})..
         /// </summary>
-        public static string DashboardStarted {
+        internal static string DashboardStarted {
             get {
                 return ResourceManager.GetString("DashboardStarted", resourceCulture);
             }
@@ -171,7 +171,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Dashboard did not become ready within the expected time..
         /// </summary>
-        public static string DashboardStartTimedOut {
+        internal static string DashboardStartTimedOut {
             get {
                 return ResourceManager.GetString("DashboardStartTimedOut", resourceCulture);
             }
@@ -180,7 +180,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Manage the Aspire dashboard (Preview).
         /// </summary>
-        public static string Description {
+        internal static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
@@ -189,7 +189,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Preparing dashboard bits....
         /// </summary>
-        public static string EnsuringDashboardBundle {
+        internal static string EnsuringDashboardBundle {
             get {
                 return ResourceManager.GetString("EnsuringDashboardBundle", resourceCulture);
             }
@@ -198,7 +198,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to One or more HTTP endpoints through which the dashboard frontend is served.
         /// </summary>
-        public static string FrontendUrlOptionDescription {
+        internal static string FrontendUrlOptionDescription {
             get {
                 return ResourceManager.GetString("FrontendUrlOptionDescription", resourceCulture);
             }
@@ -207,7 +207,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Logs.
         /// </summary>
-        public static string LogsLabel {
+        internal static string LogsLabel {
             get {
                 return ResourceManager.GetString("LogsLabel", resourceCulture);
             }
@@ -216,7 +216,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The CLI bundle layout was found, but the Dashboard executable is missing. The bundle may be corrupted or incomplete. Run &apos;aspire setup --force&apos; to re-extract the bundle, or reinstall the Aspire CLI..
         /// </summary>
-        public static string ManagedBinaryNotFound {
+        internal static string ManagedBinaryNotFound {
             get {
                 return ResourceManager.GetString("ManagedBinaryNotFound", resourceCulture);
             }
@@ -225,7 +225,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to OTLP/gRPC.
         /// </summary>
-        public static string OtlpGrpcLabel {
+        internal static string OtlpGrpcLabel {
             get {
                 return ResourceManager.GetString("OtlpGrpcLabel", resourceCulture);
             }
@@ -234,7 +234,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The OTLP/gRPC endpoint. This endpoint hosts an OTLP service and receives telemetry using gRPC.
         /// </summary>
-        public static string OtlpGrpcUrlOptionDescription {
+        internal static string OtlpGrpcUrlOptionDescription {
             get {
                 return ResourceManager.GetString("OtlpGrpcUrlOptionDescription", resourceCulture);
             }
@@ -243,7 +243,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to OTLP/HTTP.
         /// </summary>
-        public static string OtlpHttpLabel {
+        internal static string OtlpHttpLabel {
             get {
                 return ResourceManager.GetString("OtlpHttpLabel", resourceCulture);
             }
@@ -252,7 +252,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The OTLP/HTTP endpoint. This endpoint hosts an OTLP service and receives telemetry using Protobuf over HTTP.
         /// </summary>
-        public static string OtlpHttpUrlOptionDescription {
+        internal static string OtlpHttpUrlOptionDescription {
             get {
                 return ResourceManager.GetString("OtlpHttpUrlOptionDescription", resourceCulture);
             }
@@ -261,7 +261,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The dashboard data persistence mode: None, Run, or Resume.
         /// </summary>
-        public static string PersistenceModeOptionDescription {
+        internal static string PersistenceModeOptionDescription {
             get {
                 return ResourceManager.GetString("PersistenceModeOptionDescription", resourceCulture);
             }
@@ -270,7 +270,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Start the Aspire dashboard (Preview).
         /// </summary>
-        public static string RunDescription {
+        internal static string RunDescription {
             get {
                 return ResourceManager.GetString("RunDescription", resourceCulture);
             }
@@ -279,7 +279,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Starting dashboard....
         /// </summary>
-        public static string StartingDashboard {
+        internal static string StartingDashboard {
             get {
                 return ResourceManager.GetString("StartingDashboard", resourceCulture);
             }
@@ -288,7 +288,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stopping dashboard..
         /// </summary>
-        public static string StoppingDashboard {
+        internal static string StoppingDashboard {
             get {
                 return ResourceManager.GetString("StoppingDashboard", resourceCulture);
             }
