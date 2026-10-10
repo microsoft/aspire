@@ -1479,14 +1479,10 @@ public static partial class JavaHostingExtensions
     /// </para>
     /// </remarks>
     private static (string Command, string[] LeadingArgs) ResolveWrapperInvocation(JavaAppResource resource, JavaBuildTool tool)
-        => WrapperInvocationFor(
+        => JavaWrapper.GetInvocation(
             JavaBuildToolResolver.ResolveWrapperPath(resource, tool, OperatingSystem.IsWindows()),
             resource.WorkingDirectory,
             OperatingSystem.IsWindows());
-
-    /// <inheritdoc cref="ResolveWrapperInvocation" />
-    internal static (string Command, string[] LeadingArgs) WrapperInvocationFor(string wrapperPath, string workingDirectory, bool isWindows)
-        => JavaWrapper.GetInvocation(wrapperPath, workingDirectory, isWindows);
 
     private static string WrapperCommand()
         => OperatingSystem.IsWindows()
