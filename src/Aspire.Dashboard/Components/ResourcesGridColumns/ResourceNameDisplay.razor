@@ -24,7 +24,7 @@
         <FluentIcon Icon="Icons.Regular.Size16.Pin" Title="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
             Color="Color.Default" Class="persistent-container-icon" />
     }
-    @if (Resource.IsResourceHidden(showHiddenResources: false))
+    @if (ShowHiddenIndicator && Resource.IsResourceHidden(showHiddenResources: false))
     {
         <FluentIcon Icon="Icons.Regular.Size16.EyeOff" Title="@Loc[nameof(Columns.HiddenResourceIconTooltip)]"
             Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" Class="resource-hidden-icon" />
@@ -40,6 +40,11 @@
 
     [Parameter, EditorRequired]
     public required string FilterText { get; set; }
+
+    // The indicator's tooltip refers to the "Show hidden resources" toggle, so only show it in
+    // contexts that have that toggle. Other callers (e.g. the manage data dialog) list every resource.
+    [Parameter, EditorRequired]
+    public required bool ShowHiddenIndicator { get; set; }
 
     private static class KnownContainerLifetimes
     {
