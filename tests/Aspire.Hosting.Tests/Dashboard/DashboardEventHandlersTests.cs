@@ -12,6 +12,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
@@ -385,6 +386,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             configureExplicitAliases ? explicitApplicationName : "My App",
             environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
         Assert.Equal(expectedPersistenceMode, environmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName]);
+        Assert.Equal(KnownDashboardLaunchContexts.AppHost, environmentVariables[DashboardConfigNames.DashboardLaunchContextName.EnvVarName]);
     }
 
     [Theory]

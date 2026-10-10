@@ -14,6 +14,7 @@ public sealed class DashboardOptions
     internal const string DefaultApplicationName = "Aspire";
 
     public string? ApplicationName { get; set; }
+    public string? LaunchContext { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
     public ApiOptions Api { get; set; } = new();
     public FrontendOptions Frontend { get; set; } = new();

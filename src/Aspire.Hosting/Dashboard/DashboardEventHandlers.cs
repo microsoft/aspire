@@ -452,6 +452,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+        context.EnvironmentVariables[DashboardConfigNames.DashboardLaunchContextName.EnvVarName] = KnownDashboardLaunchContexts.AppHost;
         SetEnvironmentVariableWithFallback(
             context,
             DashboardConfigNames.DashboardApplicationName,
