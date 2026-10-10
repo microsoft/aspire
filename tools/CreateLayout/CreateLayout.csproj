@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)WindowsTrayPayload.cs" Link="WindowsTrayPayload.cs" />
+    <Compile Include="$(SharedDir)TerminalHostPayload.cs" Link="TerminalHostPayload.cs" />
     <InternalsVisibleTo Include="Infrastructure.Tests" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="System.Text.Json" />

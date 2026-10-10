@@ -669,6 +669,27 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ResolveAspireCliBundleResolvesStandaloneTerminalHost(bool executableExists)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        CreateFakeCliBundle(workspace.Path);
+        var directory = Path.Combine(workspace.Path, "bundle", "terminalhost");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, OperatingSystem.IsWindows() ? "Aspire.TerminalHost.exe" : "Aspire.TerminalHost");
+        if (executableExists)
+        {
+            File.WriteAllText(path, "native-host");
+        }
+
+        var task = new ResolveAspireCliBundle { AspireCliBundlePath = workspace.Path, WarnOnInvalidPaths = false };
+        Assert.True(task.Execute());
+        Assert.Equal(executableExists ? path : null, task.AspireTerminalHostPath);
+        Assert.Equal(executableExists ? string.Empty : null, task.AspireTerminalHostInvocationArgs);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void ResolveAspireCliBundleRejectsIncompleteDashboard(bool hasTransitionalDashboard)

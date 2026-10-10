@@ -29,6 +29,12 @@ public sealed class TrayLayoutTests(ITestOutputHelper output)
         File.WriteAllText(Path.Combine(components, "managed", BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)), "");
         File.WriteAllText(Path.Combine(components, "dashboard", BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), "");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(Path.Combine(components, "dcp")), "");
+        foreach (var file in TerminalHostPayload.GetRequiredFiles(System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+        {
+            var path = Path.Combine(components, BundleDiscovery.TerminalHostDirectoryName, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "stub");
+        }
         var trayPath = Path.Combine(components, OperatingSystem.IsWindows()
             ? WindowsTrayPayload.ExecutablePath : LayoutComponents.MacTrayExecutablePath);
         if (hasTray)

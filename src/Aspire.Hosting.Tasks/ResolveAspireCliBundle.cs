@@ -143,9 +143,9 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
         AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.DashboardDir);
         AspireDashboardPath = resolution.DashboardPath;
-        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
-        AspireTerminalHostPath = resolution.ManagedPath;
-        AspireTerminalHostInvocationArgs = "terminalhost";
+        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.TerminalHostDir);
+        AspireTerminalHostPath = resolution.TerminalHostPath;
+        AspireTerminalHostInvocationArgs = resolution.TerminalHostInvocationArgs;
     }
 
     private static bool TryResolveFromPath(out BundleResolution resolution)
@@ -255,12 +255,25 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return false;
         }
 
+        var terminalHostDir = Path.Combine(bundleRoot, "terminalhost");
+        var terminalHostPath = Path.Combine(terminalHostDir, IsWindows() ? "Aspire.TerminalHost.exe" : "Aspire.TerminalHost");
+        if (Directory.Exists(terminalHostDir) && !File.Exists(terminalHostPath))
+        {
+            return false;
+        }
+
+        // Older CLI bundles omit terminalhost/ entirely. Try their legacy dispatcher as a
+        // best-effort fallback; an existing but incomplete component was rejected above.
+        var hasStandaloneTerminalHost = File.Exists(terminalHostPath);
         resolution = new BundleResolution(
             dcpDir,
             managedDir,
             managedPath,
             dashboardDir,
-            File.Exists(dashboardPath) ? dashboardPath : managedPath);
+            File.Exists(dashboardPath) ? dashboardPath : managedPath,
+            hasStandaloneTerminalHost ? terminalHostDir : managedDir,
+            hasStandaloneTerminalHost ? terminalHostPath : managedPath,
+            hasStandaloneTerminalHost ? string.Empty : "terminalhost");
         return true;
     }
 
@@ -518,7 +531,8 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             or System.Security.SecurityException;
     }
 
-    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath)
+    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath,
+        string terminalHostDir, string terminalHostPath, string terminalHostInvocationArgs)
     {
         public string DcpDir { get; } = dcpDir;
 
@@ -529,5 +543,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         public string DashboardDir { get; } = dashboardDir;
 
         public string DashboardPath { get; } = dashboardPath;
+
+        public string TerminalHostDir { get; } = terminalHostDir;
+
+        public string TerminalHostPath { get; } = terminalHostPath;
+
+        public string TerminalHostInvocationArgs { get; } = terminalHostInvocationArgs;
     }
 }

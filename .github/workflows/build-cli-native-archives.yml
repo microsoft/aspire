@@ -9,7 +9,7 @@ on:
       configuration:
         required: false
         type: string
-        default: Debug
+        default: Release
       targets:
         description: >
           JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.
@@ -82,6 +82,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
+          # Repository cleanup can remove artifacts/log while the build is streaming output.
+          $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
           & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
             -ci `
             -restore `
@@ -93,10 +95,11 @@ jobs:
             /p:BuildBundleDepsOnly=true `
             /p:TargetRids=${{ matrix.targets.rids }} `
             /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
-            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $buildLog
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
+            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $temporaryLog
+          $buildExitCode = $LASTEXITCODE
+          New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
+          Copy-Item -LiteralPath $temporaryLog -Destination $buildLog
+          exit $buildExitCode
 
       - name: Verify Native AOT Dashboard warnings
         shell: pwsh
@@ -119,6 +122,13 @@ jobs:
           /p:ContinuousIntegrationBuild=true
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
+
+      - name: Smoke test bundled Native AOT TerminalHost
+        if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
+        shell: pwsh
+        run: >
+          ./eng/scripts/test-native-terminalhost.ps1
+          -TerminalHostPath "${{ github.workspace }}/artifacts/bundle/${{ matrix.targets.rids }}/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
 
       - name: Build CLI packages
         run: >

@@ -1044,6 +1044,33 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void CliBundleConsumersRunWhenStandaloneTerminalHostIsAffected()
+    {
+        var result = SelectWithRealMap("src/Aspire.TerminalHost/Program.cs", "Aspire.TerminalHost");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Equal(
+            ["job:cli-starter-validation", "job:extension-e2e", "job:homebrew-installer", "job:winget-installer"],
+            result.Jobs.Order(StringComparer.Ordinal));
+        Assert.Contains(s_map.Ignore, pattern => TestTriggerMap.GlobMatches(pattern, "eng/scripts/test-native-terminalhost.ps1"));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Cli", "Aspire.Cli.EndToEnd.Tests")]
+    [InlineData("Aspire.TerminalHost", "Aspire.Cli.EndToEnd.Tests")]
+    [InlineData("Aspire.Dashboard", "Aspire.Templates.Tests")]
+    public void TerminalPipelinePublishSettingsRunTheirInfrastructureCoverage(string projectName, string consumerProject)
+    {
+        var result = SelectWithRealMap(
+            $"src/{projectName}/{projectName}.csproj", projectName);
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        Assert.Contains(consumerProject, result.TestProjects);
+    }
+
+    [Fact]
     public void DashboardChangesRunTemplatesTestsThatStartAppHosts()
     {
         var result = SelectWithRealMap(

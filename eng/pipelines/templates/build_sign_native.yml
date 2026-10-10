@@ -202,6 +202,18 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
             displayName: 🟣Prepare aspire-managed
 
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              publish
+              $(Build.SourcesDirectory)/src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
+              -c $(_BuildConfig)
+              -r ${{ targetRid }}
+              /p:GenerateDocumentationFile=false
+              /p:EnforceCodeStyleInBuild=false
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishTerminalHost.binlog
+            displayName: 🟣Prepare Native AOT TerminalHost
+
           - pwsh: |
               $ErrorActionPreference = 'Stop'
               $buildLog = "$(Build.Arcade.LogsPath)PublishNativeDashboard.log"
@@ -259,15 +271,17 @@ jobs:
                   /p:RuntimeIdentifier=${{ targetRid }}
                 displayName: 🟣Prepare tray app signing input
 
-          # ESRP treats the Dashboard executable path as a discovery pattern and otherwise
-          # finds the adjacent .dSYM DWARF binary with the same name. Dashboard packages do
-          # not ship symbols, so remove the bundle before any signing pass evaluates inputs.
+          # ESRP treats executable paths as discovery patterns and otherwise finds adjacent
+          # .dSYM DWARF binaries with the same names. Native bundle components do not ship
+          # symbols, so remove them before any signing pass evaluates inputs.
           - ${{ if and(eq(parameters.codeSign, true), eq(parameters.agentOs, 'macos')) }}:
-            - pwsh: >-
-                Remove-Item
-                -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM"
-                -Recurse -Force
-              displayName: 🟣Remove Native AOT Dashboard debug symbols
+            - pwsh: |
+                Remove-Item -LiteralPath "$(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard.dSYM" -Recurse -Force
+                $symbols = "$(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost.dSYM"
+                if (Test-Path -LiteralPath $symbols) {
+                  Remove-Item -LiteralPath $symbols -Recurse -Force
+                }
+              displayName: 🟣Remove Native AOT bundle debug symbols
 
           - ${{ if eq(parameters.codeSign, true) }}:
             - script: >-
@@ -312,6 +326,7 @@ jobs:
             - script: |
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Dashboard/${{ targetRid }}/Release/net11.0/${{ targetRid }}/publish/Aspire.Dashboard
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.TerminalHost/Release/net11.0/${{ targetRid }}/publish/Aspire.TerminalHost
               displayName: 🟣Restore execute permissions on managed executables
 
           # Repack the already-published/signed Dashboard without republishing it,
@@ -383,6 +398,12 @@ jobs:
               /p:ContinuousIntegrationBuild=true
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout
+
+          - pwsh: >-
+              & "$(Build.SourcesDirectory)/eng/scripts/test-native-terminalhost.ps1"
+              -TerminalHostPath "$(Build.SourcesDirectory)/artifacts/bundle/${{ targetRid }}/terminalhost/Aspire.TerminalHost${{ iif(eq(parameters.agentOs, 'windows'), '.exe', '') }}"
+            displayName: 🟣Smoke test bundled Native AOT TerminalHost
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
 
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)

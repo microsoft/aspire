@@ -64,6 +64,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
     private string? _integrationProbeManifestPath;
     private AppHostServerProjectLayout? _selectedProjectLayout;
     private bool _supportsNativeDashboard = true;
+    private bool _supportsDirectTerminalHost = true;
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -192,6 +193,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             _integrationLibsPath = null;
             _integrationProbeManifestPath = null;
             _supportsNativeDashboard = false;
+            _supportsDirectTerminalHost = false;
 
             // Resolve the channel the project requests for restore (aspire.config.json#channel,
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
@@ -258,6 +260,7 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
             // Use the restored Hosting version: the server bundle does not contain its own Hosting assembly.
             _supportsNativeDashboard = TryGetHostingVersion(sdkVersion, out var hostingVersion) &&
                 DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
+            _supportsDirectTerminalHost = TerminalHostLaunchHelper.SupportsDirectLaunch(hostingVersion);
 
             return new AppHostServerPrepareResult(
                 Success: true,
@@ -1455,12 +1458,13 @@ internal sealed partial class PrebuiltAppHostServer : IAppHostServerProject, IDi
         }
 
         if (!HasEnvironmentOverride(BundleDiscovery.TerminalHostPathEnvVar) &&
-            _layout.GetManagedPath() is { } terminalHostPath)
+            TerminalHostLaunchHelper.GetLaunch(_layout, _supportsDirectTerminalHost) is { } terminalHost)
         {
-            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
-            if (!HasEnvironmentOverride(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHost.Path;
+            if (environmentVariables?.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar) != true &&
+                !startInfo.Environment.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
             {
-                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = terminalHost.InvocationArgs;
             }
         }
 

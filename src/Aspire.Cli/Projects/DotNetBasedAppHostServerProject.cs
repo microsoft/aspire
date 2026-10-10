@@ -578,13 +578,15 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // would always resolve to <unresolved-aspire-terminalhost> in repo mode.
         // Mirrors the same injection that DotNetAppHostProject performs for .NET AppHosts.
         // Skipped when the caller pre-populates the path so a user-side override always wins.
-        if (BundleDiscovery.TryGetRepoLocalManagedPath(_repoRoot) is { } terminalHostPath
-            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar))
+        if (BundleDiscovery.TryGetRepoLocalTerminalHostPath(_repoRoot) is { } terminalHostPath
+            && !ContainsKey(environmentVariables, BundleDiscovery.TerminalHostPathEnvVar)
+            && !startInfo.Environment.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar))
         {
             startInfo.Environment[BundleDiscovery.TerminalHostPathEnvVar] = terminalHostPath;
-            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar))
+            if (!ContainsKey(environmentVariables, BundleDiscovery.TerminalHostInvocationArgsEnvVar)
+                && !startInfo.Environment.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar))
             {
-                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = "terminalhost";
+                startInfo.Environment[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = string.Empty;
             }
         }
 

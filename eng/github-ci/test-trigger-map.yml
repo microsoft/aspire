@@ -102,6 +102,7 @@ ignore:
   # them would add no coverage; accounting for them here avoids an unrelated full test matrix.
   - eng/scripts/verify-cli-npm-package.ps1
   - eng/scripts/verify-cli-tool-nupkg.ps1
+  - eng/scripts/test-native-terminalhost.ps1          # unconditional native CLI archive smoke
   # SDK registration diagnostics run with the unconditional native Windows archive smoke.
   - eng/scripts/tray-registration-control/**
   # The stabilization job invokes this script independently of the tests selector.
@@ -553,6 +554,12 @@ path_rules:
       - tools/CreateLayout/**
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: assembles and validates native CLI bundle payloads
+  - paths:
+      - src/Aspire.Cli/Aspire.Cli.csproj
+      - src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
+      - src/Aspire.Dashboard/Aspire.Dashboard.csproj
+    targets: [test:Infrastructure.Tests]
+    reason: evaluates terminal pipeline native publish and managed build settings
   - paths: [src/Aspire.Tray/Windows/publish.ps1]
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: Windows native publishing and smoke invocation
@@ -580,6 +587,9 @@ affected_project_rules:
   - projects: [CreateLayout]
     targets: [CLI_BUNDLE]
     reason: CreateLayout assembles the CLI bundle consumed by these tests and jobs
+  - projects: [Aspire.TerminalHost]
+    targets: [CLI_BUNDLE]
+    reason: standalone terminal host is a runtime component of the CLI bundle
   - projects:
       - Aspire.Cli
       - Aspire.Managed
