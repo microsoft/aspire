@@ -21,6 +21,7 @@ public class DashboardCommandExecutorTests : DashboardTestContext
     [InlineData("<div>Failure</div><img src=\"x\" onerror=\"alert(1)\"><script>alert(1)</script>")]
     [InlineData("Already escaped: &lt;button&gt; & \"quoted\"")]
     [InlineData("Command failed")]
+    [InlineData("Command failed \U0001F600")]
     [InlineData("")]
     [InlineData(null)]
     public async Task ExecuteAsyncCore_FailedCommand_RendersMessageAsPlainText(string? message)
@@ -41,6 +42,19 @@ public class DashboardCommandExecutorTests : DashboardTestContext
     {
         var message = new string(character, messageLength);
         var expectedMessage = messageLength <= 250 ? message : message[..249] + FormatHelpers.Ellipsis;
+
+        await AssertFailureMessageAsync(message, expectedMessage);
+    }
+
+    [Theory]
+    [InlineData(247, true)]
+    [InlineData(248, false)]
+    [InlineData(249, false)]
+    public async Task ExecuteAsyncCore_FailedCommand_TruncationPreservesSurrogatePairs(int prefixLength, bool includeEmoji)
+    {
+        var prefix = new string('a', prefixLength);
+        var message = prefix + "\U0001F600" + " Additional diagnostic text";
+        var expectedMessage = prefix + (includeEmoji ? "\U0001F600" : "") + FormatHelpers.Ellipsis;
 
         await AssertFailureMessageAsync(message, expectedMessage);
     }

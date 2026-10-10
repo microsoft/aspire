@@ -135,6 +135,15 @@ public class FormatHelpersTests
     [InlineData("", 5, "")]
     [InlineData("abcdef", 5, "abcd" + FormatHelpers.Ellipsis)]
     [InlineData("abcdef", 10, "abcdef")]
+    [InlineData("abcdef", 6, "abcdef")]
+    [InlineData("abcdef", 1, FormatHelpers.Ellipsis)]
+    [InlineData("\U0001F600", 2, "\U0001F600")]
+    [InlineData("ab\U0001F600", 4, "ab\U0001F600")]
+    [InlineData("ab\U0001F600tail", 4, "ab" + FormatHelpers.Ellipsis)]
+    [InlineData("a\U0001F600tail", 4, "a\U0001F600" + FormatHelpers.Ellipsis)]
+    [InlineData("ab\U0001F600tail", 3, "ab" + FormatHelpers.Ellipsis)]
+    [InlineData("\U0001F600tail", 2, FormatHelpers.Ellipsis)]
+    [InlineData("\U0001F600tail", 1, FormatHelpers.Ellipsis)]
     public void TruncateText(string? initialText, int maxLength, string expected)
     {
         Assert.Equal(expected, FormatHelpers.TruncateText(initialText, maxLength: maxLength));
