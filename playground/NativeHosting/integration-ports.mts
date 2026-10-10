@@ -1,5 +1,6 @@
 import { createConnection } from 'node:net';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import * as rpc from '../NuxtApp/node_modules/vscode-jsonrpc/node.js';
 
 export interface Handle { owner: string; name: string }
@@ -38,7 +39,7 @@ async function resolve(resource: Handle, name: string, token: rpc.CancellationTo
 // This bounded RESP2 client accepts simple, error, integer and bulk replies:
 // +OK\r\n, -WRONGPASS ...\r\n, :1\r\n, $3\r\nfoo\r\n, or null $-1\r\n. Parse bytes, not TCP
 // chunks, and distinguish server rejection from retryable connection failures.
-async function redis(uri: string, commands: string[][], token: rpc.CancellationToken): Promise<(string | null)[]> {
+export async function redis(uri: string, commands: string[][], token: rpc.CancellationToken): Promise<(string | null)[]> {
     const endpoint = new URL(uri);
     const socket = createConnection({ host: endpoint.hostname, port: Number(endpoint.port) });
     let buffer = Buffer.alloc(0);
@@ -106,30 +107,45 @@ async function redis(uri: string, commands: string[][], token: rpc.CancellationT
 
 async function psql(parent: Handle, connectionUri: string, database: string, sql: string, token: rpc.CancellationToken, wrongPassword = false) {
     const state = await core<Runtime>('status', { resource: parent }, token);
+    return postgresQuery(state, connectionUri, database, sql, token, wrongPassword);
+}
+
+export async function postgresQuery(state: { containerId?: string | null }, connectionUri: string, database: string, sql: string, token: rpc.CancellationToken, wrongPassword = false, statementTimeoutMs = 5000) {
     if (!state.containerId) throw new Error('PostgreSQL container has no runtime identity.');
+    if (!Number.isSafeInteger(statementTimeoutMs) || statementTimeoutMs <= 0 || statementTimeoutMs > 60000)
+        throw new RangeError('PostgreSQL statement timeout must be between 1 and 60000ms.');
     const uri = new URL(connectionUri);
     // psql is part of the pinned PostgreSQL image. This experiment delegates its
     // protocol/authentication client to integration-local tooling, not the core.
     // host.docker.internal exercises the actual DCP-allocated host port on macOS.
     // Password travels via the subprocess environment, never command arguments.
     const child = spawn('docker', [
-        'exec', '--env', 'PGPASSWORD', '--env', 'PGCONNECT_TIMEOUT=5', '--env', 'PGOPTIONS=-c statement_timeout=5000', state.containerId, 'psql', '-h', 'host.docker.internal',
+        'exec', '--env', 'PGPASSWORD', '--env', 'PGCONNECT_TIMEOUT=5', '--env', `PGOPTIONS=-c statement_timeout=${statementTimeoutMs}`, state.containerId, 'psql', '-h', 'host.docker.internal',
         '-p', uri.port, '-U', decodeURIComponent(uri.username), '-d', database,
         '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql,
     ], { env: { ...process.env, PGPASSWORD: wrongPassword ? 'deliberately-wrong' : decodeURIComponent(uri.password) }, stdio: 'pipe' });
     const cancellation = token.onCancellationRequested(() => child.kill());
-    const timer = setTimeout(() => child.kill(), 10000);
+    const timer = setTimeout(() => child.kill(), statementTimeoutMs + 5000);
     let stdout = '';
     child.stdout.on('data', chunk => { stdout += chunk.toString(); });
     // Don't forward protocol errors: psql diagnostics can include identities and
     // SQL. Return explicit failure with exit status, not a success-shaped default.
-    child.stderr.resume();
+    let diagnostics = '';
+    child.stderr.on('data', chunk => { diagnostics = (diagnostics + chunk.toString()).slice(0, 16384); });
     try {
         const code = await new Promise<number | null>((fulfill, reject) => {
             child.once('error', reject);
-            child.once('exit', fulfill);
+            child.once('close', fulfill);
         });
-        if (code !== 0) throw new Error(`PostgreSQL protocol operation failed (${code ?? 'signal'}).`);
+        if (code !== 0)
+        {
+            // Classify common startup failures without forwarding SQL, user names,
+            // connection strings or credentials from raw psql diagnostics.
+            // Examples: "psql: error: ... Connection refused" and
+            // "ERROR: canceling statement due to statement timeout".
+            const reason = /Connection refused|password authentication failed|No space left on device|the database system is starting up|could not translate host name|timeout expired|canceling statement due to statement timeout|already exists|could not write/i.exec(diagnostics)?.[0];
+            throw new Error(`PostgreSQL protocol operation failed (${code ?? 'signal'})${reason ? `: ${reason}` : ''}.`);
+        }
         return stdout.trim();
     } finally {
         clearTimeout(timer);
@@ -274,4 +290,4 @@ connection.onRequest('invokeIntegration', async (args: { callback: string; resou
     return callback(args.resource, token);
 });
 connection.onClose(() => process.exit(0));
-connection.listen();
+if (process.argv[1] === fileURLToPath(import.meta.url)) connection.listen();

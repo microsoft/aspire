@@ -8,7 +8,7 @@ using System.Text.Json.Nodes;
 
 namespace NativeHosting;
 
-internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
+internal sealed class NativeModel(string owner, IRequestPeer peer) : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, JsonObject> _resources = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, JsonObject> _runtime = new(StringComparer.OrdinalIgnoreCase);
@@ -322,15 +322,17 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
     {
         var name = RpcPeer.RequiredString(resource, "name");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromMinutes(3));
         var ct = timeout.Token;
         try
         {
             if (resource["dependencies"] is JsonArray dependencies)
             {
-                await Task.WhenAll(dependencies.Select(dependency => StartAsync(Get(dependency!.AsObject()), ct)));
+                await Task.WhenAll(dependencies.Select(dependency => StartAsync(Get(dependency!.AsObject()), cancellationToken)));
             }
 
+            // Dependencies have independent startup budgets. Start this resource's
+            // budget after they are ready, so slow parents do not starve its setup.
+            timeout.CancelAfter(TimeSpan.FromMinutes(3));
             var kind = RpcPeer.RequiredString(resource, "kind");
             if (kind == "parameter")
             {
@@ -479,6 +481,28 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
 
                 spec["volumeMounts"] = mounts;
             }
+
+            if (resource["bindMounts"] is JsonArray bindMounts)
+            {
+                if (spec["volumeMounts"] is not JsonArray mounts)
+                {
+                    spec["volumeMounts"] = mounts = [];
+                }
+
+                foreach (var mount in bindMounts)
+                {
+                    var source = RpcPeer.RequiredString(mount!.AsObject(), "source");
+                    if (!Path.IsPathFullyQualified(source) || !Directory.Exists(source))
+                    {
+                        throw new ArgumentException("A bind mount requires an existing absolute host directory.");
+                    }
+
+                    mounts.Add((JsonNode)new JsonObject
+                    {
+                        ["type"] = "bind", ["source"] = source, ["target"] = RpcPeer.RequiredString(mount.AsObject(), "target")
+                    });
+                }
+            }
         }
         else
         {
@@ -502,7 +526,9 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
 
             if (state is "FailedToStart" or "Exited" or "Finished")
             {
-                throw new InvalidOperationException($"DCP resource '{name}' entered {state}.");
+                var containerId = observed["status"]?["containerId"]?.GetValue<string>();
+                throw new InvalidOperationException($"DCP resource '{name}' entered {state}." +
+                    (containerId is not null ? $" Container: {containerId}." : ""));
             }
 
             await Task.Delay(100, cancellationToken);
@@ -617,6 +643,7 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
                         ? await ResolveAsync(customValue, mode, network, consumer, path, cancellationToken)
                         : throw new InvalidOperationException($"Custom endpoint '{name}.{endpointName}' is unavailable."),
                 "scheme" => RpcPeer.RequiredString(endpoint, "scheme"),
+                "url" => await ResolveEndpointUrlAsync(),
                 "host" when network == "container" => name,
                 "port" or "targetPort" when network == "container" => endpoint["targetPort"]!.GetValue<int>().ToString(CultureInfo.InvariantCulture),
                 "host" or "port" => _runtime.TryGetValue(name, out var runtime) && runtime["endpoints"]?[endpointName]?[property] is { } allocated
@@ -624,6 +651,17 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
                     : throw new InvalidOperationException($"Endpoint '{name}.{endpointName}' is not allocated."),
                 _ => throw new ArgumentException("Unsupported endpoint property.")
             };
+
+            async Task<string> ResolveEndpointUrlAsync()
+            {
+                var hostExpression = (JsonObject)node.DeepClone();
+                hostExpression["property"] = "host";
+                var portExpression = (JsonObject)node.DeepClone();
+                portExpression["property"] = "port";
+                var host = await ResolveAsync(hostExpression, mode, network, consumer, path, cancellationToken);
+                var port = await ResolveAsync(portExpression, mode, network, consumer, path, cancellationToken);
+                return new UriBuilder(RpcPeer.RequiredString(endpoint, "scheme"), host, int.Parse(port, CultureInfo.InvariantCulture)).Uri.AbsoluteUri;
+            }
         }
         else
         {

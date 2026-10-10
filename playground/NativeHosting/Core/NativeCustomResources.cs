@@ -6,7 +6,7 @@ using System.Text.Json.Nodes;
 
 namespace NativeHosting;
 
-internal sealed class NativeCustomResources(RpcPeer peer, ConcurrentDictionary<string, JsonObject> runtime) : IDisposable
+internal sealed class NativeCustomResources(IRequestPeer peer, ConcurrentDictionary<string, JsonObject> runtime) : IDisposable
 {
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _disconnected = new(StringComparer.Ordinal);

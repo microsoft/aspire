@@ -10,26 +10,42 @@ using System.Text.Json.Serialization;
 
 namespace NativeHosting;
 
+internal interface IRequestPeer
+{
+    Task<JsonNode?> RequestAsync(string method, JsonObject args, CancellationToken cancellationToken);
+}
+
 // This intentionally implements only the framing and operations needed by the spike.
 // Private parent-owned stdio pipes are the trust boundary, not a public RPC endpoint.
-internal sealed class RpcPeer : IDisposable
+internal sealed class RpcPeer : IDisposable, IRequestPeer
 {
-    private readonly Stream _input = Console.OpenStandardInput();
-    private readonly Stream _output = Console.OpenStandardOutput();
+    private readonly Stream _input;
+    private readonly Stream _output;
     private readonly SemaphoreSlim _writeGate = new(1);
     private readonly CancellationTokenSource _shutdown = new();
     private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonNode?>> _pending = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _requests = new();
     private readonly object _requestGate = new();
     private readonly List<Task> _handlers = [];
-    private readonly Func<string, JsonObject, CancellationToken, Task<JsonNode?>> _handler;
+    private readonly Func<string, JsonNode?, CancellationToken, Task<JsonNode?>> _handler;
 
     public RpcPeer(Func<string, JsonObject, CancellationToken, Task<JsonNode?>> handler)
+        : this(Console.OpenStandardInput(), Console.OpenStandardOutput(),
+            (method, args, token) => handler(method, args as JsonObject ?? throw new ArgumentException("Expected named RPC arguments."), token))
     {
+    }
+
+    public RpcPeer(Stream input, Stream output, Func<string, JsonNode?, CancellationToken, Task<JsonNode?>> handler)
+    {
+        _input = input;
+        _output = output;
         _handler = handler;
     }
 
     public async Task<JsonNode?> RequestAsync(string method, JsonObject args, CancellationToken cancellationToken)
+        => await RequestAsync(method, (JsonNode)args, cancellationToken);
+
+    public async Task<JsonNode?> RequestAsync(string method, JsonNode args, CancellationToken cancellationToken)
     {
         var id = Guid.NewGuid().ToString("N");
         var completion = new TaskCompletionSource<JsonNode?>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -130,7 +146,7 @@ internal sealed class RpcPeer : IDisposable
         JsonObject response;
         try
         {
-            var result = await _handler(method, RequiredObject(message, "params"), cancellation.Token);
+            var result = await _handler(method, message["params"], cancellation.Token);
             response = new JsonObject { ["jsonrpc"] = "2.0", ["id"] = id, ["result"] = result };
         }
         catch (Exception ex)
