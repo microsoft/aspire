@@ -16,6 +16,8 @@ using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared;
+using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
@@ -36,6 +38,236 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class MetricsTests : DashboardTestContext
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    [Theory]
+    [InlineData(MetricViewKind.Graph)]
+    [InlineData(MetricViewKind.Table)]
+    public async Task ChartContainer_NoSharedHistogramBounds_ShowsWarningAndCountRemainsAvailable(MetricViewKind view)
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var timeProvider = new TestTimeProvider { UtcNow = DateTimeOffset.UtcNow };
+        Services.AddSingleton<BrowserTimeProvider>(timeProvider);
+        Services.AddSingleton<TimeProvider>(new FakeTimeProvider(timeProvider.UtcNow));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var time = timeProvider.GetUtcNow().UtcDateTime.AddSeconds(-3);
+        var first = HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [3, 0], [10]);
+        var second = HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [5, 0], [20]);
+        first.Attributes.Add(new OpenTelemetry.Proto.Common.V1.KeyValue
+        {
+            Key = "instance",
+            Value = new OpenTelemetry.Proto.Common.V1.AnyValue { StringValue = "first" }
+        });
+        second.Attributes.Add(new OpenTelemetry.Proto.Common.V1.KeyValue
+        {
+            Key = "instance",
+            Value = new OpenTelemetry.Proto.Common.V1.AnyValue { StringValue = "second" }
+        });
+        await repository.AddMetricsAsync(new AddContext(),
+            [HistogramTestHelpers.CreateMetrics(AggregationTemporality.Delta, first, second)]);
+        var resource = Assert.Single(repository.GetResources());
+        var cut = Render<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "histogram");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(1));
+            builder.Add(component => component.ActiveView, view);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, [resource]);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+                cut.Find(".block-warning").TextContent.Trim());
+            if (view == MetricViewKind.Graph)
+            {
+                AssertUnavailablePercentiles();
+            }
+        });
+
+        var instrumentViewModel = view == MetricViewKind.Graph
+            ? cut.FindComponent<PlotlyChart>().Instance.InstrumentViewModel
+            : cut.FindComponent<MetricTable>().Instance.InstrumentViewModel;
+        Assert.True(instrumentViewModel.HasIncompatibleHistogramBounds);
+        Assert.False(instrumentViewModel.HasOverflow);
+
+        var filters = cut.FindComponent<ChartFilters>();
+        await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(true));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+                cut.Find(".block-warning").TextContent.Trim());
+            if (view == MetricViewKind.Graph)
+            {
+                Assert.True(cut.FindComponent<PlotlyChart>().Instance.InstrumentViewModel.ShowCount);
+                var invocation = JSInterop.Invocations.Last(i => i.Identifier is "initializeChart" or "updateChart");
+                var trace = Assert.Single(Assert.IsAssignableFrom<IEnumerable<PlotlyTrace>>(invocation.Arguments[1]));
+                Assert.Equal("Count", trace.Name);
+                Assert.Contains(8d, trace.Y);
+            }
+            else
+            {
+                Assert.True(cut.FindComponent<MetricTable>().Instance.InstrumentViewModel.ShowCount);
+                Assert.Equal(["Time", "Count"], cut.FindComponent<MetricTable>().FindAll("th").Select(column => column.TextContent.Trim()));
+            }
+        });
+
+        await cut.InvokeAsync(() => filters.Instance.ShowCountChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+                cut.Find(".block-warning").TextContent.Trim());
+            if (view == MetricViewKind.Graph)
+            {
+                AssertUnavailablePercentiles();
+            }
+        });
+
+        var instrument = instrumentViewModel.Instrument;
+        var dimensions = instrumentViewModel.MatchedDimensions;
+        Assert.NotNull(instrument);
+        Assert.NotNull(dimensions);
+
+        timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(2);
+        await cut.InvokeAsync(() => instrumentViewModel.UpdateDataAsync(instrument, dimensions, hasOverflow: true));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(instrumentViewModel.HasIncompatibleHistogramBounds);
+            Assert.Equal(2, cut.FindAll(".block-warning").Count);
+            Assert.Equal(
+                Resources.ControlsStrings.ChartContainerOverflowTitle,
+                cut.Find(".block-warning .title").TextContent);
+        });
+
+        timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(2);
+        await cut.InvokeAsync(() => instrumentViewModel.UpdateDataAsync(instrument, dimensions, hasOverflow: false));
+        cut.WaitForAssertion(() => Assert.Equal(
+            Resources.ControlsStrings.ChartContainerIncompatibleHistogramBounds,
+            Assert.Single(cut.FindAll(".block-warning")).TextContent.Trim()));
+
+        void AssertUnavailablePercentiles()
+        {
+            var invocation = JSInterop.Invocations.Last(i => i.Identifier is "initializeChart" or "updateChart");
+            var traces = Assert.IsAssignableFrom<IEnumerable<PlotlyTrace>>(invocation.Arguments[1]).ToArray();
+            Assert.Equal(3, traces.Length);
+            Assert.All(traces, trace =>
+            {
+                Assert.Equal(32, trace.Y.Count);
+                Assert.Equal(trace.X.Count, trace.Y.Count);
+                Assert.All(trace.Y, Assert.Null);
+            });
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ChartContainer_UnavailableHistogramPercentiles_TablePreservesExemplars(bool includeAvailableIntervals, bool onlyShowValueChanges)
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        var timeProvider = new TestTimeProvider { UtcNow = DateTimeOffset.UtcNow };
+        Services.AddSingleton<BrowserTimeProvider>(timeProvider);
+        Services.AddSingleton<TimeProvider>(new FakeTimeProvider(timeProvider.UtcNow));
+        var dialogs = new ConcurrentQueue<ExemplarsDialogViewModel>();
+        Services.AddSingleton<IDialogService>(new TestDialogService((content, _) =>
+        {
+            dialogs.Enqueue(Assert.IsType<ExemplarsDialogViewModel>(content));
+            return Task.CompletedTask;
+        }));
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var time = timeProvider.GetUtcNow().UtcDateTime.AddSeconds(-5);
+        var points = new List<HistogramDataPoint>();
+        if (includeAvailableIntervals)
+        {
+            AddPoints(time.AddSeconds(-2), compatibleBounds: true, exemplarValue: 1);
+        }
+        AddPoints(time, compatibleBounds: false, exemplarValue: 2);
+        if (includeAvailableIntervals)
+        {
+            AddPoints(time.AddSeconds(2), compatibleBounds: true, exemplarValue: 3);
+        }
+        var addContext = new AddContext();
+        await repository.AddMetricsAsync(addContext, [HistogramTestHelpers.CreateMetrics(AggregationTemporality.Delta, [.. points])]);
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resource = Assert.Single(repository.GetResources());
+        var cut = Render<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "histogram");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(1));
+            builder.Add(component => component.ActiveView, MetricViewKind.Table);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, [resource]);
+        });
+        cut.WaitForState(() => cut.FindComponents<MetricTable>().Count == 1);
+        var table = cut.FindComponent<MetricTable>();
+        var instrumentViewModel = table.Instance.InstrumentViewModel;
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotNull(instrumentViewModel.Instrument);
+            Assert.NotNull(instrumentViewModel.MatchedDimensions);
+        });
+        await cut.InvokeAsync(async () =>
+        {
+            table.Instance.OnlyShowValueChangesInTable = onlyShowValueChanges;
+            timeProvider.UtcNow = timeProvider.UtcNow.AddSeconds(3);
+            await instrumentViewModel.UpdateDataAsync(instrumentViewModel.Instrument!, instrumentViewModel.MatchedDimensions!, hasOverflow: false);
+        });
+
+        // Two-second chart windows are aligned one second behind the live clock.
+        var expectedTime = FormatHelpers.FormatTimeWithOptionalDate(timeProvider, timeProvider.ToLocal(new DateTimeOffset(time.AddSeconds(2))));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(instrumentViewModel.HasIncompatibleHistogramBounds);
+            Assert.Equal(includeAvailableIntervals ? ["1", "2", "1"] : ["2"],
+                table.FindAll("fluent-button").Select(button => button.TextContent.Trim()));
+            Assert.Equal((includeAvailableIntervals ? 3 : 1) * 5, table.FindAll("[role='gridcell']").Count);
+            var button = Assert.Single(table.FindAll("fluent-button"), button => button.TextContent.Trim() == "2");
+            var row = button.Closest("[role='row']");
+            Assert.NotNull(row);
+            Assert.Equal([expectedTime, "", "", "", "2"], row.QuerySelectorAll("[role='gridcell']").Select(cell => cell.TextContent.Trim()));
+            Assert.All(row.QuerySelectorAll("[role='gridcell']").Skip(1).Take(3),
+                cell => Assert.Equal("empty-data", Assert.Single(cell.Children).ClassName));
+        });
+
+        table.FindAll("fluent-button").Single(button => button.TextContent.Trim() == "2").Click();
+        var dialog = Assert.Single(dialogs);
+        Assert.Same(instrumentViewModel.Instrument, dialog.Instrument);
+        Assert.Equal([2d, 22d], dialog.Exemplars.Select(exemplar => exemplar.Value).Order());
+        var expectedExemplarTime = timeProvider.ToLocalDateTimeOffset(new DateTimeOffset(time.AddMilliseconds(500)));
+        Assert.All(dialog.Exemplars, exemplar => Assert.Equal(expectedExemplarTime, exemplar.Start));
+
+        void AddPoints(DateTime start, bool compatibleBounds, double exemplarValue)
+        {
+            var first = HistogramTestHelpers.CreatePoint(start, start.AddSeconds(1), [3, 0], [10]);
+            var second = HistogramTestHelpers.CreatePoint(start, start.AddSeconds(1), [5, 0], compatibleBounds ? [10] : [20]);
+            first.Exemplars.Add(CreateExemplar(start.AddMilliseconds(500), exemplarValue));
+            if (!compatibleBounds)
+            {
+                second.Exemplars.Add(CreateExemplar(start.AddMilliseconds(500), exemplarValue + 20));
+            }
+            foreach (var (point, instance) in new[] { (first, "first"), (second, "second") })
+            {
+                point.Attributes.Add(new OpenTelemetry.Proto.Common.V1.KeyValue
+                {
+                    Key = "instance",
+                    Value = new OpenTelemetry.Proto.Common.V1.AnyValue { StringValue = instance }
+                });
+                points.Add(point);
+            }
+        }
+    }
 
     [Theory]
     [InlineData(false, true)]

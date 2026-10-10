@@ -793,7 +793,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
-    public void Schema_SpanKindAndStatusLookupsExist()
+    public void Schema_TelemetryEnumLookupsExist()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -833,6 +833,16 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         }
 
         command.CommandText = """
+            SELECT aggregation_temporality || ':' || aggregation_temporality_name
+            FROM telemetry_metric_aggregation_temporalities
+            ORDER BY aggregation_temporality;
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(["0:Unspecified", "1:Delta", "2:Cumulative"], ReadValues(reader));
+        }
+
+        command.CommandText = """
             SELECT "table" || ':' || "from" || ':' || "to"
             FROM pragma_foreign_key_list('telemetry_spans')
             WHERE "from" IN ('kind', 'status')
@@ -845,6 +855,18 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
                 "telemetry_span_kinds:kind:kind",
                 "telemetry_span_statuses:status:status"
             ], ReadValues(reader));
+        }
+
+        command.CommandText = """
+            SELECT "table" || ':' || "from" || ':' || "to"
+            FROM pragma_foreign_key_list('telemetry_metric_instruments')
+            WHERE "from" = 'aggregation_temporality';
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(
+                ["telemetry_metric_aggregation_temporalities:aggregation_temporality:aggregation_temporality"],
+                ReadValues(reader));
         }
 
         static List<string> ReadValues(SqliteDataReader reader)

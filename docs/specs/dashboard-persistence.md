@@ -227,7 +227,17 @@ Summary tables and indexes let trace list queries avoid reconstructing every tra
 
 `telemetry_metric_instruments` identifies instruments by resource, scope, and name and stores type, temporality, monotonicity, unit, and description.
 
-Metric dimensions are normalized into an attribute set and stable non-cryptographic hash. Points store timestamps, point type, repeated-value count, integer or floating-point values, and histogram data. Histogram bucket counts and explicit bounds are compact binary values rather than JSON. Exemplars and their filtered attributes are separate rows correlated to trace and span IDs.
+Metric dimensions use normalized attribute sets and stable non-cryptographic hashes. Points store intervals, repeated-value counts, numeric values, and compact binary histogram buckets and bounds. Exemplars and their filtered attributes are separate rows linked to points, traces, and spans.
+
+Metric and exemplar timestamps use signed Unix nanoseconds, preserving precision through persistence and export independently of display conversions. Timestamps outside the supported range, ending in April 2262, are logged and rejected; rejecting an exemplar does not discard its parent measurement.
+
+Histograms retain the producer's aggregation start separately from the normalized chart interval. Export uses producer timestamps to preserve OTLP semantics. Aggregation identities distinguish cumulative resets and independent delta intervals across persistence, rollup, and database reopening:
+
+- Cumulative rollups retain the latest snapshot for each aggregation and preserve reset boundaries rather than combining unrelated observations.
+- Delta intervals remain independent and are combined within chart windows, including when the producer omits a start timestamp.
+- Duplicate histogram deliveries update the existing interval before retention, preserving associated exemplars without consuming additional retained-point slots.
+
+Cumulative bucket layouts must remain stable within an aggregation. Charts combine differing layouts only at shared bucket boundaries, without estimating missing distributions. When percentiles cannot be calculated, the Dashboard warns and shows unavailable values rather than zero; counts and exemplars remain accessible in graph and table views.
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 

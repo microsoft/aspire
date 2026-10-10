@@ -37,13 +37,20 @@
                         {
                             var percentileData = histogramMetric.Percentiles[percentile];
 
-                            <span style="@($"text-decoration-thickness: 2px; text-decoration-line: underline; text-decoration-color: {underlineColor}; margin-right: 4px;")">
-                                @percentileData.Value
-                            </span>
-
-                            if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, title))
+                            if (percentileData.Value is null)
                             {
-                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
+                                <span class="empty-data"></span>
+                            }
+                            else
+                            {
+                                <span style="@($"text-decoration-thickness: 2px; text-decoration-line: underline; text-decoration-color: {underlineColor}; margin-right: 4px;")">
+                                    @percentileData.Value
+                                </span>
+
+                                if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, title))
+                                {
+                                    <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
+                                }
                             }
                         }
                     </TemplateColumn>

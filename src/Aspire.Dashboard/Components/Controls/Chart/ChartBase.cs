@@ -30,6 +30,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     private string? _renderedTheme;
     private bool _renderedShowCount;
     private DateTimeOffset? _previousDataEndTime;
+    private bool? _renderedHasOverflow;
 
     // Full updates always run. This interval only throttles recurring tick updates.
     protected virtual TimeSpan UpdateInterval => TimeSpan.FromSeconds(0.2);
@@ -62,6 +63,12 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     [Parameter]
     public DateTimeOffset? DataEndTime { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback reporting changes to instrument warnings.
+    /// </summary>
+    [Parameter]
+    public EventCallback InstrumentChanged { get; set; }
 
     // Stores a cache of the last set of spans returned as exemplars.
     // This dictionary is replaced each time the chart is updated.
@@ -169,6 +176,16 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
             data = calculator.CalculateHistogramValues(InstrumentViewModel.MatchedDimensions, _currentDataStartTime, TimeProvider.ToLocalDateTimeOffset, unit);
         }
 
+        var instrumentChanged = InstrumentViewModel.HasIncompatibleHistogramBounds != data.HasIncompatibleHistogramBounds ||
+            _renderedHasOverflow != InstrumentViewModel.HasOverflow;
+        InstrumentViewModel.HasIncompatibleHistogramBounds = data.HasIncompatibleHistogramBounds;
+        _renderedHasOverflow = InstrumentViewModel.HasOverflow;
+
+        if (instrumentChanged)
+        {
+            await InstrumentChanged.InvokeAsync();
+        }
+
         // Add tooltips to traces. The calculator produces values and diff values
         // but omits tooltips to keep it free of UI/localization concerns.
         // Tooltips are added before encoding trace names because FormatTooltip
@@ -236,7 +253,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
                 // ChartExemplar properties are init-only, so replace with a new instance.
                 exemplars[i] = new ChartExemplar
                 {
-                    Start = exemplar.Start,
+                    TimeUnixNano = exemplar.TimeUnixNano,
                     Value = exemplar.Value,
                     TraceId = exemplar.TraceId,
                     SpanId = exemplar.SpanId,

@@ -536,8 +536,8 @@ public sealed class TelemetryExportService
                 var dataPoint = new OtlpNumberDataPointJson
                 {
                     Attributes = ConvertAttributes(dimension.Attributes),
-                    StartTimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.Start),
-                    TimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.End),
+                    StartTimeUnixNano = value.StartTimeUnixNano,
+                    TimeUnixNano = value.EndTimeUnixNano,
                     Exemplars = value.HasExemplars ? ConvertExemplars(value.Exemplars) : null
                 };
 
@@ -574,8 +574,8 @@ public sealed class TelemetryExportService
                 var dataPoint = new OtlpHistogramDataPointJson
                 {
                     Attributes = ConvertAttributes(dimension.Attributes),
-                    StartTimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.Start),
-                    TimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(value.End),
+                    StartTimeUnixNano = histogramValue.AggregationStartUnixNano,
+                    TimeUnixNano = histogramValue.EndTimeUnixNano,
                     Count = histogramValue.Count,
                     Sum = histogramValue.Sum,
                     BucketCounts = histogramValue.Values,
@@ -594,7 +594,7 @@ public sealed class TelemetryExportService
     {
         return exemplars.Select(e => new OtlpExemplarJson
         {
-            TimeUnixNano = OtlpHelpers.DateTimeToUnixNanoseconds(e.Start),
+            TimeUnixNano = e.TimeUnixNano,
             AsDouble = e.Value,
             SpanId = e.SpanId,
             TraceId = e.TraceId,

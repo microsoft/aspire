@@ -339,7 +339,7 @@ public sealed partial class SqliteTelemetryRepository
         CachedResource resource,
         CachedResourceView resourceView,
         CachedResourceScope resourceScope,
-        RepeatedField<Metric> metrics)
+        IEnumerable<Metric> metrics)
     {
         lock (_cacheLock)
         {
