@@ -28,18 +28,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "100"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -111,15 +111,17 @@ jobs:
           for os in "${OSES[@]}"; do
             os=$(echo "$os" | xargs)
             for i in $(seq 1 "$RUNNERS"); do
-              if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
-              ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i}}"
+              for partition in 1 5; do
+                if [ -n "$ENTRIES" ]; then ENTRIES="$ENTRIES,"; fi
+                ENTRIES="${ENTRIES}{\"os\":\"${os}\",\"index\":${i},\"partition\":${partition}}"
+              done
             done
           done
 
           MATRIX="{\"include\":[${ENTRIES}]}"
           echo "matrix=${MATRIX}" >> "$GITHUB_OUTPUT"
 
-          TOTAL=$(echo "$ENTRIES" | tr ',' '\n' | wc -l)
+          TOTAL=$((RUNNERS * ${#OSES[@]} * 2))
           echo "Generated matrix: $TOTAL runners across ${#OSES[@]} OS(es)"
           echo "Each runner will execute ${{ env.ITERATIONS_PER_RUNNER }} iterations"
           echo "Total test executions: $(( TOTAL * ${{ env.ITERATIONS_PER_RUNNER }} ))"
@@ -131,7 +133,7 @@ jobs:
     uses: ./.github/workflows/build-cli-e2e-image.yml
 
   reproduce:
-    name: "${{ matrix.os }} #${{ matrix.index }}"
+    name: "Hosting-${{ matrix.partition }} ${{ matrix.os }} #${{ matrix.index }}"
     needs: [setup, build_cli_e2e_image]
     if: >-
       ${{
@@ -140,12 +142,13 @@ jobs:
         (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
       }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      TEST_FILTER: '--filter-trait "Partition=${{ matrix.partition }}" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
     steps:
       - name: Setup vars (Linux/macOS)
@@ -164,6 +167,10 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: microsoft/aspire
+          ref: af646baee1e892d4dab38c906cde20ce61b22554
+          persist-credentials: false
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -383,7 +390,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: failures-${{ matrix.os }}-${{ matrix.index }}
+          name: failures-hosting-${{ matrix.partition }}-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
           if-no-files-found: ignore
 
