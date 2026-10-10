@@ -22,7 +22,7 @@ public class AddQuarkusAppTests
         var app = builder.AddQuarkusApp("inventory", tempDir.Path);
         using var application = builder.Build();
 
-        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null);
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, "/certs");
 
         Assert.Equal("disabled", envVars["QUARKUS_HTTP_INSECURE_REQUESTS"]);
         Assert.Equal("/certs/cert.pem", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"]).ValueExpression);
@@ -47,7 +47,7 @@ public class AddQuarkusAppTests
         using var application = builder.Build();
 
         var password = builder.AddParameter("cert-password", "secret");
-        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password.Resource);
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password.Resource, "/certs");
 
         Assert.Equal("/certs/cert.pfx", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"]).ValueExpression);
         Assert.Equal("PKCS12", envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"]);
@@ -56,7 +56,52 @@ public class AddQuarkusAppTests
         Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"));
     }
 
-    private static async Task<Dictionary<string, object>> RunHttpsCertificateCallbackAsync(IResource resource, IServiceProvider services, IValueProvider? password)
+    [Fact]
+    public void AddQuarkusApp_DoesNotUseAnHttpsCertificateByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
+        Assert.Null(annotation.Certificate);
+        Assert.False(annotation.UseDeveloperCertificate);
+    }
+
+    [Fact]
+    public void AddQuarkusApp_UsesTheDeveloperCertificateWhenOptedIn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path).WithHttpsDeveloperCertificate();
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
+        Assert.True(annotation.UseDeveloperCertificate);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_WithWindowsCertificatePaths_ResolvesThemWithForwardSlashes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, @"C:\Users\dev\certs");
+
+        var certificate = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"];
+        var key = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"];
+        Assert.Equal("C:/Users/dev/certs/cert.pem", await certificate.GetValueAsync(default));
+        Assert.Equal("C:/Users/dev/certs/key.pem", await key.GetValueAsync(default));
+    }
+
+    private static async Task<Dictionary<string, object>> RunHttpsCertificateCallbackAsync(IResource resource, IServiceProvider services, IValueProvider? password, string certDir)
     {
         var annotation = Assert.Single(resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>());
 
@@ -71,10 +116,10 @@ public class AddQuarkusAppTests
             Resource = resource,
             Arguments = [],
             EnvironmentVariables = envVars,
-            CertificatePath = ReferenceExpression.Create($"/certs/cert.pem"),
-            KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
-            CertificateWithKeyPath = ReferenceExpression.Create($"/certs/combined.pem"),
-            PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
+            CertificatePath = ReferenceExpression.Create($"{certDir}/cert.pem"),
+            KeyPath = ReferenceExpression.Create($"{certDir}/key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"{certDir}/combined.pem"),
+            PfxPath = ReferenceExpression.Create($"{certDir}/cert.pfx"),
             Password = password,
             CancellationToken = default
         });

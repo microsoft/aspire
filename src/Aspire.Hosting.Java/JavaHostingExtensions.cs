@@ -378,10 +378,11 @@ public static partial class JavaHostingExtensions
     /// the application already binds all interfaces.
     /// </para>
     /// <para>
-    /// When a server certificate is available (the developer certificate by default, or one supplied with
-    /// <c>WithHttpsCertificate</c>), Quarkus serves HTTPS on the allocated port and the plain HTTP listener is
-    /// turned off, so the endpoint is switched to <c>https</c> in run mode. Call <c>WithoutHttpsCertificate()</c>
-    /// to keep serving plain HTTP.
+    /// The application serves plain HTTP by default. Call <c>WithHttpsDeveloperCertificate()</c> (or
+    /// <c>WithHttpsCertificate</c> for a specific certificate) to serve HTTPS on the allocated port instead: the
+    /// plain HTTP listener is turned off and the endpoint is switched to <c>https</c> in run mode. A resource that
+    /// references it then receives the address as <c>services__{name}__https__0</c> rather than
+    /// <c>services__{name}__http__0</c>.
     /// </para>
     /// <para>
     /// No health check is added. <c>/q/health</c> only exists when the application depends on
@@ -432,6 +433,10 @@ public static partial class JavaHostingExtensions
 
         var httpEndpoint = resourceBuilder.GetEndpoint("http");
 
+        // Opt-in: switching the scheme renames the service discovery variable consumers read, which would
+        // silently break existing applications that read the http one.
+        resourceBuilder.WithoutHttpsCertificate();
+
         resourceBuilder.WithHttpsCertificateConfiguration(ctx =>
         {
             // Quarkus listens for HTTP on quarkus.http.port and for HTTPS on a separate quarkus.http.ssl-port,
@@ -446,15 +451,15 @@ public static partial class JavaHostingExtensions
             {
                 // Aspire writes the key as an unencrypted PEM when no password is configured, which is the only
                 // key form quarkus.http.ssl.certificate.key-files accepts.
-                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"] = ctx.CertificatePath;
-                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"] = ctx.KeyPath;
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"] = WithForwardSlashes(ctx.CertificatePath);
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"] = WithForwardSlashes(ctx.KeyPath);
             }
             else
             {
                 // With a password the PEM key is encrypted, which Quarkus cannot read, so hand it the PKCS#12
                 // key store instead. An unencrypted PKCS#12 file does not work the other way round: the JVM
                 // finds no usable key without a password and every handshake fails.
-                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"] = ctx.PfxPath;
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"] = WithForwardSlashes(ctx.PfxPath);
                 ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"] = "PKCS12";
                 ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_PASSWORD"] = ctx.Password;
             }
@@ -1656,6 +1661,21 @@ public static partial class JavaHostingExtensions
             // environment layer would format the same way.
             _ => $"{existing} {appended}"
         };
+    }
+
+    // Quarkus dev mode treats backslashes in a property value as escapes, so C:\Users\x\cert.crt reaches
+    // the file lookup as C:Usersxcert.crt. The JVM accepts forward slashes on Windows.
+    private static ReferenceExpression WithForwardSlashes(ReferenceExpression path) =>
+        ReferenceExpression.Create($"{new ForwardSlashPath(path)}");
+
+    private sealed class ForwardSlashPath(ReferenceExpression path) : IValueProvider, IManifestExpressionProvider
+    {
+        public string ValueExpression => path.ValueExpression;
+
+        public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken) => GetValueAsync(new ValueProviderContext(), cancellationToken);
+
+        public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            (await path.GetValueAsync(context, cancellationToken).ConfigureAwait(false))?.Replace('\\', '/');
     }
 
     /// <summary>
