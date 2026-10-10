@@ -14,7 +14,6 @@ using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchArgsOverrideAnnotation is experimental
 #pragma warning disable ASPIRECONTAINERRUNTIME001 // Container image build and cleanup are experimental
 #pragma warning disable ASPIREPIPELINES003 // Container image manager is experimental

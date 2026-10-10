@@ -140,6 +140,11 @@ the existing table, JSON array, and follow-mode delta output described below.
 {"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
 
+Unchanged backchannel-connection notifications do not refetch AppHost metadata or
+dashboard URLs. A genuinely changed connection set is enriched again, including
+a replacement connection for the same AppHost path and PID. Identical serialized
+AppHost records are still omitted from the default follow stream.
+
 #### Snapshot output
 
 `--output snapshot` is a public, opt-in stream for tools that need complete

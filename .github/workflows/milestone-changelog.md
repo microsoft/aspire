@@ -34,7 +34,7 @@ max-daily-ai-credits: -1
 # ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
 # in the env block below, then run:
-#   gh aw compile
+#   gh aw compile --schedule-seed microsoft/aspire
 # ──────────────────────────────────────────────────────────
 
 env:

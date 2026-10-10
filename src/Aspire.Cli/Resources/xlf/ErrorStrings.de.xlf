@@ -177,6 +177,11 @@
         <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
         <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
       </trans-unit>
+      <trans-unit id="HostingIntegrationsFeatureNotEnabled">
+        <source>Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</source>
+        <target state="new">Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IntegrationBuildFailed">
         <source>The integration project could not be built.</source>
         <target state="new">The integration project could not be built.</target>

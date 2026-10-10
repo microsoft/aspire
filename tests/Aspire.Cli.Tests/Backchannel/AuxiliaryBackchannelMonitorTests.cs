@@ -18,6 +18,97 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task DefaultWatchEmitsInitialConnectionOnlyOnce()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var cancellation = new CancellationTokenSource();
+            using var server = new TestAuxiliaryBackchannelServer(
+                CreateLiveOwnerSocketPath(homeDirectory), Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            var accepted = server.AcceptAsync(cancellation.Token);
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            await accepted.DefaultTimeout();
+            Assert.Single(watch.Current);
+
+            var next = watch.MoveNextAsync().AsTask();
+            try
+            {
+                Assert.False(next.IsCompleted, "The initial scan's connection notification must not repeat the initial snapshot.");
+            }
+            finally
+            {
+                await cancellation.CancelAsync();
+            }
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DefaultWatchEmitsReplacementConnectionForSameAppHost()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var cancellation = new CancellationTokenSource();
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
+            var appHostPath = Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj");
+            using var first = new TestAuxiliaryBackchannelServer(socketPath, appHostPath);
+            var accepted = first.AcceptAsync(cancellation.Token);
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            await accepted.DefaultTimeout();
+            var firstConnection = Assert.Single(watch.Current);
+
+            // Leave the reader at its first yield until replacement completes, so the next
+            // snapshot has a new connection but the same AppHost path, PID, and count.
+            first.Dispose();
+            using var replacement = new TestAuxiliaryBackchannelServer(
+                socketPath.Replace("a1b2C3d4", "e5f6G7h8", StringComparison.Ordinal), appHostPath);
+            accepted = replacement.AcceptAsync(cancellation.Token);
+            await monitor.ScanAsync(cancellation.Token).DefaultTimeout();
+            await accepted.DefaultTimeout();
+
+            var next = watch.MoveNextAsync().AsTask();
+            try
+            {
+                Assert.True(await next.DefaultTimeout());
+            }
+            finally
+            {
+                if (!next.IsCompleted)
+                {
+                    await cancellation.CancelAsync();
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+                }
+            }
+
+            var replacementConnection = Assert.Single(watch.Current);
+            Assert.NotSame(firstConnection, replacementConnection);
+            Assert.Equal(firstConnection.AppHostInfo!.AppHostPath, replacementConnection.AppHostInfo!.AppHostPath);
+            Assert.Equal(firstConnection.AppHostInfo.ProcessId, replacementConnection.AppHostInfo.ProcessId);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void FindConnectionByAppHostPath_WithCaseVariant_FollowsCurrentVolumeBehavior()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

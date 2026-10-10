@@ -121,6 +121,7 @@
   "aspire-vscode.strings.rpcServerNotInitialized": "RPC server is not initialized.",
   "aspire-vscode.strings.extensionContextNotInitialized": "Extension context is not initialized.",
   "aspire-vscode.strings.errorRetrievingAppHosts": "Error retrieving AppHosts in the current workspace. Debug options may be incomplete.",
+  "aspire-vscode.strings.errorStoppingAppHostWatcher": "Failed to stop the previous AppHost watcher: {0}",
   "aspire-vscode.strings.launchingWithDirectory": "Launching Aspire debug session using directory {0}: attempting to determine effective AppHost...",
   "aspire-vscode.strings.launchingWithAppHost": "Launching Aspire debug session for AppHost {0}...",
   "aspire-vscode.strings.defaultConfigurationNameForWorkspaceFolder": "Aspire: Launch default AppHost ({0}: {1})",

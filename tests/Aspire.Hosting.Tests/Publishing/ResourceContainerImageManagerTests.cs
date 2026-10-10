@@ -94,10 +94,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
             .WithDockerfileBaseImage(runtimeImage: "mcr.microsoft.com/dotnet/sdk:10.0-alpine");
-#pragma warning restore ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 

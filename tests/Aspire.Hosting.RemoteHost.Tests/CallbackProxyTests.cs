@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -52,6 +53,48 @@ public class CallbackProxyTests
         var result2 = factory.CreateProxy("callback1", typeof(TestCallbackNoArgs));
 
         Assert.Same(result1, result2);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CreateProxy_RetiringConnectionRejectsNewAndCachedCallbacks(bool createdCallback)
+    {
+        using var invoker = new JsonRpcCallbackInvoker(NullLogger<JsonRpcCallbackInvoker>.Instance);
+        using var factory = CreateFactory(invoker);
+        if (createdCallback)
+        {
+            Assert.IsType<Action>(factory.CreateProxy("callback", typeof(Action)));
+        }
+
+        Assert.Equal(createdCallback, invoker.StopAcceptingCallbacks());
+        Assert.Equal(createdCallback, invoker.StopAcceptingCallbacks());
+        Assert.Throws<ObjectDisposedException>(() => factory.CreateProxy("callback", typeof(Action)));
+    }
+
+    [Fact]
+    public async Task CreateProxy_ConcurrentRetirementCannotMissAnAcceptedCallback()
+    {
+        for (var attempt = 0; attempt < 32; attempt++)
+        {
+            using var invoker = new JsonRpcCallbackInvoker(NullLogger<JsonRpcCallbackInvoker>.Instance);
+            using var factory = CreateFactory(invoker);
+            var creation = Task.Run(() =>
+            {
+                try
+                {
+                    Assert.IsType<Action>(factory.CreateProxy("callback", typeof(Action)));
+                    return true;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return false;
+                }
+            });
+            var retirement = Task.Run(invoker.StopAcceptingCallbacks);
+
+            Assert.Equal(await creation, await retirement);
+        }
     }
 
     [Fact]

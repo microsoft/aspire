@@ -8,7 +8,7 @@ import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { externalBuildProjectDebuggerExtension, projectDebuggerExtension } from '../debugger/languages/dotnet';
-import { redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
+import { onDidSpawnCliProcess, redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
@@ -29,8 +29,36 @@ import { probeUsefulnessSurvey } from './usefulnessSurveyProbe';
 import { isEnabledCommand } from '../views/treePresentation';
 import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs } from './blazorWasmDebugProofTimeouts';
 import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
+import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 
 let atomicWriteSequence = 0;
+
+export function createE2ePsFollowProcessTracker(): vscode.Disposable {
+  const stateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+  const runId = process.env.ASPIRE_EXTENSION_E2E_RUN_ID;
+  if (!isE2eBridgeEnabled() || !stateFile || !runId) {
+    return new vscode.Disposable(() => undefined);
+  }
+
+  const processLogPath = getPsFollowProcessLogPath(stateFile);
+  fs.mkdirSync(path.dirname(processLogPath), { recursive: true });
+  return onDidSpawnCliProcess(({ childProcess, args }) => {
+    const pid = childProcess.pid;
+    if (pid === undefined || args[0] !== 'ps' || !args.includes('--follow')) {
+      return;
+    }
+
+    const id = randomUUID();
+    const record = (state: PsFollowProcessEvent['state']) => {
+      const event: PsFollowProcessEvent = { runId, id, pid, state };
+      fs.appendFileSync(processLogPath, JSON.stringify(event) + '\n');
+    };
+    record('started');
+    // Shutdown can finish on exit before stdio closes. Keep observing this handle after
+    // disposing the spawn subscription so reload retires it before the host exits.
+    childProcess.once('exit', () => record('exited'));
+  });
+}
 
 export function createE2eStateFileBridge(
   context: vscode.ExtensionContext,
