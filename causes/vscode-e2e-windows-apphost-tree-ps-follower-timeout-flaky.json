@@ -1,0 +1,16 @@
+{
+  "id": "vscode-e2e-windows-apphost-tree-ps-follower-timeout-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: VS Code extension E2E (Windows, apphost-tree) times out waiting to own a single 'ps' follower after a taskkill-based watcher-stop failure",
+  "test_name": "Aspire AppHost tree E2E owns at most one ps follower through view, editor, settings, and reload transitions",
+  "error_pattern": "Timed out after 30000ms waiting for 1 owned ps follower(s) after at least 5 starts.\nLast error: <none>\nLast state errorMessage: \"Failed to stop the previous AppHost watcher: Error: taskkill for aspire ps exited with code 255 while PID 6272 remained live.\"",
+  "occurrences": [
+    {
+      "run_id": 38008165137,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/38008165137",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, apphost-tree)",
+      "pr_number": 0,
+      "observed_at": "2026-10-10T01:21:07Z"
+    }
+  ]
+}
