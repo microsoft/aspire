@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -89,6 +90,42 @@ public class AddSpringBootAppTests
         var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
         Assert.True(annotation.UseDeveloperCertificate);
     }
+
+    [Fact]
+    public async Task AddSpringBootApp_SwitchesTheEndpointToHttpsWhenOptedIn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddSpringBootApp("catalog", tempDir.Path).WithHttpsDeveloperCertificate();
+        using var application = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(application, CancellationToken.None);
+
+        var endpoint = Assert.Single(app.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal("https", endpoint.UriScheme);
+    }
+
+    [Fact]
+    public async Task AddSpringBootApp_KeepsTheEndpointOnHttpByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddSpringBootApp("catalog", tempDir.Path);
+        using var application = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(application, CancellationToken.None);
+
+        var endpoint = Assert.Single(app.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("http", endpoint.UriScheme);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     private static async Task<Dictionary<string, object>> GetHttpsCertificateEnvironmentAsync(IValueProvider? password)
     {

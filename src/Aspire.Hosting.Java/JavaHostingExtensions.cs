@@ -299,7 +299,10 @@ public static partial class JavaHostingExtensions
     /// <c>WithHttpsCertificate</c> for a specific certificate) to serve HTTPS instead: the application is then
     /// configured through <c>SERVER_SSL_KEY_STORE</c> and the related variables, and its endpoint is switched to
     /// <c>https</c> in run mode. A resource that references it then receives the address as
-    /// <c>services__{name}__https__0</c> rather than <c>services__{name}__http__0</c>.
+    /// <c>services__{name}__https__0</c> rather than <c>services__{name}__http__0</c>. Those methods are
+    /// experimental (diagnostic <c>ASPIRECERTIFICATES001</c>), so the AppHost must suppress it to call them.
+    /// A Java client of an HTTPS application uses the JVM's truststore rather than the operating system's,
+    /// so it must trust the developer certificate to call it.
     /// </para>
     /// <para>
     /// No health check is added. <c>/actuator/health</c> only exists when the application depends on
@@ -346,7 +349,7 @@ public static partial class JavaHostingExtensions
         // application without any code in the application. No targetPort is pinned: these are host
         // processes rather than containers, so a fixed target port is a real port on the machine and two
         // Spring Boot services both asking for 8080 would collide.
-        resourceBuilder = resourceBuilder
+        resourceBuilder
             .WithHttpEndpoint(env: "SERVER_PORT")
             // Opt-in: switching the scheme renames the service discovery variable consumers read, which
             // would silently break existing applications that read the http one.
