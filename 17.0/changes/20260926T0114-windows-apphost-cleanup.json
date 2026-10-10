@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "On Windows, session-scoped containers could survive AppHost shutdown (via Ctrl+C or `aspire stop`) because DCP was killed by a nested process job before it finished cleanup. .NET AppHosts launched through `dotnet run`/`dotnet watch` now let DCP complete removing session-scoped resources, while persistent resources are unaffected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-09-26T01:14:53Z",
+  "lastMergedAt": "2026-09-26T01:14:53Z",
+  "name": "Fix Windows AppHost cleanup leaving stray containers",
+  "owner": "danegsta",
+  "prs": [
+    20494
+  ]
+}

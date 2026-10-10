@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Disconnecting from the dashboard while its layout restores browser-saved navigation state no longer reports an unhandled `JSDisconnectedException` circuit error. Other browser-storage read failures are still logged at Information level, and the layout falls back to defaults when storage is unavailable.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-09-25T23:34:51Z",
+  "lastMergedAt": "2026-09-25T23:34:51Z",
+  "name": "Fix spurious disconnect errors during dashboard layout init",
+  "owner": "JamesNK",
+  "prs": [
+    20472
+  ]
+}

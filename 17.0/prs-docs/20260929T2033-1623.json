@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #19810, which is not in the 17.0 milestone",
+  "mergedAt": "2026-09-29T20:33:22Z",
+  "number": 1623,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[docs] Document Azure Sandbox default compute environment inference"
+}

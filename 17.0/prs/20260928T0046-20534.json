@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Fixes SQL Server health check false negatives caused by pool blocking",
+  "mergedAt": "2026-09-28T00:46:56Z",
+  "number": 20534,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Disable SqlClient pool blocking period for SQL Server health checks"
+}

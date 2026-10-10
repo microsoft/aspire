@@ -1,0 +1,9 @@
+{
+  "author": "Evangelink",
+  "comment": "CI/engineering maintenance, GitHub Actions version bumps",
+  "mergedAt": "2026-09-25T19:24:01Z",
+  "number": 20382,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Bump the GitHub Actions group to current major versions"
+}

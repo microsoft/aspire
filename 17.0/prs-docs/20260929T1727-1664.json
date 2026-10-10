@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #20011, which is not in the 17.0 milestone",
+  "mergedAt": "2026-09-29T17:27:01Z",
+  "number": 1664,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[docs] Note CloudCube icon for azure-environment resource in 13.6 release notes"
+}

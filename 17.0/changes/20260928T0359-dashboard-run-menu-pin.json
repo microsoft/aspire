@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Pinning or unpinning a historical dashboard run no longer closes the run selector menu. The selector now stays open, preserves the current run selection, and restores focus to the same pin/unpin button while the item re-sorts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📌",
+  "firstMergedAt": "2026-09-28T03:59:41Z",
+  "lastMergedAt": "2026-09-28T03:59:41Z",
+  "name": "Keep dashboard run menu open when pinning",
+  "owner": "JamesNK",
+  "prs": [
+    20523
+  ]
+}

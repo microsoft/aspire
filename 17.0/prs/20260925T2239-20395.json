@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Build infrastructure dependency update",
+  "mergedAt": "2026-09-25T22:39:55Z",
+  "number": 20395,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Update Arcade to 10.0.0-beta.26472.2"
+}

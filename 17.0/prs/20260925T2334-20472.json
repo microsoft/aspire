@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes spurious unhandled-exception telemetry on dashboard disconnect",
+  "mergedAt": "2026-09-25T23:34:51Z",
+  "number": 20472,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Avoid JSDisconnectedException telemetry during dashboard layout initialization"
+}

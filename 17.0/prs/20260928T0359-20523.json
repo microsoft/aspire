@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes run selector closing when pinning/unpinning a run",
+  "mergedAt": "2026-09-28T03:59:41Z",
+  "number": 20523,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Keep dashboard run menu open when pinning"
+}

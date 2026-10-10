@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs-only follow-up to a prior docs PR; no linked product PR",
+  "mergedAt": "2026-09-29T16:31:01Z",
+  "number": 1785,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[docs] Clarify connection property names and alias fallback examples"
+}

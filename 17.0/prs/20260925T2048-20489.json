@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump, no user-facing impact",
+  "mergedAt": "2026-09-25T20:48:27Z",
+  "number": 20489,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Bump the github-actions group across 1 directory with 2 updates"
+}

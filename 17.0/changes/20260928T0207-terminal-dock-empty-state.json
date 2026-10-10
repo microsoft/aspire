@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The terminal dock's empty state is simplified to its heading, console icon, documentation link, and backtick-key hint. The **More information** link is now a plain underlined text link with a visible keyboard-focus outline instead of a button-styled hover background.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧽",
+  "firstMergedAt": "2026-09-28T02:07:11Z",
+  "lastMergedAt": "2026-09-28T02:07:11Z",
+  "name": "Simplify terminal dock empty state",
+  "owner": "mitchdenny",
+  "prs": [
+    20537
+  ]
+}

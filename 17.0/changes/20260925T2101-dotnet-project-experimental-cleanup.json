@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Consumers of `Aspire.Hosting.Dotnet` no longer need to suppress the `ASPIREDOTNETPROJECT001` experimental-API warning to use `AddDotnetProject`, `DotnetProjectResource`, or `WithBuildEnvironment`, since the package is already prerelease.",
+  "docsPrs": [
+    1761
+  ],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-09-25T21:01:08Z",
+  "lastMergedAt": "2026-09-25T21:01:08Z",
+  "name": "Remove redundant experimental warnings from Aspire.Hosting.Dotnet",
+  "owner": "eerhardt",
+  "prs": [
+    20490
+  ]
+}

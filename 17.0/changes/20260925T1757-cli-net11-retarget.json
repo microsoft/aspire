@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire CLI now targets .NET 11 instead of .NET 10. Behavior for users of the native `aspire` binary is unchanged, but the `Aspire.Cli.<rid>` dotnet tool packages now place the binary under `tools/any/<rid>/` instead of a TFM-specific folder, matching the pointer package's layout.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-09-25T17:57:29Z",
+  "lastMergedAt": "2026-09-25T17:57:29Z",
+  "name": "CLI retargeted to .NET 11",
+  "owner": "eerhardt",
+  "prs": [
+    20436
+  ]
+}

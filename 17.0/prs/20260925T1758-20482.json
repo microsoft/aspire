@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Removes unnecessary ASPIREAZURE001 suppression requirement",
+  "mergedAt": "2026-09-25T17:58:02Z",
+  "number": 20482,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Remove redundant experimental annotations from Azure Sandboxes"
+}

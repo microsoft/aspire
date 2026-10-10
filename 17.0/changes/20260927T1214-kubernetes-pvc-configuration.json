@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@cdbrown2018"
+  ],
+  "description": "Adds `WithConfiguration(...)` for customizing the generated Kubernetes `PersistentVolumeClaim` for first-class persistent volumes, plus `WithoutStorageClass()` and polyglot `WithPersistentVolumeName(...)` for claiming existing volumes. This lets callers mutate claim metadata and spec fields not covered by the existing volume configuration methods.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📦",
+  "firstMergedAt": "2026-09-27T12:14:51Z",
+  "lastMergedAt": "2026-09-27T12:14:51Z",
+  "name": "Customizable Kubernetes PersistentVolumeClaims",
+  "owner": "mitchdenny",
+  "prs": [
+    19900
+  ]
+}

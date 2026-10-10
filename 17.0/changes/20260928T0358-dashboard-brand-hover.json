@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Hovering the dashboard logo, application name, or page title now applies the same brightness treatment used on aspire.dev, in both light and dark themes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✨",
+  "firstMergedAt": "2026-09-28T03:58:34Z",
+  "lastMergedAt": "2026-09-28T03:58:34Z",
+  "name": "Match dashboard brand hover to Aspire website",
+  "owner": "JamesNK",
+  "prs": [
+    20416
+  ]
+}

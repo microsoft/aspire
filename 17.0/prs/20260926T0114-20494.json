@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes stray session-scoped containers surviving Windows AppHost shutdown",
+  "mergedAt": "2026-09-26T01:14:53Z",
+  "number": 20494,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Fix Windows AppHost cleanup job routing"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "CLI retargeted to net11.0; dotnet tool package layout changes",
+  "mergedAt": "2026-09-25T17:57:29Z",
+  "number": 20436,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Update Aspire.Cli to target net11.0"
+}

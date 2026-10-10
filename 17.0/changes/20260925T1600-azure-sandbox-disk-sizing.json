@@ -1,0 +1,19 @@
+{
+  "area": "Other",
+  "areaEmoji": "📦",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Deploying an Azure Container Apps Sandbox with the `ExtraSmall` or `AzureSandboxTier.Small` tier always failed because the requested disk size exceeded the Azure Dev Compute data plane's cores-based disk cap. Disk sizing is now scaled per tier so every tier deploys successfully.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "💾",
+  "firstMergedAt": "2026-09-25T16:00:24Z",
+  "lastMergedAt": "2026-09-25T16:00:24Z",
+  "name": "Fix Azure Sandbox disk sizing for small tiers",
+  "owner": "eerhardt",
+  "prs": [
+    20461
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Official build container supply-chain maintenance, no user-facing impact",
+  "mergedAt": "2026-09-26T00:56:34Z",
+  "number": 20505,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Address container supply-chain warnings to make the official build green"
+}

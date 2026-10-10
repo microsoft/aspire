@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #19430, which is not in the 17.0 milestone",
+  "mergedAt": "2026-09-29T20:35:16Z",
+  "number": 1574,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[docs] Document hostname inheritance for Ingress paths and Gateway routes"
+}

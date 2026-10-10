@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Updates Fluent UI Blazor Components and Icons to the 5.0.0 RTM release. The AppBar overflow trigger now renders as a native button matching the navigation toggle's sizing, icon alignment, and hover styling, and dashboard navigation shuts down cleanly instead of failing when a browser disconnects during a pending page-state update.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🖌️",
+  "firstMergedAt": "2026-09-28T02:46:51Z",
+  "lastMergedAt": "2026-09-28T02:46:51Z",
+  "name": "Update Fluent UI to v5 RTM",
+  "owner": "JamesNK",
+  "prs": [
+    20527
+  ]
+}

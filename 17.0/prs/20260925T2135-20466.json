@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only fixes for Outerloop CI failures",
+  "mergedAt": "2026-09-25T21:35:11Z",
+  "number": 20466,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Fix remaining Outerloop failures in DCP, CLI, and Dashboard tests"
+}

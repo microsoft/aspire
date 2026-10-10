@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Standalone integration-guide authoring, not tied to a specific tracked changelog entry",
+  "mergedAt": "2026-09-29T17:11:32Z",
+  "number": 1794,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Onboard first-party Java and Rust integrations"
+}

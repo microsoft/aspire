@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal CI pipeline timeout fix, no user-facing impact",
+  "mergedAt": "2026-09-25T18:12:28Z",
+  "number": 20455,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[ci] Fix internal builds"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to changelog entry for PR #20490 (remove redundant experimental warnings from Aspire.Hosting.Dotnet)",
+  "mergedAt": "2026-09-29T17:59:49Z",
+  "number": 1761,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "[docs] Document ASPIREDOTNETPROJECT001 removal in Aspire 13.6"
+}

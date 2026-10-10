@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #20477, not yet processed in the 17.0 changelog",
+  "mergedAt": "2026-09-29T16:58:57Z",
+  "number": 1786,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[docs] Update CLI/SDK version skew warning docs"
+}

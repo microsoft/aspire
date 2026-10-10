@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "SQL Server health checks for `AddSqlServer` and `AddDatabase` now connect using a dedicated connection string with `PoolBlockingPeriod.NeverBlock`, so a transient failure from other code sharing the same pool can no longer poison health-check results for up to a minute, and SQL resources can become healthy faster during startup.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-09-28T00:46:56Z",
+  "lastMergedAt": "2026-09-28T00:46:56Z",
+  "name": "Fix SQL Server health check false negatives from pool blocking",
+  "owner": "JamesNK",
+  "prs": [
+    20534
+  ]
+}

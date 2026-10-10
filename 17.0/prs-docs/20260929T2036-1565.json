@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents product PR #19429, which is not in the 17.0 milestone",
+  "mergedAt": "2026-09-29T20:36:01Z",
+  "number": 1565,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[docs] Document Helm values for embedded environment parameters on Kubernetes"
+}

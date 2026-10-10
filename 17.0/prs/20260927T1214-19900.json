@@ -1,0 +1,9 @@
+{
+  "author": "cdbrown2018",
+  "comment": "New WithConfiguration API for customizing Kubernetes PersistentVolumeClaims",
+  "mergedAt": "2026-09-27T12:14:51Z",
+  "number": 19900,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Added WithConfiguration extension method for configuring PVCs"
+}

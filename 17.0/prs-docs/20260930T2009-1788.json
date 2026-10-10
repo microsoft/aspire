@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency bump in aspire.dev repo, no user-facing documentation change",
+  "mergedAt": "2026-09-30T20:09:00Z",
+  "number": 1788,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Bump the nuget-selected group with 6 updates"
+}

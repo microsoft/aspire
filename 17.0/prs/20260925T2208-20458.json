@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Agentic workflow/CI validation tooling, no user-facing impact",
+  "mergedAt": "2026-09-25T22:08:33Z",
+  "number": 20458,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "Add deterministic CI validation for agentic workflows"
+}

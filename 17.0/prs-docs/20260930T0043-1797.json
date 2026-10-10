@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Support-page lifecycle update, not tied to a specific tracked changelog entry",
+  "mergedAt": "2026-09-30T00:43:20Z",
+  "number": 1797,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "excluded",
+  "title": "[support] Update support page for Aspire 13.6.0 release"
+}

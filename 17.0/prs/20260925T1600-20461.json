@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Fixes Azure Sandbox deploy failures for ExtraSmall/Small tiers",
+  "mergedAt": "2026-09-25T16:00:24Z",
+  "number": 20461,
+  "runDate": "2026-10-10T05:31:56Z",
+  "status": "included",
+  "title": "Fix Azure sandbox ExtraSmall and Small tier disk sizes"
+}
