@@ -1,18 +1,10 @@
 <Project>
 
-  <!--
-  Projects that reference this package directly (plain Microsoft.NET.Sdk, Project Resource v2 /
-  AddDotnetProject, no Aspire.AppHost.Sdk) never have AspireHostingSDKVersion set by an SDK. Default
-  it here so the .NET SDK's built-in Aspire-workload-deprecation check (which requires
-  AspireHostingSDKVersion >= 9.0.0 whenever IsAspireHost=true, to catch apps still using the old,
-  removed, pre-9.0 Aspire workload) doesn't misidentify these projects as using that old workload.
-  This value is intentionally a fixed "known-good" version rather than this package's own version:
-  it only needs to satisfy that >= 9.0.0 check, and a fixed value keeps evaluation correct both when
-  this file is consumed from a packed NuGet package and when it's imported directly from source
-  (e.g. in this repo's own tests), where the @VERSION@ packaging token is never substituted.
-  -->
-  <PropertyGroup Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == ''">
-    <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
+  <PropertyGroup>
+    <_AspireAppHostPackageVersion>@VERSION@</_AspireAppHostPackageVersion>
+    <!-- The .NET SDK workload check requires a version >= 9 for package-only AppHosts.
+         Do not hide a missing SDK version when the obsolete SDK marker is present. -->
+    <AspireHostingSDKVersion Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == '' and '$(_UsingAspireAppHostSdk)' != 'true'">$(_AspireAppHostPackageVersion)</AspireHostingSDKVersion>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -218,11 +210,10 @@ namespace Projects%3B
     <_AspireCliDnxPackageId>aspire.cli</_AspireCliDnxPackageId>
     <!-- An explicit Dnx mode leaves the package unversioned so DNX can honor an in-scope tool manifest,
          or select the latest package when no manifest applies. Path fallback and DnxPinned use the CLI
-         version paired with the AppHost SDK. Project Resource v2 is expected to remove Aspire.AppHost.Sdk;
-         when that happens, replace AspireHostingSDKVersion as the paired CLI version source.
+         version paired with the AppHost package, independently of any retained obsolete SDK version.
          See https://github.com/microsoft/aspire/issues/16386. -->
     <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnx'">$(_AspireCliDnxPackageId)</_AspireCliDnxPackageReference>
-    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(AspireHostingSDKVersion)</_AspireCliDnxPackageReference>
+    <_AspireCliDnxPackageReference Condition="'$(_AspireCliInvocationMode.ToLowerInvariant())' != 'dnx'">$(_AspireCliDnxPackageId)@$(_AspireAppHostPackageVersion)</_AspireCliDnxPackageReference>
   </PropertyGroup>
 
   <Target Name="_ResolveAspireCliInvocation"
@@ -733,14 +724,9 @@ namespace Projects%3B
     <MakeDir Directories="$(AspireManifestPublishOutputPath)" />
   </Target>
 
-  <!--
-  This check only applies to projects that opted into the (obsolete) Aspire.AppHost.Sdk via
-  '$(_UsingAspireAppHostSdk)'. Projects that use the plain Microsoft.NET.Sdk with an explicit
-  Aspire.Hosting.AppHost PackageReference (Project Resource v2 / AddDotnetProject) never set
-  AspireHostingSDKVersion, so they are not subject to this minimum-SDK-version check.
-  -->
+  <!-- Pre-9 SDKs do not set the marker, so retain version-based detection as well. -->
   <Target Name="__ErrorOnMininumSdkVersionMissing" BeforeTargets="PrepareForBuild"
-  Condition="'$(IsAspireHost)' == 'true' and '$(_UsingAspireAppHostSdk)' == 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
+  Condition="'$(IsAspireHost)' == 'true' and (('$(_UsingAspireAppHostSdk)' == 'true' and '$(AspireHostingSDKVersion)' == '') or ('$(AspireHostingSDKVersion)' != '' and $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0'))))">
     <Error Code="ASPIRE007"
       Text="$(MSBuildProjectName) project requires a reference to &quot;Aspire.AppHost.Sdk&quot; with version &quot;9.0.0&quot; or greater to work correctly. Please add the following line after the Project declaration `&lt;Sdk Name=&quot;Aspire.AppHost.Sdk&quot; Version=&quot;9.0.0&quot; /&gt;`."
       File="$(MSBuildProjectFullPath)"

@@ -1,10 +1,15 @@
 <Project>
 
   <PropertyGroup>
+    <IsAspireHost Condition="'$(IsAspireHost)' == ''">true</IsAspireHost>
     <!-- Aspire hosting projects aren't publishable right now until https://github.com/microsoft/aspire/issues/147 is good -->
     <IsPublishable Condition="'$(IsPublishable)' == ''">false</IsPublishable>
     <IsPackable Condition="'$(IsPackable)' == ''">false</IsPackable>
     <AspireUseCliBundle Condition="'$(AspireUseCliBundle)' == ''">false</AspireUseCliBundle>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FileBasedProgram)' == 'true'">
+    <PublishAot>false</PublishAot>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(Language)' == 'C#' AND ('$(ImplicitUsings)' == 'true' or '$(ImplicitUsings)' == 'enable')">

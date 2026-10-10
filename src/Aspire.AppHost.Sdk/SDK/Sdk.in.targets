@@ -58,9 +58,9 @@
   $(SuppressAspireAppHostSdkObsoleteWarning) to true, but doing so is only intended as a temporary
   migration aid.
   -->
-  <Target Name="__WarnOnAspireAppHostSdkObsolete" BeforeTargets="PrepareForBuild" Condition="'$(_UsingAspireAppHostSdk)' == 'true' and '$(SuppressAspireAppHostSdkObsoleteWarning)' != 'true'">
+  <Target Name="__WarnOnAspireAppHostSdkObsolete" BeforeTargets="PrepareForBuild" Condition="'$(_UsingAspireAppHostSdk)' == 'true' and '$(SuppressAspireAppHostSdkObsoleteWarning)' != 'true' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(NoWarn)', '(?i)(^|[;,\s])ASPIRE012($|[;,\s])'))">
     <Warning Code="ASPIRE012"
-             Text="$(MSBuildProjectName) uses the Aspire.AppHost.Sdk, which is obsolete and will be removed in a future major version. Switch the project's Sdk attribute to Microsoft.NET.Sdk, add an explicit PackageReference to Aspire.Hosting.AppHost, and migrate C# resource ProjectReference items to AddDotnetProject calls. See https://aka.ms/aspire/diagnostics/aspire012 for migration guidance."
+             Text="$(MSBuildProjectName) uses the Aspire.AppHost.Sdk, which is obsolete but remains available for staged migration. Switch the project's Sdk attribute to Microsoft.NET.Sdk, add explicit PackageReference items for Aspire.Hosting.AppHost and Aspire.Hosting.Dotnet, and migrate C# resource ProjectReference items to AddDotnetProject calls. See https://aka.ms/aspire/diagnostics/aspire012 for migration guidance."
              HelpLink="https://aka.ms/aspire/diagnostics/aspire012" />
   </Target>
 

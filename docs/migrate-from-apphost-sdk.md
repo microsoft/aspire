@@ -1,7 +1,8 @@
 # Migrating off Aspire.AppHost.Sdk
 
-`Aspire.AppHost.Sdk` is obsolete (see diagnostic [`ASPIRE012`](list-of-diagnostics.md)) and will be
-removed in a future major version. It historically did two things for a C# AppHost project:
+`Aspire.AppHost.Sdk` is obsolete (see diagnostic [`ASPIRE012`](list-of-diagnostics.md)) but remains
+functional for staged migration, including original `ProjectReference`-based C# resources.
+No removal date has been agreed. It historically did two things for a C# AppHost project:
 
 1. Made every `ProjectReference` item in the AppHost project become a C# resource automatically
    (`IsAspireProjectResource=true` by default), orchestrated by the AppHost.
@@ -30,20 +31,23 @@ After:
 <Project Sdk="Microsoft.NET.Sdk">
 ```
 
-## 2. Add an explicit PackageReference to Aspire.Hosting.AppHost
+## 2. Add explicit AppHost and .NET project integration packages
 
-Add a `PackageReference` for the same version of `Aspire.Hosting.AppHost` that matches (or is
-compatible with) the `Aspire.AppHost.Sdk` version you were using:
+Choose a release that supports `AddDotnetProject`. Add explicit references to
+`Aspire.Hosting.AppHost` and `Aspire.Hosting.Dotnet` at compatible versions from that release;
+`AddDotnetProject` is provided by the latter package, not by `Aspire.Hosting.AppHost`.
+Replace `17.x.x` below with an available version; it is not a literal package version.
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Aspire.Hosting.AppHost" Version="9.x.x" />
+  <PackageReference Include="Aspire.Hosting.AppHost" Version="17.x.x" />
+  <PackageReference Include="Aspire.Hosting.Dotnet" Version="17.x.x" />
 </ItemGroup>
 ```
 
-Everything else the SDK previously wired up for you (`IsAspireHost`, code generation for referenced
-projects, the `dotnet run`/CLI integration, etc.) is provided by the `Aspire.Hosting.AppHost`
-package's own build targets - no other SDK-only behavior is required for a working AppHost.
+The `Aspire.Hosting.AppHost` package establishes `IsAspireHost` and supplies the AppHost targets,
+including `dotnet run` integration. It does not automatically promote ordinary project
+references into resources.
 
 ## 3. Opt in to the Aspire CLI bundle
 
@@ -89,6 +93,41 @@ isn't itself an orchestrated resource), keep the `ProjectReference` item and set
 defaulting is gone - under plain `Microsoft.NET.Sdk`, `ProjectReference` items are never
 auto-promoted to Aspire resources.
 
+Resource names, endpoint configuration, references, waits and other chained configuration should
+remain unchanged. Review overloads and metadata such as launch profiles and excluded endpoints
+individually rather than mechanically replacing every `AddProject` call.
+
+`AddDotnetProject` builds its resource project when running it. Removing the resource
+`ProjectReference` means `dotnet build` of the AppHost alone no longer builds that service;
+keep resource projects in the solution and in CI build/publish inputs.
+
+## File-based AppHosts
+
+Replace the obsolete SDK directive with explicit package directives:
+
+```csharp
+#:package Aspire.Hosting.AppHost@17.x.x
+#:package Aspire.Hosting.Dotnet@17.x.x
+#:property AspireUseCliBundle=true
+```
+
+Use actual compatible package versions, retain run configuration and user secrets, and migrate
+resource declarations as above. The AppHost package disables Native AOT for file-based AppHosts,
+matching the old SDK behavior.
+
+## Verify the migration
+
+Restore and build the AppHost, then run it with the matching Aspire CLI installation.
+Verify the dashboard starts, resource names and endpoints are unchanged, services return
+expected responses, and Restart/Rebuild work. Check service-to-service references and waits,
+not just whether the AppHost compiles. Build the solution separately to check genuine library
+references and resource-project build inputs.
+
+An unresolved CLI bundle produces `ASPIRE009` with installation/setup guidance. Fix the
+installation or explicit bundle path rather than suppressing the diagnostic.
+Pinned DNX selection uses the CLI version paired with `Aspire.Hosting.AppHost`, independently
+of an older SDK retained during staged migration.
+
 ## Suppressing the warning temporarily
 
 If you need more time to migrate, you can suppress `ASPIRE012` while you plan the migration:
@@ -101,5 +140,5 @@ If you need more time to migrate, you can suppress `ASPIRE012` while you plan th
 </PropertyGroup>
 ```
 
-This is only intended as a temporary migration aid - `Aspire.AppHost.Sdk` will be removed in a
-future major version.
+Suppression does not migrate resources or remove the need for a working CLI bundle.
+The obsolete SDK remains functional for users who have not migrated.
