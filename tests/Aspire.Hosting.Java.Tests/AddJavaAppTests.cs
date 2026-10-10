@@ -399,36 +399,6 @@ public class AddJavaAppTests
         Assert.Equal(ExpectedWrapperInvocation.Args(expectedWrapper, module, "bootRun"), args);
     }
 
-    [Theory]
-    [InlineData("mvnw.cmd")]
-    [InlineData("gradlew.bat")]
-    public void WrapperInvocationForWindowsRunsTheWrapperThroughCall(string wrapperName)
-    {
-        // cmd strips the first and last quote on the line when the first token is quoted, so a wrapper
-        // path containing a space would be mangled if it led. "call" keeps a quote off the front.
-        var workingDirectory = Path.Combine(Path.GetTempPath(), "repo", "services", "api");
-        var wrapperPath = Path.Combine(Path.GetTempPath(), "repo", "build tools", wrapperName);
-
-        var (command, leadingArgs) = JavaHostingExtensions.WrapperInvocationFor(wrapperPath, workingDirectory, isWindows: true);
-
-        Assert.Equal(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", command);
-        Assert.Equal(["/c", "call", Path.Combine("..", "..", "build tools", wrapperName)], leadingArgs);
-    }
-
-    [Fact]
-    public void WrapperInvocationForUnixRunsTheWrapperThroughShWithItsFullPath()
-    {
-        // A wrapper checked out on Windows arrives without its executable bit, so it is run by sh
-        // rather than executed. The path stays absolute because no shell resolves it.
-        var wrapperPath = Path.Combine(Path.GetTempPath(), "repo", "mvnw");
-
-        var (command, leadingArgs) = JavaHostingExtensions.WrapperInvocationFor(
-            wrapperPath, Path.Combine(Path.GetTempPath(), "repo", "services", "api"), isWindows: false);
-
-        Assert.Equal("sh", command);
-        Assert.Equal([wrapperPath], leadingArgs);
-    }
-
     [Fact]
     public async Task WithGradleTask_WithArgs_IncludesTaskAndArgs()
     {

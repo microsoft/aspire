@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 
 namespace Aspire.Hosting.Java;
 
@@ -75,115 +76,7 @@ internal static class JavaBuildToolResolver
         var appDirectory = resource.WorkingDirectory;
 
         return PathNormalizer.NormalizePathForCurrentPlatform(
-            FindWrapperInBuildRoot(appDirectory, wrapperName, tool) ?? Path.Combine(appDirectory, wrapperName));
-    }
-
-    /// <inheritdoc cref="ResolveWrapperPath" />
-    private static string? FindWrapperInBuildRoot(string appDirectory, string wrapperName, JavaBuildTool tool)
-    {
-        for (var directory = SafeDirectoryInfo(appDirectory); directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, wrapperName);
-            var isApplicationDirectory = directory.FullName == appDirectory;
-
-            if (File.Exists(candidate)
-                && (isApplicationDirectory
-                    || (IsBuildRoot(directory.FullName, tool)
-                        && !IsWorldWritable(directory)
-                        && !IsWorldWritable(new FileInfo(candidate)))))
-            {
-                return candidate;
-            }
-
-            // A worktree or submodule records .git as a file rather than a directory, so both count.
-            var gitPath = Path.Combine(directory.FullName, ".git");
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
-            {
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Returns whether a directory is the root of a build for <paramref name="tool"/>.
-    /// </summary>
-    private static bool IsBuildRoot(string directory, JavaBuildTool tool) => tool switch
-    {
-        // Gradle requires a settings file at the root of a multi-project build; that is the directory
-        // the wrapper is generated into. https://docs.gradle.org/current/userguide/multi_project_builds.html
-        JavaBuildTool.Gradle => File.Exists(Path.Combine(directory, "settings.gradle"))
-                                || File.Exists(Path.Combine(directory, "settings.gradle.kts")),
-        // A Maven aggregator is itself a project, so its POM is the marker.
-        // https://maven.apache.org/guides/introduction/introduction-to-the-pom.html
-        JavaBuildTool.Maven => File.Exists(Path.Combine(directory, "pom.xml")),
-        _ => false
-    };
-
-    /// <summary>
-    /// Returns whether any user on the machine can write to <paramref name="entry"/>.
-    /// </summary>
-    /// <remarks>
-    /// The application directory is named in the AppHost, so running the wrapper beside it is the
-    /// developer's own instruction. Ancestors are inferred instead, and the walk continues past the
-    /// application when no <c>.git</c> marks a checkout boundary - so on a shared machine an
-    /// application under a world-writable directory such as <c>/tmp</c> could otherwise pick up a
-    /// <c>mvnw</c> another user planted alongside a <c>pom.xml</c>, and execute it with the
-    /// developer's privileges before anything is built.
-    /// <para>
-    /// Applied to the wrapper file as well as its directory, because rewriting a file in place needs
-    /// write permission on the file rather than on the directory holding it.
-    /// </para>
-    /// <para>
-    /// Group-writable is deliberately not rejected: distributions that enable user private groups
-    /// pair a umask of 002 with a group per user, so an ordinary checkout is mode 775 and rejecting
-    /// it would break wrapper resolution for a large share of Linux users. Telling a private group
-    /// from a shared one needs the owner and group membership, which .NET does not expose portably.
-    /// </para>
-    /// <para>
-    /// Only applied to inferred ancestors, and only where the mode is meaningful: Windows uses ACLs
-    /// that <see cref="UnixFileMode"/> does not describe, and .NET reports
-    /// <see cref="UnixFileMode.None"/> there.
-    /// </para>
-    /// </remarks>
-    private static bool IsWorldWritable(FileSystemInfo entry)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        try
-        {
-            return entry.UnixFileMode.HasFlag(UnixFileMode.OtherWrite);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // The mode could not be read, so it cannot be shown to be safe. Treating it as
-            // world-writable falls back to the wrapper beside the application, which is the same
-            // outcome as finding no ancestor wrapper at all.
-            return true;
-        }
-    }
-
-    /// <summary>
-    /// Returns the directory, or <see langword="null"/> when the path cannot be interpreted.
-    /// </summary>
-    /// <remarks>
-    /// Wrapper resolution runs while the AppHost is still being authored, so the directory may not
-    /// exist yet and may be a value the developer has not finished typing.
-    /// </remarks>
-    private static DirectoryInfo? SafeDirectoryInfo(string path)
-    {
-        try
-        {
-            return new DirectoryInfo(path);
-        }
-        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            return null;
-        }
+            JavaWrapper.Find(appDirectory, wrapperName, ToWrapperTool(tool)) ?? Path.Combine(appDirectory, wrapperName));
     }
 
     /// <summary>
@@ -195,6 +88,13 @@ internal static class JavaBuildToolResolver
         (JavaBuildTool.Maven, false) => "mvnw",
         (JavaBuildTool.Gradle, true) => "gradlew.bat",
         (JavaBuildTool.Gradle, false) => "gradlew",
+        _ => throw new ArgumentOutOfRangeException(nameof(tool), tool, null)
+    };
+
+    private static JavaWrapperTool ToWrapperTool(JavaBuildTool tool) => tool switch
+    {
+        JavaBuildTool.Maven => JavaWrapperTool.Maven,
+        JavaBuildTool.Gradle => JavaWrapperTool.Gradle,
         _ => throw new ArgumentOutOfRangeException(nameof(tool), tool, null)
     };
 }

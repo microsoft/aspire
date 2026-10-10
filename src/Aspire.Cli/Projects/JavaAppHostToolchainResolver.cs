@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Shared;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
 using System.Xml;
@@ -167,104 +168,6 @@ internal static class JavaAppHostToolchainResolver
         yield return candidate;
     }
 
-    /// <summary>
-    /// Locates the wrapper for <paramref name="toolchain"/>, preferring the project's own directory and
-    /// otherwise walking up to the build root.
-    /// </summary>
-    /// <remarks>
-    /// A Gradle multi-project build has exactly one <c>gradlew</c>, beside the <c>settings.gradle</c>
-    /// that declares the subprojects, and a Maven multi-module repository keeps <c>mvnw</c> beside the
-    /// aggregator POM. An AppHost that is one of those modules carries only its own build file, so
-    /// requiring a wrapper next to it would reject the standard layout outright.
-    /// <para>
-    /// An ancestor only qualifies when it also holds that tool's build-root marker and is not
-    /// world-writable, and the walk stops at the directory holding <c>.git</c> so a submodule or nested
-    /// clone uses its own wrapper rather than the outer repository's. These are the same rules
-    /// <c>Aspire.Hosting.Java</c>'s JavaBuildToolResolver applies to hosted resources; the logic is
-    /// duplicated rather than shared because the CLI does not reference the hosting package.
-    /// </para>
-    /// </remarks>
-    private static string? FindWrapper(DirectoryInfo projectDirectory, string wrapperName, JavaAppHostToolchain toolchain)
-    {
-        for (var directory = projectDirectory; directory is not null; directory = directory.Parent)
-        {
-            var candidate = Path.Combine(directory.FullName, wrapperName);
-            var isProjectDirectory = directory.FullName == projectDirectory.FullName;
-
-            // The project directory is named by the AppHost, so a wrapper beside it is the developer's
-            // own instruction and needs no further qualification. Ancestors are inferred instead.
-            if (File.Exists(candidate)
-                && (isProjectDirectory
-                    || (IsBuildRoot(directory.FullName, toolchain)
-                        && !IsWorldWritable(directory.FullName)
-                        && !IsWorldWritable(candidate))))
-            {
-                return candidate;
-            }
-
-            // A worktree or submodule records .git as a file rather than a directory, so both count.
-            var gitPath = Path.Combine(directory.FullName, ".git");
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
-            {
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Returns whether a directory is the root of a build for <paramref name="toolchain"/>.
-    /// </summary>
-    private static bool IsBuildRoot(string directory, JavaAppHostToolchain toolchain) => toolchain switch
-    {
-        // Gradle requires a settings file at the root of a multi-project build; that is the directory
-        // the wrapper is generated into. https://docs.gradle.org/current/userguide/multi_project_builds.html
-        JavaAppHostToolchain.Gradle => File.Exists(Path.Combine(directory, GradleSettingsFileName))
-                                       || File.Exists(Path.Combine(directory, GradleKotlinSettingsFileName)),
-        // A Maven aggregator is itself a project, so its POM is the marker.
-        // https://maven.apache.org/guides/introduction/introduction-to-the-pom.html
-        JavaAppHostToolchain.Maven => File.Exists(Path.Combine(directory, MavenPomFileName)),
-        _ => false
-    };
-
-    /// <summary>
-    /// Returns whether any user on the machine can write to <paramref name="path"/>.
-    /// </summary>
-    /// <remarks>
-    /// Only inferred ancestors are checked. On a shared machine an AppHost under a world-writable
-    /// directory such as <c>/tmp</c> could otherwise pick up a wrapper another user planted beside a
-    /// <c>pom.xml</c>, and the CLI would execute it with the developer's privileges before anything is
-    /// built. Applied to the wrapper file as well as its directory, because rewriting a file in place
-    /// needs write permission on the file rather than on the directory holding it.
-    /// <para>
-    /// Group-writable is deliberately not rejected: distributions that enable user private groups pair
-    /// a umask of 002 with a group per user, so an ordinary checkout is mode 775 and rejecting it
-    /// would break wrapper resolution for a large share of Linux users.
-    /// </para>
-    /// <para>
-    /// Windows uses ACLs that <see cref="UnixFileMode"/> does not describe, and .NET reports
-    /// <see cref="UnixFileMode.None"/> there, so the check is skipped.
-    /// </para>
-    /// </remarks>
-    private static bool IsWorldWritable(string path)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return false;
-        }
-
-        try
-        {
-            return (File.GetUnixFileMode(path) & UnixFileMode.OtherWrite) != 0;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A path whose mode cannot be read cannot be shown safe, so treat it as unusable.
-            return true;
-        }
-    }
-
     private static StringComparison PathComparison =>
         OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
@@ -294,15 +197,15 @@ internal static class JavaAppHostToolchainResolver
         DirectoryInfo appHostDirectory,
         JavaAppHostToolchain toolchain)
     {
-        var (wrapperName, generateCommand) = toolchain switch
+        var (wrapperName, generateCommand, wrapperTool) = toolchain switch
         {
             // -N keeps the goal from recursing into the modules of a multi-module build.
-            JavaAppHostToolchain.Maven => (OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw", "mvn -N wrapper:wrapper"),
-            JavaAppHostToolchain.Gradle => (OperatingSystem.IsWindows() ? "gradlew.bat" : "gradlew", "gradle wrapper"),
+            JavaAppHostToolchain.Maven => (OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw", "mvn -N wrapper:wrapper", JavaWrapperTool.Maven),
+            JavaAppHostToolchain.Gradle => (OperatingSystem.IsWindows() ? "gradlew.bat" : "gradlew", "gradle wrapper", JavaWrapperTool.Gradle),
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
 
-        var wrapperPath = FindWrapper(projectDirectory, wrapperName, toolchain);
+        var wrapperPath = JavaWrapper.Find(projectDirectory.FullName, wrapperName, wrapperTool);
 
         // A globally installed Maven or Gradle is deliberately not used as a fallback: the wrapper pins the
         // tool version in the repository, so every machine builds the AppHost with the same one. Falling
@@ -317,37 +220,9 @@ internal static class JavaAppHostToolchainResolver
 
         var wrapperDirectory = new DirectoryInfo(Path.GetDirectoryName(wrapperPath)!);
 
-        if (!OperatingSystem.IsWindows())
-        {
-            // Invoked through "sh" rather than executed directly because a wrapper checked out on
-            // Windows, or committed without its mode bit, arrives without the executable bit and
-            // exec fails with "Permission denied". The wrappers are POSIX shell scripts and are
-            // documented to be run that way, so "sh <path>" is always valid. This matches how the
-            // hosted Java resources invoke wrappers (JavaHostingExtensions.WrapperInvocationFor).
-            //
-            // The absolute path is kept because the process is started without a shell, so a bare
-            // "mvnw" would be looked up on PATH and never found in the project directory.
-            return new JavaToolInvocation("sh", [wrapperPath], wrapperDirectory);
-        }
+        var (command, prefixArgs) = JavaWrapper.GetInvocation(wrapperPath, appHostDirectory.FullName, OperatingSystem.IsWindows());
 
-        // On Windows the wrappers are batch files. Launching one directly with redirected stdout can
-        // silently produce no output (see NpmRunner, which hits the same problem with npm.cmd), so the
-        // command interpreter runs it instead.
-        //
-        // The path is made relative to the working directory to keep it short, and "call" runs it. That
-        // matters because cmd.exe strips quotes in a way that does not match how ProcessStartInfo
-        // escapes arguments: when the *first* token on the line is quoted, cmd removes that quote and
-        // the last one on the line, mangling everything in between. A wrapper reached through a
-        // directory whose name contains a space is quoted, so with the wrapper first the line would be
-        // mangled; with "call" first the first character is never a quote and the rule cannot apply.
-        // "call" is also how one batch file invokes another: it returns control and propagates the
-        // exit code. See the quote-processing rules printed by `cmd /?`.
-        var relativeWrapperPath = Path.GetRelativePath(appHostDirectory.FullName, wrapperPath);
-
-        return new JavaToolInvocation(
-            Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
-            ["/c", "call", relativeWrapperPath],
-            wrapperDirectory);
+        return new JavaToolInvocation(command, prefixArgs, wrapperDirectory);
     }
 
     /// <summary>
