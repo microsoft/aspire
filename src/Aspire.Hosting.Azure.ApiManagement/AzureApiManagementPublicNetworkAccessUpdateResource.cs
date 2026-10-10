@@ -9,6 +9,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.Azure.ApiManagement.Provisioning;
+using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
@@ -90,8 +91,7 @@ internal sealed class AzureApiManagementPublicNetworkAccessUpdateResource
                     privateEndpointIds.Add(privateEndpointId);
                 }
                 var credential = context.Services.GetRequiredService<ITokenCredentialProvider>().TokenCredential;
-                var armClientOptions = context.Services.GetRequiredService<ArmClientOptions>();
-                var armClient = new ArmClient(credential, default, armClientOptions);
+                var armClient = context.Services.GetRequiredService<IArmClientProvider>().GetRawArmClient(credential);
 
                 await AzureApiManagementPublicNetworkAccessUpdater.DisableAsync(
                     armClient,

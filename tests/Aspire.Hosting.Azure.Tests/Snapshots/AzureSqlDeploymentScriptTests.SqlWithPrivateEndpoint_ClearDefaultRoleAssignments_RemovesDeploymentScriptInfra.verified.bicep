@@ -84,6 +84,8 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = env.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = env.properties.defaultDomain
 
+output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string = env.properties.staticIp
+
 // Resource: env-acr
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location

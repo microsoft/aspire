@@ -49,7 +49,7 @@ await apim.addApi("catalog-api", catalog, "catalog");
 
 The compute-targeted `AddApi` overload creates an API, an APIM backend, and root and catch-all operations for supported HTTP methods that forward requests to the deployed endpoint of the target resource. Both the API suffix itself (for example, `/catalog`) and its descendants are forwarded. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
 
-Explicit operations must have unique HTTP method and URL-template combinations, including templates that differ only in parameter names. Routes reserved for generated root and catch-all operations are rejected. Configure an OpenAPI import before adding explicit operations if you do not want the generated proxy routes.
+Explicit operations must have unique HTTP method and URL-template combinations, including templates that differ only in parameter names. Routes reserved for generated root and catch-all operations are rejected unless an OpenAPI import is configured for the API, regardless of whether `WithOpenApiDocument` is called before or after `AddOperation`.
 
 API Management resources are automatically omitted during `aspire run`. Azure compute environments do not materialize their public endpoints in run mode, and a cloud-hosted APIM instance cannot reach a backend running on localhost. Use `aspire deploy` to provision APIM and exercise its routing; no execution-mode guard is required around the APIM resources.
 

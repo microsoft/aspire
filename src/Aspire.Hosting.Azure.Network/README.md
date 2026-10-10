@@ -76,7 +76,7 @@ var environment = builder.AddAzureContainerAppEnvironment("env")
     .WithInternalLoadBalancer(vnet);
 ```
 
-This publish/deploy-only helper enables a private load balancer and creates a private DNS zone for the environment's default domain, a wildcard A record pointing to its static IP, and a link to the supplied virtual network. The network must contain the delegated subnet. The Network integration owns DNS provisioning; the service integration implements the shared `IAzureInternalLoadBalancerResource` contract from `Aspire.Hosting.Azure`.
+This publish/deploy-only helper enables a private load balancer and creates a private DNS zone for the environment's default domain, a wildcard A record pointing to its static IP, and a link to the supplied virtual network. The network must contain the delegated subnet. The Network integration owns DNS provisioning; the service integration implements the shared `IAzureInternalIngressResource` contract from `Aspire.Hosting.Azure`.
 
 ### Adding NAT Gateways
 

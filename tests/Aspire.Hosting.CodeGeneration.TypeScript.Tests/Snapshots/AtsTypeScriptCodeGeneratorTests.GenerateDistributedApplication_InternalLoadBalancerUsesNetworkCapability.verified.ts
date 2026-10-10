@@ -5,10 +5,10 @@
     withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureContainerAppEnvironmentResourcePromise {
         return new AzureContainerAppEnvironmentResourcePromiseImpl(this._withInternalLoadBalancerInternal(virtualNetwork), this._client);
     ["withInternalLoadBalancer"]: () => AzureContainerAppEnvironmentResourcePromiseImpl,
-    withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureInternalLoadBalancerResourcePromise;
-    withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureInternalLoadBalancerResourcePromise;
-    private async _withInternalLoadBalancerInternal(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): Promise<AzureInternalLoadBalancerResource> {
+    withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureInternalIngressResourcePromise;
+    withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureInternalIngressResourcePromise;
+    private async _withInternalLoadBalancerInternal(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): Promise<AzureInternalIngressResource> {
             'Aspire.Hosting.Azure.Network/withNetworkInternalLoadBalancer',
-    withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureInternalLoadBalancerResourcePromise {
-        return new AzureInternalLoadBalancerResourcePromiseImpl(this._withInternalLoadBalancerInternal(virtualNetwork), this._client);
-    ["withInternalLoadBalancer"]: () => AzureInternalLoadBalancerResourcePromiseImpl,
+    withInternalLoadBalancer(virtualNetwork: Awaitable<AzureVirtualNetworkResource>): AzureInternalIngressResourcePromise {
+        return new AzureInternalIngressResourcePromiseImpl(this._withInternalLoadBalancerInternal(virtualNetwork), this._client);
+    ["withInternalLoadBalancer"]: () => AzureInternalIngressResourcePromiseImpl,

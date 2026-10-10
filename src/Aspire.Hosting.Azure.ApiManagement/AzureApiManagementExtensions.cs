@@ -36,6 +36,7 @@ namespace Aspire.Hosting;
 public static class AzureApiManagementExtensions
 {
     private const string ProxyOperationName = "proxy";
+    private const string PremiumV2SubnetDelegation = "Microsoft.Web/hostingEnvironments";
     private static readonly char[] s_invalidApiIdentifierCharacters = ['*', '#', '&', '+', ':', '<', '>', '?'];
     private static readonly string[] s_proxyOperationMethods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "TRACE"];
 
@@ -1230,15 +1231,6 @@ public static class AzureApiManagementExtensions
                 "HTTP method and URL template must be unique, regardless of parameter names.");
         }
 
-        if (builder.Resource.OpenApiSource is null &&
-            s_proxyOperationMethods.Any(proxyMethod =>
-                string.Equals(signature, GetOperationSignature(proxyMethod, "/{*path}"), StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(signature, GetOperationSignature(proxyMethod, "/"), StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new InvalidOperationException(
-                $"The route '{method.ToUpperInvariant()} {urlTemplate}' conflicts with a generated proxy operation.");
-        }
-
         var resource = new AzureApiManagementOperationResource(
             name,
             physicalOperationName,
@@ -1515,8 +1507,7 @@ public static class AzureApiManagementExtensions
         {
             _ = GetKeyVaultRulePriority(subnet.Resource);
         }
-        const string delegation = "Microsoft.Web/hostingEnvironments";
-        ConfigureV2SubnetDelegation(subnet, delegation);
+        ConfigureV2SubnetDelegation(subnet, PremiumV2SubnetDelegation);
         if (SetVirtualNetworkConfiguration(
                 builder.Resource,
                 subnet.Resource,
@@ -1536,11 +1527,16 @@ public static class AzureApiManagementExtensions
 
         ValidateBackendPhysicalNames(azureResource);
 
+        if (azureResource.VirtualNetworkConfiguration is { } virtualNetworkConfiguration)
+        {
+            ValidateFinalSubnetDelegation(virtualNetworkConfiguration);
+        }
+
         if (azureResource.VirtualNetworkConfiguration is
             { Kind: AzureApiManagementVirtualNetworkKind.V2Integration or AzureApiManagementVirtualNetworkKind.PremiumV2Injection } network)
         {
             var rules = network.Subnet.NetworkSecurityGroup?.SecurityRules;
-            var allowRule = rules?.SingleOrDefault(rule => rule.Name == "allow-apim-key-vault");
+            var allowRule = rules?.SingleOrDefault(rule => string.Equals(rule.Name, "allow-apim-key-vault", StringComparison.OrdinalIgnoreCase));
             if (rules is null || allowRule is null || allowRule.Access != SecurityRuleAccess.Allow ||
                 allowRule.Direction != SecurityRuleDirection.Outbound ||
                 allowRule.Protocol != SecurityRuleProtocol.Tcp ||
@@ -2245,6 +2241,22 @@ public static class AzureApiManagementExtensions
         List<ProvisionableResource> operationDependencies = [];
         if (apiResource.OpenApiSource is null)
         {
+            // Re-check explicit operations against the reserved proxy routes here, once the API's final
+            // OpenAPI configuration is known, rather than at AddOperation call time. WithOpenApiDocument
+            // can be applied after AddOperation, and call order must not change validation outcomes.
+            foreach (var operationResource in apiResource.Operations)
+            {
+                var signature = GetOperationSignature(operationResource.Method, operationResource.UrlTemplate);
+                if (s_proxyOperationMethods.Any(proxyMethod =>
+                    string.Equals(signature, GetOperationSignature(proxyMethod, "/{*path}"), StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(signature, GetOperationSignature(proxyMethod, "/"), StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException(
+                        $"The route '{operationResource.Method} {operationResource.UrlTemplate}' conflicts with a generated proxy operation. " +
+                        $"Configure an OpenAPI import for API '{apiResource.Name}' if you do not want the generated proxy routes.");
+                }
+            }
+
             // APIM's management plane accepts "*" as an operation method, but gateways do not
             // reliably dispatch it. Materialize the catch-all route for each supported method.
             foreach (var method in s_proxyOperationMethods)
@@ -3241,6 +3253,43 @@ public static class AzureApiManagementExtensions
             _ => throw new UnreachableException(),
         };
 
+    // WithServiceDelegation is explicitly last-write-wins (see AzureVirtualNetworkExtensions), so a
+    // subnet's delegation recorded at WithClassicVirtualNetwork/WithVirtualNetworkIntegration/
+    // WithVirtualNetworkInjection call time can be replaced afterward by an unrelated later call on the
+    // same subnet. Revalidate the subnet's *final* delegation here, during infrastructure generation,
+    // so call order cannot produce an APIM service with an invalid or missing Azure delegation.
+    private static void ValidateFinalSubnetDelegation(AzureApiManagementVirtualNetworkConfiguration network)
+    {
+        network.Subnet.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out var delegation);
+        var requiredDelegation = network.Kind switch
+        {
+            AzureApiManagementVirtualNetworkKind.Classic => null,
+            AzureApiManagementVirtualNetworkKind.V2Integration => AzureSubnetServiceDelegations.AppServiceEnvironments,
+            AzureApiManagementVirtualNetworkKind.PremiumV2Injection => PremiumV2SubnetDelegation,
+            _ => throw new UnreachableException(),
+        };
+
+        if (requiredDelegation is null)
+        {
+            if (delegation is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Subnet '{network.Subnet.Name}' is delegated to '{delegation.ServiceName}', " +
+                    "but classic API Management virtual network injection requires an undelegated subnet.");
+            }
+
+            return;
+        }
+
+        if (delegation is null || !string.Equals(delegation.ServiceName, requiredDelegation, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Subnet '{network.Subnet.Name}' must be delegated to '{requiredDelegation}' for API Management " +
+                $"{(network.Kind == AzureApiManagementVirtualNetworkKind.PremiumV2Injection ? "virtual network injection" : "virtual network integration")}, " +
+                $"but it is {(delegation is null ? "no longer delegated" : $"delegated to '{delegation.ServiceName}'")}.");
+        }
+    }
+
     private static void ConfigureV2SubnetDelegation(
         IResourceBuilder<AzureSubnetResource> subnet,
         string delegation)
@@ -3294,7 +3343,7 @@ public static class AzureApiManagementExtensions
         // address prefixes may contain service tags or deploy-time expressions.
         // See https://learn.microsoft.com/azure/api-management/integrate-vnet-outbound#network-security-group.
         var rules = subnet.NetworkSecurityGroup?.SecurityRules;
-        if (rules?.Any(rule => rule.Name == "allow-apim-key-vault") == true)
+        if (rules?.Any(rule => string.Equals(rule.Name, "allow-apim-key-vault", StringComparison.OrdinalIgnoreCase)) == true)
         {
             throw new InvalidOperationException(
                 $"Subnet '{subnet.Name}' already contains the reserved NSG rule 'allow-apim-key-vault'.");

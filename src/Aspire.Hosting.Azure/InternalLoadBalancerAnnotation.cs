@@ -11,10 +11,10 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="virtualNetwork">The virtual network containing the resource's delegated subnet.</param>
 [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-public sealed class InternalLoadBalancerAnnotation(IResource virtualNetwork) : IResourceAnnotation
+public sealed class InternalLoadBalancerAnnotation(IAzureResource virtualNetwork) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the virtual network linked to the private DNS zone.
     /// </summary>
-    public IResource VirtualNetwork { get; } = virtualNetwork;
+    public IAzureResource VirtualNetwork { get; } = virtualNetwork;
 }

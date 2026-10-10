@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Azure;
 /// resulting domain and IP address so the network integration can configure private DNS.
 /// </remarks>
 [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
-public interface IAzureInternalLoadBalancerResource : IAzureDelegatedSubnetResource
+public interface IAzureInternalIngressResource : IAzureDelegatedSubnetResource
 {
     /// <summary>
     /// Gets the default domain used as the private DNS zone name.

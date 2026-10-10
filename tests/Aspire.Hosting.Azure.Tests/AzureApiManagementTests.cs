@@ -328,16 +328,44 @@ public class AzureApiManagementTests(ITestOutputHelper output)
     [InlineData("GET", "/{*other}")]
     [InlineData("post", "/{*path}")]
     [InlineData("GET", "/")]
-    public void OperationRoutesRejectGeneratedProxyConflicts(string method, string template)
+    public async Task OperationRoutesRejectGeneratedProxyConflicts(string method, string template)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
-        var api = apim.AddApi("catalog-api", "catalog");
+        var backend = apim.AddBackend("backend", ReferenceExpression.Create($"https://example.com"));
+        var api = apim.AddApi("catalog-api", "catalog").WithBackend(backend);
+        api.AddOperation("custom", method, template);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => api.AddOperation("custom", method, template));
+        // The conflict is checked against the API's final configuration during infrastructure
+        // generation, not at AddOperation call time, so that call order relative to
+        // WithOpenApiDocument does not change the validation outcome.
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => GetManifestWithBicep(apim.Resource));
 
         Assert.Contains("conflicts with a generated proxy", exception.Message);
-        Assert.Empty(api.Resource.Operations);
+    }
+
+    [Theory]
+    [InlineData("GET", "/{*other}")]
+    [InlineData("post", "/{*path}")]
+    [InlineData("GET", "/")]
+    public async Task OperationRoutesRejectGeneratedProxyConflictsRegardlessOfAddOperationCallOrder(string method, string template)
+    {
+        using var temporaryWorkspace = TemporaryWorkspace.Create(output);
+        var documentPath = Path.Combine(temporaryWorkspace.Path, "catalog.json");
+        File.WriteAllText(documentPath, """{"openapi":"3.0.1","info":{"title":"Catalog","version":"v1"},"paths":{}}""");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new() { PublisherEmail = "api-owners@example.com" });
+        var backend = apim.AddBackend("backend", ReferenceExpression.Create($"https://example.com"));
+        var api = apim.AddApi("catalog-api", "catalog").WithBackend(backend);
+        api.AddOperation("custom", method, template);
+        api.WithOpenApiDocument(documentPath);
+
+        // Once an OpenAPI import is configured, no proxy routes are generated, so the same
+        // route that previously conflicted must now be allowed, regardless of whether
+        // WithOpenApiDocument was called before or after AddOperation.
+        var (_, bicep) = await GetManifestWithBicep(apim.Resource);
+
+        Assert.Single(api.Resource.Operations);
     }
 
     [Fact]
@@ -2331,7 +2359,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var (_, environmentBicep) = await GetManifestWithBicep(environment.Resource);
         var (_, privateDnsBicep) = await GetManifestWithBicep(privateDns);
 
-        Assert.IsAssignableFrom<IAzureInternalLoadBalancerResource>(environment.Resource);
+        Assert.IsAssignableFrom<IAzureInternalIngressResource>(environment.Resource);
         Assert.Same(vnet.Resource, environment.Resource.Annotations.OfType<InternalLoadBalancerAnnotation>().Single().VirtualNetwork);
         Assert.Contains("internal: true", environmentBicep);
         Assert.Contains("output AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP string", environmentBicep);

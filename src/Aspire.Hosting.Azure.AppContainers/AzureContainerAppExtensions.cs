@@ -632,8 +632,7 @@ public static class AzureContainerAppExtensions
                 infra,
                 containerRegistry,
                 containerAppEnvironment,
-                managedIdentityIdOutputValue,
-                appEnvResource.HasAnnotationOfType<InternalLoadBalancerAnnotation>());
+                managedIdentityIdOutputValue);
         });
 
         // Create the default container registry resource before creating the environment
@@ -867,8 +866,7 @@ public static class AzureContainerAppExtensions
             infra,
             containerRegistry,
             containerAppEnvironment,
-            managedIdentityIdOutputValue,
-            includeStaticIp: false);
+            managedIdentityIdOutputValue);
     }
 
     /// <summary>
@@ -881,8 +879,7 @@ public static class AzureContainerAppExtensions
         AzureResourceInfrastructure infra,
         ContainerRegistryService containerRegistry,
         ContainerAppManagedEnvironment containerAppEnvironment,
-        BicepValue<string> managedIdentityIdOutputValue,
-        bool includeStaticIp)
+        BicepValue<string> managedIdentityIdOutputValue)
     {
         // Required by the IContainerRegistry interface
         infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_NAME", typeof(string))
@@ -917,13 +914,16 @@ public static class AzureContainerAppExtensions
             Value = containerAppEnvironment.DefaultDomain.ToBicepExpression()
         });
 
-        if (includeStaticIp)
+        // Always emitted, regardless of whether this environment is internal: this property reads
+        // directly from the managed environment resource (including "existing" references), which
+        // simply returns null/empty when the environment has no internal ingress. Internal load
+        // balancer consumers (IAzureInternalIngressResource.StaticIp) can only read this output
+        // after WithInternalLoadBalancer has configured the environment to be internal, so the output
+        // being unconditionally present does not change observable behavior for external environments.
+        infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
         {
-            infra.Add(new ProvisioningOutput("AZURE_CONTAINER_APPS_ENVIRONMENT_STATIC_IP", typeof(string))
-            {
-                Value = containerAppEnvironment.StaticIP.ToBicepExpression()
-            });
-        }
+            Value = containerAppEnvironment.StaticIP.ToBicepExpression()
+        });
     }
 
     /// <summary>

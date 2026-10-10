@@ -35,7 +35,7 @@ public static class AzureInternalLoadBalancerExtensions
     public static IResourceBuilder<T> WithInternalLoadBalancer<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureVirtualNetworkResource> virtualNetwork)
-        where T : IAzureInternalLoadBalancerResource
+        where T : IAzureInternalIngressResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(virtualNetwork);
@@ -80,10 +80,13 @@ public static class AzureInternalLoadBalancerExtensions
             privateDnsResourceName = $"{privateDnsResourceName[..55]}-{hash}";
         }
 
+        // Capture the resolved subnet resource (rather than re-deriving it from
+        // DelegatedSubnetAnnotation, which only stores a ReferenceExpression ID) so the Bicep-generation
+        // callback below can revalidate its delegation at deployment-model-finalization time.
         builder.ApplicationBuilder
             .AddAzureInfrastructure(
                 privateDnsResourceName,
-                infrastructure => AddPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource))
+                infrastructure => AddPrivateDns(infrastructure, builder.Resource, virtualNetwork.Resource, subnet))
             .WithParentRelationship(builder.Resource)
             .WithRelationship(virtualNetwork.Resource, "Virtual network link");
 
@@ -92,9 +95,28 @@ public static class AzureInternalLoadBalancerExtensions
 
     private static void AddPrivateDns(
         AzureResourceInfrastructure infrastructure,
-        IAzureInternalLoadBalancerResource resource,
-        AzureVirtualNetworkResource virtualNetwork)
+        IAzureInternalIngressResource resource,
+        AzureVirtualNetworkResource virtualNetwork,
+        AzureSubnetResource subnet)
     {
+        // WithServiceDelegation is explicitly last-write-wins, so the subnet delegation validated at
+        // WithInternalLoadBalancer call time can be replaced afterward by an unrelated later call on the
+        // same subnet (for example another WithDelegatedSubnet target, or a direct WithServiceDelegation
+        // call). Revalidate the delegation here, during infrastructure generation, so call order cannot
+        // emit this resource with IsInternal = true (and this private DNS module) while its subnet is no
+        // longer delegated to the resource's required service.
+        subnet.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out var delegation);
+        if (delegation is null || !string.Equals(
+                delegation.ServiceName,
+                resource.DelegatedSubnetServiceName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"The delegated subnet for Azure resource '{infrastructure.AspireResource.Name}' must remain delegated to " +
+                $"'{resource.DelegatedSubnetServiceName}' for an internal load balancer, but it is " +
+                $"{(delegation is null ? "no longer delegated" : $"delegated to '{delegation.ServiceName}'")}.");
+        }
+
         var virtualNetworkResource = (VirtualNetwork)virtualNetwork.AddAsExistingResource(infrastructure);
         var dnsZone = new PrivateDnsZone(
             Infrastructure.NormalizeBicepIdentifier($"{infrastructure.AspireResource.Name}_privateDns"))

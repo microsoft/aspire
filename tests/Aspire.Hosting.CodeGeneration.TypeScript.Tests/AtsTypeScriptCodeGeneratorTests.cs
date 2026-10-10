@@ -1598,7 +1598,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var capability = Assert.Single(result.Capabilities,
             c => c.CapabilityId == "Aspire.Hosting.Azure.Network/withNetworkInternalLoadBalancer");
         Assert.Equal("withInternalLoadBalancer", capability.MethodName);
-        Assert.Equal(GetAtsTypeId(typeof(IAzureInternalLoadBalancerResource)), capability.TargetTypeId);
+        Assert.Equal(GetAtsTypeId(typeof(IAzureInternalIngressResource)), capability.TargetTypeId);
 #pragma warning restore ASPIREAZURE003
 
         var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
