@@ -16,6 +16,7 @@ using Azure.Monitor.OpenTelemetry.Exporter;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
@@ -35,7 +36,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             // Isolate cached exporter settings and prevent SDK diagnostics from making real requests.
             Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
             Environment.SetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS", "true");
-            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false);
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: true);
             using var fixture = new TelemetryFixture(initialize: false);
             fixture.TagsSource.StartCalculation(() => Task.FromResult<IReadOnlyList<KeyValuePair<string, object?>>>(
             [
@@ -114,6 +115,105 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         }, workspace.WorkspaceRoot.FullName);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void SharedLogExporter_PersistsOnlyWhenConfigured(bool shutdown, bool persist)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var process = RemoteExecutor.Invoke(static async (storageDirectory, shutdownValue, persistValue) =>
+        {
+            // Exporter switches and cached transmitters must not affect other tests or send SDK diagnostics.
+            Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            var shutdown = bool.Parse(shutdownValue);
+            var persist = bool.Parse(persistValue);
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: !persist);
+            var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var releaseUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var uploaded = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
+            {
+                var payload = await request.Content!.ReadAsStringAsync(cancellationToken);
+                requestStarted.TrySetResult();
+                await releaseUpload.Task.WaitAsync(cancellationToken);
+                uploaded.TrySetResult(payload);
+                var count = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(new { itemsReceived = count, itemsAccepted = count, errors = Array.Empty<object>() }))
+                };
+            });
+            using var client = new HttpClient(handler);
+            var connectionString = $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://localhost/";
+            var services = new ServiceCollection();
+            services.AddLogging(builder => builder.AddOpenTelemetry(logging =>
+            {
+                logging.IncludeFormattedMessage = true;
+                logging.IncludeScopes = false;
+                logging.AddAspireAzureMonitorExporter(connectionString, storageDirectory, options =>
+                {
+                    Assert.Equal(connectionString, options.ConnectionString);
+                    Assert.Equal(storageDirectory, options.StorageDirectory);
+                    Assert.False(options.EnableLiveMetrics);
+                    Assert.False(options.EnableStandardMetrics);
+                    Assert.False(options.EnablePerformanceCounters);
+                    Assert.False(options.EnableTraceBasedLogsSampler);
+                    options.Transport = new HttpClientTransport(client);
+                });
+            }));
+            using var serviceProvider = services.BuildServiceProvider();
+            var provider = serviceProvider.GetRequiredService<LoggerProvider>();
+            var logger = serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Test.Product.Events");
+            string[] eventNames = ["product-event-1", "product-event-2", "product-event-3"];
+            foreach (var eventName in eventNames)
+            {
+                logger.LogInformation("{EventName}", eventName);
+            }
+
+            try
+            {
+                var drain = Task.Run(() => shutdown ? provider.Shutdown(10_000) : provider.ForceFlush(10_000));
+                if (persist)
+                {
+                    // No trace provider is present to put the shared transmitter into persistence mode.
+                    Assert.True(await drain.DefaultTimeout());
+                }
+
+                await requestStarted.Task.DefaultTimeout();
+                Assert.False(uploaded.Task.IsCompleted);
+                if (persist)
+                {
+                    Assert.NotEmpty(Directory.EnumerateFiles(storageDirectory, "*", SearchOption.AllDirectories));
+                }
+                else
+                {
+                    Assert.False(drain.IsCompleted);
+                }
+
+                releaseUpload.SetResult();
+                Assert.True(await drain.DefaultTimeout());
+                var payload = await uploaded.Task.DefaultTimeout();
+                // Ingestion receives newline-delimited envelopes such as:
+                // {"data":{"baseType":"MessageData","baseData":{"message":"product-event-1",...}},...}
+                var actualEventNames = payload.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line =>
+                {
+                    using var envelope = JsonDocument.Parse(line);
+                    var data = envelope.RootElement.GetProperty("data");
+                    Assert.Equal("MessageData", data.GetProperty("baseType").GetString());
+                    return data.GetProperty("baseData").GetProperty("message").GetString();
+                });
+                Assert.Equal(eventNames, actualEventNames);
+            }
+            finally
+            {
+                releaseUpload.TrySetResult();
+                provider.Shutdown(10_000);
+            }
+        }, workspace.Path, shutdown.ToString(), persist.ToString());
+    }
+
     [Fact]
     public async Task TelemetryManager_RequiresInitializationBeforeUse()
     {
@@ -126,12 +226,12 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         Assert.Throws<InvalidOperationException>(() => manager.HasDiagnosticProvider);
         await Assert.ThrowsAsync<InvalidOperationException>(manager.ForceFlushProfilingAsync);
         await Assert.ThrowsAsync<InvalidOperationException>(manager.ForceFlushReportedAsync);
-        Assert.False(await manager.TryShutdownAsync());
+        Assert.False(await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Local));
 
         manager.Initialize();
         Assert.True(manager.IsInitialized);
         Assert.False(manager.HasAzureMonitor);
-        Assert.True(await manager.TryShutdownAsync());
+        Assert.True(await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Local));
         Assert.False(manager.IsInitialized);
         Assert.Throws<InvalidOperationException>(manager.Initialize);
         Assert.Throws<InvalidOperationException>(() => manager.HasAzureMonitor);
@@ -211,7 +311,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 
         Assert.True(manager.IsInitialized);
         var shutdownTasks = Enumerable.Range(0, 16)
-            .Select(_ => Task.Run(manager.TryShutdownAsync))
+            .Select(_ => Task.Run(() => manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Local)))
             .ToArray();
         Assert.All(await Task.WhenAll(shutdownTasks), Assert.True);
         Assert.False(manager.IsInitialized);
@@ -232,7 +332,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         var shutdown = Task.Run(async () =>
         {
             await start.Task;
-            return await manager.TryShutdownAsync();
+            return await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Local);
         });
 
         start.SetResult();
@@ -242,7 +342,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         Assert.Equal(!wasShutDown, manager.IsInitialized);
         if (!wasShutDown)
         {
-            Assert.True(await manager.TryShutdownAsync());
+            Assert.True(await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Local));
         }
     }
 
@@ -254,7 +354,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         manager.Dispose();
 
         Assert.Throws<InvalidOperationException>(manager.Initialize);
-        Assert.False(await manager.TryShutdownAsync());
+        Assert.False(await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Local));
     }
 
     [Fact]
@@ -283,7 +383,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         var lockPath = Path.Combine(workspace.Path, "uploader.lock");
         RemoteExecutor.Invoke(static async directory =>
         {
-            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: true);
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: true, isCIEnvironment: false);
             using var handler = new MockHttpMessageHandler(async (_, cancellationToken) =>
             {
                 await Task.Delay(Timeout.Infinite, cancellationToken);
@@ -306,7 +406,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
         // expiry/recovery rather than editing private storage names or disabling exporter behavior.
         RemoteExecutor.Invoke(static async (directory, lockPath) =>
         {
-            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: true);
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: true, isCIEnvironment: false);
             var delivered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var handler = new MockHttpMessageHandler(async (request, cancellationToken) =>
             {
@@ -351,33 +451,38 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             .Build();
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ConfigureExporterForProcess_PreservesOrdinaryCommands(bool isAgentTelemetryInvocation)
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ConfigureExporterForProcess_SelectsLocalCIAndAgentPolicies(bool isAgentTelemetryInvocation, bool isCIEnvironment)
     {
-        using var process = RemoteExecutor.Invoke(static value =>
+        using var process = RemoteExecutor.Invoke(static (agentValue, ciValue) =>
         {
-            var isAgent = bool.Parse(value);
-            TelemetryManager.ConfigureExporterForProcess(isAgent);
+            var isAgent = bool.Parse(agentValue);
+            var isCI = bool.Parse(ciValue);
+            var mode = TelemetryManager.ConfigureExporterForProcess(isAgent, isCI);
+            var persist = isAgent || !isCI;
 
-            Assert.True(AppContext.TryGetSwitch("Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush", out var persist));
-            Assert.Equal(isAgent, persist);
+            Assert.Equal(isAgent ? ReportedTelemetryMode.Agent : isCI ? ReportedTelemetryMode.CI : ReportedTelemetryMode.Local, mode);
+            Assert.True(AppContext.TryGetSwitch("Azure.Monitor.OpenTelemetry.Exporter.PersistOnForceFlush", out var persistOnForceFlush));
+            Assert.Equal(persist, persistOnForceFlush);
             Assert.True(AppContext.TryGetSwitch("Azure.Monitor.OpenTelemetry.Exporter.DisablePersistOnShutdown", out var disable));
-            Assert.Equal(!isAgent, disable);
-            Assert.Equal(isAgent ? 0 : null, AppContext.GetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds"));
-        }, isAgentTelemetryInvocation.ToString());
+            Assert.Equal(!persist, disable);
+            Assert.Equal(0, AppContext.GetData("Azure.Monitor.OpenTelemetry.Exporter.ShutdownDrainBudgetMilliseconds"));
+        }, isAgentTelemetryInvocation.ToString(), isCIEnvironment.ToString());
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ForceFlush_OnlyAgentTelemetryReturnsBeforeUpload(bool isAgentTelemetryInvocation)
+    public void ForceFlush_LocalTelemetryReturnsBeforeUpload(bool isCIEnvironment)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var process = RemoteExecutor.Invoke(static async (storageDirectory, value) =>
         {
-            var isAgent = bool.Parse(value);
-            TelemetryManager.ConfigureExporterForProcess(isAgent);
+            var persist = !bool.Parse(value);
+            TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: !persist);
             var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var releaseUpload = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var uploaded = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -422,7 +527,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
             try
             {
                 var flush = Task.Run(() => provider.ForceFlush(10_000));
-                if (isAgent)
+                if (persist)
                 {
                     // A network-backed ForceFlush cannot finish until releaseUpload is signalled.
                     Assert.True(await flush.DefaultTimeout());
@@ -430,7 +535,7 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
 
                 await requestStarted.Task.DefaultTimeout();
                 Assert.False(uploaded.Task.IsCompleted);
-                if (isAgent)
+                if (persist)
                 {
                     Assert.NotEmpty(Directory.EnumerateFiles(storageDirectory, "*", SearchOption.AllDirectories));
                 }
@@ -459,6 +564,6 @@ public class AgentTelemetryPersistenceTests(ITestOutputHelper outputHelper)
                 releaseUpload.TrySetResult();
                 provider.Shutdown();
             }
-        }, workspace.Path, isAgentTelemetryInvocation.ToString());
+        }, workspace.Path, isCIEnvironment.ToString());
     }
 }

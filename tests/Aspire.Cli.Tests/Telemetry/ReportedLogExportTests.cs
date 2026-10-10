@@ -32,6 +32,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
         {
             // Statsbeat uses a separate transport; this test covers the product envelopes only.
             Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            var mode = TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: true);
             Environment.SetEnvironmentVariable("OTEL_DOTNET_AZURE_MONITOR_ENABLE_RESOURCE_METRICS", "true");
             Environment.SetEnvironmentVariable("OTEL_SERVICE_NAME", "sensitive-service");
             Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES",
@@ -57,7 +58,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             }
 
             Assert.True(await manager.ForceFlushReportedAsync());
-            Assert.True(await manager.TryShutdownAsync());
+            Assert.True(await manager.TryShutdownAsync(CliExitCodes.Success, mode));
             var records = exported.OrderBy(record => record.GetProperty("data").GetProperty("baseType").GetString(), StringComparer.Ordinal).ToArray();
             Assert.Equal(["MessageData", "MetricData", "RemoteDependencyData"],
                 records.Select(record => record.GetProperty("data").GetProperty("baseType").GetString()).ToArray());
@@ -113,6 +114,7 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
         using var process = RemoteExecutor.Invoke(static async (directory, enabledValue, flushValue) =>
         {
             Environment.SetEnvironmentVariable("APPLICATIONINSIGHTS_STATSBEAT_DISABLED", "true");
+            var mode = TelemetryManager.ConfigureExporterForProcess(isAgentTelemetryInvocation: false, isCIEnvironment: true);
             Environment.SetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES", null);
             var isEnabled = bool.Parse(enabledValue);
             var configuration = new TelemetryConfiguration { ReportedTelemetryEnabled = isEnabled };
@@ -176,9 +178,10 @@ public class ReportedLogExportTests(ITestOutputHelper outputHelper)
             {
                 Assert.True(await manager.ForceFlushReportedAsync());
             }
-            Assert.True(await manager.TryShutdownAsync());
+            Assert.True(await manager.TryShutdownAsync(CliExitCodes.Success, mode));
             Assert.False(reportedSource.HasListeners());
-            Assert.Same(manager.TryShutdownAsync(), manager.TryShutdownAsync());
+            Assert.Same(manager.TryShutdownAsync(CliExitCodes.Success, mode),
+                manager.TryShutdownAsync(CliExitCodes.Success, mode));
             var records = exported.ToArray();
             Assert.Equal(isEnabled ? ["test-event", TelemetryConstants.Events.Error] : [],
                 records.Select(record => record.GetProperty("data").GetProperty("baseData").GetProperty("message").GetString()).ToArray());

@@ -3,7 +3,7 @@
 
 using OpenTelemetry;
 
-namespace Aspire.Dashboard.Tests;
+namespace Aspire.Tests.Shared.Telemetry;
 
 internal sealed class TestTelemetryProcessor<T> : BaseProcessor<T> where T : class
 {

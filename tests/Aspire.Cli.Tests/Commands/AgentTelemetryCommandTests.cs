@@ -38,7 +38,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
 
         Assert.False(manager.IsInitialized);
-        Assert.False(await manager.TryShutdownAsync());
+        Assert.False(await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Agent));
         Assert.Empty(await fixture.TagsSource.TagsTask);
         Assert.Null(fixture.CapturedActivity);
         Assert.Equal("""{"continue":true}""" + Environment.NewLine, output.ToString());
@@ -113,7 +113,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         Program.InitializeCommandTelemetry(result.CommandResult.Command, manager, fixture.Telemetry);
         Assert.Equal(0, await result.InvokeAsync().DefaultTimeout());
         Assert.False(manager.IsInitialized);
-        Assert.False(await manager.TryShutdownAsync());
+        Assert.False(await manager.TryShutdownAsync(CliExitCodes.Success, ReportedTelemetryMode.Agent));
         Assert.Empty(await fixture.TagsSource.TagsTask);
     }
 

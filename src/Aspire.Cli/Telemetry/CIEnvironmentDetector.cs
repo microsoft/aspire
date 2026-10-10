@@ -39,33 +39,35 @@ internal sealed class CIEnvironmentDetector : ICIEnvironmentDetector
     }
 
     /// <inheritdoc />
-    public bool IsCIEnvironment()
+    public bool IsCIEnvironment() => IsCIEnvironment(_environment);
+
+    public static bool IsCIEnvironment(IEnvironment environment)
     {
         foreach (var varName in s_booleanVars)
         {
-            if (IsTrue(_environment.GetEnvironmentVariable(varName)))
+            if (IsTrue(environment.GetEnvironmentVariable(varName)))
             {
                 return true;
             }
         }
 
         // AWS CodeBuild - both variables must be present
-        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("CODEBUILD_BUILD_ID")) &&
-            !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("AWS_REGION")))
+        if (!string.IsNullOrEmpty(environment.GetEnvironmentVariable("CODEBUILD_BUILD_ID")) &&
+            !string.IsNullOrEmpty(environment.GetEnvironmentVariable("AWS_REGION")))
         {
             return true;
         }
 
         // Jenkins - both variables must be present
-        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
-            !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_URL")))
+        if (!string.IsNullOrEmpty(environment.GetEnvironmentVariable("BUILD_ID")) &&
+            !string.IsNullOrEmpty(environment.GetEnvironmentVariable("BUILD_URL")))
         {
             return true;
         }
 
         // Google Cloud Build - both variables must be present
-        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("BUILD_ID")) &&
-            !string.IsNullOrEmpty(_environment.GetEnvironmentVariable("PROJECT_ID")))
+        if (!string.IsNullOrEmpty(environment.GetEnvironmentVariable("BUILD_ID")) &&
+            !string.IsNullOrEmpty(environment.GetEnvironmentVariable("PROJECT_ID")))
         {
             return true;
         }
@@ -73,7 +75,7 @@ internal sealed class CIEnvironmentDetector : ICIEnvironmentDetector
         // Check presence-only variables - just need to be set (any non-empty value)
         foreach (var varName in s_presenceVars)
         {
-            if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(varName)))
+            if (!string.IsNullOrEmpty(environment.GetEnvironmentVariable(varName)))
             {
                 return true;
             }

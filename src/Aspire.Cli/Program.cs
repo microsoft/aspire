@@ -332,8 +332,7 @@ public class Program
         }
 
 #if !DEBUG
-        // In release builds, limit shutdown wait time for telemetry flush to 200ms
-        // to ensure the CLI exits quickly even if waiting on shutdown tasks.
+        // Keep general hosted-service shutdown short. Product telemetry has its own awaited budget.
         builder.Services.Configure<HostOptions>(options =>
         {
             options.ShutdownTimeout = TimeSpan.FromMilliseconds(200);
@@ -1108,7 +1107,9 @@ public class Program
             return await InvokeCompletionAsync(args, Console.Out, Console.Error).ConfigureAwait(false);
         }
 
-        TelemetryManager.ConfigureExporterForProcess(AgentTelemetryInvocation.Matches(args));
+        var reportedTelemetryMode = TelemetryManager.ConfigureExporterForProcess(
+            AgentTelemetryInvocation.Matches(args),
+            CIEnvironmentDetector.IsCIEnvironment(new HostEnvironment()));
 
         // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
         // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
@@ -1184,7 +1185,7 @@ public class Program
         logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
-        TelemetryManager telemetryManager;
+        TelemetryManager? telemetryManager = null;
         ParseResult parseResult;
         try
         {
@@ -1197,10 +1198,19 @@ public class Program
         }
         catch (Exception ex)
         {
-            app?.Dispose();
-
             logger.LogError(ex, "Failed to load configuration or start CLI.");
             errorWriter.WriteLine(ex.Message);
+            try
+            {
+                if (telemetryManager is not null)
+                {
+                    await telemetryManager.TryShutdownAsync(CliExitCodes.FailedToStartCli, reportedTelemetryMode).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                app?.Dispose();
+            }
             return CliExitCodes.FailedToStartCli;
         }
 
@@ -1241,10 +1251,10 @@ public class Program
             ? null
             : StartMainActivity(telemetry, app.Services.GetRequiredService<InstallSourceDetector>());
         ProfileCaptureService.ProfileCaptureSession? profileCaptureSession = null;
+        var exitCode = CliExitCodes.Success;
 
         try
         {
-            var exitCode = CliExitCodes.Success;
             try
             {
                 if (profileCaptureOptions is not null)
@@ -1347,21 +1357,30 @@ public class Program
         }
         finally
         {
-            if (profileCaptureSession is not null)
+            try
             {
-                await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
+                if (profileCaptureSession is not null)
+                {
+                    await profileCaptureSession.DisposeAsync().ConfigureAwait(false);
+                }
+
+                // Finish asynchronously-created detector activities before shutting down their provider.
+                await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
             }
-
-            // Finish asynchronously-created detector activities before shutting down their provider.
-            await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
-
-            // Shutting down telemetry manager to flush any remaining telemetry will take time.
-            // Run it concurrently with application shutdown after all asynchronously-created telemetry
-            // has been submitted to the providers.
-            var shutdownTelemetryTask = telemetryManager.TryShutdownAsync();
-
-            await app.StopAsync().ConfigureAwait(false);
-            await shutdownTelemetryTask;
+            finally
+            {
+                // Await product persistence even if another shutdown operation fails. It runs alongside
+                // host shutdown, but its local/CI budget is independent of the host's shutdown timeout.
+                var shutdownTelemetryTask = telemetryManager.TryShutdownAsync(exitCode, reportedTelemetryMode);
+                try
+                {
+                    await app.StopAsync().ConfigureAwait(false);
+                }
+                finally
+                {
+                    await shutdownTelemetryTask.ConfigureAwait(false);
+                }
+            }
         }
     }
 
