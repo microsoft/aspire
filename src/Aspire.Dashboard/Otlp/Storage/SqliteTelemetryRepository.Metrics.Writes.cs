@@ -69,8 +69,25 @@ public sealed partial class SqliteTelemetryRepository
                             continue;
                         }
 
-                        EnsureCachedInstruments(connection, transaction, cachedResource, cachedView, cachedScope, scopeMetrics.Metrics);
+                        var validatedMetrics = new List<Metric>(scopeMetrics.Metrics.Count);
                         foreach (var metric in scopeMetrics.Metrics)
+                        {
+                            var aggregationTemporality = MapAggregationTemporality(metric);
+                            if (!IsSupportedAggregationTemporality(aggregationTemporality))
+                            {
+                                context.FailureCount += OtlpHelpers.GetMetricDataPointCount(metric);
+                                _otlpContext.Logger.LogInformation(
+                                    "Error adding metric instrument {MetricName}. Aggregation temporality {AggregationTemporality} is not supported.",
+                                    metric.Name,
+                                    (int)aggregationTemporality);
+                                continue;
+                            }
+
+                            validatedMetrics.Add(metric);
+                        }
+
+                        EnsureCachedInstruments(connection, transaction, cachedResource, cachedView, cachedScope, validatedMetrics);
+                        foreach (var metric in validatedMetrics)
                         {
                             AddMetricToDatabase(connection, transaction, context, cachedResource, cachedView, cachedScope, metric, _metricIngestionState, pointBatch);
                         }
@@ -913,6 +930,14 @@ public sealed partial class SqliteTelemetryRepository
             Metric.DataOneofCase.ExponentialHistogram => (OtlpAggregationTemporality)metric.ExponentialHistogram.AggregationTemporality,
             _ => OtlpAggregationTemporality.Unspecified
         };
+    }
+
+    private static bool IsSupportedAggregationTemporality(OtlpAggregationTemporality aggregationTemporality)
+    {
+        return aggregationTemporality is
+            OtlpAggregationTemporality.Unspecified or
+            OtlpAggregationTemporality.Delta or
+            OtlpAggregationTemporality.Cumulative;
     }
 
     private sealed class MetricAttributeComparer : IComparer<KeyValuePair<string, string>>

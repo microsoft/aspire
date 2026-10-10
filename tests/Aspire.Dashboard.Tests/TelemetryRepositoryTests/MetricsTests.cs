@@ -1117,6 +1117,54 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task AddMetrics_UnsupportedAggregationTemporalities_RejectsAffectedMetricsOnly()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var invalidSum = CreateSumMetric(metricName: "invalid-sum", startTime: s_testTime.AddMinutes(1));
+        invalidSum.Sum.AggregationTemporality = (AggregationTemporality)3;
+        var invalidHistogram = CreateHistogramMetric(metricName: "invalid-histogram", startTime: s_testTime.AddMinutes(1));
+        invalidHistogram.Histogram.AggregationTemporality = (AggregationTemporality)3;
+        var addContext = new AddContext();
+
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            invalidSum,
+                            CreateSumMetric(metricName: "valid", startTime: s_testTime.AddMinutes(1)),
+                            invalidHistogram
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(1, addContext.SuccessCount);
+        Assert.Equal(2, addContext.FailureCount);
+        var instrument = await repositoryContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "test-meter",
+            InstrumentName = "valid",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        }, cancellationToken: CancellationToken.None);
+        Assert.NotNull(instrument);
+        Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument.Dimensions).Values)).Value);
+        Assert.Collection(
+            repositoryContext.Repository.GetInstrumentSummaries(new ResourceKey("TestService", "TestId")),
+            summary => Assert.Equal("valid", summary.Name));
+    }
+
+    [Fact]
     public async Task AddMetrics_NonFiniteDoubleDataPointsRejectedIndividually()
     {
         using var repositoryContext = await CreateRepositoryAsync();
