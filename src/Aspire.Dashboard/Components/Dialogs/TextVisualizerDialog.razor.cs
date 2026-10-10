@@ -142,7 +142,10 @@ public partial class TextVisualizerDialog : ComponentBase
         };
 
         return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
-            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.InitialFormat), parameters);
+            new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat, options.InitialFormat)
+            {
+                MarkdownDescription = options.MarkdownDescription
+            }, parameters);
     }
 
     private async Task DownloadAsync()

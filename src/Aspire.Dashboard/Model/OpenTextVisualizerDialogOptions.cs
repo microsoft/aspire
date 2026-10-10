@@ -11,6 +11,12 @@ public sealed class OpenTextVisualizerDialogOptions
     public required DashboardDialogService DialogService { get; init; }
     public required string ValueDescription { get; init; }
     public required string Value { get; init; }
+
+    /// <summary>
+    /// Optional Markdown description displayed above the text content.
+    /// </summary>
+    public string? MarkdownDescription { get; init; }
+
     public bool ContainsSecret { get; init; }
     public string? DownloadFileName { get; init; }
 

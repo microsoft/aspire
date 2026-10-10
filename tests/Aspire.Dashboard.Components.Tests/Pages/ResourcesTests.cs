@@ -534,6 +534,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         var dialog = Assert.Single(dialogs);
         Assert.Equal("resources.mmd", dialog.DownloadFileName);
+        Assert.Equal(Aspire.Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription, dialog.MarkdownDescription);
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.FixedFormat);
         Assert.False(dialog.ContainsSecret);
         Assert.Empty(JSInterop.Invocations["downloadStreamAsFile"]);
