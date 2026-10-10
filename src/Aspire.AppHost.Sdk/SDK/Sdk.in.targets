@@ -50,6 +50,20 @@
     <Warning Code="ASPIRE003" Text="$(MSBuildProjectName) is an Aspire AppHost project that requires Visual Studio version 17.10 or above to work correctly. You are using version $(MSBuildVersion)." HelpLink="https://aka.ms/aspire/diagnostics/aspire003" />
   </Target>
 
+  <!--
+  Aspire.AppHost.Sdk is obsolete. Project Resource v2 (AddDotnetProject) replaces the automatic
+  ProjectReference-as-resource behavior, and the Aspire CLI bundle replaces the implicit
+  Dashboard/DCP package references. Projects should migrate to the plain Microsoft.NET.Sdk with an
+  explicit Aspire.Hosting.AppHost PackageReference. This warning can be suppressed by setting
+  $(SuppressAspireAppHostSdkObsoleteWarning) to true, but doing so is only intended as a temporary
+  migration aid.
+  -->
+  <Target Name="__WarnOnAspireAppHostSdkObsolete" BeforeTargets="PrepareForBuild" Condition="'$(SuppressAspireAppHostSdkObsoleteWarning)' != 'true'">
+    <Warning Code="ASPIRE012"
+             Text="$(MSBuildProjectName) uses the Aspire.AppHost.Sdk, which is obsolete and will be removed in a future major version. Switch the project's Sdk attribute to Microsoft.NET.Sdk, add an explicit PackageReference to Aspire.Hosting.AppHost, and migrate C# resource ProjectReference items to AddDotnetProject calls. See https://aka.ms/aspire/diagnostics/aspire012 for migration guidance."
+             HelpLink="https://aka.ms/aspire/diagnostics/aspire012" />
+  </Target>
+
   <PropertyGroup>
     <AspireRidToolRoot>$(MSBuildThisFileDirectory)..\tools\@DefaultTargetFramework@\</AspireRidToolRoot>
     <AspireRidToolDirectory>$([MSBuild]::NormalizePath('$(AspireRidToolRoot)\'))</AspireRidToolDirectory>

@@ -56,6 +56,149 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AppHostSdkEmitsObsoleteWarning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = await RunWriteDashboardAndDcpTargetAsync(workspace, extraProjectXml: null);
+
+        Assert.Contains("ASPIRE012", output);
+        Assert.Contains("Aspire.AppHost.Sdk", output);
+        Assert.Contains("obsolete", output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AddDotnetProject", output);
+    }
+
+    [Fact]
+    public async Task AppHostSdkObsoleteWarningCanBeSuppressed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = await RunWriteDashboardAndDcpTargetAsync(workspace,
+            """
+              <PropertyGroup>
+                <SuppressAspireAppHostSdkObsoleteWarning>true</SuppressAspireAppHostSdkObsoleteWarning>
+              </PropertyGroup>
+            """);
+
+        Assert.DoesNotContain("ASPIRE012", output);
+    }
+
+    [Fact]
+    public async Task AppHostTargetsDefaultAspireHostingSDKVersionWhenSdkIsNotUsed()
+    {
+        // Simulates a Project Resource v2 / AddDotnetProject AppHost that uses the plain
+        // Microsoft.NET.Sdk with an explicit Aspire.Hosting.AppHost PackageReference, and never
+        // sets AspireHostingSDKVersion itself (that was previously only set by Aspire.AppHost.Sdk).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(
+            workspace.Path,
+            aspireUseCliBundle: false,
+            extraProjectXml: null,
+            includeBundlePaths: false);
+
+        // Remove the AspireHostingSDKVersion set by the test helper so this project matches a
+        // real non-SDK AppHost, where no component sets that property.
+        var projectXml = await File.ReadAllTextAsync(project.ProjectFile);
+        projectXml = projectXml.Replace($"<AspireHostingSDKVersion>{AspireCliVersion}</AspireHostingSDKVersion>", string.Empty);
+        await File.WriteAllTextAsync(project.ProjectFile, projectXml);
+
+        var properties = await GetTargetPropertiesAsync(
+            project,
+            "CollectPackageReferences",
+            "AspireHostingSDKVersion,IsAspireHost",
+            extraArguments: null,
+            environment: null);
+
+        Assert.False(string.IsNullOrEmpty(properties["AspireHostingSDKVersion"]));
+        Assert.False(MSBuildStringVersionIsLessThan9(properties["AspireHostingSDKVersion"]));
+    }
+
+    private static bool MSBuildStringVersionIsLessThan9(string version)
+        => Version.TryParse(version, out var parsed) && parsed < new Version(9, 0, 0);
+
+    [Fact]
+    public async Task MinimumSdkVersionErrorDoesNotFireForNonSdkAppHost()
+    {
+        // A plain Microsoft.NET.Sdk + Aspire.Hosting.AppHost PackageReference AppHost
+        // (Project Resource v2 / AddDotnetProject) never sets AspireHostingSDKVersion via an SDK,
+        // so the "requires Aspire.AppHost.Sdk >= 9.0.0" check must not apply to it.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(
+            workspace.Path,
+            aspireUseCliBundle: false,
+            extraProjectXml: """
+              <Target Name="RunPrepareForBuild" DependsOnTargets="PrepareForBuild" />
+            """,
+            includeBundlePaths: false);
+
+        var projectXml = await File.ReadAllTextAsync(project.ProjectFile);
+        projectXml = projectXml.Replace($"<AspireHostingSDKVersion>{AspireCliVersion}</AspireHostingSDKVersion>", string.Empty);
+        await File.WriteAllTextAsync(project.ProjectFile, projectXml);
+
+        var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, ["msbuild", "-nologo", "-restore", "-t:RunPrepareForBuild"]);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE007", result.Output);
+    }
+
+    [Fact]
+    public async Task MinimumSdkVersionErrorStillFiresForOldAspireAppHostSdkVersion()
+    {
+        // A project still using Aspire.AppHost.Sdk with a pre-9.0 version must still get the
+        // clear ASPIRE007 error telling it to upgrade the Sdk reference.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(
+            workspace.Path,
+            aspireUseCliBundle: false,
+            extraProjectXml: """
+              <PropertyGroup>
+                <_UsingAspireAppHostSdk>true</_UsingAspireAppHostSdk>
+              </PropertyGroup>
+              <Target Name="RunPrepareForBuild" DependsOnTargets="PrepareForBuild" />
+            """,
+            includeBundlePaths: false);
+
+        var projectXml = await File.ReadAllTextAsync(project.ProjectFile);
+        projectXml = projectXml.Replace($"<AspireHostingSDKVersion>{AspireCliVersion}</AspireHostingSDKVersion>", "<AspireHostingSDKVersion>8.0.0</AspireHostingSDKVersion>");
+        await File.WriteAllTextAsync(project.ProjectFile, projectXml);
+
+        var result = await RunDotNetWithArgumentsAsync(project.ProjectDirectory, ["msbuild", "-nologo", "-restore", "-t:RunPrepareForBuild"]);
+
+        Assert.Contains("ASPIRE007", result.Output);
+    }
+
+    private static async Task<string> RunWriteDashboardAndDcpTargetAsync(TemporaryWorkspace workspace, string? extraProjectXml)
+    {
+        var repoRoot = GetRepoRoot();
+
+        var projectDirectory = Path.Combine(workspace.Path, "AppHost");
+        Directory.CreateDirectory(projectDirectory);
+
+        var sdkTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.AppHost.Sdk", "SDK", "Sdk.in.targets"));
+
+        await File.WriteAllTextAsync(Path.Combine(projectDirectory, "AppHost.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
+                <!-- Avoid needing a real package restore for this test; the obsolete-SDK warning
+                     doesn't depend on the implicit Aspire.Hosting.AppHost package reference. -->
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+              </PropertyGroup>
+
+              <Import Project="{{sdkTargetsPath}}" />
+
+            {{extraProjectXml}}
+
+            </Project>
+            """);
+
+        var result = await RunDotNetAsync(projectDirectory, "msbuild -nologo -t:Build");
+
+        return result.Output;
+    }
+
+    [Fact]
     public async Task AddReferenceToDashboardAndDcpUsesSdkRidSelectionTask()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -1,5 +1,20 @@
 <Project>
 
+  <!--
+  Projects that reference this package directly (plain Microsoft.NET.Sdk, Project Resource v2 /
+  AddDotnetProject, no Aspire.AppHost.Sdk) never have AspireHostingSDKVersion set by an SDK. Default
+  it here so the .NET SDK's built-in Aspire-workload-deprecation check (which requires
+  AspireHostingSDKVersion >= 9.0.0 whenever IsAspireHost=true, to catch apps still using the old,
+  removed, pre-9.0 Aspire workload) doesn't misidentify these projects as using that old workload.
+  This value is intentionally a fixed "known-good" version rather than this package's own version:
+  it only needs to satisfy that >= 9.0.0 check, and a fixed value keeps evaluation correct both when
+  this file is consumed from a packed NuGet package and when it's imported directly from source
+  (e.g. in this repo's own tests), where the @VERSION@ packaging token is never substituted.
+  -->
+  <PropertyGroup Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == ''">
+    <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
+  </PropertyGroup>
+
   <PropertyGroup>
     <!-- Similar to ASP.NET Core and Worker apps, set the default CWD of orchestrator projects to be the project directory. -->
     <RunWorkingDirectory Condition=" '$(RunWorkingDirectory)' == '' and '$(EnableDefaultRunWorkingDirectory)' != 'false' ">$(MSBuildProjectDirectory)</RunWorkingDirectory>
@@ -718,8 +733,14 @@ namespace Projects%3B
     <MakeDir Directories="$(AspireManifestPublishOutputPath)" />
   </Target>
 
+  <!--
+  This check only applies to projects that opted into the (obsolete) Aspire.AppHost.Sdk via
+  '$(_UsingAspireAppHostSdk)'. Projects that use the plain Microsoft.NET.Sdk with an explicit
+  Aspire.Hosting.AppHost PackageReference (Project Resource v2 / AddDotnetProject) never set
+  AspireHostingSDKVersion, so they are not subject to this minimum-SDK-version check.
+  -->
   <Target Name="__ErrorOnMininumSdkVersionMissing" BeforeTargets="PrepareForBuild"
-  Condition="'$(IsAspireHost)' == 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
+  Condition="'$(IsAspireHost)' == 'true' and '$(_UsingAspireAppHostSdk)' == 'true' and ('$(AspireHostingSDKVersion)' == '' or $([MSBuild]::VersionLessThan('$(AspireHostingSDKVersion)', '9.0.0')))">
     <Error Code="ASPIRE007"
       Text="$(MSBuildProjectName) project requires a reference to &quot;Aspire.AppHost.Sdk&quot; with version &quot;9.0.0&quot; or greater to work correctly. Please add the following line after the Project declaration `&lt;Sdk Name=&quot;Aspire.AppHost.Sdk&quot; Version=&quot;9.0.0&quot; /&gt;`."
       File="$(MSBuildProjectFullPath)"
