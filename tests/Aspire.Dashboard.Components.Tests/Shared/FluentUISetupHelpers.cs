@@ -77,11 +77,14 @@ internal static class FluentUISetupHelpers
 
     public static void SetupFluentDataGrid(BunitContext context)
     {
+        // bUnit leaves a SetupVoid invocation pending until a result is set. FluentDataGrid awaits "stop" when it is
+        // disposed, so without SetVoidResult() every test that renders a data grid blocks in disposal until the
+        // bUnit wait timeout elapses (10 seconds in DashboardTestContext).
         var dataGridModule = context.JSInterop.SetupModule("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/DataGrid/FluentDataGrid.razor.js");
-        dataGridModule.SetupVoid("Microsoft.FluentUI.Blazor.DataGrid.EnableColumnResizing", _ => true);
+        dataGridModule.SetupVoid("Microsoft.FluentUI.Blazor.DataGrid.EnableColumnResizing", _ => true).SetVoidResult();
 
         var gridReference = dataGridModule.SetupModule("Microsoft.FluentUI.Blazor.DataGrid.Initialize", _ => true);
-        gridReference.SetupVoid("stop", _ => true);
+        gridReference.SetupVoid("stop", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentSearch(BunitContext context)
