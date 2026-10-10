@@ -62,6 +62,15 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "ServiceBusBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureServiceBusRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> target, params global::Azure.Provisioning.ServiceBus.ServiceBusBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithSqlServer(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> sqlServer) { throw null; }
+
+        [AspireExportIgnore(Reason = "Action<IResourceBuilder<SqlServerServerResource>> callbacks are not ATS-compatible. Use the WithSqlServer overload that takes a SQL Server resource instead.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithSqlServer(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource>> configureSqlServer) { throw null; }
+
+        [AspireExportIgnore(Reason = "The emulator creates its own SQL Server resource by default, so there is nothing to configure. Use the WithSqlServer overload that takes a SQL Server resource to reuse an existing one.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithSqlServer(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder) { throw null; }
     }
 }
 

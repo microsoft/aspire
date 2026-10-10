@@ -22,7 +22,7 @@ namespace Aspire.Hosting
         [System.Obsolete("GetSecretOutput is obsolete. Use IAzureKeyVaultResource.GetSecret instead.")]
         public static Azure.BicepSecretOutputReference GetSecretOutput(this ApplicationModel.IResourceBuilder<Azure.AzureBicepResource> builder, string name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.BicepOutputReference bicepOutputReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -30,19 +30,19 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.BicepSecretOutputReference bicepOutputReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.IAzureKeyVaultSecretReference secretReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.EndpointReference value)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> value)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value)
             where T : Azure.AzureBicepResource { throw null; }
 
@@ -50,15 +50,15 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.ParameterResource value)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.ReferenceExpression value)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.BicepOutputReference value)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Collections.Generic.IEnumerable<string> value)
             where T : Azure.AzureBicepResource { throw null; }
 
@@ -66,7 +66,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Func<object?> valueCallback)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string value)
             where T : Azure.AzureBicepResource { throw null; }
 
@@ -74,7 +74,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Text.Json.Nodes.JsonNode value)
             where T : Azure.AzureBicepResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withParameter dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withParameter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
             where T : Azure.AzureBicepResource { throw null; }
     }
@@ -317,7 +317,6 @@ namespace Aspire.Hosting.Azure
         public static AzureBicepResourceScope CreateForTenant() { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public sealed partial class AzureEnvironmentResource : ApplicationModel.Resource
     {
         public const string PrepareResourcesStepName = "azure-prepare-resources";
@@ -334,15 +333,12 @@ namespace Aspire.Hosting.Azure
     public static partial class AzureEnvironmentResourceExtensions
     {
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> AddAzureEnvironment(this IDistributedApplicationBuilder builder) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> WithLocation(this ApplicationModel.IResourceBuilder<AzureEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> location) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> WithResourceGroup(this ApplicationModel.IResourceBuilder<AzureEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> resourceGroup) { throw null; }
     }
 
@@ -379,10 +375,11 @@ namespace Aspire.Hosting.Azure
         public static bool TryApplyExistingResourceAnnotation(ApplicationModel.IAzureResource aspireResource, AzureResourceInfrastructure infra, global::Azure.Provisioning.Primitives.ProvisionableResource provisionableResource) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzurePublishingContext
     {
         public AzurePublishingContext(string outputPath, AzureProvisioningOptions provisioningOptions, System.IServiceProvider serviceProvider, Microsoft.Extensions.Logging.ILogger logger, Pipelines.IReportingStep reportingStep) { }
+
+        public bool ExcludeMainBicepFile { get { throw null; } set { } }
 
         public global::Azure.Provisioning.Infrastructure MainInfrastructure { get { throw null; } }
 
@@ -401,7 +398,6 @@ namespace Aspire.Hosting.Azure
         public AzureProvisioningResource AspireResource { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class AzureRoleAssignmentResource : AzureProvisioningResource
     {
         public AzureRoleAssignmentResource(string name, AzureProvisioningResource targetAzureResource, ApplicationModel.IResource? ownerResource, AzureUserAssignedIdentityResource? identityResource, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
