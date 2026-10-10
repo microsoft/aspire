@@ -1499,8 +1499,9 @@ public static partial class JavaHostingExtensions
 
         // A bare "mvnw.cmd" is only found in the working directory while cmd.exe searches it, and
         // NoDefaultCurrentDirectoryInExePath=1 (a common hardening setting) turns that search off, which
-        // fails with "'mvnw.cmd' is not recognized". A "." segment makes it a path rather than a name.
-        if (!Path.IsPathRooted(relativeWrapperPath))
+        // fails with "'mvnw.cmd' is not recognized". A "." segment makes it a path rather than a name;
+        // any path that already has a separator is resolved directly.
+        if (!relativeWrapperPath.Contains(Path.DirectorySeparatorChar))
         {
             relativeWrapperPath = Path.Combine(".", relativeWrapperPath);
         }

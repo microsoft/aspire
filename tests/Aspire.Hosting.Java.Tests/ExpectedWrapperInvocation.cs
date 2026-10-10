@@ -26,6 +26,14 @@ internal static class ExpectedWrapperInvocation
 
     public static string[] Args(string wrapperPath, string workingDirectory, params string[] toolArgs)
         => OperatingSystem.IsWindows()
-            ? ["/c", "call", Path.Combine(".", Path.GetRelativePath(workingDirectory, wrapperPath)), .. toolArgs]
+            ? ["/c", "call", RelativeWrapper(workingDirectory, wrapperPath), .. toolArgs]
             : [wrapperPath, .. toolArgs];
+
+    // Only a bare file name needs ".\" so cmd.exe does not look it up by name.
+    private static string RelativeWrapper(string workingDirectory, string wrapperPath)
+    {
+        var relative = Path.GetRelativePath(workingDirectory, wrapperPath);
+
+        return relative.Contains(Path.DirectorySeparatorChar) ? relative : $".{Path.DirectorySeparatorChar}{relative}";
+    }
 }
