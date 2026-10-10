@@ -20,6 +20,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Java;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -1485,36 +1486,7 @@ public static partial class JavaHostingExtensions
 
     /// <inheritdoc cref="ResolveWrapperInvocation" />
     internal static (string Command, string[] LeadingArgs) WrapperInvocationFor(string wrapperPath, string workingDirectory, bool isWindows)
-    {
-        if (!isWindows)
-        {
-            return ("sh", [wrapperPath]);
-        }
-
-        // Passing the wrapper as a path relative to the resource's working directory keeps it short and
-        // usually free of spaces, which matters because cmd.exe strips quotes in a way that does not
-        // match how arguments are escaped for it: when the *first* token on the line is quoted, cmd
-        // removes that quote and the last one on the line, mangling everything in between.
-        var relativeWrapperPath = Path.GetRelativePath(workingDirectory, wrapperPath);
-
-        // A bare "mvnw.cmd" is only found in the working directory while cmd.exe searches it, and
-        // NoDefaultCurrentDirectoryInExePath=1 (a common hardening setting) turns that search off, which
-        // fails with "'mvnw.cmd' is not recognized". A "." segment makes it a path rather than a name;
-        // any path that already has a separator is resolved directly.
-        if (!relativeWrapperPath.Contains(Path.DirectorySeparatorChar))
-        {
-            relativeWrapperPath = Path.Combine(".", relativeWrapperPath);
-        }
-
-        // "call" makes that unreachable rather than merely unlikely. A wrapper reached through a
-        // directory with a space in its name — WithWrapperPath("../build tools/mvnw.cmd") — is quoted
-        // when the command line is built, and quoting the first token is exactly what triggers the
-        // stripping. With "call" ahead of it the first character is never a quote, so the rule cannot
-        // apply, and "call" is how a batch file is meant to be invoked from another anyway: it returns
-        // control and propagates the wrapper's exit code.
-        // See the quote-processing rules printed by `cmd /?`.
-        return (Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", ["/c", "call", relativeWrapperPath]);
-    }
+        => JavaWrapper.GetInvocation(wrapperPath, workingDirectory, isWindows);
 
     private static string WrapperCommand()
         => OperatingSystem.IsWindows()
