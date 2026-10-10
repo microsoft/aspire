@@ -325,6 +325,11 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
                     {
                         urls.Add(url.DeepClone());
                     }
+                    else if (endpoint.Value?["host"] is { } host && endpoint.Value["port"] is { } port)
+                    {
+                        var scheme = resource.Definition["endpoints"]![endpoint.Key]!["scheme"]!.GetValue<string>();
+                        urls.Add((JsonNode)JsonValue.Create(new UriBuilder(scheme, host.GetValue<string>(), port.GetValue<int>()).Uri.AbsoluteUri)!);
+                    }
                 }
             }
 
@@ -333,6 +338,8 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
                 ["name"] = resource.Name,
                 ["kind"] = resource.Definition["kind"]!.DeepClone(),
                 ["state"] = RpcPeer.RequiredString(state, "state"),
+                ["containerId"] = state["containerId"]?.DeepClone(),
+                ["pid"] = state["pid"]?.DeepClone(),
                 ["urls"] = urls
             });
         }
@@ -344,6 +351,7 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     private readonly Dictionary<string, NativeResource> _resources = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Func<ControlRequest, CancellationToken, Task<bool>>> _callbacks = new(StringComparer.Ordinal);
     private bool _sealed;
+    private bool _built;
     private bool _disposed;
     private readonly string _dcp;
 
@@ -355,11 +363,18 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
 
     internal string Owner { get; } = Guid.NewGuid().ToString("N");
     internal string ControllerOwner { get; } = Guid.NewGuid().ToString("N");
+    internal string ProjectDirectory { get; set; } = Environment.CurrentDirectory;
+
+    internal void Build()
+    {
+        EnsureMutable();
+        _built = true;
+    }
 
     internal void EnsureMutable()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_sealed)
+        if (_sealed || _built)
         {
             throw new InvalidOperationException("The ATS graph is sealed.");
         }
@@ -411,7 +426,11 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     [AspireExport]
     public async Task<bool> Run(CancellationToken cancellationToken)
     {
-        EnsureMutable();
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_sealed)
+        {
+            throw new InvalidOperationException("The ATS graph is already running.");
+        }
         _sealed = true;
         // Definitions are committed only after guest construction finishes. This
         // keeps callback registration and deferred references free of side effects.

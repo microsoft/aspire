@@ -10,6 +10,19 @@ using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
 using NativeHosting;
 
+if (args is [var compatibleRoot, "--compatible" or "--codegen-rpc" or "--validate-apphost"])
+{
+    if (args[1] == "--validate-apphost")
+    {
+        await CompatibleCodegen.ValidateAppHostAsync(Path.GetFullPath(compatibleRoot));
+    }
+    else
+    {
+        await CompatibleCodegen.RunAsync(Path.GetFullPath(compatibleRoot), args[1] == "--codegen-rpc");
+    }
+    return;
+}
+
 var root = Path.GetFullPath(args.Single());
 var context = AtsCapabilityScanner.ScanAssemblies([typeof(NativeBuilder).Assembly]).ToAtsContext();
 foreach (var diagnostic in context.Diagnostics)

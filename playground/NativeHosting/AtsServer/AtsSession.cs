@@ -16,6 +16,7 @@ internal sealed class AtsRegistry : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, (object Value, string Type)> _handles = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<object, JsonObject> _references = new(ReferenceEqualityComparer.Instance);
+    private readonly ConcurrentDictionary<(object Value, string Type), JsonObject> _views = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _tokens = new(StringComparer.Ordinal);
     private readonly object _tokenGate = new();
     private readonly ConcurrentDictionary<string, RpcPeer> _external = new(StringComparer.Ordinal);
@@ -41,12 +42,27 @@ internal sealed class AtsRegistry : IAsyncDisposable
         await _graphGate.WaitAsync(token);
         try
         {
-            return new JsonObject
+            using var process = System.Diagnostics.Process.GetCurrentProcess();
+            var snapshot = new JsonObject
             {
                 ["idle"] = Idle, ["handles"] = HandleCount, ["ready"] = Ready,
                 ["integrationHostRegistered"] = IntegrationHostRegistered,
+                ["stats"] = new JsonObject
+                {
+                    ["pid"] = process.Id, ["workingSetBytes"] = process.WorkingSet64,
+                    ["dynamicCodeSupported"] = System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported
+                },
                 ["resources"] = _builder is { } builder ? await builder.ObserveResourcesAsync(token) : new JsonArray()
             };
+            if (Environment.GetEnvironmentVariable("NATIVE_HOSTING_OBSERVATION_FILE") is { Length: > 0 } path)
+            {
+                // The harness observes the graph without instrumenting AppHost
+                // source. Publish atomically and exclude definitions and secrets.
+                await File.WriteAllTextAsync(path + ".pending", snapshot.ToJsonString(), token);
+                File.Move(path + ".pending", path, overwrite: true);
+            }
+
+            return snapshot;
         }
         finally
         {
@@ -72,7 +88,7 @@ internal sealed class AtsRegistry : IAsyncDisposable
 
     public JsonObject Marshal(object value, string type)
     {
-        return (JsonObject)_references.GetOrAdd(value, instance =>
+        var reference = _references.GetOrAdd(value, instance =>
         {
             var id = RandomNumberGenerator.GetHexString(32, lowercase: true);
             if (instance is NativeBuilder builder)
@@ -85,6 +101,19 @@ internal sealed class AtsRegistry : IAsyncDisposable
 
             _handles[id] = (instance, type);
             return new JsonObject { ["$handle"] = id, ["$type"] = type };
+        });
+        if (reference["$type"]!.GetValue<string>() == type)
+        {
+            return (JsonObject)reference.DeepClone();
+        }
+
+        // Guest compatibility views and integration primitive views identify the
+        // same model object without trusting a caller-supplied replacement type.
+        return (JsonObject)_views.GetOrAdd((value, type), key =>
+        {
+            var id = RandomNumberGenerator.GetHexString(32, lowercase: true);
+            _handles[id] = (key.Value, key.Type);
+            return new JsonObject { ["$handle"] = id, ["$type"] = key.Type };
         }).DeepClone();
     }
 
@@ -143,7 +172,7 @@ internal sealed class AtsRegistry : IAsyncDisposable
         }
 
         var ids = exports.Select(export => RpcPeer.RequiredString(export!.AsObject(), "id")).ToArray();
-        if (ids.Distinct(StringComparer.Ordinal).Count() != ids.Length || ids.Any(id => !ExternalDispatch.Contains(id)))
+        if (ids.Distinct(StringComparer.Ordinal).Count() != ids.Length || ids.Any(id => !ExternalDispatch.Contains(id) && !CompatibleDispatch.IsExternal(id)))
         {
             throw new ArgumentException("External ATS capabilities must be known and unique.");
         }
@@ -202,25 +231,36 @@ internal sealed class AtsRegistry : IAsyncDisposable
     private async Task<JsonNode?> InvokeCoreAsync(AtsSession session, string capability, JsonObject args, CancellationToken token, CancellationToken generation)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(token, generation, Token(args["cancellationToken"], token));
-        if (capability == "NativeHosting.Ats/createNativeBuilder" && _builder is not null)
+        if (capability is "NativeHosting.Ats/createNativeBuilder" or "Aspire.Hosting/createBuilder" && _builder is not null)
         {
             // Check under the dispatch gate before constructing an owner. A
             // rejected guest must not allocate an undisposed DCP workspace.
             throw new InvalidOperationException("Only one guest graph can be active.");
         }
 
+        if (CompatibleDispatch.Contains(capability))
+        {
+            return await CompatibleDispatch.InvokeAsync(session, capability, args, linked.Token,
+                (id, parameters) => InvokeExternalAsync(id, parameters, linked.Token));
+        }
+
         if (ExternalDispatch.Contains(capability))
         {
-            if (!_external.TryGetValue(capability, out var host))
-            {
-                throw new InvalidOperationException("The ATS integration host is not registered.");
-            }
-
-            return await host.RequestAsync("handleExternalCapability",
-                new JsonArray(JsonValue.Create(capability), args.DeepClone(), JsonValue.Create(Guid.NewGuid().ToString("N"))), linked.Token);
+            return await InvokeExternalAsync(capability, args, linked.Token);
         }
 
         return await NativeDispatch.InvokeAsync(session, capability, args, linked.Token);
+    }
+
+    private Task<JsonNode?> InvokeExternalAsync(string capability, JsonObject args, CancellationToken token)
+    {
+        if (!_external.TryGetValue(capability, out var host))
+        {
+            throw new InvalidOperationException("The ATS integration host is not registered.");
+        }
+
+        return host.RequestAsync("handleExternalCapability",
+            new JsonArray(JsonValue.Create(capability), args.DeepClone(), JsonValue.Create(Guid.NewGuid().ToString("N"))), token);
     }
 
     public async Task ResetAsync()
@@ -263,6 +303,7 @@ internal sealed class AtsRegistry : IAsyncDisposable
                 // Revoke capabilities before waiting for inflight callbacks.
                 _handles.Clear();
                 _references.Clear();
+                _views.Clear();
                 _controllers.Clear();
                 operations = _active.ToArray();
             }
@@ -406,6 +447,11 @@ internal sealed class AtsSession(AtsRegistry registry, string authToken)
 
         if (method == "generateCode")
         {
+            if (Environment.GetEnvironmentVariable("NATIVE_HOSTING_CODEGEN_TOOL") is { Length: > 0 })
+            {
+                return await NativeCliBootstrap.GenerateCodeAsync(String(args[0], "language"), args.Count > 1 ? args[1] as JsonArray : null, token);
+            }
+
             if (args.Count > 1 && args[1] is not null)
             {
                 throw new NotSupportedException("The native exploration serves a fixed offline SDK, not filtered assembly code generation.");
@@ -457,7 +503,7 @@ internal sealed class AtsSession(AtsRegistry registry, string authToken)
         }
 
         var capability = String(args[0], "capabilityId");
-        if (capability == "NativeHosting.Ats/createNativeBuilder")
+        if (capability is "NativeHosting.Ats/createNativeBuilder" or "Aspire.Hosting/createBuilder")
         {
             if (IntegrationHost)
             {
@@ -469,7 +515,7 @@ internal sealed class AtsSession(AtsRegistry registry, string authToken)
         try
         {
             var result = await registry.InvokeAsync(this, capability, args[1] as JsonObject ?? new JsonObject(), token);
-            if (capability == "NativeHosting.Ats/createNativeBuilder")
+            if (capability is "NativeHosting.Ats/createNativeBuilder" or "Aspire.Hosting/createBuilder")
             {
                 Guest = true;
             }

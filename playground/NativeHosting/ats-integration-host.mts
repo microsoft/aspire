@@ -1,5 +1,5 @@
 import { runIntegrationHost } from './generated/integration-host.mjs';
-import { configureTunnel, configureStorage, nativePorts } from './ats-ports.mts';
+import { compatiblePorts, configureTunnel, configureStorage, nativePorts } from './ats-ports.mts';
 
 const fixture = process.env.NATIVE_HOSTING_TUNNEL_FIXTURE;
 const storage = process.env.NATIVE_HOSTING_PORT_DATA_DIRECTORY;
@@ -14,4 +14,4 @@ configureTunnel(fixture ? {
     executable: process.env.NATIVE_HOSTING_DEVTUNNEL ?? 'devtunnel',
     prefix: [], environment: {}, localFixture: false,
 });
-await runIntegrationHost({ packageName: 'NativeHosting.Experiment', integrations: [nativePorts] });
+await runIntegrationHost({ packageName: 'NativeHosting.Experiment', integrations: [nativePorts, compatiblePorts] });

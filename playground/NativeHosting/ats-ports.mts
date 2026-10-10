@@ -2,18 +2,19 @@ import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { mkdtemp } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import * as rpc from '../NuxtApp/node_modules/vscode-jsonrpc/node.js';
 import { AspireExport, defineIntegration } from './generated/base.mjs';
 import { CancellationToken, unregisterCallback } from './generated/transport.mjs';
 import type { NativeBuilder, NativeResource, ControlRequest } from './generated/aspire.mjs';
 import { projections } from './generated/ports-projection.mjs';
+import { compatibleProjections } from './compatible-projection.mjs';
 import { TunnelOutputParser } from './devtunnel-output.mts';
 import { redis, postgresQuery } from './integration-ports.mts';
 
 type Tool = { executable: string; prefix: string[]; environment: Record<string, string>; localFixture: boolean };
 type NativeValueHandle = Awaited<ReturnType<NativeBuilder['literal']>>;
-type Server = { password: NativeResource };
+type Server = { password: NativeResource; userName: string };
 type Database = { server: NativeResource; databaseName: string };
 const servers = new Map<string, Server>();
 const databases = new Map<string, Database>();
@@ -67,6 +68,8 @@ const addRedis = AspireExport(projections.addRedis, async ({ builder, name }: { 
     await cache.withProperty('password', await password.getParameter(false));
     await cache.withProperty('host', await cache.getEndpoint('tcp', 'host'));
     await cache.withProperty('port', await cache.getEndpoint('tcp', 'port'));
+    await cache.withProperty('connectionString', await concat(builder, await cache.getEndpoint('tcp', 'host'), ':',
+        await cache.getEndpoint('tcp', 'port'), ',password=', await password.getParameter(false)));
     await cache.withProperty('uri', await concat(builder, await cache.getEndpoint('tcp', 'scheme'), '://:',
         await password.getParameter(true), '@', await cache.getEndpoint('tcp', 'host'), ':', await cache.getEndpoint('tcp', 'port')));
     await cache.withHealth(async (resource, token) => {
@@ -82,7 +85,9 @@ const addRedis = AspireExport(projections.addRedis, async ({ builder, name }: { 
     return cache;
 });
 
-const addPostgres = AspireExport(projections.addPostgres, async ({ builder, name }: { builder: NativeBuilder; name: string }) => {
+const addPostgres = AspireExport(projections.addPostgres, async ({ builder, name, defaultUserName = 'aspire' }: {
+    builder: NativeBuilder; name: string; defaultUserName?: string;
+}) => {
     if (!dataDirectory) throw new Error('A session-owned host data directory is required.');
     const source = await mkdtemp(join(dataDirectory, 'postgres-'));
     const password = await builder.addResource(`${name}-password`, 'parameter', { secret: true });
@@ -92,15 +97,18 @@ const addPostgres = AspireExport(projections.addPostgres, async ({ builder, name
         // alongside Redis's named volume, without sharing another graph's data.
         bindMounts: [{ source, target: '/var/lib/postgresql' }],
     });
-    await server.withEnvironment('POSTGRES_USER', 'aspire').withEnvironment('POSTGRES_PASSWORD', await password.getParameter(false))
+    await server.withEnvironment('POSTGRES_USER', defaultUserName).withEnvironment('POSTGRES_PASSWORD', await password.getParameter(false))
         .withEnvironment('POSTGRES_HOST_AUTH_METHOD', 'scram-sha-256')
         .withEnvironment('POSTGRES_INITDB_ARGS', '--auth-host=scram-sha-256 --auth-local=scram-sha-256');
-    await server.withProperty('uri', await concat(builder, 'postgresql://aspire:', await password.getParameter(true),
+    await server.withProperty('uri', await concat(builder, `postgresql://${defaultUserName}:`, await password.getParameter(true),
         '@', await server.getEndpoint('tcp', 'host'), ':', await server.getEndpoint('tcp', 'port'), '/postgres'));
     await server.withProperty('password', await password.getParameter(false));
     await server.withProperty('host', await server.getEndpoint('tcp', 'host'));
     await server.withProperty('port', await server.getEndpoint('tcp', 'port'));
-    servers.set(key(server), { password });
+    await server.withProperty('connectionString', await concat(builder, 'Host=', await server.getEndpoint('tcp', 'host'),
+        ';Port=', await server.getEndpoint('tcp', 'port'), `;Username=${defaultUserName};Password=`,
+        await password.getParameter(false), ';Database=postgres'));
+    servers.set(key(server), { password, userName: defaultUserName });
     await server.withHealth(async (resource, token) => {
         try {
             const state = await resource.status(token);
@@ -125,8 +133,11 @@ const addDatabase = AspireExport(projections.addDatabase, async ({ server, name,
     const database = await builder.addResource(name, 'value', {});
     await database.withParent(server).waitFor(server);
     await database.withProperty('database', databaseName);
-    await database.withProperty('uri', await concat(builder, 'postgresql://aspire:', await parent.password.getParameter(true),
+    await database.withProperty('uri', await concat(builder, `postgresql://${parent.userName}:`, await parent.password.getParameter(true),
         '@', await server.getEndpoint('tcp', 'host'), ':', await server.getEndpoint('tcp', 'port'), '/', encodeURIComponent(databaseName)));
+    await database.withProperty('connectionString', await concat(builder, 'Host=', await server.getEndpoint('tcp', 'host'),
+        ';Port=', await server.getEndpoint('tcp', 'port'), `;Username=${parent.userName};Password=`,
+        await parent.password.getParameter(false), ';Database=', databaseName));
     await database.withInitialize(async (_, token) => {
         const state = await server.status(token);
         const uri = await resolve(server, 'uri', token);
@@ -192,8 +203,8 @@ async function runCli(args: string[], token: rpc.CancellationToken): Promise<str
     } finally { clearTimeout(timeout); cancellation.dispose(); }
 }
 
-const addDevTunnel = AspireExport(projections.addDevTunnel, async ({ builder, name, target, directory, allowAnonymous }: {
-    builder: NativeBuilder; name: string; target: NativeResource; directory: string; allowAnonymous: boolean;
+const addDevTunnel = AspireExport(projections.addDevTunnel, async ({ builder, name, target, directory, allowAnonymous, existingPort }: {
+    builder: NativeBuilder; name: string; target: NativeResource; directory: string; allowAnonymous: boolean; existingPort?: NativeResource;
 }) => {
     if (!tool || !allowAnonymous) throw new Error('This bounded tunnel experiment requires configured tooling and explicit anonymous access.');
     const id = `native-${randomUUID().replaceAll('-', '').slice(0, 20)}`;
@@ -201,7 +212,7 @@ const addDevTunnel = AspireExport(projections.addDevTunnel, async ({ builder, na
     for (const argument of [...tool.prefix, 'host', id, '--nologo']) await parent.withArgument(argument);
     for (const [name, value] of Object.entries(tool.environment)) await parent.withEnvironment(name, value);
     await parent.waitFor(target).withProperty('targetPort', await target.getEndpoint('http', 'port'));
-    const port = await builder.addResource(`${name}-port`, 'custom', {
+    const port = existingPort ?? await builder.addResource(`${name}-port`, 'custom', {
         runOnly: true, endpoints: { tunnel: { scheme: tool.localFixture ? 'http' : 'https' } },
     });
     await port.withParent(parent).waitFor(parent).withProperty('url', await port.getEndpoint('tunnel', 'url'));
@@ -309,10 +320,71 @@ const releaseGraph = AspireExport(projections.releaseGraph, async ({ callbackIds
     servers.clear();
     databases.clear();
     serverBuilders.clear();
+    compatibleTunnels.clear();
     return true;
 });
 
 export const nativePorts = defineIntegration({
     name: 'NativePorts',
     capabilities: [addRedis, addPostgresTracked, addDatabase, addNuxt, addDevTunnel, redisCommand, query, releaseGraph],
+});
+
+const compatibleTunnels = new Map<string, { builder: NativeBuilder; name: string; directory: string; linked: boolean }>();
+function requireOmitted(args: Record<string, unknown>, names: string[]): void {
+    for (const name of names) {
+        if (args[name] !== undefined && args[name] !== null)
+            throw new Error(`Production option '${name}' is not implemented by this bounded integration port.`);
+    }
+}
+const compatibleRedis = AspireExport(compatibleProjections['Aspire.Hosting.Redis/addRedis'],
+    async (args: { builder: NativeBuilder; name: string; port?: number; password?: NativeResource }) => {
+        requireOmitted(args, ['port', 'password']);
+        return addRedis(args);
+    });
+const compatiblePostgres = AspireExport(compatibleProjections['Aspire.Hosting.PostgreSQL/addPostgres'],
+    async (args: { builder: NativeBuilder; name: string; port?: number; password?: NativeResource; userName?: NativeResource }) => {
+        requireOmitted(args, ['port', 'password', 'userName']);
+        const server = await addPostgres({ ...args, defaultUserName: 'postgres' });
+        serverBuilders.set(key(server), args.builder);
+        return server;
+    });
+const compatibleDatabase = AspireExport(compatibleProjections['Aspire.Hosting.PostgreSQL/addDatabase'],
+    async ({ builder, name, databaseName }: { builder: NativeResource; name: string; databaseName?: string }) =>
+        addDatabase({ server: builder, name, databaseName: databaseName ?? name }));
+const compatibleJavaScript = AspireExport(compatibleProjections['Aspire.Hosting.JavaScript/addJavaScriptApp'],
+    async ({ builder, name, appDirectory, runScriptName, _projectDirectory }: {
+        builder: NativeBuilder; name: string; appDirectory: string; runScriptName?: string; _projectDirectory: string;
+    }) => {
+        const directory = resolvePath(_projectDirectory, appDirectory);
+        const app = await builder.addResource(name, 'executable', { executable: 'npm', directory });
+        await app.withArgument('run').withArgument(runScriptName ?? 'dev');
+        return app;
+    });
+const compatibleTunnel = AspireExport(compatibleProjections['Aspire.Hosting.DevTunnels/addDevTunnel'],
+    async (args: { builder: NativeBuilder; name: string; allowAnonymous?: boolean; tunnelId?: string; description?: string; labels?: string[]; _projectDirectory: string }) => {
+        requireOmitted(args, ['tunnelId', 'description', 'labels']);
+        if (args.allowAnonymous === true) throw new Error('This port requires explicit per-reference anonymous access.');
+        const resource = await args.builder.addResource(args.name, 'custom', {
+            runOnly: true, endpoints: { tunnel: { scheme: tool.localFixture ? 'http' : 'https' } },
+        });
+        compatibleTunnels.set(key(resource), {
+            builder: args.builder, name: args.name, directory: args._projectDirectory, linked: false,
+        });
+        return resource;
+    });
+const compatibleTunnelReference = AspireExport(compatibleProjections['Aspire.Hosting.DevTunnels/withReferenceResourceAnonymous'],
+    async ({ tunnelBuilder: builder, resourceBuilder, allowAnonymous }: { tunnelBuilder: NativeResource; resourceBuilder: NativeResource; allowAnonymous: boolean }) => {
+        const owner = compatibleTunnels.get(key(builder));
+        if (!owner || owner.linked) throw new Error('The bounded tunnel requires exactly one HTTP resource reference.');
+        owner.linked = true;
+        await addDevTunnel({
+            builder: owner.builder, name: `${owner.name}-host`, target: resourceBuilder,
+            directory: owner.directory, allowAnonymous, existingPort: builder,
+        });
+        return builder;
+    });
+
+export const compatiblePorts = defineIntegration({
+    name: 'CompatiblePorts',
+    capabilities: [compatibleRedis, compatiblePostgres, compatibleDatabase, compatibleJavaScript, compatibleTunnel, compatibleTunnelReference],
 });

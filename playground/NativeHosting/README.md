@@ -2,6 +2,44 @@
 
 This is an isolated experiment for [#20873](https://github.com/microsoft/aspire/issues/20873), not a new supported AppHost runtime. C# hosting remains managed and the default guest server selection stays unchanged. An explicit development-only CLI override now exercises the native server and extends the command's cleanup window. No Nuxt package, dependency version, or generated API baseline is changed. The original handwritten-RPC experiments remain available; the ATS-native server below uses generated ATS APIs instead.
 
+## ATS-native integration authoring direction
+
+[App Model v2](../../docs/specs/appmodelv2.md) is the living design companion for
+this PoC. It maps the existing resource model to server-owned ATS entities,
+structured values, relationships, and integration-owned behavior. The goal is
+not one-to-one compatibility with the managed integration implementation API.
+
+`CompatibleAppHost/apphost.mts` is a bounded experiment with ordinary production
+guest APIs: `createBuilder`, Redis, PostgreSQL database children, JavaScript
+workloads, references, Dev Tunnels, and `build().run()`. The exact sample compiles
+against the full managed ATS-generated SDK. Its native backend uses a compact
+wire adapter and external integration ports, not managed Hosting objects.
+Unsupported options fail explicitly. This does not support arbitrary existing
+AppHosts or integrations.
+
+In this mode the CLI still calls `generateCode` and `getRuntimeSpec`. The native
+server launches a separate managed codegen helper to invoke the real ATS scanner
+and TypeScript generator. The helper's managed integration dependencies stay out
+of the AOT core. The guest's pending `run` call keeps its lifetime active without
+native-specific timers or bootstrap methods.
+
+```bash
+dotnet run --project playground/NativeHosting/AtsCodegen/NativeHosting.AtsCodegen.csproj \
+  -- playground/NativeHosting --compatible
+dotnet run --project playground/NativeHosting/AtsCodegen/NativeHosting.AtsCodegen.csproj \
+  -- playground/NativeHosting --validate-apphost
+dotnet publish playground/NativeHosting/AtsServer/NativeHosting.AtsServer.csproj \
+  -r osx-arm64 -c Release -o artifacts/native-hosting/ats-server
+NATIVE_HOSTING_COMPATIBLE=1 node playground/NativeHosting/cli-e2e.mts
+```
+
+Generate and compile the primitive SDK using the ATS commands below before
+running the integration host. The compatible generator also writes its external
+projection metadata. The harness supplies the helper paths, observes readiness
+without modifying AppHost source, exercises Redis through Nuxt and the tunnel
+fixture, queries the PostgreSQL database, and checks exact owned-container
+removal. The sample is a compatibility probe, not the proposed v2 authoring API.
+
 ## Actual `aspire run` with the AOT core
 
 `ASPIRE_CLI_NATIVE_APPHOST_SERVER` selects the native executable before the usual repository/bundle guest-server selection. The CLI retains its standard process factory, AppHost server session, authentication, SDK writing, language runtime execution, and graceful-shutdown infrastructure. Native server selection applies only to guest AppHosts; C# hosting remains managed.
