@@ -225,10 +225,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // can be recorded even though the host never starts.
         builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
         builder.Services.TryAddSingleton<DashboardTelemetryService>();
-        builder.Services.TryAddSingleton(services => new DashboardStartupTelemetry(
-            services.GetRequiredService<DashboardTelemetryService>(),
-            services.GetRequiredService<IConfiguration>(),
-            startupTimestamp));
         builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
             services.GetRequiredService<IConfiguration>()));
         builder.Services.AddSingleton<DashboardTelemetryManager>();
@@ -251,7 +247,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                     .AddOtlpExporter());
         }
 
-        if (!TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages))
+        var validDashboardOptions = TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages);
+        // Use the bound snapshot even when validation fails. Resolving options through DI
+        // would throw instead of allowing startup failure telemetry to be recorded.
+        builder.Services.TryAddSingleton(services => new DashboardStartupTelemetry(
+            services.GetRequiredService<DashboardTelemetryService>(),
+            dashboardOptions,
+            startupTimestamp));
+
+        if (!validDashboardOptions)
         {
             // The options have validation failures. Write them out to the user and return a non-zero exit code.
             // We don't want to start the app, but we need to build the app to access the logger to log the errors.
@@ -685,7 +689,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// Load <see cref="DashboardOptions"/> from configuration without using DI. This performs
     /// the same steps as getting the options from DI but without the need for a service provider.
     /// </summary>
-    private static bool TryGetDashboardOptions(WebApplicationBuilder builder, IConfigurationSection dashboardConfigSection, [NotNullWhen(true)] out DashboardOptions? dashboardOptions, [NotNullWhen(false)] out IEnumerable<string>? failureMessages)
+    private static bool TryGetDashboardOptions(WebApplicationBuilder builder, IConfigurationSection dashboardConfigSection, out DashboardOptions dashboardOptions, out IEnumerable<string> failureMessages)
     {
         dashboardOptions = new DashboardOptions();
         dashboardConfigSection.Bind(dashboardOptions);
@@ -698,7 +702,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         else
         {
-            failureMessages = null;
+            failureMessages = Array.Empty<string>();
             return true;
         }
     }

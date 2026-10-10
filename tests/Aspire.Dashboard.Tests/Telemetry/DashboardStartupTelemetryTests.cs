@@ -2,10 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Telemetry;
-using Aspire.Hosting;
 using Aspire.Shared;
-using Microsoft.Extensions.Configuration;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Telemetry;
@@ -18,14 +17,9 @@ public class DashboardStartupTelemetryTests
     public void Record_RecordsStartupResultOnce(bool success, string? errorType)
     {
         using var fixture = new DashboardTelemetryFixture();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [DashboardConfigNames.DashboardLaunchContextName.ConfigKey] = "AppHost"
-            })
-            .Build();
+        var options = new DashboardOptions { LaunchContext = "AppHost" };
         var startupTimestamp = Stopwatch.GetTimestamp() - Stopwatch.Frequency;
-        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, configuration, startupTimestamp);
+        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, options, startupTimestamp);
 
         if (success)
         {
@@ -56,20 +50,19 @@ public class DashboardStartupTelemetryTests
     }
 
     [Theory]
+    [InlineData("AppHost", KnownDashboardLaunchContexts.AppHost)]
+    [InlineData(" CLI ", KnownDashboardLaunchContexts.Cli)]
     [InlineData("Container", KnownDashboardLaunchContexts.Container)]
+    [InlineData("unknown", KnownDashboardLaunchContexts.Unknown)]
     [InlineData("custom-context", KnownDashboardLaunchContexts.Unknown)]
     [InlineData("", KnownDashboardLaunchContexts.Unknown)]
+    [InlineData(" ", KnownDashboardLaunchContexts.Unknown)]
     [InlineData(null, KnownDashboardLaunchContexts.Unknown)]
     public void Record_NormalizesLaunchContext(string? launchContext, string expected)
     {
         using var fixture = new DashboardTelemetryFixture();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [DashboardConfigNames.DashboardLaunchContextName.ConfigKey] = launchContext
-            })
-            .Build();
-        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, configuration, Stopwatch.GetTimestamp());
+        var options = new DashboardOptions { LaunchContext = launchContext };
+        var startupTelemetry = new DashboardStartupTelemetry(fixture.Telemetry, options, Stopwatch.GetTimestamp());
 
         startupTelemetry.RecordSuccess();
 

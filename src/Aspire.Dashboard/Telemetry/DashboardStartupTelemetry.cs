@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Hosting;
+using Aspire.Dashboard.Configuration;
 using Aspire.Shared;
 
 namespace Aspire.Dashboard.Telemetry;
@@ -14,11 +14,11 @@ internal sealed class DashboardStartupTelemetry
     private readonly long _startTimestamp;
     private int _recorded;
 
-    public DashboardStartupTelemetry(DashboardTelemetryService telemetry, IConfiguration configuration, long startTimestamp)
+    public DashboardStartupTelemetry(DashboardTelemetryService telemetry, DashboardOptions options, long startTimestamp)
     {
         _telemetry = telemetry;
         _startTimestamp = startTimestamp;
-        _launchContext = configuration[DashboardConfigNames.DashboardLaunchContextName.ConfigKey]?.Trim().ToLowerInvariant() switch
+        _launchContext = options.LaunchContext?.Trim().ToLowerInvariant() switch
         {
             KnownDashboardLaunchContexts.AppHost => KnownDashboardLaunchContexts.AppHost,
             KnownDashboardLaunchContexts.Cli => KnownDashboardLaunchContexts.Cli,

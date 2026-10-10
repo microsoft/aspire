@@ -74,6 +74,7 @@ The Dashboard uses the following events and operation:
 
 | Name | Representation |
 | --- | --- |
+| `aspire/dashboard/startup` | Structured log |
 | `aspire/dashboard/component/initialize` | Structured log |
 | `aspire/dashboard/component/paramsSet` | Structured log |
 | `aspire/dashboard/component/dispose` | Structured log |
@@ -81,6 +82,8 @@ The Dashboard uses the following events and operation:
 | `aspire/dashboard/command` | Internal activity, exported as an Application Insights dependency |
 
 Component lifecycle events are recorded when they occur, with any available ambient trace correlation. [DashboardCommandExecutor](../../src/Aspire.Dashboard/Model/DashboardCommandExecutor.cs) calls `StartOperation`, sets the result through `SetOperationStatus`, and disposes the activity after command execution, before the UI recovery delay.
+
+Startup events record success, duration, failure type, and launch context. The context is read from `DashboardOptions.LaunchContext`, configured by `Dashboard:LaunchContext` or `DASHBOARD__LAUNCHCONTEXT`. Only `apphost`, `cli`, `container`, and `unknown` are reported; other values map to `unknown`. Startup failure recording uses the bound options snapshot so configuration validation failures can still report their launch context.
 
 Dashboard recording APIs accept classified properties. Activity property setters also apply the shared property policy, but direct mutation of a returned `Activity` bypasses that policy. Instrumentation must use the recording service's property APIs.
 
