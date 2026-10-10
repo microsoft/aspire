@@ -1,0 +1,220 @@
+{
+  "run_id": 38029555710,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/38029555710",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-10T06:45:13Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20851,
+    "title": "Improve CLI and Dashboard product telemetry shutdown durability",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/azure-monitor-log-persistence",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20851",
+    "merged_at": "2026-10-10T06:02:24Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "ce70b037a9a2bdc95bd5c9415f19df1565782f65",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      },
+      {
+        "sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "message": "[WIP] Fix Go AppHost start timeout error (#20086) - [x] Identify the Go AppHost startup failure from logs and code. - [x] Implement a focused fix with regression coverage. - [x] Run targeted validation and review the final changes. <!-- START COPILOT CODING AGENT SUFFIX --> - Fixes #20056 --------- Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: David Pine <7679720+IEvangelist",
+        "html_url": "https://github.com/microsoft/aspire/commit/c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "pull_request": {
+          "number": 20086,
+          "title": "[WIP] Fix Go AppHost start timeout error",
+          "url": "https://github.com/microsoft/aspire/pull/20086",
+          "merged_at": "2026-10-09T20:10:35Z"
+        }
+      },
+      {
+        "sha": "ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "message": "Remove ASPIREAZURE003 from Azure role-assignment APIs (#20857) ## Description `AzureRoleAssignmentResource` is going stable: it is no longer experimental. Consumers can use this API without suppressing `ASPIREAZURE003`. Azure role assignments are not an Azure Networking feature, so the networking experimental diagnostic should not apply to this type. Remove its `Experimental` attribute and clean up obsolete suppressions in `RoleAssignmentResourceAnnotation`, the shared ACR pull identity helper, ",
+        "html_url": "https://github.com/microsoft/aspire/commit/ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "pull_request": {
+          "number": 20857,
+          "title": "Remove ASPIREAZURE003 from Azure role-assignment APIs",
+          "url": "https://github.com/microsoft/aspire/pull/20857",
+          "merged_at": "2026-10-09T20:42:47Z"
+        }
+      },
+      {
+        "sha": "517d566279e2c1ceded7788930197e5f6667bbb0",
+        "message": "Add polyglot hosting integrations through ATS projection (#16110) ## Description Part of #16220. Adds support for hosting integrations authored outside .NET through Aspire's ATS metadata, SDK generation, and runtime dispatch pipeline. A consuming AppHost gets normal generated builder methods, while the integration executes in its own runtime and configures the same .NET resource model as a managed integration. Integration-host ownership belongs to the AppHost server rather than the CLI. The CLI ",
+        "html_url": "https://github.com/microsoft/aspire/commit/517d566279e2c1ceded7788930197e5f6667bbb0",
+        "pull_request": {
+          "number": 16110,
+          "title": "Add polyglot hosting integrations through ATS projection",
+          "url": "https://github.com/microsoft/aspire/pull/16110",
+          "merged_at": "2026-10-09T21:41:12Z"
+        }
+      },
+      {
+        "sha": "ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "message": "fix(java): update Log4j in Spring Boot samples and starter (#20830) ## Description The Spring Boot catalog and orders playground services, and the CLI's Java starter API, resolve Log4j API 2.24.3. That version is affected by [CVE-2026-49844](https://logging.apache.org/security.html#CVE-2026-49844): `MapMessage` can serialize non-finite floating-point values as invalid JSON, disrupting downstream log parsing when the affected logging path is used. Spring Boot's dependency management still imports",
+        "html_url": "https://github.com/microsoft/aspire/commit/ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "pull_request": {
+          "number": 20830,
+          "title": "fix(java): update Log4j in Spring Boot samples and starter",
+          "url": "https://github.com/microsoft/aspire/pull/20830",
+          "merged_at": "2026-10-09T22:06:46Z"
+        }
+      },
+      {
+        "sha": "213aa53159663c6f3e4a29bf7df907179ae6e1c4",
+        "message": "Remove obsolete ASP.NET policy links from issue templates (#20782) ## Description Remove inherited ASP.NET issue-policy links from Aspire’s issue templates while retaining issue guidance and existing-issue checks. - **Templates:** Remove the policy contact link and references from the bug and feature request forms. ## Checklist - Is this feature complete?   - [x] Yes. Ready to ship.   - [ ] No. Follow-up changes expected. - Are you including unit tests for the changes and scenario tests if relev",
+        "html_url": "https://github.com/microsoft/aspire/commit/213aa53159663c6f3e4a29bf7df907179ae6e1c4",
+        "pull_request": {
+          "number": 20782,
+          "title": "Remove obsolete ASP.NET policy links from issue templates",
+          "url": "https://github.com/microsoft/aspire/pull/20782",
+          "merged_at": "2026-10-10T00:14:12Z"
+        }
+      },
+      {
+        "sha": "ccc9d55a69991612581e841a5c664432af1c9332",
+        "message": "Recover ambiguous DCP creates with configurable timeouts (#20752) ## Description A single timed-out or HTTP 504 DCP create currently puts a resource into `FailedToStart`, even though the server may have committed the object. The 20-second steady-state client budget can also expire before DCP's own create timeout, and users cannot configure those limits for slower environments. Recover ambiguous creates by checking whether the same kind/namespace/name exists before retrying the POST. Creation has",
+        "html_url": "https://github.com/microsoft/aspire/commit/ccc9d55a69991612581e841a5c664432af1c9332",
+        "pull_request": {
+          "number": 20752,
+          "title": "Recover ambiguous DCP creates with configurable timeouts",
+          "url": "https://github.com/microsoft/aspire/pull/20752",
+          "merged_at": "2026-10-10T00:49:21Z"
+        }
+      },
+      {
+        "sha": "a011c879e2294c0f103ef09000fe1450dc1189bf",
+        "message": "Add Markdown descriptions to dashboard text visualizer dialogs (#20819) ## Description Mermaid graph exports currently show diagram source without explaining the format. This change adds an optional Markdown description above text visualizer content and uses it to explain Mermaid with a link to Aspire's documentation. - Display descriptions above text/code or rendered Markdown, using the existing Markdown renderer and safe URL schemes. - Keep the description behind the existing secret-warning co",
+        "html_url": "https://github.com/microsoft/aspire/commit/a011c879e2294c0f103ef09000fe1450dc1189bf",
+        "pull_request": {
+          "number": 20819,
+          "title": "Add Markdown descriptions to dashboard text visualizer dialogs",
+          "url": "https://github.com/microsoft/aspire/pull/20819",
+          "merged_at": "2026-10-10T01:12:23Z"
+        }
+      },
+      {
+        "sha": "c5ca439d81eee3e703718108cd93179689da71f4",
+        "message": "Fix dashboard graph initialization and circuit teardown errors (#20811)",
+        "html_url": "https://github.com/microsoft/aspire/commit/c5ca439d81eee3e703718108cd93179689da71f4",
+        "pull_request": {
+          "number": 20811,
+          "title": "Fix dashboard graph initialization and circuit teardown errors",
+          "url": "https://github.com/microsoft/aspire/pull/20811",
+          "merged_at": "2026-10-10T05:14:55Z"
+        }
+      },
+      {
+        "sha": "2e06172e2fba4953e4b6d5e69a7d13b4c70ab86b",
+        "message": "Update milestone changelog for 17.0 (#20849)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2e06172e2fba4953e4b6d5e69a7d13b4c70ab86b",
+        "pull_request": {
+          "number": 20849,
+          "title": "Update milestone changelog for 17.0",
+          "url": "https://github.com/microsoft/aspire/pull/20849",
+          "merged_at": "2026-10-10T05:46:43Z"
+        }
+      },
+      {
+        "sha": "776f81c6601141981b30e0b5901fad9bf6e6e2b7",
+        "message": "Consolidate RESX generator metadata and align resource visibility (#20843)",
+        "html_url": "https://github.com/microsoft/aspire/commit/776f81c6601141981b30e0b5901fad9bf6e6e2b7",
+        "pull_request": {
+          "number": 20843,
+          "title": "Consolidate RESX generator metadata and align resource visibility",
+          "url": "https://github.com/microsoft/aspire/pull/20843",
+          "merged_at": "2026-10-10T05:49:13Z"
+        }
+      },
+      {
+        "sha": "ce70b037a9a2bdc95bd5c9415f19df1565782f65",
+        "message": "Improve CLI and Dashboard product telemetry shutdown durability (#20851)",
+        "html_url": "https://github.com/microsoft/aspire/commit/ce70b037a9a2bdc95bd5c9415f19df1565782f65",
+        "pull_request": {
+          "number": 20851,
+          "title": "Improve CLI and Dashboard product telemetry shutdown durability",
+          "url": "https://github.com/microsoft/aspire/pull/20851",
+          "merged_at": "2026-10-10T06:02:24Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting, Hosting, tests/Aspire.Hosting.Tests/... / Hosting (windows-latest)",
+      "id": 114148593730,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38029555710/job/114148593730",
+      "classification": "main-repository-breakage",
+      "reason": "Test asserts recorded HTTP methods ['POST','GET'] but none were recorded; test name/behavior directly corresponds to PR #20752 'Recover ambiguous DCP creates with configurable timeouts' merged into main in this window; same deterministic failure seen on two prior main runs (38012264262, 38026858066).",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x)",
+      "id": 114150101431,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38029555710/job/114150101431",
+      "classification": "main-repository-breakage",
+      "reason": "TypeScript validation AppHosts all pass (59/59), but building the generated Nuxt publish image fails deterministically at Dockerfile step 'RUN npm ci' with exit code 1; this exact failure recurs across the last four main runs (37997402988, 38008165137, 38012264262, 38026858066), indicating a persistent repository/fixture breakage rather than a new transient or PR-specific issue.",
+      "failed_steps": [
+        "Run TypeScript SDK validation"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 114152046966,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38029555710/job/114152046966",
+      "classification": "main-repository-breakage",
+      "reason": "Downstream aggregation job fails because the TypeScript SDK Validation leg reported failure (Python/Go/Java succeeded); same root cause as the TypeScript SDK Validation job failure.",
+      "failed_steps": [
+        "Check validation results"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(useHttpDate: False, retryAfterSeconds: 2147483647)",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting, Hosting, tests/Aspire.Hosting.Tests/... / Hosting (windows-latest)",
+      "error": "Assert.Equal() Failure: Collections differ\n           ↓ (pos 0)\nExpected: [\"POST\", \"GET\"]\nActual:   []",
+      "stack_trace": "at Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(Boolean useHttpDate, Int32 retryAfterSeconds) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Dcp\\KubernetesServiceTests.cs:line 663\n   at Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(Boolean useHttpDate, Int32 retryAfterSeconds) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Dcp\\KubernetesServiceTests.cs:line 663\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic assertion failure directly tied to PR #20752's DCP create-recovery feature merged into main; not flaky — reproduces consistently across consecutive main runs."
+    }
+  ],
+  "causes": [
+    "kubernetesservicetests-recoverybudget-confirmationretrydelay-empty-methods",
+    "typescript-sdk-nuxt-integration-npm-ci-docker-build-failure"
+  ]
+}
