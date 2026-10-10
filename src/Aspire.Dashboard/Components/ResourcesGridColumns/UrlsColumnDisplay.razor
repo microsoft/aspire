@@ -42,7 +42,7 @@ else if (DisplayedUrls.Count > 1)
                             @foreach (var item in items)
                             {
                                 <div class="url-link">
-                                    @WriteUrl(item)
+                                    @WriteExpandedUrl(item)
                                 </div>
                             }
                         </div>
@@ -54,15 +54,25 @@ else if (DisplayedUrls.Count > 1)
 }
 
 @code {
+    // Always a link, including for schemes that aren't browsable (e.g. tcp://), so every URL is presented consistently.
     RenderFragment WriteUrl(DisplayedUrl displayedUrl)
     {
-        if (displayedUrl.Url != null)
-        {
-            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@displayedUrl.Text</a>;
-        }
-        else
-        {
-            return @<span title="@GetTooltipText(displayedUrl)">@displayedUrl.Text</span>;
-        }
+        var address = GetTooltipText(displayedUrl);
+
+        return @<a href="@address" target="_blank" title="@address" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@displayedUrl.Text</a>;
+    }
+
+    // In the overflow popover there's no space constraint, so show "{label}: {address}" rather than the compact
+    // default display text. The label is the explicit display name if one was set, otherwise the endpoint name
+    // (omitted entirely, along with the colon, if there is neither), so no information is lost. The label is kept
+    // outside the link so only the address itself is clickable. The address is always a link, including for
+    // schemes that aren't browsable (e.g. tcp://), so every address is presented consistently.
+    RenderFragment WriteExpandedUrl(DisplayedUrl displayedUrl)
+    {
+        var label = displayedUrl.DisplayName ?? (displayedUrl.Name != "-" ? displayedUrl.Name : null);
+        var labelPrefix = label is not null ? $"{label}: " : null;
+        var address = GetTooltipText(displayedUrl);
+
+        return @<text>@labelPrefix<a href="@address" target="_blank" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@address</a></text>;
     }
 }

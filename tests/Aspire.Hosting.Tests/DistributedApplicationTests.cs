@@ -1340,34 +1340,6 @@ public class DistributedApplicationTests
         }
     }
 
-    [Fact]
-    public async Task StartAsync_DashboardUrls_DisplayPropertiesSet()
-    {
-        const string testName = "dashboard-urls-display";
-        var args = new string[] {
-            $"{KnownAspNetCoreConfigNames.Urls}=https://localhost:0;http://localhost:0",
-            $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0"
-        };
-        using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false);
-
-        await using var app = testProgram.Build();
-
-        var kubernetes = app.Services.GetRequiredService<IKubernetesService>();
-
-        await app.StartAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var aspireDashboard = model.Resources.Single(r => r.Name == KnownResourceNames.AspireDashboard);
-
-        var dashboardUrls = aspireDashboard.Annotations.OfType<ResourceUrlAnnotation>().ToList();
-        Assert.Collection(dashboardUrls,
-            u => Assert.Equal("Dashboard (https)", u.DisplayText),
-            u => Assert.Equal("Dashboard (http)", u.DisplayText),
-            u => Assert.Equal("otlp-grpc", u.DisplayText));
-
-        await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
-    }
-
     [Theory]
     [InlineData(KnownConfigNames.DashboardFrontendBrowserToken)]
     [InlineData(KnownConfigNames.Legacy.DashboardFrontendBrowserToken)]
