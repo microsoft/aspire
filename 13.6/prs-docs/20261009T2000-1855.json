@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Removes a duplicated low-value sentence from existing docs; not a documentation addition for any changelog entry",
+  "mergedAt": "2026-10-09T20:00:45Z",
+  "number": 1855,
+  "runDate": "2026-10-10T00:07:10Z",
+  "status": "excluded",
+  "title": "Update standalone dashboard documentation"
+}
