@@ -302,24 +302,16 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
             foreach (var url in c.Urls)
             {
-                if (url.Endpoint is { } endpoint)
+                if (url.Endpoint is { } endpoint && endpoint.EndpointName is "http" or "https")
                 {
-                    if (endpoint.EndpointName is "http" or "https")
-                    {
-                        // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
-                        // Order these before non-browser usable endpoints.
-                        url.DisplayText = $"Dashboard ({endpoint.EndpointName})";
-                        url.DisplayOrder = 1;
+                    // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
+                    // Order these before non-browser usable endpoints.
+                    url.DisplayOrder = 1;
 
-                        // Append the browser token to the URL as a query string parameter if token is configured
-                        if (!string.IsNullOrEmpty(browserToken))
-                        {
-                            url.Url = $"{url.Url}/login?t={browserToken}";
-                        }
-                    }
-                    else
+                    // Append the browser token to the URL as a query string parameter if token is configured
+                    if (!string.IsNullOrEmpty(browserToken))
                     {
-                        url.DisplayText = endpoint.EndpointName;
+                        url.Url = $"{url.Url}/login?t={browserToken}";
                     }
                 }
             }

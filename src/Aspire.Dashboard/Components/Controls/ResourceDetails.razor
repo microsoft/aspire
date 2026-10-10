@@ -244,27 +244,19 @@
     {
         var highlighting = !string.IsNullOrEmpty(filter);
 
-        // If there's no URL, e.g. this is a tcp:// URI, just show the text
-        if (vm.Url is null)
-        {
-            if (highlighting)
-            {
-                return @<FluentHighlighter HighlightedText="@filter" Text="@vm.Text" />;
-            }
-            return @<span>@vm.Text</span>;
-        }
-        // Otherwise, render a link for the URL
-        else
-        {
-            // Mask querystring values for display
-            var displayUrl = DashboardUIHelpers.MaskQueryStringValues(vm.Url);
+        // Always render the address as a link, including for schemes the dashboard doesn't treat as browsable
+        // (e.g. tcp://), so that every address is presented consistently. Use the original URL rather than Text,
+        // which is a display name or "name (port)".
+        var url = vm.Url ?? vm.OriginalUrlString;
 
-            if (highlighting)
-            {
-                return @<a href="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@displayUrl" /></a>;
-            }
-            return @<a href="@vm.Url" target="_blank">@displayUrl</a>;
+        // Mask querystring values for display
+        var displayUrl = DashboardUIHelpers.MaskQueryStringValues(url);
+
+        if (highlighting)
+        {
+            return @<a href="@url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@displayUrl" /></a>;
         }
+        return @<a href="@url" target="_blank">@displayUrl</a>;
     }
 
     private static RenderFragment RenderTextValue(DisplayedUrl vm, string filter)
@@ -276,14 +268,15 @@
         {
             return @<span class="empty-data"></span>;
         }
-        // Otherwise, render a link with the text as the anchor text & title as the URL
+        // Otherwise, render the text without a link. The address is displayed in the column next to this one,
+        // and it is the link, so linking the text as well would be redundant.
         else
         {
             if (highlighting)
             {
-                return @<a href="@vm.Url" title="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
+                return @<FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" />;
             }
-            return @<a href="@vm.Url" title="@vm.Url" target="_blank">@vm.DisplayName</a>;
+            return @<span>@vm.DisplayName</span>;
         }
     }
 }

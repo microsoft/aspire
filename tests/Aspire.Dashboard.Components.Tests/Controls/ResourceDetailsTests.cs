@@ -459,6 +459,31 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_Urls_AddressesAreLinksAndDisplayTextIsNot()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            urls: [
+                new("http", new("http://localhost:5001"), isInternal: false, isInactive: false, displayProperties: new UrlDisplayPropertiesViewModel("Custom http", 0)),
+                new("tcp", new("tcp://localhost:5000"), isInternal: false, isInactive: false, displayProperties: new UrlDisplayPropertiesViewModel("Custom tcp", 0))
+            ]);
+
+        var cut = Render<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        // Only the address column is a link, and it is the real address (including for schemes that aren't browsable),
+        // rather than the display text that is shown in the text column next to it.
+        var links = cut.FindAll("a[target=_blank]");
+        Assert.Equal(["http://localhost:5001", "tcp://localhost:5000"], links.Select(l => l.TextContent));
+        Assert.Equal(["http://localhost:5001", "tcp://localhost:5000"], links.Select(l => l.GetAttribute("href")));
+    }
+
+    [Fact]
     public void Render_NullState_ShowsUnknownStateInResourceDetails()
     {
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));

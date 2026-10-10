@@ -32,14 +32,14 @@ internal static class ResourceUrlHelpers
                 urls.Add(new DisplayedUrl
                 {
                     Index = index,
-                    Name = url.EndpointName ?? "-",
+                    Name = string.IsNullOrEmpty(url.EndpointName) ? "-" : url.EndpointName,
                     Address = url.Url.Host,
                     Port = url.Url.Port,
                     Url = !KnownUnsupportedUrlSchemes.IsUnsupportedScheme(url.Url.Scheme) ? url.Url.OriginalString : null,
                     SortOrder = url.DisplayProperties.SortOrder,
                     DisplayName = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? null : url.DisplayProperties.DisplayName,
                     OriginalUrlString = url.Url.OriginalString,
-                    Text = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? url.Url.OriginalString : url.DisplayProperties.DisplayName
+                    Text = string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? GetDefaultDisplayText(url) : url.DisplayProperties.DisplayName
                 });
                 index++;
             }
@@ -58,6 +58,21 @@ internal static class ResourceUrlHelpers
             .ToList();
 
         return orderedUrls;
+    }
+
+    // Default display text for a URL when no explicit display name has been set via WithUrlForEndpoint/WithUrlDisplayName.
+    // When the URL belongs to a named endpoint, show the endpoint name and port (e.g. "http (12345)") rather than the
+    // full URL, since with multiple endpoints on a resource the full URLs often differ only by port and give no
+    // indication of what each endpoint is for. The port is still included as it's useful when troubleshooting
+    // (e.g. dynamically assigned proxy ports).
+    private static string GetDefaultDisplayText(UrlViewModel url)
+    {
+        if (string.IsNullOrEmpty(url.EndpointName))
+        {
+            return url.Url.OriginalString;
+        }
+
+        return url.Url.Port >= 0 ? $"{url.EndpointName} ({url.Url.Port})" : url.EndpointName;
     }
 }
 
@@ -82,10 +97,11 @@ public sealed class DisplayedUrl : IPropertyGridItem
 
     object IPropertyGridItem.Key => Index;
 
-    public string? ValueToVisualize => Url ?? Text;
+    public string? ValueToVisualize => Url ?? OriginalUrlString;
 
     public bool MatchesFilter(string filter)
         => Url?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) == true ||
+           OriginalUrlString.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
            Text.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
            Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
            DisplayName?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) == true;
