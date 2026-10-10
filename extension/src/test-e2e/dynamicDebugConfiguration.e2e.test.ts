@@ -1,26 +1,44 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions, waitForRepositoryIdle } from './helpers/assertions';
-import { executeE2eControlCommand, getRunningAppHostPid, removePath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit, waitForRunningAppHostPid } from './helpers/fixtures';
-import { getWorkspaceRoot } from './helpers/paths';
+import { isSamePath, readStateFile, waitForExtensionState, waitForNoDebugSessions } from './helpers/assertions';
+import { executeE2eControlCommand, getRunningAppHostPid, restoreWorkspaceFoldersForE2E, runE2eTeardown, setWorkspaceFoldersForE2E, stopAppHostIfRunning, waitForKnownProcessExit, waitForRunningAppHostPid } from './helpers/fixtures';
+import { getRunRoot } from './helpers/paths';
 import { cancelActiveInput, chooseActiveQuickPick, chooseActiveQuickPickAtIndex, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForEditorTitle } from './helpers/vscode';
+
+// Dynamic launch output is emitted before the selected single-file AppHost finishes its cold build.
+// Hosted Windows exceeded the old 60-second process-state wait while the build was still running.
+const appHostProcessStateTimeoutMs = 120000;
 
 suite('Aspire dynamic debug configuration E2E', function () {
     this.timeout(240000);
 
-    const fixtureRoot = path.join(getWorkspaceRoot(), '.e2e-dynamic-debug');
-    const firstFolderPath = path.join(fixtureRoot, 'first');
-    const secondFolderPath = path.join(fixtureRoot, 'second');
-    const firstAppHostPath = path.join(firstFolderPath, 'apphost.cs');
-    const appHostPath = path.join(secondFolderPath, 'apphost.cs');
-    const ambiguousWorkspacePath = path.join(fixtureRoot, 'ambiguous');
-    const ambiguousFirstAppHostPath = path.join(ambiguousWorkspacePath, 'first', 'apphost.cs');
-    const ambiguousSecondAppHostPath = path.join(ambiguousWorkspacePath, 'second', 'apphost.cs');
-    const fixtureAppHostPaths = [appHostPath, firstAppHostPath, ambiguousFirstAppHostPath, ambiguousSecondAppHostPath];
+    const runRoot = getRunRoot();
+    assert.ok(runRoot, 'ASPIRE_EXTENSION_E2E_RUN_ROOT is required to isolate dynamic debug configuration fixtures.');
+    let fixtureIndex = 0;
+    let fixtureRoot = '';
+    let firstFolderPath = '';
+    let secondFolderPath = '';
+    let firstAppHostPath = '';
+    let appHostPath = '';
+    let ambiguousWorkspacePath = '';
+    let ambiguousFirstAppHostPath = '';
+    let ambiguousSecondAppHostPath = '';
+    let fixtureAppHostPaths: string[] = [];
     let appHostPidsBeforeStop: number[];
 
     setup(() => {
+        fixtureRoot = path.join(runRoot, `.e2e-dynamic-debug-${++fixtureIndex}`);
+        firstFolderPath = path.join(fixtureRoot, 'first');
+        secondFolderPath = path.join(fixtureRoot, 'second');
+        firstAppHostPath = path.join(firstFolderPath, 'apphost.cs');
+        appHostPath = path.join(secondFolderPath, 'apphost.cs');
+        ambiguousWorkspacePath = path.join(fixtureRoot, 'ambiguous');
+        ambiguousFirstAppHostPath = path.join(ambiguousWorkspacePath, 'first', 'apphost.cs');
+        ambiguousSecondAppHostPath = path.join(ambiguousWorkspacePath, 'second', 'apphost.cs');
+        fixtureAppHostPaths = [appHostPath, firstAppHostPath, ambiguousFirstAppHostPath, ambiguousSecondAppHostPath];
+        fs.mkdirSync(fixtureRoot, { recursive: true });
+        fs.writeFileSync(path.join(fixtureRoot, 'aspire.config.json'), '{}\n');
         appHostPidsBeforeStop = [];
     });
 
@@ -36,9 +54,8 @@ suite('Aspire dynamic debug configuration E2E', function () {
             () => Promise.all(appHostPidsBeforeStop.map(appHostPid =>
                 waitForKnownProcessExit(appHostPid, 'a dynamic debug configuration AppHost process', 30000))),
             () => waitForNoDebugSessions().catch(() => undefined),
-            () => restoreWorkspaceFoldersForE2E(),
             () => executeE2eControlCommand({ name: 'closeAllEditors' }),
-            () => removePath(fixtureRoot, { recursive: true, force: true }),
+            () => restoreDefaultWorkspaceForCleanup(),
         ], 'Dynamic debug configuration E2E teardown failed.');
     });
 
@@ -51,7 +68,14 @@ suite('Aspire dynamic debug configuration E2E', function () {
         ]);
         assert.deepStrictEqual(workspaceFolders.map(folder => folder.name), ['src', 'src']);
 
-        await waitForRepositoryIdle();
+        await waitForExtensionState(
+            stateFile =>
+                stateFile.state.isWorkspaceAppHostDiscoveryComplete &&
+                !stateFile.state.isRepositoryLoading &&
+                stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, firstAppHostPath)) &&
+                stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, appHostPath)),
+            'both duplicate-alias AppHost candidates',
+            120000);
         await executeE2eControlCommand({ name: 'openFile', filePath: appHostPath });
         await waitForEditorTitle('apphost.cs');
 
@@ -91,7 +115,8 @@ suite('Aspire dynamic debug configuration E2E', function () {
         assert.ok(isSamePath(secondLaunch.appHostPath, appHostPath));
     });
 
-    test('launches the selected AppHost from an ambiguous single-folder workspace', async () => {
+    test('launches the selected AppHost from an ambiguous single-folder workspace', async function () {
+        this.timeout(300000);
         createAmbiguousWorkspaceFixture();
         await openAmbiguousWorkspace();
 
@@ -103,7 +128,9 @@ suite('Aspire dynamic debug configuration E2E', function () {
         const launch = await waitForLaunchOutput(beforeLaunch);
         assert.ok(launch.appHostPath);
         assert.ok(isSamePath(launch.appHostPath, ambiguousSecondAppHostPath));
-        const appHostPid = await waitForRunningAppHostPid(ambiguousSecondAppHostPath, 60000);
+        const appHostPid = await waitForRunningAppHostPid(
+            ambiguousSecondAppHostPath,
+            appHostProcessStateTimeoutMs);
         assert.ok(appHostPid > 0);
         assert.strictEqual(getRunningAppHostPid(ambiguousFirstAppHostPath), undefined);
         assert.deepStrictEqual(
@@ -141,7 +168,6 @@ suite('Aspire dynamic debug configuration E2E', function () {
     });
 
     function createWorkspaceFixture(): void {
-        removePath(fixtureRoot, { recursive: true, force: true });
         fs.mkdirSync(firstFolderPath, { recursive: true });
         fs.mkdirSync(secondFolderPath, { recursive: true });
         const appHostSdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
@@ -157,7 +183,6 @@ builder.Build().Run();
     }
 
     function createAmbiguousWorkspaceFixture(): void {
-        removePath(fixtureRoot, { recursive: true, force: true });
         fs.mkdirSync(path.dirname(ambiguousFirstAppHostPath), { recursive: true });
         fs.mkdirSync(path.dirname(ambiguousSecondAppHostPath), { recursive: true });
         const appHostSdkVersion = process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
@@ -179,10 +204,25 @@ builder.Build().Run();
             stateFile =>
                 stateFile.state.isWorkspaceAppHostDiscoveryComplete &&
                 !stateFile.state.isRepositoryLoading &&
-                stateFile.state.workspaceAppHostCandidatePaths.length === 2 &&
                 stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, ambiguousFirstAppHostPath)) &&
                 stateFile.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, ambiguousSecondAppHostPath)),
             'both ambiguous AppHost candidates',
+            120000);
+    }
+
+    async function restoreDefaultWorkspaceForCleanup(): Promise<void> {
+        // Discovery processes can outlive repository disposal, so leave each unique fixture under the
+        // runner-owned root. The outer harness removes that root after VS Code and ExTester have exited.
+        await restoreWorkspaceFoldersForE2E({ waitForExtensionHostReload: true });
+        await waitForExtensionState(
+            stateFile =>
+                stateFile.state.isWorkspaceAppHostDiscoveryComplete &&
+                !stateFile.state.isRepositoryLoading &&
+                !stateFile.state.workspaceAppHostCandidatePaths.some(candidate =>
+                    fixtureAppHostPaths.some(fixtureAppHostPath => isSamePath(candidate, fixtureAppHostPath))) &&
+                (stateFile.state.workspaceAppHostPath === undefined ||
+                    !fixtureAppHostPaths.some(fixtureAppHostPath => isSamePath(stateFile.state.workspaceAppHostPath!, fixtureAppHostPath))),
+            'default workspace discovery to release dynamic debug configuration fixtures',
             120000);
     }
 

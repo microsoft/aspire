@@ -7,14 +7,14 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class EventHubsPublicApiTests
+public class EventHubsPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void CtorAzureEventHubConsumerGroupResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resource = builder.AddAzureEventHubs("event-hubs");
         var name = isNull ? null! : string.Empty;
         const string consumerGroupName = "group";
@@ -33,7 +33,7 @@ public class EventHubsPublicApiTests
     [InlineData(true)]
     public void CtorAzureEventHubConsumerGroupResourceShouldThrowWhenConsumerGroupNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var resource = builder.AddAzureEventHubs("event-hubs");
         const string name = "consumer";
         var consumerGroupName = isNull ? null! : string.Empty;
@@ -135,7 +135,7 @@ public class EventHubsPublicApiTests
     [InlineData(true)]
     public void AddAzureEventHubsShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureEventHubs(name);
@@ -165,7 +165,7 @@ public class EventHubsPublicApiTests
     [Obsolete($"This method is obsolete because it has the wrong return type and will be removed in a future version. Use AddHub instead to add an Azure Event Hub.")]
     public void AddEventHubShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        using var hostBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = hostBuilder.AddAzureEventHubs("event-hubs");
         var name = isNull ? null! : string.Empty;
 
@@ -194,7 +194,7 @@ public class EventHubsPublicApiTests
     [InlineData(true)]
     public void AddHubShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        using var hostBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = hostBuilder.AddAzureEventHubs("event-hubs");
         var name = isNull ? null! : string.Empty;
 
@@ -221,7 +221,7 @@ public class EventHubsPublicApiTests
     [Fact]
     public void WithPropertiesShouldThrowWhenConfigureIsNullOrEmpty()
     {
-        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        using var hostBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = hostBuilder.AddAzureEventHubs("event-hubs").AddHub("hub");
         Action<AzureEventHubResource> configure = null!;
 
@@ -248,7 +248,7 @@ public class EventHubsPublicApiTests
     [InlineData(true)]
     public void AddConsumerGroupShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        using var hostBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = hostBuilder.AddAzureEventHubs("event-hubs").AddHub("hub");
         var name = isNull ? null! : string.Empty;
 
@@ -339,7 +339,7 @@ public class EventHubsPublicApiTests
     [InlineData(true)]
     public void WithConfigurationFileShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        using var hostBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = hostBuilder.AddAzureEventHubs("event-hubs");
 
         var path = isNull ? null! : string.Empty;
@@ -367,7 +367,7 @@ public class EventHubsPublicApiTests
     [Fact]
     public void WithConfigurationShouldThrowWhenConfigJsonIsNullOrEmpty()
     {
-        using var hostBuilder = TestDistributedApplicationBuilder.Create();
+        using var hostBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = hostBuilder.AddAzureEventHubs("event-hubs");
         Action<JsonNode> configJson = null!;
 

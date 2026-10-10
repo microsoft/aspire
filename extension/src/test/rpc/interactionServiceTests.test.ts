@@ -160,6 +160,88 @@ suite('InteractionService endpoints', () => {
 		showQuickPickStub.restore();
 	});
 
+	// promptForSelections
+	test('promptForSelections preselects CLI defaults', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves([
+			{ label: 'Aspire skill', picked: true },
+		] as never);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill', 'Playwright CLI'],
+				['Aspire skill']);
+
+			const quickPickItems = showQuickPickStub.firstCall.args[0] as readonly vscode.QuickPickItem[];
+			assert.deepStrictEqual(quickPickItems, [
+				{ label: 'Aspire skill', picked: true },
+				{ label: 'Playwright CLI', picked: false },
+			]);
+			assert.deepStrictEqual(result, ['Aspire skill']);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
+	test('promptForSelections returns the user changed selections', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves([
+			{ label: 'Playwright CLI', picked: false },
+		] as never);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill', 'Playwright CLI'],
+				['Aspire skill']);
+
+			assert.deepStrictEqual(result, ['Playwright CLI']);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
+	test('promptForSelections returns null when user cancels', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves(undefined);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill'],
+				['Aspire skill']);
+
+			assert.strictEqual(result, null);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
+	test('promptForSelections supports older CLI calls without defaults', async () => {
+		const testInfo = await createTestRpcServer();
+		const showQuickPickStub = sinon.stub(vscode.window, 'showQuickPick').resolves([] as never);
+
+		try {
+			const result = await testInfo.interactionService.promptForSelections(
+				'Select skills:',
+				['Aspire skill', 'Playwright CLI']);
+
+			const quickPickItems = showQuickPickStub.firstCall.args[0] as readonly vscode.QuickPickItem[];
+			assert.deepStrictEqual(quickPickItems, [
+				{ label: 'Aspire skill', picked: false },
+				{ label: 'Playwright CLI', picked: false },
+			]);
+			assert.deepStrictEqual(result, []);
+		}
+		finally {
+			showQuickPickStub.restore();
+		}
+	});
+
 	test('startDebugSession forwards CLI environment to the debug configuration', async () => {
 		const testInfo = await createTestRpcServer();
 		const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
@@ -250,6 +332,7 @@ suite('InteractionService endpoints', () => {
 					tryReserveExternalLaunch: () => 'reservation-1',
 					validateOrReacquireExternalLaunchReservation: (_appHostPath, reservationId) => reservationId,
 					replaceExternalLaunchReservation: () => 'reservation-1',
+					markLaunchAttemptFailureRecorded: () => { },
 					releaseExternalLaunchReservation: () => { },
 					tryReserveExternalOperation: () => 'operation-1',
 					validateOrReacquireExternalOperationReservation: (_appHostPath, reservationId) => reservationId,
@@ -387,15 +470,151 @@ suite('InteractionService endpoints', () => {
 	test('displayError endpoint', async () => {
 		const testInfo = await createTestRpcServer();
 		const showErrorMessageSpy = sinon.spy(vscode.window, 'showErrorMessage');
-		testInfo.interactionService.displayError('Test error message');
+		await testInfo.interactionService.displayError('Test error message');
 		assert.ok(showErrorMessageSpy.calledWith('Test error message'));
 		showErrorMessageSpy.restore();
+	});
+
+	test('displayError offers existing files and opens the selected structured action', async () => {
+		const testInfo = await createTestRpcServer();
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-message-action-'));
+		const cliLogFilePath = path.join(tempRoot, 'aspire.cli.log');
+		const appHostLogFilePath = path.join(tempRoot, 'apphost.cli.log');
+		await Promise.all([
+			fs.writeFile(cliLogFilePath, 'CLI diagnostics'),
+			fs.writeFile(appHostLogFilePath, 'AppHost diagnostics'),
+		]);
+		const sandbox = sinon.createSandbox();
+
+		try {
+			let selectAction: (action: vscode.MessageItem | undefined) => void;
+			const selection = new Promise<vscode.MessageItem | undefined>(resolve => selectAction = resolve);
+			const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').returns(selection);
+			const openEditorStub = sandbox.stub(testInfo.interactionService, 'openEditor').resolves();
+
+			await testInfo.interactionService.displayError('Test error message', [
+				{
+					displayName: 'Open CLI Log',
+					filePath: cliLogFilePath,
+				},
+				{
+					displayName: 'Open AppHost Log',
+					filePath: appHostLogFilePath,
+				},
+			]);
+			await new Promise<void>(resolve => setImmediate(resolve));
+
+			assert.strictEqual(showErrorMessageStub.callCount, 1);
+			assert.deepStrictEqual(
+				showErrorMessageStub.firstCall.args.slice(1).map(action => (action as vscode.MessageItem).title),
+				['Open CLI Log', 'Open AppHost Log']);
+			selectAction!(showErrorMessageStub.firstCall.args[2] as vscode.MessageItem);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.ok(openEditorStub.calledOnceWith(appHostLogFilePath));
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test('displayMessage executes a registered command selected from a structured action', async () => {
+		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
+
+		try {
+			let selectAction: (action: vscode.MessageItem | undefined) => void;
+			const selection = new Promise<vscode.MessageItem | undefined>(resolve => selectAction = resolve);
+			const getCommandsStub = sandbox.stub(vscode.commands, 'getCommands').resolves(['aspire-vscode.testAction']);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').returns(selection);
+
+			await testInfo.interactionService.displayMessage('information', 'Test info message', [{
+				displayName: 'Run action',
+				command: 'aspire-vscode.testAction',
+			}]);
+			await new Promise<void>(resolve => setImmediate(resolve));
+
+			assert.ok(getCommandsStub.calledOnceWith(true));
+			const action = showInformationMessageStub.firstCall.args[1] as vscode.MessageItem;
+			assert.strictEqual(action.title, 'Run action');
+			selectAction!(action);
+			await new Promise<void>(resolve => setImmediate(resolve));
+			assert.ok(executeCommandStub.calledOnceWith('aspire-vscode.testAction'));
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test('displayMessage hides unavailable and invalid structured actions', async () => {
+		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
+
+		try {
+			sandbox.stub(vscode.commands, 'getCommands').resolves([]);
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+
+			await testInfo.interactionService.displayMessage('information', 'Test info message', [
+				{ displayName: 'Missing command', command: 'aspire-vscode.missing' },
+				{ displayName: 'Missing file', filePath: path.join(os.tmpdir(), 'missing-aspire-message-action.log') },
+				{ displayName: 'Ambiguous', command: 'aspire-vscode.missing', filePath: 'file.log' },
+			]);
+
+			assert.deepStrictEqual(showInformationMessageStub.firstCall.args, ['Test info message']);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test('displayError completes while an action notification remains open', async () => {
+		const testInfo = await createTestRpcServer();
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-message-action-'));
+		const logFilePath = path.join(tempRoot, 'aspire.cli.log');
+		await fs.writeFile(logFilePath, 'diagnostics');
+		const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').returns(new Promise<vscode.MessageItem | undefined>(() => { }));
+
+		try {
+			await testInfo.interactionService.displayError('Test error message', [{
+				displayName: 'Open CLI Log',
+				filePath: logFilePath,
+			}]);
+
+			assert.strictEqual(showErrorMessageStub.callCount, 1);
+		}
+		finally {
+			showErrorMessageStub.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test('displayError ignores cancellation while an action notification closes', async () => {
+		const testInfo = await createTestRpcServer();
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-message-action-'));
+		const logFilePath = path.join(tempRoot, 'aspire.cli.log');
+		await fs.writeFile(logFilePath, 'diagnostics');
+		const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').rejects(new vscode.CancellationError());
+
+		try {
+			await testInfo.interactionService.displayError('Test error message', [{
+				displayName: 'Open CLI Log',
+				filePath: logFilePath,
+			}]);
+			await new Promise<void>(resolve => setImmediate(resolve));
+
+			assert.strictEqual(showErrorMessageStub.callCount, 1);
+		}
+		finally {
+			showErrorMessageStub.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
 	});
 
 	test('displayMessage endpoint', async () => {
 		const testInfo = await createTestRpcServer();
 		const showInformationMessageSpy = sinon.spy(vscode.window, 'showInformationMessage');
-		testInfo.interactionService.displayMessage(":test_emoji:", 'Test info message');
+		await testInfo.interactionService.displayMessage(":test_emoji:", 'Test info message');
 		assert.ok(showInformationMessageSpy.calledWith('Test info message'));
 		showInformationMessageSpy.restore();
 	});
@@ -761,7 +980,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://codespaces/login?t=codespaces-secret', 'openExternalBrowser', false]);
 		}
 		finally {
 			sandbox.restore();
@@ -821,7 +1040,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser', false]);
 		}
 		finally {
 			sandbox.restore();
@@ -849,7 +1068,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(openDashboardStub.callCount, 1);
-			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser']);
+			assert.deepStrictEqual(openDashboardStub.getCall(0).args, ['http://localhost/login?t=base-secret', 'integratedBrowser', false]);
 		}
 		finally {
 			sandbox.restore();

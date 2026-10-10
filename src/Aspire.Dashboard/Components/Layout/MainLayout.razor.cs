@@ -18,6 +18,14 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _isDisposing;
+
+    private bool _runSelectionChanged;
+    private bool _isSwitchingRuns;
+    private bool _hasResourceTerminals;
+    // Fluent v5 has no API to notify the provider after mutating an existing toast's options. This value is
+    // rendered as an additional provider attribute so changing it forces FluentToastProvider to read them again.
+    private int _toastProviderUpdateVersion;
 
     // Desktop nav rail layout. false = collapsed to icons only (default, most content space,
     // labels still available via each item's tooltip); true = expanded so each item shows its
@@ -30,7 +38,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IJSObjectReference? _keyboardHandlers;
     private DotNetObjectReference<ShortcutManager>? _shortcutManagerReference;
     private DotNetObjectReference<MainLayout>? _layoutReference;
-    private IDialogReference? _openPageDialog;
+    private DashboardDialogReference? _openPageDialog;
     private string? _pendingReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
     private const string SettingsDialogId = "SettingsDialog";
@@ -43,6 +51,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
+
+    [Inject]
+    public required IThemeService FluentThemeService { get; init; }
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -69,7 +80,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required ShortcutManager ShortcutManager { get; init; }
 
     [Inject]
-    public required IMessageService MessageService { get; init; }
+    public required DashboardMessageBarService MessageService { get; init; }
 
     [Inject]
     public required IOptionsMonitor<DashboardOptions> Options { get; init; }
@@ -77,11 +88,53 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
 
+    [Inject]
+    public required ISessionStorage SessionStorage { get; init; }
+
+    [Inject]
+    public required IDashboardRunStore RunStore { get; init; }
+
+    [Inject]
+    public required IDashboardRunSelection RunSelection { get; init; }
+
+    [Inject]
+    public required ILogger<MainLayout> Logger { get; init; }
+
+    [Inject]
+    public required Aspire.Dashboard.Model.INotificationService NotificationService { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
+
     protected override async Task OnInitializedAsync()
     {
+        if (RunStore.SupportsRunSelection)
+        {
+            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+            {
+                try
+                {
+                    RunSelection.SelectRun(selectedRunId);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                    RunSelection.SelectRun(runId: null);
+                }
+
+                if (RunSelection.SelectedRun.IsCurrent)
+                {
+                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+                }
+            }
+        }
+
+        NotificationService.OnChange += HandleNotificationsChanged;
+
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -89,9 +142,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             if (_jsModule is not null)
             {
                 var newValue = ThemeManager.SelectedTheme!;
-
-                var effectiveTheme = await _jsModule.InvokeAsync<string>("updateTheme", newValue);
-                ThemeManager.EffectiveTheme = effectiveTheme;
+                await ApplyThemeAsync(newValue);
             }
         });
 
@@ -110,25 +161,36 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             });
         }
 
-        var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
-        TimeProvider.SetBrowserTimeZone(result.TimeZone);
-        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
-        TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
-
-        var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
-        if (timeFormatResult.Success)
+        try
         {
-            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
-        }
+            var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
+            TimeProvider.SetBrowserTimeZone(result.TimeZone);
+            TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
+            TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
 
-        // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
-        var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
-        if (navExpandedResult.Success)
+            var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+            if (timeFormatResult.Success)
+            {
+                TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+            }
+
+            // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
+            var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
+            if (navExpandedResult.Success)
+            {
+                _isNavMenuExpanded = navExpandedResult.Value;
+            }
+
+            await DisplayUnsecuredEndpointsMessageAsync();
+        }
+        catch (JSDisconnectedException ex)
         {
-            _isNavMenuExpanded = navExpandedResult.Value;
+            Logger.LogDebug(ex, "Dashboard layout initialization stopped because the circuit disconnected.");
         }
-
-        await DisplayUnsecuredEndpointsMessageAsync();
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Dashboard layout initialization stopped because the layout was disposed.");
+        }
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -151,26 +213,17 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
             if (!skipMessage)
             {
-                // ShowMessageBarAsync must come after an await. Otherwise it will NRE.
-                // I think this order allows the message bar provider to be fully initialized.
-                await MessageService.ShowMessageBarAsync(options =>
-                {
-                    options.Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)];
-                    options.Body = unsecuredEndpointsMessage.ToString();
-                    options.Link = new()
+                await MessageService.ShowAsync(
+                    new DashboardMessageBarContent
                     {
-                        Text = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
-                        Href = "https://aspire.dev/dashboard/security-considerations/",
-                        Target = "_blank"
-                    };
-                    options.Intent = MessageIntent.Warning;
-                    options.Section = DashboardUIHelpers.MessageBarSection;
-                    options.AllowDismiss = true;
-                    options.OnClose = async m =>
-                    {
-                        await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true);
-                    };
-                });
+                        Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)],
+                        Message = unsecuredEndpointsMessage.ToString(),
+                        LinkText = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
+                        LinkUrl = "https://aka.ms/aspire/api-endpoint-unsecured"
+                    },
+                    MessageBarIntent.Warning,
+                    DashboardUIHelpers.MessageBarSection,
+                    _ => LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true));
             }
         }
 
@@ -196,21 +249,52 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 
+    private async Task ApplyThemeAsync(string theme)
+    {
+        var mode = theme switch
+        {
+            ThemeManager.ThemeSettingDark => ThemeMode.Dark,
+            ThemeManager.ThemeSettingLight => ThemeMode.Light,
+            _ => ThemeMode.System
+        };
+
+        await FluentThemeService.SetThemeAsync(mode);
+        ThemeManager.EffectiveTheme = await _jsModule!.InvokeAsync<string>("updateTheme", theme);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (_isDisposing)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-theme.js");
-            _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
-            _layoutReference = DotNetObjectReference.Create(this);
-            _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
-            ShortcutManager.AddGlobalKeydownListener(this);
+            return;
         }
 
-        if (_pendingReturnFocusElementId is { } elementId && _openPageDialog is null)
+        try
         {
-            _pendingReturnFocusElementId = null;
-            await JS.InvokeVoidAsync("focusElement", elementId);
+            if (firstRender)
+            {
+                _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-theme.js"]}");
+                await ThemeManager.EnsureInitializedAsync();
+                await ApplyThemeAsync(ThemeManager.SelectedTheme ?? ThemeManager.ThemeSettingSystem);
+                _shortcutManagerReference = DotNetObjectReference.Create(ShortcutManager);
+                _layoutReference = DotNetObjectReference.Create(this);
+                _keyboardHandlers = await JS.InvokeAsync<IJSObjectReference>("window.registerGlobalKeydownListener", _shortcutManagerReference);
+                ShortcutManager.AddGlobalKeydownListener(this);
+            }
+
+            if (_pendingReturnFocusElementId is { } elementId && _openPageDialog is null)
+            {
+                _pendingReturnFocusElementId = null;
+                await JS.InvokeVoidAsync("focusElement", elementId);
+            }
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Dashboard layout rendering stopped because the circuit disconnected.");
+        }
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Dashboard layout rendering stopped because the layout was disposed.");
         }
     }
 
@@ -224,6 +308,42 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
+
+    private async Task SwitchDashboardRunAsync(string? runId)
+    {
+        _runSelectionChanged = true;
+        var selectedRunId = RunSelection.SelectedRun is { IsCurrent: false } selectedRun ? selectedRun.RunId : null;
+        if (string.Equals(runId, selectedRunId, StringComparison.Ordinal))
+        {
+            await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
+            return;
+        }
+
+        _isSwitchingRuns = true;
+        _hasResourceTerminals = false;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            RunSelection.SelectRun(runId);
+        }
+        catch (Exception exception)
+        {
+            Logger.LogError(
+                exception,
+                "Failed to switch to dashboard run '{RunId}'. Keeping dashboard run '{SelectedRunId}' selected.",
+                runId,
+                RunSelection.SelectedRun.RunId);
+        }
+        finally
+        {
+            _isSwitchingRuns = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
+        var persistedRunId = RunSelection.SelectedRun is { IsCurrent: false } actualSelectedRun ? actualSelectedRun.RunId : string.Empty;
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, persistedRunId);
+    }
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
     {
@@ -242,13 +362,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
             PrimaryActionEnabled = true,
             SecondaryAction = null,
-            TrapFocus = true,
             Modal = true,
             Alignment = HorizontalAlignment.Center,
             Width = "700px",
-            Height = "auto",
             Id = HelpDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, HelpButtonId)))
+            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, HelpButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(HelpDialogId).ConfigureAwait(true))
@@ -302,13 +420,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)],
             PrimaryActionEnabled = true,
             SecondaryAction = null,
-            TrapFocus = true,
             Modal = true,
             Alignment = HorizontalAlignment.Center,
             Width = "700px",
-            Height = "auto",
             Id = AIAgentsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose())
+            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose())
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(AIAgentsDialogId).ConfigureAwait(true))
@@ -328,13 +444,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Title = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogTitle)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
             SecondaryAction = null,
-            TrapFocus = true,
             Modal = true,
             Alignment = HorizontalAlignment.Right,
             Width = "300px",
-            Height = "auto",
             Id = SettingsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
+            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose(GetVisibleReturnFocusElementId(returnFocusElementId, SettingsButtonId)))
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(SettingsDialogId).ConfigureAwait(true))
@@ -345,14 +459,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         // Ensure the currently set theme is immediately available to display in settings dialog.
         await ThemeManager.EnsureInitializedAsync();
 
-        if (ViewportInformation.IsDesktop)
-        {
-            _openPageDialog = await DialogService.ShowPanelAsync<SettingsDialog>(parameters).ConfigureAwait(true);
-        }
-        else
-        {
-            _openPageDialog = await DialogService.ShowDialogAsync<SettingsDialog>(parameters).ConfigureAwait(true);
-        }
+        _openPageDialog = await DialogService.ShowPanelAsync<SettingsDialog>(parameters).ConfigureAwait(true);
     }
 
     public async Task LaunchNotificationsAsync()
@@ -362,13 +469,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Title = Loc[nameof(Resources.Layout.MainLayoutNotificationCenterTitle)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
             SecondaryAction = null,
-            TrapFocus = true,
             Modal = true,
             Alignment = HorizontalAlignment.Right,
             Width = "350px",
-            Height = "auto",
             Id = NotificationsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose())
+            OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, _ => HandleDialogClose())
         };
 
         if (!await CloseOpenPageDialogForReplacementAsync(NotificationsDialogId).ConfigureAwait(true))
@@ -376,26 +481,38 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             return;
         }
 
-        if (ViewportInformation.IsDesktop)
-        {
-            _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
-        }
-        else
-        {
-            _openPageDialog = await DialogService.ShowDialogAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
-        }
+        _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
     }
 
-    public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
+    private static readonly IReadOnlySet<AspireKeyboardShortcut> s_subscribedShortcuts = new HashSet<AspireKeyboardShortcut>
     {
         AspireKeyboardShortcut.Help,
         AspireKeyboardShortcut.Settings,
-        AspireKeyboardShortcut.GoToResources,
-        AspireKeyboardShortcut.GoToConsoleLogs,
         AspireKeyboardShortcut.GoToStructuredLogs,
         AspireKeyboardShortcut.GoToTraces,
         AspireKeyboardShortcut.GoToMetrics
     };
+
+    private static readonly IReadOnlySet<AspireKeyboardShortcut> s_resourceServiceSubscribedShortcuts = new HashSet<AspireKeyboardShortcut>(
+        s_subscribedShortcuts)
+    {
+        AspireKeyboardShortcut.GoToResources,
+        AspireKeyboardShortcut.GoToConsoleLogs
+    };
+
+    private static readonly IReadOnlySet<AspireKeyboardShortcut> s_resourceTerminalsSubscribedShortcuts = new HashSet<AspireKeyboardShortcut>(
+        s_resourceServiceSubscribedShortcuts)
+    {
+        AspireKeyboardShortcut.GoToTerminals
+    };
+
+    public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts =>
+        (DashboardClient.IsEnabled, _hasResourceTerminals) switch
+        {
+            (true, true) => s_resourceTerminalsSubscribedShortcuts,
+            (true, false) => s_resourceServiceSubscribedShortcuts,
+            _ => s_subscribedShortcuts
+        };
 
     public async Task OnPageKeyDownAsync(AspireKeyboardShortcut shortcut)
     {
@@ -407,10 +524,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             case AspireKeyboardShortcut.Settings:
                 await LaunchSettingsAsync();
                 break;
-            case AspireKeyboardShortcut.GoToResources:
+            case AspireKeyboardShortcut.GoToResources when DashboardClient.IsEnabled:
                 NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl());
                 break;
-            case AspireKeyboardShortcut.GoToConsoleLogs:
+            case AspireKeyboardShortcut.GoToConsoleLogs when DashboardClient.IsEnabled:
                 NavigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl());
                 break;
             case AspireKeyboardShortcut.GoToStructuredLogs:
@@ -422,6 +539,9 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             case AspireKeyboardShortcut.GoToMetrics:
                 NavigationManager.NavigateTo(DashboardUrls.MetricsUrl());
                 break;
+            case AspireKeyboardShortcut.GoToTerminals when DashboardClient.IsEnabled && _hasResourceTerminals:
+                NavigationManager.NavigateTo(DashboardUrls.TerminalsUrl());
+                break;
         }
     }
 
@@ -429,6 +549,17 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     {
         _isNavMenuOpen = false;
         StateHasChanged();
+    }
+
+    private void HandleNotificationsChanged()
+    {
+        // Resource command toasts and notification-center entries are updated together. Use that notification
+        // event to refresh any open toast whose retained ToastOptions instance was mutated with the result.
+        _ = InvokeAsync(() =>
+        {
+            _toastProviderUpdateVersion++;
+            StateHasChanged();
+        });
     }
 
     private async Task ToggleNavMenuExpandedAsync()
@@ -439,23 +570,25 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _isDisposing = true;
+
         _shortcutManagerReference?.Dispose();
         _layoutReference?.Dispose();
         _themeChangedSubscription?.Dispose();
         _locationChangingRegistration?.Dispose();
+        NotificationService.OnChange -= HandleNotificationsChanged;
         ShortcutManager.RemoveGlobalKeydownListener(this);
 
         try
         {
-            if (_keyboardHandlers is { } h)
+            if (_keyboardHandlers is { } keyboardHandlers)
             {
-                await JS.InvokeVoidAsync("window.unregisterGlobalKeydownListener", h);
+                await JS.InvokeVoidAsync("window.unregisterGlobalKeydownListener", keyboardHandlers);
             }
         }
-        catch (JSDisconnectedException)
+        catch (JSDisconnectedException ex)
         {
-            // Per https://learn.microsoft.com/aspnet/core/blazor/javascript-interoperability/?view=aspnetcore-7.0#javascript-interop-calls-without-a-circuit
-            // this is one of the calls that will fail if the circuit is disconnected, and we just need to catch the exception so it doesn't pollute the logs
+            Logger.LogDebug(ex, "Dashboard keyboard cleanup stopped because the circuit disconnected.");
         }
 
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);

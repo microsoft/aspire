@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
@@ -15,7 +14,7 @@ public class CliTagEnrichmentProcessorTests
     {
         using var fixture = new TelemetryFixture();
 
-        var processor = new CliTagEnrichmentProcessor(fixture.TagsSource);
+        var processor = new CliTagEnrichmentProcessor(fixture.TagsSource, fixture.Telemetry);
 
         using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
         using var listener = new ActivityListener
@@ -43,7 +42,8 @@ public class CliTagEnrichmentProcessorTests
     {
         // Verifies the processor handles the synchronous wait path when tags
         // haven't completed yet (the GetResolvedTags blocking path).
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        using var fixture = new TelemetryFixture(initialize: false);
+        var tagsSource = fixture.TagsSource;
 
         // Gate the tag calculation behind a TaskCompletionSource so it hasn't completed
         // when OnEnd is called — this forces the blocking wait path in GetResolvedTags.
@@ -60,7 +60,7 @@ public class CliTagEnrichmentProcessorTests
             return expectedTags;
         });
 
-        var processor = new CliTagEnrichmentProcessor(tagsSource);
+        var processor = new CliTagEnrichmentProcessor(tagsSource, fixture.Telemetry);
 
         using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
         using var listener = new ActivityListener
@@ -87,5 +87,35 @@ public class CliTagEnrichmentProcessorTests
         // Tags were applied via the blocking wait path
         Assert.Contains(activity.Tags, t => t.Key == "aspire.cli.version" && (string?)t.Value == "1.0.0-test");
         Assert.Contains(activity.Tags, t => t.Key == "machine.device_id" && (string?)t.Value == "test-device-id");
+    }
+
+    [Fact]
+    public async Task OnEnd_DetectorActivitySuppressesRawInternalIdentityTags()
+    {
+        using var fixture = new TelemetryFixture(initialize: false);
+        var tagsSource = fixture.TagsSource;
+        tagsSource.StartCalculation(() => Task.FromResult<IReadOnlyList<KeyValuePair<string, object?>>>(
+        [
+            new(TelemetryConstants.Tags.CliVersion, "1.0.0-test"),
+            new(TelemetryConstants.Tags.InternalMicrosoftAlias, "test.alias"),
+            new(TelemetryConstants.Tags.InternalMicrosoftDomain, "REDMOND")
+        ]));
+        await tagsSource.TagsTask;
+        var processor = new CliTagEnrichmentProcessor(tagsSource, fixture.Telemetry);
+
+        using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = s => s.Name == source.Name,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
+        };
+        ActivitySource.AddActivityListener(listener);
+        using var activity = source.StartActivity(TelemetryConstants.Activities.InternalMicrosoftDetector)!;
+
+        processor.OnEnd(activity);
+
+        Assert.Equal("1.0.0-test", activity.GetTagItem(TelemetryConstants.Tags.CliVersion));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftAlias));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDomain));
     }
 }

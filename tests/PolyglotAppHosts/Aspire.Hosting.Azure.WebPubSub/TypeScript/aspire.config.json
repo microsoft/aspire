@@ -4,6 +4,7 @@
     "language": "typescript/nodejs"
   },
   "packages": {
-    "Aspire.Hosting.Azure.WebPubSub": ""
+    "Aspire.Hosting.Azure.WebPubSub": "",
+    "Aspire.Hosting.Azure.Provisioning.WebPubSub": ""
   }
 }

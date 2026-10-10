@@ -159,7 +159,7 @@ public static class DashboardEndpointsBuilder
                 return Results.Empty;
             }
 
-            var response = service.GetSpans(resource, traceId, hasError, limit, search);
+            var response = await service.GetSpansAsync(resource, traceId, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -191,7 +191,7 @@ public static class DashboardEndpointsBuilder
                 return Results.Empty;
             }
 
-            var response = service.GetLogs(resource, traceId, severity, limit, search);
+            var response = await service.GetLogsAsync(resource, traceId, severity, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -206,14 +206,15 @@ public static class DashboardEndpointsBuilder
 
         // GET /api/telemetry/traces - List traces in OTLP JSON format (snapshot only, no streaming)
         // Supports multiple resource names: ?resource=app1&resource=app2
-        group.MapGet("/traces", (
+        group.MapGet("/traces", async (
             TelemetryApiService service,
             [FromQuery] string[]? resource,
             [FromQuery] bool? hasError,
             [FromQuery] int? limit,
-            [FromQuery] string? search) =>
+            [FromQuery] string? search,
+            CancellationToken cancellationToken) =>
         {
-            var response = service.GetTraces(resource, hasError, limit, search);
+            var response = await service.GetTracesAsync(resource, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails

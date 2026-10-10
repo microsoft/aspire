@@ -7,7 +7,7 @@ using Aspire.Hosting.Dcp.Model;
 namespace Aspire.Hosting.Dcp;
 
 /// <summary>
-/// Shared certificate utilities used by both ExecutableCreator and ContainerCreator.
+/// Shared certificate utilities used by executable and container configuration resolution.
 /// </summary>
 internal sealed class CertificateUtilities
 {

@@ -36,10 +36,14 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     }
 
     /// <summary>
-    /// This field is used to store the model identifier used by Foundry Local.
-    /// It is used in the connection string instead of <see cref="ModelName"/>.
+    /// Gets or sets the model identifier used by Foundry Local.
     /// </summary>
-    internal string? ModelId { get; set; }
+    /// <remarks>
+    /// Aspire resolves this value automatically when it manages Foundry Local. Set it explicitly
+    /// when connecting to an existing Foundry Local service and <see cref="ModelName"/> is an alias
+    /// rather than the identifier reported by the service.
+    /// </remarks>
+    public string? LocalModelId { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the deployment.
@@ -99,12 +103,12 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// Gets the connection string expression for the Microsoft Foundry resource with model/deployment information.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => Parent.IsEmulator
-        ? ReferenceExpression.Create($"{Parent};Model={ModelId ?? ModelName}")
+        ? ReferenceExpression.Create($"{Parent};Model={LocalModelId ?? ModelName}")
         : ReferenceExpression.Create($"{Parent};Deployment={DeploymentName}");
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {
-        var model = Parent.IsEmulator ? ModelId ?? ModelName : DeploymentName;
+        var model = Parent.IsEmulator ? LocalModelId ?? ModelName : DeploymentName;
         return Parent.CombineProperties([
             new("ModelName", ReferenceExpression.Create($"{model}")),
             new("Format", ReferenceExpression.Create($"{Format}")),

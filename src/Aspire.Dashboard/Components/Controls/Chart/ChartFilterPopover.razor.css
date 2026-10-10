@@ -1,20 +1,35 @@
-.chart-filter-button-container {
-    display: inline-flex;
-    width: 32px;
-    height: 32px;
+.chart-filter-popover-container ::deep .chart-filter-popover::part(dialog) {
+    position-anchor: var(--chart-filter-anchor);
+    /* Fluent sets the dialog insets inline; the anchor position must override them. */
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
+    position-try-fallbacks: flip-block;
+    box-sizing: border-box;
+    max-width: 400px;
+    width: max-content;
 }
 
-.chart-filter-button-container ::deep .chart-filter-button {
-    width: 32px;
-    min-width: 32px;
-    max-width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
+.dimension-popup-container {
+    min-width: 0;
 }
 
-.chart-filter-button-container ::deep .chart-filter-button::part(control) {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    padding: 0;
+.dimension-popup-container ::deep .dimension-popup {
+    min-width: 0;
+    row-gap: 4px;
+    width: 100%;
+}
+
+.dimension-popup-container ::deep .dimension-popup > fluent-field {
+    cursor: pointer;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    width: 100%;
+}
+
+.dimension-popup-container ::deep .dimension-popup > fluent-field > label[slot="label"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }

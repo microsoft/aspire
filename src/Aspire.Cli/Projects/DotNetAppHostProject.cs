@@ -14,15 +14,18 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -51,6 +54,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
     private readonly IEnvironment _environment;
+    private readonly AppHostConfigurationProjector _appHostConfigurationProjector;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -82,6 +86,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         IDotNetSdkInstaller sdkInstaller,
         IBundleService bundleService,
         IEnvironment environment,
+        AppHostConfigurationProjector appHostConfigurationProjector,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
@@ -102,6 +107,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         _sdkInstaller = sdkInstaller;
         _bundleService = bundleService;
         _environment = environment;
+        _appHostConfigurationProjector = appHostConfigurationProjector;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
@@ -126,6 +132,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
     /// <inheritdoc />
     public string DisplayName => "C# (.NET)";
+
+    /// <inheritdoc />
+    public bool SupportsLaunchProfiles => true;
 
     // ═══════════════════════════════════════════════════════════════
     // DETECTION
@@ -1485,16 +1494,17 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         using var cliBundleLeaseScope = cliBundleLease;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false, aspireHostingVersion: null);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
-        var preparationExitCode = await PrepareAppHostAsync(
+        var (preparationExitCode, builtByCli, deferBuildCompletion) = await PrepareAppHostAsync(
             context,
             effectiveAppHostFile,
             isSingleFileAppHost,
             isExtensionHost,
             extensionBackchannel,
             buildOutputCollector,
+            env,
             cancellationToken);
         if (preparationExitCode is { } exitCode)
         {
@@ -1513,7 +1523,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ? await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken)
             : null;
         var injectDcpAndDashboard = appHostInfo?.IsUsingCliBundle == true;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo?.AspireHostingVersion);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -1521,9 +1531,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         context.OutputCollector = runOutputCollector;
 
-        // Signal that build/preparation is complete
-        context.BuildCompletionSource?.TrySetResult(true);
-        activity.AddAppHostBuildReadyEvent();
+        void SignalBuildCompletion()
+        {
+            context.BuildCompletionSource?.TrySetResult(true);
+            activity.AddAppHostBuildReadyEvent();
+        }
+
+        if (!deferBuildCompletion)
+        {
+            SignalBuildCompletion();
+        }
 
         var runOptions = new ProcessInvocationOptions
         {
@@ -1533,14 +1550,30 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             Debug = context.Debug,
             KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(_environment.IsWindows()),
             // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
-            // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
+            // same graceful-then-escalate semantics as TypeScript AppHosts (which already
             // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,
             // package add, layout, and other short-lived invocations leave these unset so
             // they continue to use the shared ladder's force-kill mode.
             IsolateConsole = true,
-            KillOnParentExit = true,
+            // dotnet run nests its own non-breakaway job inside the CLI job, preventing DCP
+            // from escaping the CLI job to finish resource cleanup. Direct launches have no
+            // intervening job and opt back into the CLI job below.
+            KillOnParentExit = false,
+            Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
+            // The bundled AppHost run hook delegates dotnet run to aspire run. The SDK passes
+            // its selected profile through DOTNET_LAUNCH_PROFILE rather than a CLI argument.
+            // Preserve that selection for both direct launch and the dotnet run fallback,
+            // while allowing an explicit Aspire CLI option to take precedence.
+            LaunchProfile = context.LaunchProfile ?? GetEffectiveEnvironmentValue(env, "DOTNET_LAUNCH_PROFILE"),
+            ExtensionAppHostLaunchCompletedAsync = deferBuildCompletion
+                ? () =>
+                {
+                    SignalBuildCompletion();
+                    return Task.CompletedTask;
+                }
+                : null,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -1555,7 +1588,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
         var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
-            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, cancellationToken)
+            ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, runOptions.LaunchProfile, cancellationToken)
             : null;
 
         // Start the apphost - the runner will signal the backchannel when ready
@@ -1572,14 +1605,28 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             //
             // noRestore is only relevant when noBuild is false because --no-build implies --no-restore.
             var noBuild = !watch || context.NoBuild;
-            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, context.NoRestore);
+            var noRestore = context.NoRestore;
+            if (isSingleFileAppHost && !builtByCli)
+            {
+                // File-based RunCommand metadata is only safe to reuse when the CLI's pre-build
+                // generated it with run-hook suppression. Preserve the extension-owned rebuild
+                // fallback rather than trusting ambient output.
+                noBuild = false;
+                noRestore = false;
+            }
+
+            using var runDotnetActivity = _profilingTelemetry.StartAppHostRunDotnetLifetime(watch, noBuild, noRestore);
+            var appHostDirectory = effectiveAppHostFile.Directory ?? _executionContext.WorkingDirectory;
             if (directRun is not null)
             {
+                await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(directRun.Environment, appHostDirectory, cancellationToken);
+
                 // The direct command line has no "--" separator, so the forwarded-argument boundary
                 // has to be carried alongside it for logging. Clone rather than mutate because the
                 // caller may reuse runOptions for other invocations.
                 var directRunOptions = runOptions.Clone();
                 directRunOptions.AppHostArgumentStartIndex = directRun.AppHostArgumentStartIndex;
+                directRunOptions.KillOnParentExit = true;
 
                 return await _runner.RunAppHostCommandAsync(
                     effectiveAppHostFile,
@@ -1592,11 +1639,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     cancellationToken);
             }
 
+            await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(env, appHostDirectory, cancellationToken);
+
             return await _runner.RunAsync(
                 effectiveAppHostFile,
                 watch,
                 noBuild,
-                context.NoRestore,
+                noRestore,
                 context.UnmatchedTokens,
                 env,
                 backchannelCompletionSource,
@@ -1645,37 +1694,40 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<int?> PrepareAppHostAsync(
+    private async Task<(int? ExitCode, bool BuiltByCli, bool DeferBuildCompletion)> PrepareAppHostAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
         bool isExtensionHost,
         IExtensionBackchannel? extensionBackchannel,
         OutputCollector buildOutputCollector,
+        IDictionary<string, string> buildEnvironment,
         CancellationToken cancellationToken)
     {
         try
         {
-            var buildExitCode = await BuildAppHostIfNeededAsync(
+            var (buildExitCode, builtByCli, deferBuildCompletion) = await BuildAppHostIfNeededAsync(
                 context,
                 effectiveAppHostFile,
+                isSingleFileAppHost,
                 isExtensionHost,
                 extensionBackchannel,
                 buildOutputCollector,
+                buildEnvironment,
                 cancellationToken);
             if (buildExitCode is not null)
             {
-                return buildExitCode;
+                return (buildExitCode, builtByCli, deferBuildCompletion);
             }
 
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
                 context.BuildCompletionSource?.TrySetResult(false);
-                return CliExitCodes.FailedToDotnetRunAppHost;
+                return (CliExitCodes.FailedToDotnetRunAppHost, builtByCli, deferBuildCompletion);
             }
 
-            return null;
+            return (null, builtByCli, deferBuildCompletion);
         }
         catch
         {
@@ -1687,29 +1739,35 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private async Task<int?> BuildAppHostIfNeededAsync(
+    private async Task<(int? ExitCode, bool BuiltByCli, bool DeferBuildCompletion)> BuildAppHostIfNeededAsync(
         AppHostProjectContext context,
         FileInfo effectiveAppHostFile,
+        bool isSingleFileAppHost,
         bool isExtensionHost,
         IExtensionBackchannel? extensionBackchannel,
         OutputCollector buildOutputCollector,
+        IDictionary<string, string> buildEnvironment,
         CancellationToken cancellationToken)
     {
-        if (context.NoBuild)
+        if (context.NoBuild && !isSingleFileAppHost)
         {
-            return null;
+            return (null, false, false);
         }
 
         var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
-        if (isExtensionHost && !extensionHasBuildCapability)
+        var extensionCanLaunchProject = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.Project, cancellationToken);
+        if (isExtensionHost && extensionCanLaunchProject && !extensionHasBuildCapability)
         {
             // Older extension hosts own the AppHost build themselves. Building again in the CLI would
             // duplicate work and could race the extension's diagnostics/launch pipeline. Newer hosts
             // opt in with build-dotnet-using-cli when they want the CLI to own this pre-build.
-            return null;
+            return (null, false, true);
         }
 
-        using var buildActivity = _profilingTelemetry.StartAppHostBuild(context.NoRestore, isExtensionHost, extensionHasBuildCapability);
+        // File-based AppHosts cannot safely reuse ambient RunCommand metadata, including for explicit
+        // --no-build. Build them here so startup reuses output generated with run-hook suppression.
+        var noRestore = isSingleFileAppHost && context.NoBuild ? false : context.NoRestore;
+        using var buildActivity = _profilingTelemetry.StartAppHostBuild(noRestore, isExtensionHost, extensionHasBuildCapability);
 
         var buildOptions = new ProcessInvocationOptions
         {
@@ -1717,12 +1775,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = buildOutputCollector.AppendError,
         };
 
-        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, context.NoRestore, buildOptions, context.WorkingDirectory, cancellationToken);
+        var buildExitCode = await AppHostHelper.BuildAppHostAsync(_runner, _interactionService, effectiveAppHostFile, noRestore, buildEnvironment, buildOptions, context.WorkingDirectory, cancellationToken);
         buildActivity.SetAppHostBuildExitCode(buildExitCode);
 
         if (buildExitCode == 0)
         {
-            return null;
+            return (null, true, false);
         }
 
         // Preserve the build output before signaling failure. RunCommand reads this collector after
@@ -1730,7 +1788,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // generic "project could not be built" message.
         context.OutputCollector = buildOutputCollector;
         context.BuildCompletionSource?.TrySetResult(false);
-        return CliExitCodes.FailedToBuildArtifacts;
+        return (CliExitCodes.FailedToBuildArtifacts, false, false);
     }
 
     private async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
@@ -1776,6 +1834,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         string[] unmatchedTokens,
         bool noLaunchProfile,
+        string? launchProfile,
         CancellationToken cancellationToken)
     {
         if (await IsDirectLaunchDisabledAsync(effectiveAppHostFile, cancellationToken).ConfigureAwait(false))
@@ -1806,6 +1865,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 directEnv,
                 arguments,
                 noLaunchProfile,
+                launchProfile,
                 hasExplicitApplicationArgs: unmatchedTokens.Length > 0,
                 hasRunArguments))
         {
@@ -1945,6 +2005,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         Dictionary<string, string> env,
         List<string> arguments,
         bool noLaunchProfile,
+        string? launchProfile,
         bool hasExplicitApplicationArgs,
         bool hasRunArguments)
     {
@@ -1957,16 +2018,16 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         {
             if (!TryGetLaunchSettingsPath(effectiveAppHostFile, out var launchSettingsPath))
             {
-                return true;
+                // An explicitly selected profile must not be silently ignored. Let the SDK path
+                // remain authoritative for its missing launch-settings/profile diagnostic.
+                return string.IsNullOrEmpty(launchProfile);
             }
 
-            var launchSettings = LaunchSettingsReader.ReadLaunchSettingsFile(
-                launchSettingsPath,
-                $"AppHost project '{effectiveAppHostFile.FullName}'",
-                AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchSettings);
-            if (!TryGetDefaultSupportedLaunchProfile(launchSettings, out var profileName, out var profile))
+            if (!TryGetLaunchProfile(launchSettingsPath, launchProfile, out var profileName, out var profile))
             {
-                _logger.LogDebug("Falling back to dotnet run for {Project}; launch settings do not contain a supported profile.", effectiveAppHostFile.FullName);
+                _logger.LogDebug(
+                    "Falling back to dotnet run for {Project}; launch settings do not contain the requested or a supported default profile.",
+                    effectiveAppHostFile.FullName);
                 return false;
             }
 
@@ -2023,7 +2084,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             return true;
         }
-        catch (InvalidDataException ex)
+        catch (JsonException ex)
         {
             _logger.LogDebug(ex, "Falling back to dotnet run because launch settings could not be parsed for {Project}.", effectiveAppHostFile.FullName);
             return false;
@@ -2046,9 +2107,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         // Keep this lookup in sync with the SDK's `dotnet run` launch-settings discovery:
         // first check Properties/launchSettings.json (or My Project/launchSettings.json for VB),
-        // then fall back to the flat <ProjectName>.run.json file. The shared reader owns parsing
-        // once a file is selected, but it intentionally does not encode the SDK's project-file
-        // discovery rules.
+        // then fall back to the flat <ProjectName>.run.json file. Profile parsing intentionally
+        // stays separate because it must preserve raw JSON property enumeration to match SDK
+        // duplicate-profile detection.
         // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/LaunchSettings.cs
         var propertiesDirectoryName = projectFile.Extension.Equals(".vbproj", StringComparison.OrdinalIgnoreCase)
             ? "My Project"
@@ -2072,48 +2133,102 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
-    private static bool TryGetDefaultSupportedLaunchProfile(AppHostLaunchSettings? launchSettings, out string profileName, out AppHostLaunchProfile profile)
+    private static bool TryGetLaunchProfile(
+        string launchSettingsPath,
+        string? requestedProfileName,
+        out string profileName,
+        out AppHostLaunchProfile profile)
     {
-        if (launchSettings?.Profiles is null)
+        using var stream = File.OpenRead(launchSettingsPath);
+        using var document = JsonDocument.Parse(stream, new JsonDocumentOptions
         {
-            // launchSettings.json with `"profiles": null` (or no profiles map at all) deserializes
-            // the Profiles property to null even though it is declared non-nullable. Treat that
-            // shape the same as a missing launchSettings.json and fall through to `dotnet run`.
+            CommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true
+        });
+
+        if (document.RootElement.ValueKind is not JsonValueKind.Object ||
+            !document.RootElement.TryGetProperty("profiles", out var profiles) ||
+            profiles.ValueKind is not JsonValueKind.Object)
+        {
             profileName = null!;
             profile = null!;
             return false;
         }
 
-        foreach (var (candidateProfileName, candidateProfile) in launchSettings.Profiles)
+        JsonProperty selectedProfile = default;
+
+        if (!string.IsNullOrEmpty(requestedProfileName))
         {
-            // A profile entry can be explicitly null in JSON (e.g. `"http": null`). Skip those
-            // rather than crashing inside IsSupportedLaunchProfile when reading CommandName.
-            if (candidateProfile is null)
+            var hasMatch = false;
+            foreach (var candidate in profiles.EnumerateObject())
             {
-                continue;
+                if (!string.Equals(candidate.Name, requestedProfileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // The SDK enumerates raw JSON properties so both duplicate names and names that
+                // differ only by casing remain visible. Preserve that behavior instead of letting
+                // dictionary deserialization silently replace an earlier property.
+                if (hasMatch)
+                {
+                    profileName = null!;
+                    profile = null!;
+                    return false;
+                }
+
+                selectedProfile = candidate;
+                hasMatch = true;
             }
 
-            if (IsSupportedLaunchProfile(candidateProfile))
+            if (!hasMatch || selectedProfile.Value.ValueKind is not JsonValueKind.Object)
             {
-                profileName = candidateProfileName;
-                profile = candidateProfile;
-                return true;
+                profileName = null!;
+                profile = null!;
+                return false;
+            }
+        }
+        else
+        {
+            foreach (var candidate in profiles.EnumerateObject())
+            {
+                if (candidate.Value.ValueKind is not JsonValueKind.Object ||
+                    !candidate.Value.TryGetProperty("commandName", out var commandName) ||
+                    commandName.ValueKind is not JsonValueKind.String ||
+                    commandName.GetString() is not ("Project" or "Executable"))
+                {
+                    continue;
+                }
+
+                selectedProfile = candidate;
+                break;
+            }
+
+            if (selectedProfile.Value.ValueKind is not JsonValueKind.Object)
+            {
+                profileName = null!;
+                profile = null!;
+                return false;
             }
         }
 
-        profileName = null!;
-        profile = null!;
-        return false;
+        var selectedProfileValue = selectedProfile.Value.Deserialize(AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchProfile);
+        if (selectedProfileValue is null)
+        {
+            profileName = null!;
+            profile = null!;
+            return false;
+        }
+
+        profileName = string.IsNullOrEmpty(requestedProfileName)
+            ? selectedProfile.Name
+            : requestedProfileName;
+        profile = selectedProfileValue;
+        return true;
     }
 
-    private static bool IsSupportedLaunchProfile(AppHostLaunchProfile profile)
-        => IsProjectLaunchProfile(profile) || IsExecutableLaunchProfile(profile);
-
     private static bool IsProjectLaunchProfile(AppHostLaunchProfile profile)
-        => string.Equals(profile.CommandName, "Project", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsExecutableLaunchProfile(AppHostLaunchProfile profile)
-        => string.Equals(profile.CommandName, "Executable", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(profile.CommandName, "Project", StringComparison.Ordinal);
 
     private static bool IsProjectFile(FileInfo appHostFile)
         => ProjectExtensions.Contains(appHostFile.Extension.ToLowerInvariant());
@@ -2218,8 +2333,10 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // this AppHost. (Covers layouts where multiple AppHosts share a directory.)
         if (!string.IsNullOrEmpty(config.AppHost?.Path))
         {
-            var resolvedAppHostPath = Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path));
-            if (!string.Equals(resolvedAppHostPath, appHostFile.FullName, StringComparison.OrdinalIgnoreCase))
+            var configuredAppHostPath = PathNormalizer.ResolveToFilesystemPath(
+                Path.GetFullPath(Path.Combine(directoryName, config.AppHost.Path)));
+            var selectedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName);
+            if (!string.Equals(configuredAppHostPath, selectedAppHostPath, StringComparisons.FileSystemPath))
             {
                 return false;
             }
@@ -2312,8 +2429,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
         }
 
-        // Build the apphost (unless --no-build is specified)
-        if (!isSingleFileAppHost && !context.NoBuild)
+        var builtByCli = false;
+
+        // Project AppHosts honor --no-build. File-based AppHosts always require a CLI-owned safety
+        // build before local or extension launch so run-api metadata cannot be missing or stale.
+        if (!context.NoBuild || isSingleFileAppHost)
         {
             var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
@@ -2327,6 +2447,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 _interactionService,
                 effectiveAppHostFile,
                 noRestore: false,
+                env: env,
                 buildOptions,
                 context.WorkingDirectory,
                 cancellationToken);
@@ -2340,6 +2461,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     new InvalidOperationException("The app host build failed."));
                 return CliExitCodes.FailedToBuildArtifacts;
             }
+
+            builtByCli = true;
         }
 
         // Create collector and store in context for exception handling
@@ -2359,10 +2482,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             ConfigureSingleFilePublishEnvironment(effectiveAppHostFile, env, args: context.Arguments);
         }
 
+        // Single-file RunCommand metadata is safe to reuse because the CLI-owned build above
+        // generated it with run-hook suppression.
+        var noBuild = !isSingleFileAppHost || builtByCli;
+
         return await _runner.RunAsync(
             effectiveAppHostFile,
             watch: false,
-            noBuild: true,
+            noBuild,
             noRestore: false,
             context.Arguments,
             env,
@@ -2404,21 +2531,21 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
     {
-        var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+        var matchingSockets = AppHostSocketManager.FindSockets(
             appHostFile.FullName,
             homeDirectory.FullName,
             Environment.ProcessId,
             _logger);
 
         // Check if any socket files exist
-        if (matchingSockets.Length == 0)
+        if (matchingSockets.Count == 0)
         {
             return RunningInstanceResult.NoRunningInstance;
         }
 
         // Stop all running instances
-        var stopTasks = matchingSockets.Select(socketPath =>
-            _runningInstanceManager.StopRunningInstanceAsync(socketPath, cancellationToken));
+        var stopTasks = matchingSockets.Select(socket =>
+            _runningInstanceManager.StopRunningInstanceAsync(socket, cancellationToken));
         var results = await Task.WhenAll(stopTasks);
         return results.All(r => r) ? RunningInstanceResult.InstanceStopped : RunningInstanceResult.StopFailed;
     }
@@ -2477,7 +2604,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private void ConfigureCliBundleEnvironment(
         Dictionary<string, string> env,
         BundleLayoutLease? layoutLease,
-        bool injectDcpAndDashboard)
+        bool injectDcpAndDashboard,
+        string? aspireHostingVersion)
     {
         var layout = layoutLease?.Layout;
         if (layout is null)
@@ -2508,11 +2636,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)) &&
-                layout.GetManagedPath() is { } layoutManagedPath &&
-                IsUsableDashboardPath(layoutManagedPath))
+            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)))
             {
-                env[BundleDiscovery.DashboardPathEnvVar] = layoutManagedPath;
+                SemVersion.TryParse(aspireHostingVersion, out var hostingVersion);
+                var supportsNativeDashboard = DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
+                if (DashboardLaunchHelper.GetDashboardPath(layout, supportsNativeDashboard) is { } dashboardPath)
+                {
+                    env[BundleDiscovery.DashboardPathEnvVar] = dashboardPath;
+                }
             }
         }
 

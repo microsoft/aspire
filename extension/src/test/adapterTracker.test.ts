@@ -76,6 +76,31 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('browser adapter exit does not send a terminal notification', () => {
+        (debugSession.configuration as AspireResourceExtendedDebugConfiguration).resourceType = 'browser';
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-msedge');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+        disposable.dispose();
+    });
+
+    test('non-browser adapter exit still sends a terminal notification', () => {
+        (debugSession.configuration as AspireResourceExtendedDebugConfiguration).resourceType = 'node';
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'node');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        assert.strictEqual(dcpServer.sendNotification.firstCall.args[0].notification_type, 'sessionTerminated');
+        disposable.dispose();
+    });
+
     test('exit code 143 on macOS is converted to 0', async () => {
         // Mock process.platform to return 'darwin'
         const originalPlatform = process.platform;
@@ -386,6 +411,175 @@ suite('Debug Adapter Tracker Tests', () => {
         }
     });
 
+    test('ignores VS Code cleanup disconnects after an AppHost terminated or exited event', () => {
+        for (const event of ['terminated', 'exited']) {
+            const terminationRequested = sinon.stub();
+            const disposable = createDebugAdapterTracker(
+                dcpServer as any,
+                'pwa-node',
+                {
+                    debugSessionId: 'debug-456',
+                    onTerminationRequested: terminationRequested,
+                });
+            const factory = registerFactoryStub.lastCall.args[1];
+            const tracker = factory.createDebugAdapterTracker({
+                ...debugSession,
+                configuration: {
+                    ...debugSession.configuration,
+                    isApphost: true
+                }
+            });
+
+            tracker.onDidSendMessage({
+                type: 'event',
+                event,
+                body: event === 'exited' ? { exitCode: 1 } : {}
+            });
+            tracker.onWillReceiveMessage({
+                type: 'request',
+                seq: 1,
+                command: 'disconnect',
+                arguments: { terminateDebuggee: false }
+            });
+
+            sinon.assert.notCalled(terminationRequested);
+            disposable.dispose();
+        }
+    });
+
+    test('ignores VS Code cleanup disconnects before an AppHost terminated or exited event', () => {
+        const terminationRequested = sinon.stub();
+        const disposable = createDebugAdapterTracker(
+            dcpServer as any,
+            'pwa-node',
+            {
+                debugSessionId: 'debug-456',
+                onTerminationRequested: terminationRequested,
+            });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true
+            }
+        });
+
+        tracker.onWillReceiveMessage({
+            type: 'request',
+            seq: 1,
+            command: 'disconnect',
+            arguments: { terminateDebuggee: false }
+        });
+
+        sinon.assert.notCalled(terminationRequested);
+        disposable.dispose();
+    });
+
+    test('reports an explicit AppHost disconnect before the adapter terminates', () => {
+        const terminationRequested = sinon.stub();
+        const disposable = createDebugAdapterTracker(
+            dcpServer as any,
+            'pwa-node',
+            {
+                debugSessionId: 'debug-456',
+                onTerminationRequested: terminationRequested,
+            });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true
+            }
+        });
+
+        tracker.onWillReceiveMessage({
+            type: 'request',
+            seq: 1,
+            command: 'disconnect',
+            arguments: { terminateDebuggee: true }
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'terminated',
+            body: {}
+        });
+
+        sinon.assert.calledOnceWithExactly(terminationRequested, 'debug-456');
+        disposable.dispose();
+    });
+
+    test('reports an explicit AppHost disconnect after a restarted process begins', () => {
+        const terminationRequested = sinon.stub();
+        const disposable = createDebugAdapterTracker(
+            dcpServer as any,
+            'pwa-node',
+            {
+                debugSessionId: 'debug-456',
+                onTerminationRequested: terminationRequested,
+            });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true
+            }
+        });
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 1 }
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: { systemProcessId: 4242 }
+        });
+        tracker.onWillReceiveMessage({
+            type: 'request',
+            seq: 1,
+            command: 'disconnect',
+            arguments: { terminateDebuggee: true }
+        });
+
+        sinon.assert.calledOnceWithExactly(terminationRequested, 'debug-456');
+        disposable.dispose();
+    });
+
+    test('does not treat a launch configuration restart property as an AppHost restart request', () => {
+        const restartRequested = sinon.stub().returns(true);
+        const disposable = createDebugAdapterTracker(
+            dcpServer as any,
+            'pwa-node',
+            {
+                debugSessionId: 'debug-456',
+                onRestartRequested: restartRequested,
+            });
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker({
+            ...debugSession,
+            configuration: {
+                ...debugSession.configuration,
+                isApphost: true
+            }
+        });
+        const launchRequest = {
+            type: 'request',
+            seq: 1,
+            command: 'launch',
+            arguments: { restart: true }
+        };
+
+        tracker.onWillReceiveMessage(launchRequest);
+
+        sinon.assert.notCalled(restartRequested);
+        assert.strictEqual(launchRequest.arguments.restart, true);
+        disposable.dispose();
+    });
+
     test('non-telemetry output events are sent as service logs', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'node');
         const factory = registerFactoryStub.lastCall.args[1];
@@ -445,7 +639,10 @@ suite('Debug Adapter Tracker Tests', () => {
 
     test('apphost output events are mirrored to output callback without service log notification', async () => {
         const outputCallback = sinon.stub();
-        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', {
+            debugSessionId: 'debug-456',
+            onOutput: outputCallback
+        });
         const factory = registerFactoryStub.lastCall.args[1];
         const tracker = factory.createDebugAdapterTracker({
             ...debugSession,
@@ -470,9 +667,123 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('apphost output only feeds the tracker that owns its debug session', async () => {
+        const owningCallback = sinon.stub();
+        const unrelatedCallback = sinon.stub();
+        const owningDisposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
+            debugSessionId: 'debug-456',
+            onOutput: owningCallback
+        });
+        const owningFactory = registerFactoryStub.lastCall.args[1];
+        const unrelatedDisposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
+            debugSessionId: 'other-session',
+            onOutput: unrelatedCallback
+        });
+        const unrelatedFactory = registerFactoryStub.lastCall.args[1];
+        const appHostSession = {
+            ...debugSession,
+            configuration: { ...debugSession.configuration, isApphost: true }
+        };
+
+        const outputEvent = {
+            type: 'event',
+            event: 'output',
+            body: { category: 'stdout', output: 'Repeated AppHost output\n' }
+        };
+        owningFactory.createDebugAdapterTracker(appHostSession).onDidSendMessage(outputEvent);
+        unrelatedFactory.createDebugAdapterTracker(appHostSession)?.onDidSendMessage(outputEvent);
+
+        assert.strictEqual(owningCallback.calledOnceWith('Repeated AppHost output\n', 'stdout'), true);
+        assert.strictEqual(unrelatedCallback.called, false);
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+
+        owningDisposable.dispose();
+        unrelatedDisposable.dispose();
+    });
+
+    test('apphost restart only feeds the tracker that owns its debug session', async () => {
+        const owningCallback = sinon.stub().returns(true);
+        const unrelatedCallback = sinon.stub().returns(true);
+        const owningDisposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
+            debugSessionId: 'debug-456',
+            onRestartRequested: owningCallback
+        });
+        const owningFactory = registerFactoryStub.lastCall.args[1];
+        const unrelatedDisposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
+            debugSessionId: 'other-session',
+            onRestartRequested: unrelatedCallback
+        });
+        const unrelatedFactory = registerFactoryStub.lastCall.args[1];
+        const appHostSession = {
+            ...debugSession,
+            configuration: { ...debugSession.configuration, isApphost: true }
+        };
+        const unrelatedDisconnectRequest = {
+            command: 'disconnect',
+            arguments: { restart: true }
+        };
+        const owningDisconnectRequest = {
+            command: 'disconnect',
+            arguments: { restart: true }
+        };
+
+        unrelatedFactory.createDebugAdapterTracker(appHostSession)?.onWillReceiveMessage(unrelatedDisconnectRequest);
+        owningFactory.createDebugAdapterTracker(appHostSession).onWillReceiveMessage(owningDisconnectRequest);
+
+        assert.strictEqual(owningCallback.calledOnceWith('debug-456'), true);
+        assert.strictEqual(unrelatedCallback.called, false);
+        assert.strictEqual(unrelatedDisconnectRequest.arguments.restart, true);
+        assert.strictEqual(owningDisconnectRequest.arguments.restart, false);
+
+        owningDisposable.dispose();
+        unrelatedDisposable.dispose();
+    });
+
+    test('apphost lifecycle events are not sent as DCP run-session notifications', async () => {
+        const unrelatedDcpServer = sinon.createStubInstance(AspireDcpServer);
+        const owningDisposable = createDebugAdapterTracker(dcpServer as any, 'coreclr', {
+            debugSessionId: 'debug-456'
+        });
+        const owningFactory = registerFactoryStub.lastCall.args[1];
+        const unrelatedDisposable = createDebugAdapterTracker(unrelatedDcpServer as any, 'coreclr', {
+            debugSessionId: 'other-session'
+        });
+        const unrelatedFactory = registerFactoryStub.lastCall.args[1];
+        const appHostSession = {
+            ...debugSession,
+            configuration: { ...debugSession.configuration, runId: '', isApphost: true }
+        };
+        const owningTracker = owningFactory.createDebugAdapterTracker(appHostSession);
+        const unrelatedTracker = unrelatedFactory.createDebugAdapterTracker(appHostSession);
+
+        assert.notStrictEqual(owningTracker, undefined);
+        assert.strictEqual(unrelatedTracker, undefined);
+
+        owningTracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: { systemProcessId: 4242 }
+        });
+        owningTracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 7 }
+        });
+        owningTracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.callCount, 0);
+        assert.strictEqual(unrelatedDcpServer.sendNotification.callCount, 0);
+
+        owningDisposable.dispose();
+        unrelatedDisposable.dispose();
+    });
+
     test('resource output events are not mirrored to output callback', async () => {
         const outputCallback = sinon.stub();
-        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', undefined, outputCallback);
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-node', {
+            debugSessionId: 'debug-456',
+            onOutput: outputCallback
+        });
         const factory = registerFactoryStub.lastCall.args[1];
         const tracker = factory.createDebugAdapterTracker(debugSession);
 

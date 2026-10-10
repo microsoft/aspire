@@ -20,6 +20,37 @@ concurrency:
 
 jobs:
 
+  actionlint:
+    name: Lint handwritten workflows
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'microsoft' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The pin lives outside .github/workflows so the scheduled updater
+      # (update-actionlint.yml) can propose bumps without workflow-write access.
+      - name: Install actionlint
+        run: |
+          ACTIONLINT_VERSION=$(jq -er '.version' .github/actionlint-version.json)
+          ACTIONLINT_LINUX_AMD64_SHA256=$(jq -er '.linuxAmd64Sha256' .github/actionlint-version.json)
+          if [[ ! "${ACTIONLINT_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid actionlint version '${ACTIONLINT_VERSION}' in .github/actionlint-version.json"
+            exit 1
+          fi
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 --retry-all-errors \
+            --output "${archive}" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          echo "${ACTIONLINT_LINUX_AMD64_SHA256}  ${archive}" | sha256sum --check -
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}" actionlint
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Lint handwritten workflow files
+        run: bash .github/workflows/lint-handwritten-workflows.sh
+
   prepare_for_ci:
     runs-on: ubuntu-latest
     name: Prepare for CI
@@ -28,11 +59,14 @@ jobs:
       skip_workflow: ${{ (steps.check_for_changes.outputs.no_changes == 'true' || steps.check_for_changes.outputs.only_changed == 'true') && 'true' || 'false' }}
       VERSION_SUFFIX_OVERRIDE: ${{ steps.compute_version_suffix.outputs.VERSION_SUFFIX_OVERRIDE }}
       EXTENSION_VERSION_OVERRIDE: ${{ steps.compute_version_suffix.outputs.EXTENSION_VERSION_OVERRIDE }}
+      # Re-enable once the .NET 11 dependencies are GA. Export the switch so Final
+      # Results can distinguish intentionally disabled PRs from unexpected skips.
+      STABILIZATION_ENABLED: 'false'
 
     steps:
       - name: Checkout code
         if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -70,11 +104,13 @@ jobs:
     uses: ./.github/workflows/tests.yml
     name: Tests
     needs: [prepare_for_ci]
-    # issues:write + pull-requests:write are used only by tests.yml's isolated comment_selection job
-    # (which runs no PR code) to post the "selected tests" issue comment; every job that runs PR code
-    # stays at contents:read. Reusable-workflow tokens are capped by the caller, so this is where the
-    # elevated scope must be granted.
+    # actions:read lets the reusable workflow download build artifacts via gh/actions APIs (for example
+    # get-aspire-cli-pr.ps1 -> gh run download). issues:write + pull-requests:write are used only by
+    # tests.yml's isolated comment_selection job (which runs no PR code) to post the "selected tests"
+    # issue comment. Reusable-workflow tokens are capped by the caller, so every needed scope must be
+    # granted here.
     permissions:
+      actions: read
       contents: read
       issues: write
       pull-requests: write
@@ -88,7 +124,7 @@ jobs:
   # PR CI runs unstable (DotNetFinalVersionKind=prerelease above) so that dogfood artifacts
   # have unique versions and dynamic Helix versions line up cleanly. To compensate for the
   # fact that we never normally exercise the "everything is stable" build shape on PRs, this
-  # job runs a parallel build with StabilizePackageVersion=true that:
+  # job, when enabled, runs a parallel build with StabilizePackageVersion=true that:
   #
   #   1. Packs all shipping packages, which catches NU5104 (stable package depending on a
   #      preview package whose csproj sets SuppressFinalPackageVersion=true). This is the
@@ -100,31 +136,19 @@ jobs:
   #      exercises the user-visible CLI flow against the locally-built stable feed,
   #      which is the scenario that has historically broken on stabilization branches.
   #
-  # The job is gated to PRs only. Push CI (including push to release branches with
+  # The job is gated to enabled PRs only. Push CI (including push to release branches with
   # StabilizePackageVersion=true) doesn't need this check because that *is* the stabilized
   # build shape already.
   stabilization_check:
     name: Stabilization Check
     runs-on: 8-core-ubuntu-latest
     needs: [prepare_for_ci]
-    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' && github.event_name == 'pull_request' && needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' }}
     steps:
-      # The actual stabilization work only makes sense for pull_request events. On push
-      # (including push to release branches with StabilizePackageVersion=true) the build is
-      # already running in the shape this job is meant to validate, so there's nothing to
-      # add. We still let the job *run* on push so the GitHub Actions result is 'success'
-      # rather than 'skipped' — otherwise the `results:` job's `contains(needs.*.result,
-      # 'skipped')` check would fail every push to main / release/**.
-      - name: Skip on push events
-        if: ${{ github.event_name != 'pull_request' }}
-        run: echo "Stabilization Check only runs on pull_request events. Skipping (job remains success)."
-
       - name: Checkout code
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build + pack with StabilizePackageVersion=true
-        if: ${{ github.event_name == 'pull_request' }}
         # SkipNativeBuild=true keeps this job fast (~5min): pack-time NU5104 detection
         # doesn't need NativeAOT CLI binaries, and the moderate smoke below invokes the
         # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`.
@@ -137,7 +161,6 @@ jobs:
             -p:InstallBrowsersForPlaywright=false
 
       - name: Run version-sensitive Aspire.Cli.Tests classes under stabilization
-        if: ${{ github.event_name == 'pull_request' }}
         # Classes that touch IsPrerelease / channel detection / template version pinning /
         # update-notification logic. These are the code paths most likely to behave
         # differently when the CLI's own assembly version label is stable.
@@ -169,13 +192,12 @@ jobs:
             --filter-not-trait "outerloop=true"
 
       - name: aspire init + restore smoke against stable local feed
-        if: ${{ github.event_name == 'pull_request' }}
         run: ./eng/scripts/stabilization-smoke-init-restore.sh
 
       # Always upload logs, even if the build fails, to enable debugging
       - name: Upload logs
-        if: ${{ always() && github.event_name == 'pull_request' }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: stabilization_check_logs
           path: artifacts/log
@@ -186,25 +208,21 @@ jobs:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [prepare_for_ci, tests, stabilization_check]
+    needs: [actionlint, prepare_for_ci, tests, stabilization_check]
 
     steps:
       - name: Fail if any of the dependent jobs failed
-        # Don't fail if the workflow is being skipped.
-        # Check skip_workflow on all declared dependencies. Workflows without
-        # skip_workflow outputs (e.g., tests, build_cli_archives) evaluate to
-        # empty string, so the check still works ('!= true' is true for empty).
-        #
-        # For others 'skipped' can be when a transitive dependency fails and the dependent job gets
-        # 'skipped'. For example, one of setup_* jobs failing and the Integration test jobs getting
-        # 'skipped'
+        # Build and test jobs may be skipped, but handwritten workflow lint remains required.
         if: >-
           ${{ always() &&
-              needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
-              needs.tests.outputs.skip_workflow != 'true' &&
-              (contains(needs.*.result, 'failure') ||
-               contains(needs.*.result, 'cancelled') ||
-               contains(needs.*.result, 'skipped')) }}
+              (needs.actionlint.result != 'success' ||
+               (needs.prepare_for_ci.outputs.skip_workflow != 'true' &&
+                (contains(needs.*.result, 'failure') ||
+                 contains(needs.*.result, 'cancelled') ||
+                 needs.tests.result != 'success' ||
+                 (needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' &&
+                  github.event_name == 'pull_request' &&
+                  needs.stabilization_check.result != 'success')))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1
@@ -217,21 +235,22 @@ jobs:
   # checks and are owned by the author.
   #
   # CI_RED / CI_GREEN are derived from explicit needs.*.result checks rather than
-  # failure()/success() because tests/stabilization_check are *skipped* on the
+  # failure()/success() because tests are *skipped* on the
   # no-relevant-changes path (skip_workflow): a skipped run is neither red nor green,
-  # so the script leaves any open issue untouched (no CI signal). Requiring all
-  # three to have *succeeded* for CI_GREEN means a docs-only push never closes a
-  # still-red issue without actually re-running CI.
+  # so the script leaves any open issue untouched (no CI signal). Requiring actionlint,
+  # prepare_for_ci and tests to have *succeeded* for CI_GREEN means a docs-only push
+  # never closes a still-red issue without actually re-running CI. Stabilization is
+  # PR-only and cannot contribute a success result to this push-only tracker.
   ci_failure_tracker:
     name: Track CI Failure
-    needs: [prepare_for_ci, tests, stabilization_check]
+    needs: [actionlint, prepare_for_ci, tests, stabilization_check]
     if: ${{ always() && github.event_name == 'push' && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read   # checkout to require the local .js modules
       issues: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -241,9 +260,9 @@ jobs:
           REF: ${{ github.ref_name }}
           CI_RED: ${{ contains(needs.*.result, 'failure') }}
           CI_GREEN: >-
-            ${{ needs.prepare_for_ci.result == 'success' &&
-                needs.tests.result == 'success' &&
-                needs.stabilization_check.result == 'success' }}
+            ${{ needs.actionlint.result == 'success' &&
+                needs.prepare_for_ci.result == 'success' &&
+                needs.tests.result == 'success' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

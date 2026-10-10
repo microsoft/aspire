@@ -3,15 +3,79 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
 public class AspireCliTelemetryTests
 {
+    [Fact]
+    public void RecordEvent_RequiresExplicitEventLoggerAttachment()
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var telemetry = new AspireCliTelemetry(logger,
+            new TelemetryFixture.TestMachineInformationProvider(), new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(), new TelemetryFixture.TestInternalMicrosoftDetector(),
+            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            $"Test.Reported.{Guid.NewGuid():N}", $"Test.Diagnostics.{Guid.NewGuid():N}",
+            TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance));
+
+        telemetry.RecordEvent("before-attachment");
+        Assert.Empty(logger.Collector.GetSnapshot());
+
+        telemetry.SetEventLogger(logger);
+        telemetry.RecordEvent("after-attachment");
+        Assert.Equal("after-attachment", Assert.Single(logger.Collector.GetSnapshot()).Message);
+
+        telemetry.SetEventLogger(null);
+        telemetry.RecordEvent("after-detachment");
+        Assert.Equal("after-attachment", Assert.Single(logger.Collector.GetSnapshot()).Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SetActivityProperties_PreservesCliValuesAndSupportsRemovingTags(bool batch)
+    {
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var activity = fixture.Telemetry.StartReportedActivity("test-activity");
+        Assert.NotNull(activity);
+        fixture.Telemetry.SetActivityProperty(activity, "test.removed", "original");
+        string[] values = ["one", "two"];
+        KeyValuePair<string, object?>[] properties =
+        [
+            new("test.string", "value"),
+            new("test.number", 42L),
+            new("test.array", values),
+            new("test.removed", null)
+        ];
+
+        if (batch)
+        {
+            fixture.Telemetry.SetActivityProperties(activity, properties);
+        }
+        else
+        {
+            foreach (var (key, value) in properties)
+            {
+                fixture.Telemetry.SetActivityProperty(activity, key, value);
+            }
+        }
+
+        Assert.Collection(activity.TagObjects.OrderBy(t => t.Key, StringComparer.Ordinal),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("test.array", values), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("test.number", 42L), tag),
+            tag => Assert.Equal(new KeyValuePair<string, object?>("test.string", "value"), tag));
+        Assert.Empty(activity.Events);
+    }
+
     [Fact]
     public void StartReportedActivity_CreatesActivityWithCorrectName()
     {
@@ -49,11 +113,11 @@ public class AspireCliTelemetryTests
 
         // Verify all default tags are included
         var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
-        var activityTags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
+        var activityTags = activity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
         foreach (var tag in defaultTags)
         {
             Assert.True(activityTags.ContainsKey(tag.Key), $"Activity is missing tag '{tag.Key}'");
-            Assert.Equal(tag.Value?.ToString(), activityTags[tag.Key]);
+            Assert.Equal(tag.Value, activityTags[tag.Key]);
         }
     }
 
@@ -94,7 +158,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_LogsError()
+    public void RecordError_LogsLocalAndStructuredErrors()
     {
         var logger = new FakeLogger<AspireCliTelemetry>();
         using var fixture = new TelemetryFixture(logger: logger);
@@ -102,16 +166,102 @@ public class AspireCliTelemetryTests
 
         fixture.Telemetry.RecordError("Error occurred", exception);
 
-        var logRecord = Assert.Single(logger.Collector.GetSnapshot());
-        Assert.Equal(LogLevel.Error, logRecord.Level);
-        Assert.Equal("Error occurred", logRecord.Message);
-        Assert.Same(exception, logRecord.Exception);
+        Assert.Collection(logger.Collector.GetSnapshot(),
+            local =>
+            {
+                Assert.Equal(LogLevel.Error, local.Level);
+                Assert.Equal("Error occurred", local.Message);
+                Assert.Same(exception, local.Exception);
+            },
+            reported =>
+            {
+                Assert.Equal(LogLevel.Information, reported.Level);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Message);
+                Assert.Equal(TelemetryConstants.Events.Error, reported.Id.Name);
+                Assert.Null(reported.Exception);
+                Assert.NotNull(reported.StructuredState);
+                Assert.Equal(TelemetryConstants.Events.Error,
+                    reported.StructuredState.Single(t => t.Key == "microsoft.operation_name").Value);
+                Assert.Equal(typeof(InvalidOperationException).FullName,
+                    reported.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionType).Value);
+                Assert.Equal("Test exception",
+                    reported.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionMessage).Value);
+            });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RecordEvent_LogsWithDefaultTagsWithoutAddingActivityEvents(bool withActivity)
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
+        using var activity = withActivity ? fixture.Telemetry.StartReportedActivity("test-activity") : null;
+        var current = Activity.Current;
+
+        fixture.Telemetry.RecordEvent("test-event", [new("test.property", 42)]);
+
+        Assert.Same(current, Activity.Current);
+        var log = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Information, log.Level);
+        Assert.Equal("test-event", log.Message);
+        Assert.Equal("test-event", log.Id.Name);
+        Assert.Null(log.Exception);
+        Assert.NotNull(log.StructuredState);
+        Assert.Equal("test-event", log.StructuredState.Single(t => t.Key == "microsoft.operation_name").Value);
+        Assert.Equal("42", log.StructuredState.Single(t => t.Key == "test.property").Value);
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
+        Assert.NotEmpty(defaultTags);
+        foreach (var tag in defaultTags)
+        {
+            Assert.Equal(tag.Value?.ToString(), log.StructuredState.Single(t => t.Key == tag.Key).Value);
+        }
+        if (withActivity)
+        {
+            Assert.NotNull(activity);
+            Assert.Empty(activity.Events);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void RecordEvent_InvalidName_ThrowsWithoutLogging(string? eventName)
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
+
+        Assert.ThrowsAny<ArgumentException>(() => fixture.Telemetry.RecordEvent(eventName!));
+
+        Assert.Empty(logger.Collector.GetSnapshot());
     }
 
     [Fact]
-    public async Task RecordError_AddsActivityEventWithDefaultTags_WhenReportedActivityIsActive()
+    public void TelemetryOptOut_SuppressesStructuredEventsAndErrorsButPreservesLocalErrors()
     {
-        using var fixture = new TelemetryFixture();
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger,
+            telemetryConfiguration: new TelemetryConfiguration { ReportedTelemetryEnabled = false });
+        using var activity = fixture.Telemetry.StartReportedActivity("test-activity");
+        Assert.NotNull(activity);
+        var exception = new InvalidOperationException("Test exception");
+
+        fixture.Telemetry.RecordEvent("test-event");
+        fixture.Telemetry.RecordError("Local error", exception);
+
+        Assert.Empty(activity.Events);
+        var log = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Error, log.Level);
+        Assert.Equal("Local error", log.Message);
+        Assert.Same(exception, log.Exception);
+    }
+
+    [Fact]
+    public async Task RecordError_LogsWithDefaultTagsWithoutActivityEvents_WhenReportedActivityIsActive()
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger);
         var exception = new InvalidOperationException("Test exception");
 
         using var activity = fixture.Telemetry.StartReportedActivity("test-activity", ActivityKind.Internal);
@@ -119,95 +269,24 @@ public class AspireCliTelemetryTests
 
         fixture.Telemetry.RecordError("Error occurred", exception);
 
-        var events = activity.Events.ToList();
-        var exceptionEvent = Assert.Single(events);
-        Assert.Equal(TelemetryConstants.Events.Error, exceptionEvent.Name);
-
-        var eventTags = exceptionEvent.Tags.ToDictionary(t => t.Key, t => t.Value);
-        Assert.Equal(typeof(InvalidOperationException).FullName, eventTags[TelemetryConstants.Tags.ExceptionType]);
-        Assert.Equal("Test exception", eventTags[TelemetryConstants.Tags.ExceptionMessage]);
-        // Note: exception.stacktrace may not be present if the exception was never thrown
-
-        // RecordError adds default tags directly to the error event at creation time
-        // so they are available even if the enrichment processor has not run yet.
+        Assert.Same(activity, Activity.Current);
+        Assert.Empty(activity.Events);
+        var log = Assert.Single(logger.Collector.GetSnapshot(), record => record.Level == LogLevel.Information);
+        Assert.Equal(TelemetryConstants.Events.Error, log.Message);
+        Assert.Null(log.Exception);
+        Assert.NotNull(log.StructuredState);
+        Assert.Equal(typeof(InvalidOperationException).FullName,
+            log.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionType).Value);
+        Assert.Equal("Test exception",
+            log.StructuredState.Single(t => t.Key == TelemetryConstants.Tags.ExceptionMessage).Value);
+        Assert.Equal(TelemetryConstants.Events.Error,
+            log.StructuredState.Single(t => t.Key == "microsoft.operation_name").Value);
         var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
         Assert.NotEmpty(defaultTags);
         foreach (var tag in defaultTags)
         {
-            Assert.True(eventTags.ContainsKey(tag.Key), $"Error event is missing default tag '{tag.Key}'");
-            Assert.Equal(tag.Value?.ToString(), eventTags[tag.Key]?.ToString());
+            Assert.Equal(tag.Value?.ToString(), log.StructuredState.Single(t => t.Key == tag.Key).Value);
         }
-    }
-
-    [Fact]
-    public void RecordError_DoesNotThrow_WhenNoActivityIsActive()
-    {
-        var logger = new FakeLogger<AspireCliTelemetry>();
-        using var fixture = new TelemetryFixture(logger: logger);
-        var exception = new InvalidOperationException("Test exception");
-
-        // Should not throw even when there's no active activity
-        fixture.Telemetry.RecordError("Error occurred", exception);
-
-        // Verify logging still happens
-        var logRecord = Assert.Single(logger.Collector.GetSnapshot());
-        Assert.Equal(LogLevel.Error, logRecord.Level);
-    }
-
-    [Fact]
-    public void RecordError_FindsReportedActivity_InHierarchy()
-    {
-        using var fixture = new TelemetryFixture();
-        var otherSourceName = $"Test.{Path.GetRandomFileName()}";
-
-        using var otherListener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == otherSourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
-        };
-        ActivitySource.AddActivityListener(otherListener);
-
-        var exception = new InvalidOperationException("Test exception");
-
-        // Start a reported activity (parent)
-        using var reportedActivity = fixture.Telemetry.StartReportedActivity("parent-activity", ActivityKind.Internal);
-        Assert.NotNull(reportedActivity);
-
-        // Start a child activity from a different source
-        using var otherSource = new ActivitySource(otherSourceName);
-        using var childActivity = otherSource.StartActivity("child-activity");
-        Assert.NotNull(childActivity);
-
-        // RecordError should find the reported activity in the hierarchy
-        fixture.Telemetry.RecordError("Error in child", exception);
-
-        // The error should be recorded on the reported activity, not the child
-        var events = reportedActivity.Events.ToList();
-        Assert.Single(events);
-
-        // Child activity should not have the error event
-        Assert.Empty(childActivity.Events);
-    }
-
-    [Fact]
-    public void RecordError_DoesNotRecordEvent_WhenOnlyDiagnosticActivityIsActive()
-    {
-        var logger = new FakeLogger<AspireCliTelemetry>();
-        using var fixture = new TelemetryFixture(logger: logger);
-        var exception = new InvalidOperationException("Test exception");
-
-        using var activity = fixture.Telemetry.StartDiagnosticActivity("test-activity");
-        Assert.NotNull(activity);
-
-        fixture.Telemetry.RecordError("Error occurred", exception);
-
-        // FindKnownActivity only looks for ReportedActivitySource, so no event should be added
-        Assert.Empty(activity.Events);
-        Assert.Equal(ActivityStatusCode.Unset, activity.Status);
-
-        // But logging should still happen
-        var logRecord = Assert.Single(logger.Collector.GetSnapshot());
-        Assert.Equal(LogLevel.Error, logRecord.Level);
     }
 
     [Fact]
@@ -271,6 +350,12 @@ public class AspireCliTelemetryTests
         Assert.Equal("aspire.cli.microsoft_internal_source", TelemetryConstants.Tags.InternalMicrosoftSource);
         Assert.Equal("aspire.cli.microsoft_internal_alias", TelemetryConstants.Tags.InternalMicrosoftAlias);
         Assert.Equal("aspire.cli.microsoft_internal_domain", TelemetryConstants.Tags.InternalMicrosoftDomain);
+        Assert.Equal("aspire.cli.microsoft_internal_detector.outcome", TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.failure_code", TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.failure_stage", TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.exception_type", TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.process_exit_code", TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode);
+        Assert.Equal("aspire.cli.microsoft_internal_probe.http_status_code", TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode);
 
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
@@ -290,6 +375,26 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public async Task Initialize_AddsExplicitFalseInternalMicrosoftTag_WhenNotDetected()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = false
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
+
+        Assert.Collection(
+            GetInternalMicrosoftTags(tags),
+            tag =>
+            {
+                Assert.Equal(TelemetryConstants.Tags.InternalMicrosoft, tag.Key);
+                Assert.False((bool?)tag.Value);
+            });
+    }
+
+    [Fact]
     public async Task Initialize_DoesNotAddOptionalInternalMicrosoftTags_WhenValuesAreNotDetected()
     {
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
@@ -301,6 +406,41 @@ public class AspireCliTelemetryTests
 
         var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
+        Assert.Collection(
+            GetInternalMicrosoftTags(tags),
+            tag =>
+            {
+                Assert.Equal(TelemetryConstants.Tags.InternalMicrosoft, tag.Key);
+                Assert.True((bool?)tag.Value);
+            },
+            tag =>
+            {
+                Assert.Equal(TelemetryConstants.Tags.InternalMicrosoftSource, tag.Key);
+                Assert.Equal("test source", tag.Value);
+            });
+    }
+
+    [Fact]
+    public async Task Initialize_SuppressesAliasAndDomainInCI()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true,
+            Source = "test source",
+            Alias = "test.alias",
+            Domain = "TEST"
+        };
+        var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector
+        {
+            IsCIEnvironmentResult = true
+        };
+        using var fixture = new TelemetryFixture(ciEnvironmentDetector: ciDetector, internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
+
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftSource && (string?)t.Value == "test source");
+        Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.DeploymentEnvironmentName && (string?)t.Value == "ci");
         Assert.Collection(
             GetInternalMicrosoftTags(tags),
             tag =>
@@ -346,6 +486,76 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
+    public async Task CompleteInternalMicrosoftDiagnosticsAsync_DoesNotWaitForTagsWhenReportedTelemetryIsDisabled()
+    {
+        var blockedTag = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var machineInformationProvider = new TelemetryFixture.TestMachineInformationProvider
+        {
+            GetDeviceIdCallback = () => blockedTag.Task
+        };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            machineInformationProvider,
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            new TelemetryFixture.TestInternalMicrosoftDetector(),
+            new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = false,
+                EmitInternalMicrosoftDiagnostics = true
+            },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
+
+        telemetry.Initialize();
+        await telemetry.CompleteInternalMicrosoftDiagnosticsAsync().WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.False(tagsSource.TagsTask.IsCompleted);
+        blockedTag.TrySetResult("test-device-id");
+    }
+
+    [Fact]
+    public async Task Initialize_BoundsInternalMicrosoftDetectorForAgentTelemetryInvocation()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            DetectionCallback = async cancellationToken =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new UnreachableException();
+            }
+        };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            new TelemetryFixture.TestMachineInformationProvider(),
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            internalMicrosoftDetector,
+            new TelemetryConfiguration
+            {
+                ReportedTelemetryEnabled = true,
+                EmitInternalMicrosoftDiagnostics = false,
+                InternalMicrosoftDetectionTimeout = TimeSpan.FromMilliseconds(25)
+            },
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
+
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
+
+        Assert.Equal(1, internalMicrosoftDetector.InvocationCount);
+        Assert.Contains(
+            await telemetry.GetDefaultTagsAsync(),
+            tag => tag.Key == TelemetryConstants.Tags.InternalMicrosoft && (bool?)tag.Value == false);
+    }
+
+    [Fact]
     public async Task Initialize_AddsDefaultTags_WhenInternalMicrosoftDetectorFails()
     {
         var provider = new TelemetryFixture.TestMachineInformationProvider
@@ -378,29 +588,280 @@ public class AspireCliTelemetryTests
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.DeviceId && (string?)t.Value == "test-device-id");
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.OsName);
-        Assert.Empty(GetInternalMicrosoftTags(tags));
+        Assert.Collection(
+            GetInternalMicrosoftTags(tags),
+            tag =>
+            {
+                Assert.Equal(TelemetryConstants.Tags.InternalMicrosoft, tag.Key);
+                Assert.False((bool?)tag.Value);
+            });
+    }
+
+    [Fact]
+    public async Task Initialize_RecordsElapsedDurationWhenInternalMicrosoftDetectorFails()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            DetectionCallback = async cancellationToken =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(20), cancellationToken);
+                throw new NotSupportedException("Unexpected probe failure.");
+            }
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+        await fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+
+        var activity = Assert.IsType<Activity>(fixture.CapturedActivity);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Failed, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
+        Assert.True((long?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorDurationMs) > 0);
+    }
+
+    [Theory]
+    [InlineData(25)]
+    [InlineData(500)]
+    public async Task GetInternalMicrosoftResultAsync_RecordsActualElapsedDurationWhenDetectorTimesOut(int elapsedMilliseconds)
+    {
+        var timeProvider = new FakeTimeProvider();
+        var timeout = TimeSpan.FromMilliseconds(25);
+        using var timeoutSource = new CancellationTokenSource(timeout, timeProvider);
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            DetectionCallback = async cancellationToken =>
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new UnreachableException();
+            }
+        };
+        using var fixture = new TelemetryFixture(
+            internalMicrosoftDetector: internalMicrosoftDetector,
+            initialize: false);
+        var resultTask = fixture.Telemetry.GetInternalMicrosoftResultAsync(timeoutSource, timeProvider);
+
+        Assert.False(resultTask.IsCompleted);
+        // Cancellation can be observed later than the budget under contention. Keep virtual time
+        // fixed until the wrapper finishes so scheduling cannot affect the recorded duration.
+        var elapsed = TimeSpan.FromMilliseconds(elapsedMilliseconds);
+        timeProvider.Advance(elapsed);
+        var result = await resultTask.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // Completing unrelated tag calculation later must not extend the already captured duration.
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(InternalMicrosoftDetectorOutcome.TimedOut, result.Outcome);
+        Assert.Equal(elapsed, result.Duration);
+    }
+
+    [Fact]
+    public async Task CompleteInternalMicrosoftDiagnosticsAsync_ContainsListenerFailureDuringShutdown()
+    {
+        var logger = new FakeLogger<AspireCliTelemetry>();
+        using var fixture = new TelemetryFixture(logger: logger, initialize: false);
+        var exception = new InvalidOperationException("Simulated detector activity listener failure.");
+        var listenerCalled = false;
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == fixture.ReportedSourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector)
+                {
+                    listenerCalled = true;
+                    throw exception;
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        fixture.Telemetry.Initialize();
+        await fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync().WaitAsync(TimeSpan.FromSeconds(30));
+        await fixture.Telemetry.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.True(listenerCalled);
+        var log = Assert.Single(logger.Collector.GetSnapshot());
+        Assert.Equal(LogLevel.Debug, log.Level);
+        Assert.Equal("Failed to complete internal Microsoft diagnostics.", log.Message);
+        Assert.Same(exception, log.Exception);
+    }
+
+    [Fact]
+    public async Task CompleteInternalMicrosoftDiagnosticsAsync_PreservesCallerCancellation()
+    {
+        var deviceId = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var fixture = new TelemetryFixture(
+            machineInfoProvider: new TelemetryFixture.TestMachineInformationProvider
+            {
+                GetDeviceIdCallback = () => deviceId.Task
+            },
+            initialize: false);
+        using var cancellationSource = new CancellationTokenSource();
+        fixture.Telemetry.Initialize();
+        var completionTask = fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+        var stopTask = fixture.Telemetry.StopAsync(cancellationSource.Token);
+
+        try
+        {
+            await cancellationSource.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => stopTask);
+            Assert.False(completionTask.IsCompleted);
+        }
+        finally
+        {
+            deviceId.TrySetResult("test-device-id");
+            await completionTask.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+    }
+
+    [Fact]
+    public void CompleteInternalMicrosoftDiagnosticsAsync_ReusesOneCompletionWait()
+    {
+        using var fixture = new TelemetryFixture();
+
+        var firstWait = fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+        var secondWait = fixture.Telemetry.CompleteInternalMicrosoftDiagnosticsAsync();
+
+        Assert.Same(firstWait, secondWait);
+    }
+
+    [Fact]
+    public void Initialize_EmitsBoundedInternalMicrosoftDiagnosticActivity()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true,
+            Source = "test source",
+            Alias = "test.alias",
+            Domain = "TEST",
+            ProbeDiagnostics =
+            [
+                new InternalMicrosoftProbeDiagnostic("test source", InternalMicrosoftProbeOutcome.Detected, TimeSpan.FromMilliseconds(12), HasAlias: true, HasDomain: true)
+            ]
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var activity = fixture.CapturedActivity;
+
+        Assert.NotNull(activity);
+        Assert.Equal(TelemetryConstants.Activities.InternalMicrosoftDetector, activity.OperationName);
+        Assert.Equal(fixture.ReportedSourceName, activity.Source.Name);
+        Assert.Equal(InternalMicrosoftDetectorOutcome.Detected, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorOutcome));
+        Assert.Equal(InternalMicrosoftDetectorCacheStatus.Miss, activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorCacheStatus));
+        Assert.Equal("test source", activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftSource));
+        Assert.True((bool?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorHasAlias));
+        Assert.True((bool?)activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDetectorHasDomain));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftAlias));
+        Assert.Null(activity.GetTagItem(TelemetryConstants.Tags.InternalMicrosoftDomain));
+        var probeEvent = Assert.Single(activity.Events);
+        Assert.Equal(TelemetryConstants.Events.InternalMicrosoftProbe, probeEvent.Name);
+        Assert.Contains(probeEvent.Tags, tag => tag.Key == TelemetryConstants.Tags.InternalMicrosoftProbeOutcome && (string?)tag.Value == InternalMicrosoftProbeOutcome.Detected);
+    }
+
+    [Fact]
+    public void Initialize_EmitsOnlyAllowListedProbeFailureMetadata()
+    {
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            ProbeDiagnostics =
+            [
+                new InternalMicrosoftProbeDiagnostic(
+                    "test source",
+                    InternalMicrosoftProbeOutcome.Failed,
+                    TimeSpan.FromMilliseconds(18),
+                    HasAlias: false,
+                    HasDomain: false,
+                    Failure: new InternalMicrosoftProbeFailure(
+                        InternalMicrosoftProbeFailureCode.ProcessExit,
+                        InternalMicrosoftProbeFailureStage.ProcessExit,
+                        ExceptionType: InternalMicrosoftProbeExceptionType.Other,
+                        ProcessExitCode: 7,
+                        HttpStatusCode: 503))
+            ]
+        };
+        using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
+
+        var probeEvent = Assert.Single(fixture.CapturedActivity!.Events);
+        var tags = probeEvent.Tags.ToDictionary(tag => tag.Key, tag => tag.Value);
+
+        Assert.Equal(InternalMicrosoftProbeFailureCode.ProcessExit, tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureCode]);
+        Assert.Equal(InternalMicrosoftProbeFailureStage.ProcessExit, tags[TelemetryConstants.Tags.InternalMicrosoftProbeFailureStage]);
+        Assert.Equal(InternalMicrosoftProbeExceptionType.Other, tags[TelemetryConstants.Tags.InternalMicrosoftProbeExceptionType]);
+        Assert.Equal(7, tags[TelemetryConstants.Tags.InternalMicrosoftProbeProcessExitCode]);
+        Assert.Equal(503, tags[TelemetryConstants.Tags.InternalMicrosoftProbeHttpStatusCode]);
+        Assert.DoesNotContain(tags, tag => tag.Key.Contains("message", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(tags, tag => tag.Key.Contains("path", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("CLAUDECODE", null, "1", null)]
+    [InlineData("CLAUDECODE", "1", "", "claude")]
+    [InlineData("CLAUDECODE", "1", null, "claude")]
+    [InlineData("AI_AGENT", null, "github_copilot_app_agent", null)]
+    [InlineData("AI_AGENT", "github_copilot_app_agent", "github_copilot_vscode_agent", "copilot-app")]
+    [InlineData("OR_APP_NAME", "Aider", "plandex", "aider")]
+    public void CodingAgentDetector_IgnoresConfigurationValues(string variableName, string? environmentValue, string? configuredValue, string? expectedCodingAgent)
+    {
+        var environmentVariables = new Dictionary<string, string?>
+        {
+            [variableName] = environmentValue
+        };
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(environmentVariables)
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [variableName] = configuredValue
+            })
+            .Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(environmentVariables));
+        services.AddTelemetryServices();
+        using var serviceProvider = services.BuildServiceProvider();
+
+        var detector = serviceProvider.GetRequiredService<ICodingAgentDetector>();
+
+        Assert.Equal(expectedCodingAgent, detector.GetCodingAgent());
     }
 
     [Theory]
     [MemberData(nameof(CodingAgentTelemetryTestCases))]
     public void CodingAgentDetector_DetectsKnownCodingAgents((string, string?)[] environmentVariables, string? expectedCodingAgent)
     {
-        var configurationValues = new Dictionary<string, string?>();
-        foreach (var environmentVariable in environmentVariables)
-        {
-            if (environmentVariable.Item1.Length > 0)
-            {
-                configurationValues.Add(environmentVariable.Item1, environmentVariable.Item2);
-            }
-        }
-
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configurationValues)
-            .Build();
-
-        var detector = new CodingAgentDetector(configuration);
+        var environment = new TestEnvironment(environmentVariables.ToDictionary(variable => variable.Item1, variable => variable.Item2, StringComparer.Ordinal));
+        var detector = new CodingAgentDetector(environment);
 
         Assert.Equal(expectedCodingAgent, detector.GetCodingAgent());
+    }
+
+    [Theory]
+    [InlineData(true, "claude")]
+    [InlineData(false, null)]
+    public void CodingAgentDetector_PreservesEnvironmentVariableNameComparison(bool ignoreCase, string? expectedCodingAgent)
+    {
+        var comparer = ignoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var environment = new TestEnvironment(new Dictionary<string, string?>(comparer)
+        {
+            ["claudecode"] = "1"
+        });
+        var detector = new CodingAgentDetector(environment);
+
+        Assert.Equal(expectedCodingAgent, detector.GetCodingAgent());
+    }
+
+    [Fact]
+    public void CodingAgentDetector_ReadsCurrentEnvironmentValues()
+    {
+        var environmentVariables = new Dictionary<string, string?>();
+        var detector = new CodingAgentDetector(new TestEnvironment(environmentVariables));
+
+        Assert.Null(detector.GetCodingAgent());
+
+        environmentVariables["AI_AGENT"] = "github_copilot_app_agent";
+        Assert.Equal("copilot-app", detector.GetCodingAgent());
+
+        environmentVariables["AI_AGENT"] = "github_copilot_vscode_agent";
+        Assert.Equal("copilot-vscode", detector.GetCodingAgent());
+
+        environmentVariables.Clear();
+        Assert.Null(detector.GetCodingAgent());
     }
 
     [Fact]
@@ -419,11 +880,11 @@ public class AspireCliTelemetryTests
 
         // Verify all default tags are included
         var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
-        var activityTags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
+        var activityTags = activity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
         foreach (var tag in defaultTags)
         {
             Assert.True(activityTags.ContainsKey(tag.Key), $"Activity is missing tag '{tag.Key}'");
-            Assert.Equal(tag.Value?.ToString(), activityTags[tag.Key]);
+            Assert.Equal(tag.Value, activityTags[tag.Key]);
         }
     }
 
@@ -459,7 +920,7 @@ public class AspireCliTelemetryTests
     private static IReadOnlyList<KeyValuePair<string, object?>> GetInternalMicrosoftTags(IReadOnlyList<KeyValuePair<string, object?>> tags)
     {
         return [.. tags.Where(t => t.Key == TelemetryConstants.Tags.InternalMicrosoft ||
-            t.Key.StartsWith("aspire.cli.microsoft_internal", StringComparison.Ordinal))];
+            t.Key is TelemetryConstants.Tags.InternalMicrosoftSource or TelemetryConstants.Tags.InternalMicrosoftAlias or TelemetryConstants.Tags.InternalMicrosoftDomain)];
     }
 
     [Fact]
@@ -509,6 +970,10 @@ public class AspireCliTelemetryTests
     public static TheoryData<(string, string?)[], string?> CodingAgentTelemetryTestCases => new()
     {
         { [("CLAUDECODE", "1")], "claude" },
+        { [("CLAUDECODE", null)], null },
+        { [("CLAUDECODE", "")], null },
+        { [("CLAUDECODE", " ")], "claude" },
+        { [("CLAUDECODE", "1"), ("CLAUDE_CODE", "1")], "claude" },
         { [("CLAUDE_CODE", "1")], "claude" },
         { [("CLAUDE_CODE_ENTRYPOINT", "some_value")], "claude" },
         { [("CLAUDE_CODE_IS_COWORK", "1")], "cowork" },
@@ -524,14 +989,22 @@ public class AspireCliTelemetryTests
         { [("COPILOT_MODEL", "gpt")], "copilot-cli" },
         { [("COPILOT_ALLOW_ALL", "1")], "copilot-cli" },
         { [("COPILOT_GITHUB_TOKEN", "token")], "copilot-cli" },
+        { [("AI_AGENT", "github_copilot_app_agent")], "copilot-app" },
+        { [("AI_AGENT", "GITHUB_COPILOT_APP_AGENT")], "copilot-app" },
+        { [("AI_AGENT", " github_copilot_app_agent ")], null },
+        { [("AI_AGENT", "unknown_agent")], null },
+        { [("AI_AGENT", "")], null },
+        { [("AI_AGENT", null)], null },
         { [("AI_AGENT", "github_copilot_vscode_agent")], "copilot-vscode" },
         { [("COPILOT_AGENT", "1")], "copilot-vscode" },
+        { [("AI_AGENT", "github_copilot_vscode_agent"), ("COPILOT_AGENT", "1")], "copilot-vscode" },
         { [("CODEX_CLI", "1")], "codex" },
         { [("CODEX_SANDBOX", "1")], "codex" },
         { [("CODEX_CI", "1")], "codex" },
         { [("CODEX_THREAD_ID", "thread1")], "codex" },
         { [("OR_APP_NAME", "Aider")], "aider" },
         { [("OR_APP_NAME", "aider")], "aider" },
+        { [("OR_APP_NAME", " Aider ")], null },
         { [("OR_APP_NAME", "plandex")], "plandex" },
         { [("OR_APP_NAME", "Plandex")], "plandex" },
         { [("AMP_HOME", "/path/to/amp")], "amp" },
@@ -559,6 +1032,7 @@ public class AspireCliTelemetryTests
         { [("OR_APP_NAME", "Aider"), ("CLINE_TASK_ID", "task123") ], "aider, cline" },
         { [("CODEX_CLI", "1"), ("WINDSURF_SESSION", "session789") ], "codex, windsurf" },
         { [("GOOSE_TERMINAL", "1"), ("ROO_CODE_TASK_ID", "task456") ], "goose, roo" },
+        { [("COPILOT_CLI", "1"), ("AI_AGENT", "github_copilot_app_agent")], "copilot-cli, copilot-app" },
         { [("GEMINI_CLI", "false")], "gemini" },
         { [("GITHUB_COPILOT_CLI_MODE", "false")], "copilot-cli" },
         { [("AGENT_CLI", "false")], "generic_agent" },
@@ -566,6 +1040,6 @@ public class AspireCliTelemetryTests
         { [("KIMI_CLI", "false")], "kimi" },
         { [("CLAUDE_CODE_IS_COWORK", "1"), ("CLAUDE_CODE", "1")], "cowork, claude" },
         { [("OR_APP_NAME", "SomeOtherApp")], null },
-        { [("", "")], null }
+        { [], null }
     };
 }

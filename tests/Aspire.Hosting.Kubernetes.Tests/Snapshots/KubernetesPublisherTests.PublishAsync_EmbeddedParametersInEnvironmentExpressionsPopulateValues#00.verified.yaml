@@ -1,0 +1,9 @@
+﻿parameters: {}
+secrets:
+  myapp:
+    SECRET_URL: ""
+    token: ""
+config:
+  myapp:
+    SOME_URL: ""
+    host: ""

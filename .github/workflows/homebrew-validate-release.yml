@@ -1,7 +1,8 @@
 # Validate the Homebrew cask against a freshly-published Aspire release.
 #
 # Runs the full upstream-equivalent cask validation (`brew audit --cask
-# --online --signing` + a real `brew install`/`brew uninstall` cycle)
+# --online` + explicit binary notarization verification + a real
+# `brew install`/`brew uninstall` cycle)
 # against the cask file generated from the just-published release's
 # aspire-cli-osx-* archives. This is the same validation that used to
 # run as HomebrewValidateJob inside eng/pipelines/release-publish-nuget.yml.
@@ -65,7 +66,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
 

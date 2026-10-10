@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
-using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Hosting.ApplicationModel;
@@ -24,14 +21,14 @@ internal static class MauiEnvironmentHelper
     /// <summary>
     /// Creates an MSBuild targets file for Android that sets environment variables.
     /// </summary>
-    /// <param name="fileSystemService">The file system service for managing temp files.</param>
+    /// <param name="tempDirectory">The resource-specific temporary directory for the targets file.</param>
     /// <param name="resource">The resource to collect environment variables from.</param>
     /// <param name="executionContext">The execution context.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The path to the generated targets file, or null if no environment variables are present.</returns>
     public static async Task<string?> CreateAndroidEnvironmentTargetsFileAsync(
-        IFileSystemService fileSystemService,
+        string tempDirectory,
         IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
@@ -59,15 +56,8 @@ internal static class MauiEnvironmentHelper
             return null;
         }
 
-        // Create a temporary targets file
-        var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-maui-android-env").Path;
-
-        // Prune old targets files
-        PruneOldTargets(tempDirectory, logger);
-
         var sanitizedName = SanitizeFileName(resource.Name + "-android");
-        var uniqueId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}-{uniqueId}.targets");
+        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}.targets");
 
         // Generate the targets file content
         var targetsContent = GenerateAndroidTargetsFileContent(environmentVariables);
@@ -145,34 +135,6 @@ internal static class MauiEnvironmentHelper
         return stringWriter.ToString();
     }
 
-    private static void PruneOldTargets(string directory, ILogger logger)
-    {
-        var expiration = DateTimeOffset.UtcNow - TimeSpan.FromDays(1);
-        var deletedFiles = new List<string>();
-
-        foreach (var file in Directory.EnumerateFiles(directory, "*.targets", SearchOption.TopDirectoryOnly))
-        {
-            try
-            {
-                var info = new FileInfo(file);
-                if (info.Exists && info.LastWriteTimeUtc < expiration)
-                {
-                    info.Delete();
-                    deletedFiles.Add(info.Name);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Failed to prune stale Android environment targets file '{TargetsFile}'.", file);
-            }
-        }
-
-        if (deletedFiles.Count > 0)
-        {
-            logger.LogDebug("Pruned {Count} stale Android environment targets file(s): {Files}", deletedFiles.Count, string.Join(", ", deletedFiles));
-        }
-    }
-
     internal static string SanitizeFileName(string name)
     {
         var invalidCharacters = Path.GetInvalidFileNameChars();
@@ -211,14 +173,14 @@ internal static class MauiEnvironmentHelper
     /// <summary>
     /// Creates an MSBuild targets file for iOS that sets environment variables.
     /// </summary>
-    /// <param name="fileSystemService">The file system service for managing temp files.</param>
+    /// <param name="tempDirectory">The resource-specific temporary directory for the targets file.</param>
     /// <param name="resource">The resource to collect environment variables from.</param>
     /// <param name="executionContext">The execution context.</param>
     /// <param name="logger">Logger for diagnostic output.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The path to the generated targets file, or null if no environment variables are present.</returns>
     public static async Task<string?> CreateiOSEnvironmentTargetsFileAsync(
-        IFileSystemService fileSystemService,
+        string tempDirectory,
         IResource resource,
         DistributedApplicationExecutionContext executionContext,
         ILogger logger,
@@ -235,15 +197,8 @@ internal static class MauiEnvironmentHelper
             return null;
         }
 
-        // Create a temporary targets file
-        var tempDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-maui-mlaunch-env").Path;
-
-        // Prune old targets files
-        PruneOldTargetsiOS(tempDirectory, logger);
-
         var sanitizedName = SanitizeFileName(resource.Name + "-ios");
-        var uniqueId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}-{uniqueId}.targets");
+        var targetsFilePath = Path.Combine(tempDirectory, $"{sanitizedName}.targets");
 
         // Generate the targets file content
         var targetsContent = GenerateiOSTargetsFileContent(executionConfiguration.EnvironmentVariables.ToDictionary());
@@ -303,31 +258,4 @@ internal static class MauiEnvironmentHelper
         return stringWriter.ToString();
     }
 
-    private static void PruneOldTargetsiOS(string directory, ILogger logger)
-    {
-        var expiration = DateTimeOffset.UtcNow - TimeSpan.FromDays(1);
-        var deletedFiles = new List<string>();
-
-        foreach (var file in Directory.EnumerateFiles(directory, "*.targets", SearchOption.TopDirectoryOnly))
-        {
-            try
-            {
-                var info = new FileInfo(file);
-                if (info.Exists && info.LastWriteTimeUtc < expiration)
-                {
-                    info.Delete();
-                    deletedFiles.Add(info.Name);
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogDebug(ex, "Failed to prune stale iOS environment targets file '{TargetsFile}'.", file);
-            }
-        }
-
-        if (deletedFiles.Count > 0)
-        {
-            logger.LogDebug("Pruned {Count} stale iOS environment targets file(s): {Files}", deletedFiles.Count, string.Join(", ", deletedFiles));
-        }
-    }
 }

@@ -70,6 +70,17 @@ internal sealed partial class CliTemplateFactory
                     {
                         _logger.LogDebug("Using embedded C# empty AppHost template for '{OutputPath}'.", outputPath);
                         await WriteCSharpEmptyAppHostAsync(inputs.Version, outputPath, projectName, useLocalhostTld, cancellationToken);
+
+                        if (!string.IsNullOrEmpty(inputs.Channel))
+                        {
+                            var aspireVersion = string.IsNullOrWhiteSpace(inputs.Version)
+                                ? _executionContext.IdentitySdkVersion
+                                : inputs.Version;
+                            var config = Configuration.AspireConfigFile.LoadOrCreate(outputPath);
+                            config.Channel = inputs.Channel;
+                            config.SdkVersion = aspireVersion;
+                            config.Save(outputPath);
+                        }
                     }
                     else
                     {

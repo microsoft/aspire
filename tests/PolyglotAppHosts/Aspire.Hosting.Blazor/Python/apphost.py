@@ -1,9 +1,9 @@
-from aspire_app import OtlpProtocol, create_builder
+from aspire_app import create_builder
 
 
 with create_builder() as builder:
-    weather_api = builder.add_project("weatherapi", "./src/WeatherApi", "http")
-    time_api = builder.add_project("timeapi", "./src/TimeApi", "https")
+    weather_api = builder.add_project("weatherapi", "./src/WeatherApi", launch_profile_or_options="http")
+    time_api = builder.add_project("timeapi", "./src/TimeApi", launch_profile_or_options="https")
     time_api.with_https_endpoint(name="api")
 
     blazor_app = builder.add_blazor_wasm_project("app", "./src/Client/Client.csproj")
@@ -12,7 +12,7 @@ with create_builder() as builder:
 
     gateway = builder.add_blazor_gateway("gateway")
     gateway.with_external_http_endpoints()
-    gateway.with_otlp_exporter(protocol=OtlpProtocol.HTTP_PROTOBUF)
+    gateway.with_otlp_exporter(protocol="HttpProtobuf")
     gateway.with_blazor_client_app(blazor_app)
 
     dotnet_project_blazor_app = builder.add_blazor_wasm_project("dotnet-app", "./src/Client/Client.csproj")

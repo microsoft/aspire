@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared;
@@ -153,12 +154,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         if (!hasExistingPackageJson)
         {
-            scripts["lint"] = "npm run aspire:lint";
-            scripts["predev"] = "npm run aspire:lint";
-            scripts["dev"] = "npm run aspire:start";
-            scripts["prebuild"] = "npm run aspire:lint";
-            scripts["build"] = "npm run aspire:build";
-            scripts["watch"] = "npm run aspire:dev";
+            // These aliases are emitted before the CLI resolves the package manager, so invoke the
+            // underlying commands directly instead of assuming npm lifecycle hooks are available.
+            scripts["lint"] = "eslint apphost.mts";
+            scripts["dev"] = "eslint apphost.mts && aspire run";
+            scripts["build"] = $"eslint apphost.mts && tsc -p {AppHostTsConfigFileName}";
+            scripts["watch"] = $"tsc --watch -p {AppHostTsConfigFileName}";
         }
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
@@ -301,16 +302,43 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     /// <summary>
     /// Sets the certificate bundle environment variable when the runtime contract supports it.
     /// </summary>
-    internal static void SetCertificateBundleEnvironmentVariableIfSupported(
-        object runtimeSpec,
+    internal static void SetCertificateBundleEnvironmentVariableIfSupported<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TRuntimeSpec>(
+        TRuntimeSpec runtimeSpec,
         string environmentVariableName)
     {
         // Aspire.TypeSystem is force-shared from the installed CLI. A newer codegen assembly can
         // therefore run against an older RuntimeSpec that has the same assembly identity but does not
         // expose this additive property. Probe by name so the new certificate feature is skipped while
-        // the rest of code generation remains compatible.
-        runtimeSpec.GetType()
+        // the rest of code generation remains compatible. The annotated static type preserves the
+        // optional property when trimming without directly referencing its setter.
+        typeof(TRuntimeSpec)
             .GetProperty(nameof(RuntimeSpec.CertificateBundleEnvironmentVariable))
             ?.SetValue(runtimeSpec, environmentVariableName);
+    }
+
+    /// <summary>
+    /// Gets the integration-host launch specification as JSON for optional server-side discovery.
+    /// </summary>
+#pragma warning disable CA1822 // The optional provider hook is discovered as an instance method on ILanguageSupport implementations.
+    public JsonElement GetIntegrationHostSpec()
+#pragma warning restore CA1822
+    {
+        // The CLI force-shares Aspire.TypeSystem, including when it predates this feature.
+        // Keep the hook off ILanguageSupport and use a framework return type so discovery
+        // can load this provider without resolving any new contract types or members.
+        using var document = JsonDocument.Parse("""
+            {
+              "execute": {
+                "command": "node",
+                "args": ["--import", "tsx", "{entryPoint}"]
+              },
+              "installDependencies": {
+                "command": "npm",
+                "args": ["install"]
+              }
+            }
+            """);
+
+        return document.RootElement.Clone();
     }
 }

@@ -1,5 +1,5 @@
-::deep .text-visualizer-line-number {
-    min-width: 33px;
+.dialog-title-grid ::deep .text-visualizer-dialog-title {
+    font: inherit;
 }
 
 ::deep .highlight-line {
@@ -7,37 +7,44 @@
     background: transparent;
 }
 
-.text-visualizer-container ::deep.button-container {
+.button-container {
     display: flex;
     width: 100%;
-    margin-top: auto;
 }
 
-.text-visualizer-container ::deep.text-visualizer-unmask-content {
-    margin-left: 0;
-}
-
-.text-visualizer-container ::deep.button-container-right {
+.button-container-right {
     display: flex;
     gap: 8px;
     margin-left: auto;
+}
+
+.copy-button-icon {
+    margin-right: 11px;
+    display: flex;
 }
 
 .text-visualizer-container {
     display: flex;
     flex-direction: column;
     width: 100%;
-    min-height: 120px;
+    height: 100%;
+    min-height: 0;
 }
 
-.text-visualizer-container ::deep.log-overflow {
+.text-visualizer-description {
+    flex-shrink: 0;
+    margin-bottom: 8px;
+    overflow-wrap: anywhere;
+}
+
+.text-visualizer-container ::deep.log-overflow,
+.markdown-content {
     max-height: 60vh;
+    min-height: 0;
     margin-bottom: 16px;
 }
 
 .markdown-content {
-    max-height: 60vh;
     overflow-y: auto;
     overflow-wrap: anywhere;
-    margin-bottom: 16px;
 }

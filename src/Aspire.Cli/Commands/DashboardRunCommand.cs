@@ -59,6 +59,16 @@ internal sealed class DashboardRunCommand : BaseCommand
         Description = DashboardCommandStrings.AllowAnonymousOptionDescription
     };
 
+    private static readonly Option<string?> s_applicationNameOption = new("--application-name")
+    {
+        Description = DashboardCommandStrings.ApplicationNameOptionDescription
+    };
+
+    private static readonly Option<string?> s_persistenceModeOption = new("--persistence")
+    {
+        Description = DashboardCommandStrings.PersistenceModeOptionDescription
+    };
+
     private static readonly Option<string?> s_configFilePathOption = new("--config-file-path")
     {
         Description = DashboardCommandStrings.ConfigFilePathOptionDescription
@@ -83,6 +93,8 @@ internal sealed class DashboardRunCommand : BaseCommand
         Options.Add(s_otlpGrpcUrlOption);
         Options.Add(s_otlpHttpUrlOption);
         Options.Add(s_allowAnonymousOption);
+        Options.Add(s_applicationNameOption);
+        Options.Add(s_persistenceModeOption);
         Options.Add(s_configFilePathOption);
         TreatUnmatchedTokensAsErrors = false;
     }
@@ -96,13 +108,13 @@ internal sealed class DashboardRunCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.DashboardFailure, DashboardCommandStrings.BundleLayoutNotFound);
         }
 
-        var managedPath = layout.GetManagedPath();
-        if (managedPath is null || !File.Exists(managedPath))
+        var dashboardPath = layout.GetDashboardPath();
+        if (dashboardPath is null || !File.Exists(dashboardPath))
         {
             return CommandResult.Failure(CliExitCodes.DashboardFailure, DashboardCommandStrings.ManagedBinaryNotFound);
         }
 
-        var dashboardArgs = new List<string> { "dashboard" };
+        var dashboardArgs = new List<string>();
 
         // Build args from typed options. These are added before unmatched tokens
         // so that raw pass-through arguments (unmatched tokens) take precedence.
@@ -114,7 +126,12 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Tokens and keys are passed via environment variables (not command-line args)
         // to avoid exposing them in process listings (e.g. ps, Task Manager).
         string? browserToken = null;
-        var environmentVariables = new Dictionary<string, string>();
+        var environmentVariables = new Dictionary<string, string>
+        {
+            // Dashboard output is captured in the CLI log instead of written to the console,
+            // so include debug details without increasing console verbosity.
+            ["Logging__LogLevel__Default"] = LogLevel.Debug.ToString()
+        };
         layoutLease?.AddEnvironment(environmentVariables);
         if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, _environment, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
         {
@@ -143,7 +160,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Resolve URLs for the summary display.
         var dashboardInfo = ResolveDashboardInfo(dashboardArgs, unmatchedTokens, _environment, browserToken);
 
-        return await ExecuteForegroundAsync(managedPath, dashboardArgs, dashboardInfo, environmentVariables, cancellationToken).ConfigureAwait(false);
+        return await ExecuteForegroundAsync(dashboardPath, dashboardArgs, dashboardInfo, environmentVariables, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<BundleLayoutLease?> EnsureDashboardBundleAsync(CancellationToken cancellationToken)
@@ -167,6 +184,8 @@ internal sealed class DashboardRunCommand : BaseCommand
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
         AddBoolOptionArg(parseResult, args, unmatchedTokens, environment, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_applicationNameOption, DashboardConfigNames.DashboardApplicationName.EnvVarName, defaultValue: null);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_persistenceModeOption, DashboardConfigNames.DashboardPersistenceModeName.EnvVarName, defaultValue: null);
 
         // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard,
         // unless the user has explicitly configured either the enabled or disabled setting.
@@ -370,9 +389,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         interactionService.DisplayRenderable(padder);
     }
 
-    private async Task<CommandResult> ExecuteForegroundAsync(string managedPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
+    private async Task<CommandResult> ExecuteForegroundAsync(string dashboardPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Starting dashboard in foreground: {ManagedPath}", managedPath);
+        _logger.LogDebug("Starting dashboard in foreground: {DashboardPath}", dashboardPath);
 
         var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Dashboard);
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -400,11 +419,11 @@ internal sealed class DashboardRunCommand : BaseCommand
             // Foreground `aspire dashboard run`: the dashboard is a child of this CLI and must not
             // outlive it, so bind it to the Windows kill-on-close job as an OS-level backstop on top of
             // the cross-platform parent-liveness watchdog. No-op on non-Windows hosts.
-            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options, killOnParentExit: true).ConfigureAwait(false);
+            process = await _layoutProcessRunner.StartAsync(dashboardPath, dashboardArgs, environmentVariables: environmentVariables, options: options, killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to start dashboard process: {ManagedPath}", managedPath);
+            _logger.LogError(ex, "Failed to start dashboard process: {DashboardPath}", dashboardPath);
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, ex.Message));
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }

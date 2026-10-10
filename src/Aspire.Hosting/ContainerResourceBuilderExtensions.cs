@@ -1,12 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
-using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.ApplicationModel;
@@ -197,6 +195,11 @@ public static class ContainerResourceBuilderExtensions
     /// They are not shared with the host's file-system. To mount files from the host inside the container, call <see cref="WithBindMount{T}(IResourceBuilder{T}, string, string, bool)"/>.
     /// </para>
     /// <para>
+    /// Named volumes are preserved independently of the container lifetime. A session-lifetime
+    /// container is removed when the AppHost stops and reuses the named volume on its next run.
+    /// A persistent-lifetime container can remain running and keeps the same attached volume.
+    /// </para>
+    /// <para>
     /// If a value for the <paramref name="name"/> of the volume is not provided, the volume is created as an "anonymous volume" and will be given a random name by the container
     /// runtime. To share a volume between multiple containers, specify the same <paramref name="name"/>.
     /// </para>
@@ -217,14 +220,11 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     // Note: [AspireExport] is on CoreExports.WithVolume which reorders parameters
     // so the required 'target' comes before the optional 'name' - better for polyglot APIs.
+    [OverloadResolutionPriority(1)]
     [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which reorders parameters.")]
     public static IResourceBuilder<T> WithVolume<T>(this IResourceBuilder<T> builder, string? name, string target, bool isReadOnly = false) where T : ContainerResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(target);
-
-        var annotation = new ContainerMountAnnotation(name, target, ContainerMountType.Volume, isReadOnly);
-        return builder.WithAnnotation(annotation);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(builder, name, target, isReadOnly, env: null);
     }
 
     /// <summary>
@@ -261,11 +261,7 @@ public static class ContainerResourceBuilderExtensions
     [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which accepts optional name parameter.")]
     public static IResourceBuilder<T> WithVolume<T>(this IResourceBuilder<T> builder, string target) where T : ContainerResource
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(target);
-
-        var annotation = new ContainerMountAnnotation(null, target, ContainerMountType.Volume, false);
-        return builder.WithAnnotation(annotation);
+        return VolumeResourceBuilderExtensions.WithVolumeCore(builder, name: null, target, isReadOnly: false, env: null);
     }
 
     /// <summary>
@@ -1027,8 +1023,15 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// <para>
+    /// Use the callback's Dockerfile builder to define the image's stages and instructions.
+    /// </para>
+    /// <para>
+    /// The build context path is relative to the AppHost directory unless it is fully qualified.
+    /// </para>
+    /// </ats-remarks>
     [AspireExport]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1076,7 +1079,6 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
     [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1693,8 +1695,16 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// <para>
+    /// Calling this method multiple times composes callbacks, which are invoked in registration order
+    /// to build the final Dockerfile.
+    /// </para>
+    /// <para>
+    /// The build context path is relative to the AppHost directory unless it is fully qualified.
+    /// </para>
+    /// </ats-remarks>
     [AspireExport]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1799,7 +1809,6 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
     [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(callback);
@@ -1839,8 +1848,11 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// For multi-stage Dockerfiles, specify separate build and runtime base images.
+    /// Images that are not specified use the integration's defaults. At least one base image must be specified.
+    /// </ats-remarks>
     [AspireExport]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBaseImage<T>(this IResourceBuilder<T> builder, string? buildImage = null, string? runtimeImage = null) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);

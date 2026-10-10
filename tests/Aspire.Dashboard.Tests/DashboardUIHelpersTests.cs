@@ -9,6 +9,14 @@ namespace Aspire.Dashboard.Tests;
 public class DashboardUIHelpersTests
 {
     [Theory]
+    [InlineData(200_000, 200_000)]
+    [InlineData(600_000, 200_000)]
+    public void GetVirtualizedItemCount_LimitsLargeResultSets(int totalItemCount, int expected)
+    {
+        Assert.Equal(expected, DashboardUIHelpers.GetVirtualizedItemCount(totalItemCount));
+    }
+
+    [Theory]
     [InlineData(0, 0)]
     [InlineData(1000, 1000)]
     [InlineData(1.5, 1)]

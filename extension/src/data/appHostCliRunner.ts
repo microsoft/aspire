@@ -8,6 +8,7 @@ import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from 
 import { AspireCliFailedError, AspireCliNotInstalledError } from './appHostCliContracts';
 import { normalizeResourceCommandStatusLine } from './resourceCommandStatusOutput';
 import { CliPathResolutionTarget, windowCliPathTarget } from '../utils/cliPathVariables';
+import { reportCliResolvedForOperation } from '../utils/cliOperationResolution';
 
 export const oneShotOutputBufferLimit = 64 * 1024;
 
@@ -78,14 +79,16 @@ export class AppHostCliRunner implements vscode.Disposable {
     }
 
     async runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
+        const target = options.target ?? windowCliPathTarget;
         const cliPath = options.cliPath
-            ?? await this._terminalProvider.getAspireCliExecutablePath(options.target ?? windowCliPathTarget).catch(error => {
+            ?? await this._terminalProvider.getAspireCliExecutablePath(target).catch(error => {
                 throw new AspireCliNotInstalledError(String(error));
             });
 
         if (options.cancellationToken?.isCancellationRequested) {
             throw new vscode.CancellationError();
         }
+        reportCliResolvedForOperation(target, cliPath);
         const invocationArgs = this.normalizeNoLogoArgs(cliPath, args);
 
         return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {

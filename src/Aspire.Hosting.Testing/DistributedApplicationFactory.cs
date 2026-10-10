@@ -381,7 +381,7 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
                     // This helper launches the target assembly's entry point and hooks into the lifecycle
                     // so we can intercept execution at key stages.
                     var factory = DistributedApplicationEntryPointInvoker.ResolveEntryPoint(
-                        _entryPoint.Assembly,
+                        _entryPoint,
                         onConstructing: OnBuilderCreatingCore,
                         onConstructed: OnBuilderCreatedCore,
                         onBuilding: OnBuildingCore,

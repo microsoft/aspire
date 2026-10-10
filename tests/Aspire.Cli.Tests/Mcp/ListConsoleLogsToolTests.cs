@@ -8,6 +8,8 @@ using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
+using ModelContextProtocol.Protocol;
 
 namespace Aspire.Cli.Tests.Mcp;
 
@@ -36,7 +38,7 @@ public class ListConsoleLogsToolTests
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel();
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -47,6 +49,86 @@ public class ListConsoleLogsToolTests
     }
 
     [Fact]
+    public async Task ListConsoleLogsTool_DoesNotLeakCredentialUrlFromBackchannelFailure()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceLogsHandler = (_, _, cancellationToken) => ThrowCredentialUrlAsync(cancellationToken)
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+        var sink = new TestSink();
+        var logger = new TestLogger<ListConsoleLogsTool>(
+            new TestLoggerFactory(sink, enabled: true));
+        var tool = new ListConsoleLogsTool(monitor, logger);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonDocument.Parse("\"api-service\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(
+            CallToolContextTestHelper.Create(arguments),
+            CancellationToken.None).DefaultTimeout();
+
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content!)).Text;
+        foreach (var diagnostic in new[] { text }.Concat(
+            sink.Writes.Select(write => $"{write.Message} {write.Exception}")))
+        {
+            Assert.DoesNotContain("request-user", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-password", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-secret", diagnostic, StringComparison.Ordinal);
+            Assert.DoesNotContain("request-fragment", diagnostic, StringComparison.Ordinal);
+        }
+
+        static async IAsyncEnumerable<ResourceLogLine> ThrowCredentialUrlAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new InvalidOperationException(
+                "Backchannel failed at https://" + "request-user" + ":" + "request-password" +
+                "@example.com?token=request-secret#request-fragment");
+#pragma warning disable CS0162
+            yield break;
+#pragma warning restore CS0162
+        }
+    }
+
+    [Fact]
+    public async Task ListConsoleLogsTool_RethrowsOperationCanceledExceptionWithIdentity()
+    {
+        var expectedException = new OperationCanceledException("Console log request canceled");
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceLogsHandler = (_, _, _) => ThrowCancellationAsync(expectedException)
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+        var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["resourceName"] = JsonDocument.Parse("\"api-service\"").RootElement
+        };
+
+        var actualException = await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            tool.CallToolAsync(
+                CallToolContextTestHelper.Create(arguments),
+                CancellationToken.None).AsTask());
+
+        Assert.Same(expectedException, actualException);
+
+        static async IAsyncEnumerable<ResourceLogLine> ThrowCancellationAsync(
+            OperationCanceledException exception)
+        {
+            await Task.Yield();
+            throw exception;
+#pragma warning disable CS0162
+            yield break;
+#pragma warning restore CS0162
+        }
+    }
+
+    [Fact]
     public async Task ListConsoleLogsTool_ReturnsLogs_WhenResourceHasNoLogs()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -54,7 +136,7 @@ public class ListConsoleLogsToolTests
         {
             LogLines = []
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -89,7 +171,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "other-service", LineNumber = 1, Content = "Different service log", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -123,7 +205,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 1, Content = "Test log line", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -153,7 +235,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 1, Content = "2024-01-15T10:30:00.123Z Log message after timestamp", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -182,7 +264,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 1, Content = "\u001b[32mGreen text\u001b[0m normal text", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -213,7 +295,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 3, Content = "Request received", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -247,7 +329,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 2, Content = "Normal operation", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -279,7 +361,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 1, Content = "Hello world", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -313,7 +395,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 4, Content = "Connection closed", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -347,7 +429,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 2, Content = "Goodbye world", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -385,7 +467,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 4, Content = "Ready to accept connections", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -422,7 +504,7 @@ public class ListConsoleLogsToolTests
                 new ResourceLogLine { ResourceName = "api-service", LineNumber = 2, Content = "Normal operation", IsError = false }
             ]
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var tool = new ListConsoleLogsTool(monitor, NullLogger<ListConsoleLogsTool>.Instance);
 
@@ -451,4 +533,3 @@ public class ListConsoleLogsToolTests
         return match.Success ? match.Groups[1].Value : string.Empty;
     }
 }
-

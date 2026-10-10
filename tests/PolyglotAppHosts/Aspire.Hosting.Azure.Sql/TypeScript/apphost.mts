@@ -1,7 +1,9 @@
-import { createBuilder } from './.aspire/modules/aspire.mjs';
+import { ProvisioningValueType, SqlAdministratorType, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 const storage = await builder.addAzureStorage("storage");
+const administratorLogin = await builder.addParameter("sqlAdministratorLogin");
+const administratorObjectId = await builder.addParameter("sqlAdministratorObjectId");
 
 // VNet with subnet for deployment script (validates #15373 fix)
 const vnet = await builder.addAzureVirtualNetwork("vnet");
@@ -9,6 +11,25 @@ const deploymentSubnet = await vnet.addSubnet("deployment-subnet", "10.0.1.0/24"
 const aciSubnet = await vnet.addSubnet("aci-subnet", "10.0.2.0/29");
 
 const sqlServer = await builder.addAzureSqlServer("sql");
+await sqlServer.configureInfrastructure(async infrastructure => {
+    const server = await infrastructure.getSqlServer();
+    const tags = await server.tags.get();
+    await tags.set("provisioning-proxy", "typescript");
+
+    const login = await infrastructure.addBicepParameter("principalName", ProvisioningValueType.String);
+    await login.value.set(infrastructure.bicep().parameter(administratorLogin));
+    const objectId = await infrastructure.addBicepParameter("principalId", ProvisioningValueType.String);
+    await objectId.value.set(infrastructure.bicep().parameter(administratorObjectId));
+
+    const administrator = await infrastructure.createServerExternalAdministrator();
+    await administrator.administratorType.set(SqlAdministratorType.ActiveDirectory);
+    await administrator.isAzureADOnlyAuthenticationEnabled.set(true);
+    await administrator.login.set(login.value.get());
+    await administrator.sid.set(objectId.value.get());
+    const subscription = await infrastructure.bicep().subscription();
+    await administrator.tenantId.set(infrastructure.bicep().member(subscription, "tenantId"));
+    await server.administrators.set(administrator);
+});
 const db = await sqlServer.addDatabase("mydb");
 const db2 = await sqlServer.addDatabase("inventory", { databaseName: "inventorydb" });
 await db2.withDefaultAzureSku();

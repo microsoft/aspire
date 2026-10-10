@@ -1,7 +1,10 @@
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
+#pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
@@ -10,6 +13,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
@@ -30,9 +35,20 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ResourceBuilderExtensions
 {
-    private const string ConnectionStringEnvironmentName = "ConnectionStrings__";
     private const string PersistenceExperimentalDiagnosticId = "ASPIREPERSISTENCE001";
     private static readonly MethodInfo s_dispatchCustomWithReferenceMethod = typeof(ResourceBuilderExtensions).GetMethod(nameof(DispatchCustomWithReference), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    // Mirrors the ATS marshaller's JSON options (camelCase, string enums, millisecond durations, cycle-safe) so that a
+    // typed annotation written from C# produces the exact JSON shape that the generated TypeScript
+    // DTO interfaces expect, and vice versa. Aspire.Hosting cannot reference the marshaller (it lives
+    // in the higher-level Aspire.Hosting.RemoteHost), so the options are duplicated here intentionally.
+    private static readonly JsonSerializerOptions s_annotationJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter(), new TimeSpanMillisecondsJsonConverter() },
+        ReferenceHandler = ReferenceHandler.IgnoreCycles
+    };
 
     /// <summary>
     /// Configures a resource to use a session lifetime.
@@ -690,6 +706,241 @@ public static class ResourceBuilderExtensions
         return builder.WithArgs(context => context.Args.AddRange(args));
     }
 
+    // The exported annotation capabilities below intentionally target IResource (not IResourceBuilder<T>).
+    // ATS has no method overloading, so the scanner can only project one capability per (target type,
+    // method name) pair. The capability dispatcher can bridge an incoming resource builder handle down to
+    // its underlying resource (see PolyglotCapabilityInvocationException.TryConvertHandle), but it cannot
+    // bridge a bare resource handle up to a builder. Deferred run-time callbacks (for example, an args or
+    // Dockerfile-builder callback) are handed a resource handle, not a builder, so a builder-targeted
+    // capability would fail those calls with a TYPE_MISMATCH. Targeting IResource makes the single exported
+    // capability usable from both build-time builder handles and run-time resource handles.
+    //
+    // The builder-targeted overloads are kept as non-exported C# conveniences for ergonomic authoring and
+    // chaining; only the IResource overloads carry [AspireExport].
+
+    /// <summary>
+    /// Stores a serialized ATS annotation payload on a resource builder, replacing any existing annotation with the same ID.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <param name="json">The serialized JSON payload.</param>
+    /// <returns>The resource builder.</returns>
+    internal static IResourceBuilder<T> WithSerializedAnnotation<T>(this IResourceBuilder<T> builder, string annotationId, string json)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.WithSerializedAnnotation(annotationId, json);
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    /// </summary>
+    /// <param name="resource">The resource.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <param name="json">The serialized JSON payload.</param>
+    /// <returns>The resource.</returns>
+    /// <ats-returns>The resource.</ats-returns>
+    [AspireExport]
+    internal static IResource WithSerializedAnnotation(this IResource resource, string annotationId, string json)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+        ArgumentNullException.ThrowIfNull(json);
+
+        RemoveSerializedAnnotation(resource, annotationId);
+        resource.Annotations.Add(new AtsAnnotation(annotationId, json));
+
+        return resource;
+    }
+
+    /// <summary>
+    /// Gets a serialized ATS annotation payload from a resource builder.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns>The serialized JSON payload.</returns>
+    internal static string GetSerializedAnnotation<T>(this IResourceBuilder<T> builder, string annotationId)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return GetSerializedAnnotation(builder.Resource, annotationId);
+    }
+
+    /// <summary>
+    /// Gets a serialized ATS annotation payload from a resource.
+    /// </summary>
+    /// <param name="resource">The resource.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns>The serialized JSON payload.</returns>
+    [AspireExport]
+    internal static string GetSerializedAnnotation(this IResource resource, string annotationId)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
+        return TryGetSerializedAnnotation(resource, annotationId)
+            ?? throw new InvalidOperationException($"Resource '{resource.Name}' does not contain an annotation with ID '{annotationId}'.");
+    }
+
+    /// <summary>
+    /// Determines whether a resource builder has a serialized ATS annotation with the specified ID.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns><see langword="true"/> if the annotation exists; otherwise, <see langword="false"/>.</returns>
+    internal static bool HasSerializedAnnotation<T>(this IResourceBuilder<T> builder, string annotationId)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return HasSerializedAnnotation(builder.Resource, annotationId);
+    }
+
+    /// <summary>
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    /// </summary>
+    /// <param name="resource">The resource.</param>
+    /// <param name="annotationId">The stable annotation identifier.</param>
+    /// <returns><see langword="true"/> if the annotation exists; otherwise, <see langword="false"/>.</returns>
+    [AspireExport]
+    internal static bool HasSerializedAnnotation(this IResource resource, string annotationId)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(annotationId);
+
+        return TryGetSerializedAnnotation(resource, annotationId) is not null;
+    }
+
+    /// <summary>
+    /// Stores a typed ATS annotation on a resource, serializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <param name="data">The annotation payload.</param>
+    /// <returns>The resource builder.</returns>
+    internal static IResourceBuilder<T> WithAnnotation<T, TData>(this IResourceBuilder<T> builder, AnnotationDefinition<TData> definition, TData data)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(definition);
+        ArgumentNullException.ThrowIfNull(data);
+
+        var json = JsonSerializer.Serialize(data, s_annotationJsonOptions);
+
+        return builder.WithSerializedAnnotation(definition.Id, json);
+    }
+
+    /// <summary>
+    /// Gets a typed ATS annotation from a resource builder, deserializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <returns>The deserialized annotation payload.</returns>
+    internal static TData GetAnnotation<T, TData>(this IResourceBuilder<T> builder, AnnotationDefinition<TData> definition)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return GetAnnotation(builder.Resource, definition);
+    }
+
+    /// <summary>
+    /// Gets a typed ATS annotation from a resource, deserializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="resource">The resource.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <returns>The deserialized annotation payload.</returns>
+    internal static TData GetAnnotation<TData>(this IResource resource, AnnotationDefinition<TData> definition)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(definition);
+
+        var json = resource.GetSerializedAnnotation(definition.Id);
+
+        return JsonSerializer.Deserialize<TData>(json, s_annotationJsonOptions)
+            ?? throw new InvalidOperationException($"Annotation '{definition.Id}' on resource '{resource.Name}' deserialized to null.");
+    }
+
+    /// <summary>
+    /// Attempts to get a typed ATS annotation from a resource, deserializing the payload declared by <paramref name="definition"/>.
+    /// </summary>
+    /// <typeparam name="TData">The annotation payload type.</typeparam>
+    /// <param name="resource">The resource.</param>
+    /// <param name="definition">The annotation declaration.</param>
+    /// <param name="data">When this method returns <see langword="true"/>, the deserialized annotation payload.</param>
+    /// <returns><see langword="true"/> if the annotation exists; otherwise, <see langword="false"/>.</returns>
+    internal static bool TryGetAnnotation<TData>(this IResource resource, AnnotationDefinition<TData> definition, [NotNullWhen(true)] out TData? data)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(definition);
+
+        var json = TryGetSerializedAnnotation(resource, definition.Id);
+        if (json is null)
+        {
+            data = default;
+            return false;
+        }
+
+        data = JsonSerializer.Deserialize<TData>(json, s_annotationJsonOptions)
+            ?? throw new InvalidOperationException($"Annotation '{definition.Id}' on resource '{resource.Name}' deserialized to null.");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
+    /// <param name="args">The arguments to be passed to the resource when it is started.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    internal static IResourceBuilder<T> WithArgsReplace<T>(this IResourceBuilder<T> builder, params string[] args) where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(args);
+
+        return builder.WithArgs(context =>
+        {
+            context.Args.Clear();
+            context.Args.AddRange(args);
+        });
+    }
+
+    private static string? TryGetSerializedAnnotation(IResource resource, string annotationId)
+    {
+        return resource.Annotations
+            .OfType<AtsAnnotation>()
+            .LastOrDefault(annotation => string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal))
+            ?.Json;
+    }
+
+    private static void RemoveSerializedAnnotation(IResource resource, string annotationId)
+    {
+        var existingAnnotations = resource.Annotations
+            .OfType<AtsAnnotation>()
+            .Where(annotation => string.Equals(annotation.AnnotationId, annotationId, StringComparison.Ordinal))
+            .ToArray();
+
+        foreach (var annotation in existingAnnotations)
+        {
+            resource.Annotations.Remove(annotation);
+        }
+    }
+
     /// <summary>
     /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     /// </summary>
@@ -1085,7 +1336,10 @@ public static class ResourceBuilderExtensions
 
     /// <summary>
     /// Injects a connection string as an environment variable from the source resource into the destination resource, using the source resource's name as the connection string name (if not overridden).
-    /// The format of the environment variable will be "ConnectionStrings__{sourceResourceName}={connectionString}".
+    /// The logical connection name is preserved for application configuration. When the source resource does not specify
+    /// <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/> and the logical name is not portable as an environment-variable suffix,
+    /// Aspire emits both the original name and a portable alias that replaces characters unsupported in environment-variable names.
+    /// For example, <c>my-db</c> produces <c>ConnectionStrings__my-db</c> and <c>ConnectionStrings__my_db</c> on targets that support both names.
     /// <para>
     /// Each resource defines the format of the connection string value. The
     /// underlying connection string value can be retrieved using <see cref="IResourceWithConnectionString.GetConnectionStringAsync(CancellationToken)"/>.
@@ -1098,7 +1352,10 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where connection string will be injected.</param>
     /// <param name="source">The resource from which to extract the connection string.</param>
-    /// <param name="connectionName">An override of the source resource's name for the connection string. The resulting connection string will be "ConnectionStrings__connectionName" if this is not null.</param>
+    /// <param name="connectionName">
+    /// An override of the source resource's logical connection name. The physical environment-variable names are derived from this value when it is not <see langword="null"/>,
+    /// unless the source resource specifies <see cref="IResourceWithConnectionString.ConnectionStringEnvironmentVariable"/>, in which case that explicit physical name is preserved.
+    /// </param>
     /// <param name="optional"><see langword="true"/> to allow a missing connection string; <see langword="false"/> to throw an exception if the connection string is not found.</param>
     /// <exception cref="DistributedApplicationException">Throws an exception if the connection string resolves to null. It can be null if the resource has no connection string, and if the configuration has no connection string for the source resource.</exception>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
@@ -1117,13 +1374,30 @@ public static class ResourceBuilderExtensions
         // Determine what to inject based on the annotation on the destination resource
         builder.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
         var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+        var environmentVariableNames = ConnectionStringEnvironmentVariableNames.Create(resource, connectionName);
+        ConnectionStringReference? connectionStringReference = null;
+
+        if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+        {
+            connectionStringReference = new ConnectionStringReference(
+                resource,
+                optional,
+                environmentVariableNames,
+                nameof(IResourceWithConnectionString.ConnectionStringExpression),
+                connectionStringExpression: null);
+        }
 
         return builder.WithEnvironment(context =>
         {
-            if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionString))
+            if (connectionStringReference is not null)
             {
-                var connectionStringName = resource.ConnectionStringEnvironmentVariable ?? $"{ConnectionStringEnvironmentName}{connectionName}";
-                context.EnvironmentVariables[connectionStringName] = new ConnectionStringReference(resource, optional);
+                ValidateConnectionStringReference(context, connectionStringReference);
+                context.EnvironmentVariables[environmentVariableNames.OriginalName] = connectionStringReference;
+
+                if (!string.Equals(environmentVariableNames.OriginalName, environmentVariableNames.PortableName, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.EnvironmentVariables[environmentVariableNames.PortableName] = connectionStringReference;
+                }
             }
 
             if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ConnectionProperties))
@@ -1145,6 +1419,44 @@ public static class ResourceBuilderExtensions
                 }
             }
         });
+    }
+
+    internal static void ValidateConnectionStringReference(EnvironmentCallbackContext context, ConnectionStringReference candidate)
+    {
+        if (candidate.EnvironmentVariableNames is not { } candidateNames)
+        {
+            return;
+        }
+
+        foreach (var existing in context.EnvironmentVariables.Values.OfType<ConnectionStringReference>())
+        {
+            if (existing.EnvironmentVariableNames is not { } existingNames ||
+                IsEquivalentConnectionStringReference(existing, candidate))
+            {
+                continue;
+            }
+
+            var conflictingName = existingNames.GetPhysicalNames()
+                .Intersect(candidateNames.GetPhysicalNames(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+
+            if (conflictingName is not null)
+            {
+                throw new DistributedApplicationException(
+                    $"Connection-string references '{existingNames.LogicalName}' and " +
+                    $"'{candidateNames.LogicalName}' on resource '{context.Resource.Name}' both use " +
+                    $"the environment variable '{conflictingName}'. Use unique connectionName values when calling WithReference.");
+            }
+        }
+    }
+
+    private static bool IsEquivalentConnectionStringReference(
+        ConnectionStringReference left,
+        ConnectionStringReference right)
+    {
+        return ReferenceEquals(left.Resource, right.Resource) &&
+            string.Equals(left.ValueName, right.ValueName, StringComparison.Ordinal) &&
+            left.EnvironmentVariableNames == right.EnvironmentVariableNames;
     }
 
     private static void SplatConnectionProperties(IResourceWithConnectionString resource, string prefix, EnvironmentCallbackContext context)
@@ -2183,20 +2495,27 @@ public static class ResourceBuilderExtensions
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Action<ResourceUrlAnnotation> callback)
         where T : IResource
     {
-        builder.WithUrls(context =>
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpointName);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        if (builder.Resource is IResourceWithEndpoints resource)
         {
-            var urlForEndpoint = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == endpointName);
-            if (urlForEndpoint is not null)
+            return builder.WithUrlForEndpoint(resource.GetEndpoint(endpointName), callback);
+        }
+
+        return builder.WithUrls(context =>
+        {
+            var url = context.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == endpointName);
+            if (url is not null)
             {
-                callback(urlForEndpoint);
+                callback(url);
             }
             else
             {
                 context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no endpoint with name '{EndpointName}' could be found on resource '{ResourceName}'.", endpointName, builder.Resource.Name);
             }
         });
-
-        return builder;
     }
 
     /// <summary>
@@ -2245,6 +2564,58 @@ public static class ResourceBuilderExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the URL for an endpoint, including an endpoint on another resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The builder for the resource that will display the URL.</param>
+    /// <param name="endpoint">The endpoint to link to.</param>
+    /// <param name="callback">The callback that configures the URL.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// The callback runs after endpoints have been allocated. An existing URL for the endpoint is updated.
+    /// When the endpoint belongs to another resource, a URL is added with its endpoint set before the callback runs.
+    /// A relative URL is combined with the referenced endpoint's URL.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the endpoint name overload for withUrlForEndpoint.")]
+    public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, EndpointReference endpoint, Action<ResourceUrlAnnotation> callback)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        var resourceComparer = new ResourceNameComparer();
+
+        return builder.WithUrls(context =>
+        {
+            if (endpoint.Exists)
+            {
+                var url = context.Urls.FirstOrDefault(u =>
+                    u.Endpoint is { } urlEndpoint &&
+                    resourceComparer.Equals(urlEndpoint.Resource, endpoint.Resource) &&
+                    string.Equals(urlEndpoint.EndpointName, endpoint.EndpointName, StringComparisons.EndpointAnnotationName));
+                if (url is null)
+                {
+                    if (resourceComparer.Equals(builder.Resource, endpoint.Resource))
+                    {
+                        context.Logger.LogWarning("Could not execute callback to customize endpoint URL as no URL for endpoint '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, builder.Resource.Name);
+                        return;
+                    }
+
+                    url = new ResourceUrlAnnotation { Url = "/", Endpoint = endpoint };
+                    context.Urls.Add(url);
+                }
+
+                callback(url);
+            }
+            else
+            {
+                context.Logger.LogWarning("Could not execute callback to add an endpoint URL as no endpoint with name '{EndpointName}' could be found on resource '{ResourceName}'.", endpoint.EndpointName, endpoint.Resource.Name);
+            }
+        });
     }
 
     /// <summary>
@@ -4151,6 +4522,43 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="certificateBundleEnvironmentVariable">The environment variable that receives the certificate bundle path.</param>
+    /// <param name="certificateDirectoriesEnvironmentVariable">The optional environment variable that receives the certificate directories path.</param>
+    /// <returns>The updated resource builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    internal static IResourceBuilder<TResource> WithCertificateTrustEnvironment<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string certificateBundleEnvironmentVariable,
+        string? certificateDirectoriesEnvironmentVariable = null)
+        where TResource : IResourceWithArgs, IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(certificateBundleEnvironmentVariable);
+
+        if (certificateDirectoriesEnvironmentVariable is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(certificateDirectoriesEnvironmentVariable);
+        }
+
+        return builder.WithCertificateTrustConfiguration(context =>
+        {
+            context.EnvironmentVariables[certificateBundleEnvironmentVariable] = context.CertificateBundlePath;
+
+            if (certificateDirectoriesEnvironmentVariable is not null)
+            {
+                context.EnvironmentVariables[certificateDirectoriesEnvironmentVariable] = context.CertificateDirectoriesPath;
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time.
     /// Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used
     /// when running in local development scenarios; in publish mode resources will use their default certificate configuration.
@@ -4444,7 +4852,12 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(type);
 
-        return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        if (!builder.Resource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(r => ReferenceEquals(r.Resource, resource) && r.Type == type))
+        {
+            builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+        }
+
+        return builder;
     }
 
     /// <summary>
@@ -4817,17 +5230,58 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callback);
 
+        return builder.WithLaunchToolArgs(
+            ctx =>
+            {
+                callback(ctx);
+                return Task.CompletedTask;
+            },
+            ownedByLaunchConfigurationType,
+            showInCommandLine);
+    }
+
+    /// <summary>
+    /// Asynchronously declares the resource's launch tool arguments.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="callback">
+    /// Callback that produces the launch tool arguments. It is invoked with an empty
+    /// <see cref="CommandLineArgsCallbackContext.Args"/> list.
+    /// </param>
+    /// <param name="ownedByLaunchConfigurationType">
+    /// The debug launch configuration type that performs this tool invocation, or <see langword="null"/> when
+    /// the prefix is always passed to the launched program.
+    /// </param>
+    /// <param name="showInCommandLine">Whether these arguments appear in the dashboard command line.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="callback"/> is null.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="ownedByLaunchConfigurationType"/> is empty.
+    /// </exception>
+    /// <remarks>
+    /// The ordering, IDE ownership, visibility, and replacement behavior is the same as the synchronous overload.
+    /// </remarks>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Generic launch tool argument support is not part of the ATS surface.")]
+    public static IResourceBuilder<T> WithLaunchToolArgs<T>(
+        this IResourceBuilder<T> builder,
+        Func<CommandLineArgsCallbackContext, Task> callback,
+        string? ownedByLaunchConfigurationType = null,
+        bool showInCommandLine = true)
+        where T : IResourceWithArgs
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
         if (ownedByLaunchConfigurationType is not null)
         {
             ArgumentException.ThrowIfNullOrEmpty(ownedByLaunchConfigurationType);
         }
 
         return builder.WithAnnotation(new LaunchToolArgsCallbackAnnotation(
-            ctx =>
-            {
-                callback(ctx);
-                return Task.CompletedTask;
-            },
+            callback,
             ownedByLaunchConfigurationType,
             showInCommandLine));
     }
@@ -4972,6 +5426,44 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Adds VS Code-compatible debug metadata for an executable resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="launchConfigurationType">The launch configuration type understood by the extension.</param>
+    /// <param name="scriptPath">The script path, relative to the executable working directory when not rooted.</param>
+    /// <param name="runtimeExecutable">The optional runtime executable to use in the launch configuration.</param>
+    /// <param name="launchMethod">The optional launch method to use in the launch configuration.</param>
+    /// <returns>The resource builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
+    internal static IResourceBuilder<T> WithExecutableDebugSupport<T>(
+        this IResourceBuilder<T> builder,
+        string launchConfigurationType,
+        string scriptPath,
+        string? runtimeExecutable = null,
+        string? launchMethod = null)
+        where T : ExecutableResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(launchConfigurationType);
+        ArgumentException.ThrowIfNullOrWhiteSpace(scriptPath);
+
+        var workingDirectory = Path.GetFullPath(builder.Resource.WorkingDirectory);
+
+        return builder.WithDebugSupport(
+            mode => new AtsExecutableLaunchConfiguration(launchConfigurationType)
+            {
+                Mode = mode,
+                ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
+                RuntimeExecutable = runtimeExecutable ?? launchConfigurationType,
+                WorkingDirectory = workingDirectory,
+                LaunchMethod = launchMethod ?? "direct"
+            },
+            launchConfigurationType);
+    }
+
+    /// <summary>
     /// Adds a HTTP probe to the resource.
     /// </summary>
     /// <typeparam name="T">Type of resource.</typeparam>
@@ -5004,7 +5496,6 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts. The parameter name 'type' is a reserved keyword in Go and Rust.</para>
     /// </remarks>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the ATS export stub with renamed probeType parameter instead.")]
     public static IResourceBuilder<T> WithHttpProbe<T>(this IResourceBuilder<T> builder, ProbeType type, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null, string? endpointName = null)
         where T : IResourceWithEndpoints, IResourceWithProbes
@@ -5023,7 +5514,6 @@ public static class ResourceBuilderExtensions
     /// with renamed parameter to avoid reserved keyword conflicts in Go and Rust.
     /// </summary>
     /// <ats-summary>Adds an HTTP health probe to the resource</ats-summary>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withHttpProbe")]
     internal static IResourceBuilder<T> WithHttpProbeExport<T>(this IResourceBuilder<T> builder, ProbeType probeType, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null, string? endpointName = null)
         where T : IResourceWithEndpoints, IResourceWithProbes
@@ -5064,7 +5554,6 @@ public static class ResourceBuilderExtensions
     /// </example>
     /// <para>This method is not available in polyglot app hosts. Use the endpointName-based overload instead.</para>
     /// </remarks>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Func<EndpointReference> delegate — not ATS-compatible.")]
     public static IResourceBuilder<T> WithHttpProbe<T>(this IResourceBuilder<T> builder, ProbeType type, Func<EndpointReference>? endpointSelector, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null)
         where T : IResourceWithEndpoints, IResourceWithProbes
@@ -5096,7 +5585,6 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">Resource builder.</param>
     /// <param name="probeAnnotation">Probe annotation to add to resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<T> WithProbe<T>(this IResourceBuilder<T> builder, ProbeAnnotation probeAnnotation) where T : IResourceWithProbes
     {
         // Replace existing annotation with the same type
@@ -5371,5 +5859,26 @@ public static class ResourceBuilderExtensions
         {
             context.Options.RemoteImageTag = remoteImageTag;
         });
+    }
+
+    private sealed class AtsExecutableLaunchConfiguration(string type)
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; } = type;
+
+        [JsonPropertyName("mode")]
+        public string Mode { get; init; } = string.Empty;
+
+        [JsonPropertyName("script_path")]
+        public string ScriptPath { get; init; } = string.Empty;
+
+        [JsonPropertyName("runtime_executable")]
+        public string RuntimeExecutable { get; init; } = string.Empty;
+
+        [JsonPropertyName("working_directory")]
+        public string WorkingDirectory { get; init; } = string.Empty;
+
+        [JsonPropertyName("launch_method")]
+        public string LaunchMethod { get; init; } = string.Empty;
     }
 }

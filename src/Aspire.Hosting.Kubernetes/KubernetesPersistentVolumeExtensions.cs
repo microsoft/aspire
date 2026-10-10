@@ -2,9 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Annotations;
+using Aspire.Hosting.Kubernetes.Extensions;
+using Aspire.Hosting.Kubernetes.Resources;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -63,9 +67,8 @@ public static class KubernetesPersistentVolumeExtensions
     /// <summary>
     /// Sets the Kubernetes storage class name on the PVC's
     /// <c>spec.storageClassName</c>. When unset, the cluster's default storage class
-    /// is used.
+    /// is used. An empty string explicitly disables storage class assignment.
     /// </summary>
-    /// <ats-summary>Sets the storage class for a persistent volume</ats-summary>
     /// <param name="builder">The persistent volume resource builder.</param>
     /// <param name="storageClassName">The storage class name (e.g.
     /// <c>"managed-csi"</c>, <c>"gp3"</c>).</param>
@@ -76,8 +79,13 @@ public static class KubernetesPersistentVolumeExtensions
         string storageClassName)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(storageClassName);
+        ArgumentNullException.ThrowIfNull(storageClassName);
+        if (storageClassName.Length > 0)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(storageClassName);
+        }
 
+        builder.Resource.ShouldRequestStorageClassName = true;
         builder.Resource.StorageClassName = ReferenceExpression.Create($"{storageClassName}");
         return builder;
     }
@@ -99,7 +107,26 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(storageClassName);
 
+        builder.Resource.ShouldRequestStorageClassName = true;
         builder.Resource.StorageClassName = ReferenceExpression.Create($"{storageClassName.Resource}");
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Omits <c>spec.storageClassName</c> from the generated PVC so Kubernetes can assign the cluster's default StorageClass.
+    /// To request a classless volume, call <see cref="WithStorageClass(IResourceBuilder{KubernetesPersistentVolumeResource}, string)"/> with an empty string.
+    /// </summary>
+    /// <param name="builder">The persistent volume resource builder.</param>
+    /// <returns>The same builder for chaining.</returns>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesPersistentVolumeResource> WithoutStorageClass(
+        this IResourceBuilder<KubernetesPersistentVolumeResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.ShouldRequestStorageClassName = false;
+        builder.Resource.StorageClassName = null;
         return builder;
     }
 
@@ -141,6 +168,31 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(capacity);
 
         builder.Resource.Capacity = ReferenceExpression.Create($"{capacity.Resource}");
+        return builder;
+    }
+
+    /// <summary>
+    /// Sets the name of the existing PersistentVolume to bind to in the generated PVC's
+    /// <c>spec.volumeName</c>.
+    /// </summary>
+    /// <param name="builder">The persistent volume resource builder.</param>
+    /// <param name="persistentVolumeName">The name of the existing PersistentVolume.</param>
+    /// <returns>The same builder for chaining.</returns>
+    /// <remarks>
+    /// The named PersistentVolume must satisfy the claim's storage class, access modes, and requested capacity; otherwise, the claim remains unbound.
+    /// Configure these values to match the existing volume.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">The builder or volume name is null.</exception>
+    /// <exception cref="ArgumentException">The volume name is empty or consists only of whitespace.</exception>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesPersistentVolumeResource> WithPersistentVolumeName(
+        this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
+        string persistentVolumeName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(persistentVolumeName);
+
+        builder.Resource.PersistentVolumeName = ReferenceExpression.Create($"{persistentVolumeName}");
         return builder;
     }
 
@@ -220,8 +272,42 @@ public static class KubernetesPersistentVolumeExtensions
     }
 
     /// <summary>
+    /// Configures the Kubernetes PersistentVolumeClaim generated for the persistent volume.
+    /// </summary>
+    /// <param name="builder">The persistent volume resource builder.</param>
+    /// <param name="configure">The action used to configure the generated persistent volume claim.</param>
+    /// <returns>The same builder for chaining.</returns>
+    /// <remarks>
+    /// This callback runs when the Kubernetes manifest is generated and can be used to set
+    /// properties that are not exposed by the other persistent volume configuration methods.
+    /// Changing <c>claim.Metadata.Name</c> changes the identity of the generated PVC; if you
+    /// do so, ensure that any workload references are updated accordingly.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var data = k8s.AddPersistentVolume("data")
+    ///     .WithConfiguration(claim =>
+    ///     {
+    ///         claim.Metadata.Labels["example.com/retention"] = "retain";
+    ///         claim.Spec.VolumeMode = "Filesystem";
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "The callback exposes C#-only Kubernetes manifest types; use With* for polyglot configuration.")]
+    public static IResourceBuilder<KubernetesPersistentVolumeResource> WithConfiguration(
+        this IResourceBuilder<KubernetesPersistentVolumeResource> builder,
+        Action<PersistentVolumeClaim> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.WithAnnotation(new KubernetesPersistentVolumeCustomizationAnnotation(configure));
+        return builder;
+    }
+
+    /// <summary>
     /// Binds a workload to a Kubernetes <see cref="KubernetesPersistentVolumeResource"/>
-    /// using name matching. The workload must already declare a volume with
+    /// using name matching. The workload must declare a volume with
     /// a matching <c>source</c> name (typically via <c>WithVolume("name", "/path")</c>
     /// or an integration helper such as Postgres'
     /// <c>WithDataVolume()</c>). The publisher rewrites that volume's pod-spec entry
@@ -234,7 +320,7 @@ public static class KubernetesPersistentVolumeExtensions
     /// <param name="volume">The persistent volume resource to bind to.</param>
     /// <returns>The same builder for chaining.</returns>
     /// <remarks>
-    /// To bind a workload that does not already have a matching named mount (for
+    /// To bind a workload that does not have a matching named mount (for
     /// example a <c>ProjectResource</c>), use the overload that accepts a
     /// <c>mountPath</c> instead. The generated pod uses an Aspire-managed
     /// <c>fsGroup</c> of <c>2000</c> with an <c>OnRootMismatch</c> change policy so
@@ -263,7 +349,24 @@ public static class KubernetesPersistentVolumeExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(volume);
 
-        builder.WithAnnotation(new KubernetesPersistentVolumeBindingAnnotation(volume.Resource));
+        builder.WithAnnotation(new VolumeMountBindingAnnotation(volume.Resource.Name)
+        {
+            RunModeHostPathResolver = context =>
+            {
+                var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
+                return KubernetesPersistentVolumeLocalStorage.GetOrCreatePath(store, volume.Resource);
+            }
+        });
+
+        // This overload takes no env, but the name-match composition can still opt into the portable
+        // path by spelling env on the mount instead:
+        //   .WithVolume("data", "/srv/data", env: "DATA_PATH").WithPersistentVolume(pv)
+        // That mount may be declared after this call, so whether the scoped name actually gets applied
+        // is decided at finalization rather than here. See ApplyRunModeContainerVolumeName.
+        var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume);
+        builder.WithAnnotation(new KubernetesPersistentVolumeBindingAnnotation(
+            volume.Resource,
+            runModeContainerVolumeName: runModeContainerVolumeName));
         return builder;
     }
 
@@ -301,7 +404,8 @@ public static class KubernetesPersistentVolumeExtensions
     ///        .WithPersistentVolume(media, "/srv/media");
     /// </code>
     /// </example>
-    [AspireExport("withKubernetesPersistentVolumeMount")]
+    [OverloadResolutionPriority(1)]
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the withKubernetesPersistentVolumeMount adapter.")]
     public static IResourceBuilder<T> WithPersistentVolume<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<KubernetesPersistentVolumeResource> volume,
@@ -309,13 +413,158 @@ public static class KubernetesPersistentVolumeExtensions
         bool isReadOnly = false)
         where T : IComputeResource
     {
+        return WithPersistentVolumeCore(builder, volume, mountPath, isReadOnly, env: null);
+    }
+
+    /// <summary>
+    /// Binds a workload to a Kubernetes <see cref="KubernetesPersistentVolumeResource"/>,
+    /// mounts it at the specified path when deployed, and exposes the effective storage
+    /// path through an environment variable.
+    /// </summary>
+    /// <typeparam name="T">A compute resource that supports environment variables.</typeparam>
+    /// <param name="builder">The workload resource builder.</param>
+    /// <param name="volume">The persistent volume resource to bind to.</param>
+    /// <param name="mountPath">The path inside the deployed container where the volume is mounted.</param>
+    /// <param name="env">The environment variable that receives the effective storage path.</param>
+    /// <param name="isReadOnly">When <see langword="true"/>, mounts the deployed volume read-only.</param>
+    /// <returns>The same builder for chaining.</returns>
+    /// <remarks>
+    /// In run mode, projects and executables receive a deterministic host directory under
+    /// the AppHost's <see cref="IAspireStore"/>. Containers receive the in-container
+    /// <paramref name="mountPath"/>. In publish and deploy modes, every workload receives
+    /// <paramref name="mountPath"/>.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var data = k8s.AddPersistentVolume("data")
+    ///     .WithCapacity("20Gi");
+    ///
+    /// builder.AddProject&lt;Projects.Api&gt;("api")
+    ///     .WithPersistentVolume(data, "/srv/data", env: "DATA_PATH");
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Polyglot AppHosts use the withKubernetesPersistentVolumeMount adapter.")]
+    public static IResourceBuilder<T> WithPersistentVolume<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<KubernetesPersistentVolumeResource> volume,
+        string mountPath,
+        string env,
+        bool isReadOnly = false)
+        where T : IComputeResource, IResourceWithEnvironment
+    {
+        ArgumentException.ThrowIfNullOrEmpty(env);
+
+        return WithPersistentVolumeCore(builder, volume, mountPath, isReadOnly, env);
+    }
+
+    /// <summary>
+    /// Binds a workload to a Kubernetes persistent volume and optionally exposes the
+    /// effective storage path through an environment variable.
+    /// </summary>
+    /// <ats-summary>Binds a workload to a Kubernetes persistent volume and mounts it at a path</ats-summary>
+    /// <typeparam name="T">A compute resource.</typeparam>
+    /// <param name="builder">The workload resource builder.</param>
+    /// <param name="volume">The persistent volume resource to bind to.</param>
+    /// <param name="mountPath">The path inside the deployed container where the volume is mounted.</param>
+    /// <param name="isReadOnly">When true, mounts the deployed volume read-only.</param>
+    /// <param name="env">An optional environment variable that receives the effective storage path.</param>
+    /// <returns>The same builder for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withKubernetesPersistentVolumeMount")]
+    internal static IResourceBuilder<T> WithPersistentVolumeMountForExport<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<KubernetesPersistentVolumeResource> volume,
+        string mountPath,
+        bool isReadOnly = false,
+        string? env = null)
+        where T : IComputeResource
+    {
+        return WithPersistentVolumeCore(builder, volume, mountPath, isReadOnly, env);
+    }
+
+    private static IResourceBuilder<T> WithPersistentVolumeCore<T>(
+        IResourceBuilder<T> builder,
+        IResourceBuilder<KubernetesPersistentVolumeResource> volume,
+        string mountPath,
+        bool isReadOnly,
+        string? env)
+        where T : IComputeResource
+    {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(volume);
         ArgumentException.ThrowIfNullOrEmpty(mountPath);
 
-        builder.WithAnnotation(new ContainerMountAnnotation(volume.Resource.Name, mountPath, ContainerMountType.Volume, isReadOnly));
-        builder.WithAnnotation(new KubernetesPersistentVolumeBindingAnnotation(volume.Resource));
+        if (env is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(env);
+
+            if (builder.Resource is not IResourceWithEnvironment)
+            {
+                throw new InvalidOperationException(
+                    $"Resource '{builder.Resource.Name}' does not support environment variables and cannot use the '{env}' volume path variable.");
+            }
+        }
+
+        var runModeContainerVolumeName = GetRunModeContainerVolumeName(builder, volume);
+
+        // Declare the mount and its binding directly rather than through WithVolume, because the polyglot
+        // adapter only constrains T to IComputeResource while the env-carrying WithVolume overload also
+        // requires IResourceWithEnvironment. The env value itself still comes from the shared binding
+        // logic so the inner/outer loop decision lives in exactly one place.
+        var binding = new VolumeMountBindingAnnotation(volume.Resource.Name)
+        {
+            EnvironmentVariableName = env,
+            MountPath = mountPath,
+            RunModeHostPathResolver = context =>
+            {
+                var store = context.ExecutionContext.Services.GetRequiredService<IAspireStore>();
+                return KubernetesPersistentVolumeLocalStorage.GetOrCreatePath(store, volume.Resource);
+            }
+        };
+
+        builder.WithAnnotation(new ContainerMountAnnotation(
+            volume.Resource.Name,
+            mountPath,
+            ContainerMountType.Volume,
+            isReadOnly));
+
+        builder.WithAnnotation(binding);
+
+        if (env is not null)
+        {
+            builder.WithAnnotation(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[env] = binding.ResolvePath(context);
+            }));
+        }
+
+        builder.WithAnnotation(new KubernetesPersistentVolumeBindingAnnotation(
+            volume.Resource,
+            env,
+            runModeContainerVolumeName));
+
         return builder;
+    }
+
+    /// <summary>
+    /// Computes the worktree-scoped local volume name for a run-mode container binding. This only
+    /// builds the candidate; whether it is actually applied is decided at finalization, because the
+    /// env opt-in can be spelled on a mount declared after this binding.
+    /// </summary>
+    private static string? GetRunModeContainerVolumeName<T>(
+        IResourceBuilder<T> builder,
+        IResourceBuilder<KubernetesPersistentVolumeResource> volume)
+        where T : IComputeResource
+    {
+        if (!builder.ApplicationBuilder.ExecutionContext.IsRunMode || builder.Resource is not ContainerResource)
+        {
+            return null;
+        }
+
+        // Generate is builder-bound because it needs the application name and the AppHost path hash,
+        // so the candidate has to be built here even though the decision happens later.
+        var environmentName = volume.Resource.Parent.Name.ToKubernetesResourceName();
+        return VolumeNameGenerator.Generate(volume, $"kubernetes-{environmentName}");
     }
 
     /// <summary>

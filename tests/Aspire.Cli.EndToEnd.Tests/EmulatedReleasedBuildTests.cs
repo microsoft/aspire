@@ -82,7 +82,7 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
 
         // `aspire add` must resolve a restorable version (no custom feed available) and complete.
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+        await AddRedisInteractivelyAsync(auto, counter, stableVersion!);
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
         AssertStableShaped(sdkVersion, configPath);
 
         await auto.RunCommandAsync($"cd {projectName}", counter);
-        await AddIntegrationInteractivelyAsync(auto, counter, "redis");
+        await AddRedisInteractivelyAsync(auto, counter, stableVersion!);
     }
 
     /// <summary>
@@ -176,23 +176,28 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Runs <c>aspire add</c> interactively, filters the integration list by <paramref name="filter"/>,
-    /// accepts the default version if a version picker appears, and waits for the success message.
-    /// Mirrors the proven interactive add flow used elsewhere in the E2E suite.
+    /// Runs <c>aspire add</c> interactively, selects the Redis integration, and verifies that the
+    /// default version is the emulated stable version rather than a package from the installed PR hive.
     /// </summary>
-    private static async Task AddIntegrationInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string filter)
+    private static async Task AddRedisInteractivelyAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string stableVersion)
     {
         await auto.TypeAsync("aspire add");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
-        await auto.TypeAsync(filter);
+
+        // Searching for just "redis" also matches azure-provisioning-redis from the PR hive.
+        // Wait for the intended row to be selected before accepting the interactive search.
+        const string integrationLabel = "redis (Aspire.Hosting.Redis)";
+        await auto.TypeAsync("Aspire.Hosting.Redis");
+        await auto.WaitUntilTextAsync($"> {integrationLabel}", timeout: TimeSpan.FromMinutes(1));
         await auto.EnterAsync();
 
+        var successMessage = $"Aspire.Hosting.Redis::{stableVersion} was added successfully.";
         var waitingForVersionSelection = false;
         await auto.WaitUntilAsync(snapshot =>
         {
             waitingForVersionSelection = snapshot.ContainsText("Select a version of");
-            return waitingForVersionSelection || snapshot.ContainsText("was added successfully.");
+            return waitingForVersionSelection || snapshot.ContainsText(successMessage);
         }, timeout: TimeSpan.FromMinutes(2), description: "version prompt or add success");
 
         if (waitingForVersionSelection)
@@ -200,7 +205,7 @@ public sealed class EmulatedReleasedBuildTests(ITestOutputHelper output)
             await auto.EnterAsync();
         }
 
-        await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync(successMessage, timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
     }
 

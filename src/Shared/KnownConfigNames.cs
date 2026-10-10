@@ -24,6 +24,7 @@ internal static class KnownConfigNames
     public const string ResourceServiceEndpointUrl = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
+    public const string ContainerTunnelBaseImage = "ASPIRE_CONTAINER_TUNNEL_BASE_IMAGE";
     public const string DependencyCheckTimeout = "ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
     public const string ProxylessEndpointPortRange = "ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE";
     public const string ServiceStartupWatchTimeout = "ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
@@ -31,6 +32,8 @@ internal static class KnownConfigNames
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";
     public const string UnixSocketPath = "ASPIRE_BACKCHANNEL_PATH";
     public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
+    public const string IntegrationHostBootstrap = "ASPIRE_INTEGRATION_HOST_BOOTSTRAP";
+    public const string IntegrationHostsEnabled = "ASPIRE_INTEGRATION_HOSTS_ENABLED";
 
     // Identifies the RemoteHost server's parent (the CLI process that launched aspire-managed server).
     // Paired with RemoteAppHostProcessStarted so the RemoteHost orphan detector can verify PID + start
@@ -46,6 +49,8 @@ internal static class KnownConfigNames
     // this identity so it can shut down and unlink its sockets if the AppHost disappears.
     public const string TerminalHostParentProcessId = "ASPIRE_TERMINAL_HOST_PARENT_PID";
     public const string TerminalHostParentProcessStartedStable = "ASPIRE_TERMINAL_HOST_PARENT_STARTED_STABLE";
+    public const string TerminalHostTelemetryEnabled = "ASPIRE_TERMINAL_HOST_TELEMETRY_ENABLED";
+    public const string TerminalWatchBufferCapacity = "ASPIRE_TERMINAL_WATCH_BUFFER_CAPACITY";
 
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the

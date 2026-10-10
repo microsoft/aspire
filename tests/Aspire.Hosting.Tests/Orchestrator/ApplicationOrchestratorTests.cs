@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
-
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
@@ -24,6 +21,54 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 [Trait("Partition", "3")]
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData("Waiting")]
+    [InlineData("Starting")]
+    [InlineData("Running")]
+    public async Task ResourceStoppedEventIsNotRepeatedWhenHandlerChangesSnapshotState(string snapshotState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddExecutable("resource", "unused", ".");
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var stoppedCount = 0;
+
+        resource.OnResourceStopped(async (_, @event, _) =>
+        {
+            Interlocked.Increment(ref stoppedCount);
+            Assert.Equal(KnownResourceStates.Finished, @event.ResourceEvent.Snapshot.State?.Text);
+            Assert.Equal(0, @event.ResourceEvent.Snapshot.ExitCode);
+            await notifications.PublishUpdateAsync(resource.Resource, resource.Resource.Name,
+                snapshot => snapshot with { State = snapshotState });
+        });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var orchestrator = CreateOrchestrator(model, notificationService: notifications, dcpEvents: events, applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+
+        await PublishStateAsync(null, null);
+        await PublishStateAsync(KnownResourceStates.Running, null);
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Running);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Finished);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Exited, KnownResourceStates.Finished);
+        await PublishStateAsync(KnownResourceStates.FailedToStart, KnownResourceStates.Exited);
+        Assert.Equal(1, stoppedCount);
+
+        await PublishStateAsync(KnownResourceStates.Running, KnownResourceStates.FailedToStart);
+        await PublishStateAsync(KnownResourceStates.Finished, KnownResourceStates.Running);
+        Assert.Equal(2, stoppedCount);
+
+        Task PublishStateAsync(string? state, string? previousState) => events.PublishAsync(new OnResourceChangedContext(
+            CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, resource.Resource.Name,
+            new ResourceStatus(state, null, null), previousState,
+            snapshot => snapshot with { State = state is not null ? new(state, null) : snapshot.State, ExitCode = state == KnownResourceStates.Finished ? 0 : null }));
+    }
+
     [Fact]
     public async Task ParentPropertySetOnChildResource()
     {
@@ -447,7 +492,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ConnectionStringAvailableEventPublishesConnectionStringAndResolvableProperties()
+    public async Task ConnectionStringAvailableEventUpdatesConnectionStringAndResolvablePropertiesWithoutDuplicates()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
@@ -465,48 +510,30 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, applicationEventing: applicationEventing);
         await appOrchestrator.RunApplicationAsync();
 
-        string? connectionStringProperty = null;
-        IReadOnlyDictionary<string, string?>? connectionProperties = null;
-        bool? isConnectionStringSensitive = null;
-        bool? areConnectionPropertiesSensitive = null;
-        var hasDatabaseNameProperty = false;
-        var watchResourceTask = Task.Run(async () =>
-        {
-            await foreach (var item in resourceNotificationService.WatchAsync())
-            {
-                if (item.Resource == resource.Resource)
-                {
-                    var connectionStringProp = item.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.ConnectionString);
-                    if (connectionStringProp is not null)
-                    {
-                        connectionStringProperty = connectionStringProp.Value?.ToString();
-                        isConnectionStringSensitive = connectionStringProp.IsSensitive;
-                        var connectionPropertiesProp = item.Snapshot.Properties.Single(p => p.Name == KnownProperties.Resource.ConnectionProperties);
-                        connectionProperties = Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProp.Value);
-                        areConnectionPropertiesSensitive = connectionPropertiesProp.IsSensitive;
-                        hasDatabaseNameProperty = item.Snapshot.Properties.Any(p => p.Name == "resource.DatabaseName");
-                        return;
-                    }
-                }
-            }
-        });
-
-        // Publish the ConnectionStringAvailableEvent to trigger the update
+        await applicationEventing.PublishAsync(new ConnectionStringAvailableEvent(resource.Resource, app.Services), CancellationToken.None);
         await applicationEventing.PublishAsync(new ConnectionStringAvailableEvent(resource.Resource, app.Services), CancellationToken.None);
 
-        await watchResourceTask.DefaultTimeout();
-
-        Assert.Equal("Server=localhost:5432;Database=testdb", connectionStringProperty);
-        Assert.True(isConnectionStringSensitive);
-        Assert.Equal(
-            new Dictionary<string, string?>
+        Assert.True(resourceNotificationService.TryGetCurrentState(resource.Resource.Name, out var currentState));
+        Assert.Collection(
+            currentState.Snapshot.Properties,
+            connectionStringProperty =>
             {
-                ["DatabaseName"] = "testdb",
-                ["Host"] = "localhost"
+                Assert.Equal(KnownProperties.Resource.ConnectionString, connectionStringProperty.Name);
+                Assert.Equal("Server=localhost:5432;Database=testdb", connectionStringProperty.Value);
+                Assert.True(connectionStringProperty.IsSensitive);
             },
-            connectionProperties);
-        Assert.True(areConnectionPropertiesSensitive);
-        Assert.False(hasDatabaseNameProperty);
+            connectionPropertiesProperty =>
+            {
+                Assert.Equal(KnownProperties.Resource.ConnectionProperties, connectionPropertiesProperty.Name);
+                Assert.Equal(
+                    new Dictionary<string, string?>
+                    {
+                        ["DatabaseName"] = "testdb",
+                        ["Host"] = "localhost"
+                    },
+                    Assert.IsAssignableFrom<IReadOnlyDictionary<string, string?>>(connectionPropertiesProperty.Value));
+                Assert.True(connectionPropertiesProperty.IsSensitive);
+            });
     }
 
     [Fact]
@@ -1188,6 +1215,9 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             return Task.FromResult(new DeploymentStateSection(sectionName, [], 0));
         }
 
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
+
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -1326,6 +1356,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             parentContainer.Resource,
             "parent-container-dcp",
             new ResourceStatus(KnownResourceStates.FailedToStart, null, null),
+            PreviousState: null,
             snapshot => snapshot with { State = KnownResourceStates.FailedToStart }));
 
         // Check final states
@@ -1373,6 +1404,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             parentContainer.Resource,
             "parent-container-dcp",
             new ResourceStatus(KnownResourceStates.FailedToStart, null, null),
+            PreviousState: null,
             snapshot => snapshot with { State = KnownResourceStates.FailedToStart }));
 
         // Check final states

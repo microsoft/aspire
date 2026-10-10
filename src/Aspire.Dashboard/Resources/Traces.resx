@@ -168,6 +168,10 @@
     <value>Showing &lt;strong&gt;{0} traces&lt;/strong&gt;</value>
     <comment>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</comment>
   </data>
+  <data name="VirtualizedLimitText" xml:space="preserve">
+    <value>Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results</value>
+    <comment>{0} is the displayed count. {1} is the total count. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified.</comment>
+  </data>
   <data name="SpanTypeLabel" xml:space="preserve">
     <value>Type</value>
   </data>

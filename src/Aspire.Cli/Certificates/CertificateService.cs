@@ -232,7 +232,3 @@ internal sealed class CertificateService(
         }
     }
 }
-
-internal sealed class CertificateServiceException(string message) : Exception(message)
-{
-}

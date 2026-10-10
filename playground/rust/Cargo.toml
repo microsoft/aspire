@@ -11,7 +11,7 @@ name = "apphost"
 path = "apphost.rs"
 
 # Only what the generated SDK under .aspire/modules needs. The AppHost itself does no telemetry
-# export; the sample app under ./app owns its OTLP/tonic dependencies.
+# export; the sample app under ./app owns its OTLP/TLS dependencies.
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

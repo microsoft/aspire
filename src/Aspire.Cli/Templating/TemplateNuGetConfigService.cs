@@ -7,6 +7,7 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
+using System.Globalization;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Templating;
@@ -235,6 +236,12 @@ internal sealed class TemplateNuGetConfigService(
     public async Task<TemplatePackageSelection> ResolveTemplatePackageAsync(TemplatePackageQuery query, CancellationToken cancellationToken)
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken, query.RequestedChannel);
+        var isUnqualifiedLocalResolution =
+            query.IncludePrHives &&
+            string.Equals(executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase) &&
+            string.IsNullOrWhiteSpace(query.RequestedChannel) &&
+            string.IsNullOrWhiteSpace(query.VersionOverride) &&
+            string.IsNullOrWhiteSpace(query.SourceOverride);
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
@@ -254,7 +261,13 @@ internal sealed class TemplateNuGetConfigService(
                     allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c))));
 
         IEnumerable<PackageChannel> channels;
-        if (!string.IsNullOrEmpty(query.RequestedChannel))
+        if (isUnqualifiedLocalResolution)
+        {
+            channels = allChannels.Where(c =>
+                c.IsBackedByLocalPackageDirectory &&
+                string.Equals(c.Name, executionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
+        }
+        else if (!string.IsNullOrEmpty(query.RequestedChannel))
         {
             var matchingChannel = allChannels.FirstOrDefault(c =>
                     string.Equals(c.Name, query.RequestedChannel, StringComparison.OrdinalIgnoreCase))
@@ -289,7 +302,19 @@ internal sealed class TemplateNuGetConfigService(
                 var templateSearchMappings = string.IsNullOrWhiteSpace(query.SourceOverride)
                     ? channel.Mappings
                     : PackageSourceOverrideMappings.CreateForTemplateOperations(query.SourceOverride);
-                var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, templateSearchMappings, ct);
+                var templatePackages = await channel.GetTemplatePackagesAsync(
+                    executionContext.WorkingDirectory,
+                    templateSearchMappings,
+                    // Init and explicit source/version overrides historically enumerate the source
+                    // before this service selects a version. Keep pin filtering only for channel
+                    // resolution in `aspire new`; unqualified local resolution selects the exact
+                    // CLI identity version below from the complete candidate set.
+                    filterLocalPackagesToPinnedVersion:
+                        query.IncludePrHives &&
+                        !isUnqualifiedLocalResolution &&
+                        string.IsNullOrWhiteSpace(query.VersionOverride) &&
+                        string.IsNullOrWhiteSpace(query.SourceOverride),
+                    ct);
                 lock (resultsLock)
                 {
                     results.AddRange(templatePackages.Select(p => (p, channel)));
@@ -299,20 +324,43 @@ internal sealed class TemplateNuGetConfigService(
             return results;
         });
 
-        if (!packagesFromChannels.Any())
+        if (isUnqualifiedLocalResolution)
         {
-            throw new EmptyChoicesException(Resources.TemplatingStrings.NoTemplateVersionsFound);
+            var localMatch = packagesFromChannels.FirstOrDefault(p =>
+                string.Equals(p.Package.Version, executionContext.IdentitySdkVersion, StringComparison.OrdinalIgnoreCase));
+            if (localMatch.Package is null)
+            {
+                throw new EmptyChoicesException(
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        Resources.TemplatingStrings.NoMatchingLocalTemplatePackage,
+                        executionContext.IdentitySdkVersion));
+            }
+
+            return new TemplatePackageSelection(localMatch.Package, localMatch.Channel);
         }
 
         var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => Semver.SemVersion.Parse(p.Package.Version), Semver.SemVersion.PrecedenceComparer);
 
         if (query.VersionOverride is { } version)
         {
-            var explicitMatch = orderedPackagesFromChannels.FirstOrDefault(p => p.Package.Version == version);
+            var explicitMatch = orderedPackagesFromChannels.FirstOrDefault(p =>
+                string.Equals(p.Package.Version, version, StringComparison.OrdinalIgnoreCase));
             if (explicitMatch.Package is not null)
             {
                 return new TemplatePackageSelection(explicitMatch.Package, explicitMatch.Channel);
             }
+
+            throw new EmptyChoicesException(
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    Resources.TemplatingStrings.TemplateVersionNotFound,
+                    version));
+        }
+
+        if (!packagesFromChannels.Any())
+        {
+            throw new EmptyChoicesException(Resources.TemplatingStrings.NoTemplateVersionsFound);
         }
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(

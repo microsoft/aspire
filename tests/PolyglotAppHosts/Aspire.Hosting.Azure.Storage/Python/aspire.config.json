@@ -4,9 +4,10 @@
     "language": "python"
   },
   "features": {
-    "experimentalPolyglot:python": true
+    "experimentalPolyglotPython": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.Storage": ""
+    "Aspire.Hosting.Azure.Storage": "",
+    "Aspire.Hosting.Azure.Provisioning.Storage": ""
   }
 }

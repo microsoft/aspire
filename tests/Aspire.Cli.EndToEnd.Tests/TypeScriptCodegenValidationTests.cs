@@ -85,6 +85,32 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
                 $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} restore to create '{lockFilePath}'.");
         }
 
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
+        File.WriteAllText(appHostPath, """
+            import { createBuilder, SqlServerReplCommand, type SqlServerReplOptions } from './.aspire/modules/aspire.mjs';
+
+            const builder = await createBuilder();
+            await builder.addRedis("cache");
+            await builder.addSqlServer("sql-default").withRepl();
+            await builder.addSqlServer("sql-empty-options").withRepl({});
+            await builder.addSqlServer("sql-configured").withRepl({
+                configure: async (options: SqlServerReplOptions) => {
+                    const command: string = await options.command.get();
+                    await options.command.set(command);
+
+                    const version17: "/opt/mssql-tools/bin/sqlcmd" = SqlServerReplCommand.Version17;
+                    const version18: "/opt/mssql-tools18/bin/sqlcmd" = SqlServerReplCommand.Version18;
+                    await options.command.set(version17);
+                    await options.command.set(version18);
+                    await options.command.set("/custom tools/sqlcmd-wrapper");
+
+                    // @ts-expect-error Commands must remain string paths, not numeric versions.
+                    await options.command.set(18);
+                }
+            });
+            await builder.build().run();
+            """);
+
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
@@ -387,10 +413,11 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             builder.addContainer("consumer", "nginx")
                 .withReference(db);
 
-            // build() flushes all pending promises before proceeding. If the
-            // flush implementation deadlocks (e.g. re-awaiting a promise tracked
-            // after flush starts), this line hangs and the test times out.
-            await builder.build().run();
+            // Invoke build() through another fluent promise. The build wrapper and its
+            // synchronously chained run() call must stay out of build()'s promise flush.
+            await builder.addHealthCheck("chained-build", async () => ({}))
+                .build()
+                .run();
             """;
 
         File.WriteAllText(appHostPath, newContent);

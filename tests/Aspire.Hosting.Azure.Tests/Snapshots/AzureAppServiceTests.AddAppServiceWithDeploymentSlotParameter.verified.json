@@ -1,4 +1,4 @@
-{
+﻿{
   "type": "azure.bicep.v0",
   "path": "project1-website.module.bicep",
   "params": {

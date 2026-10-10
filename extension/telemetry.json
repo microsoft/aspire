@@ -1,5 +1,34 @@
 {
   "events": {
+    "aspire/vscode/survey/invitation": {
+      "campaign_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed usefulness survey campaign identifier. Only is_microsoft_internal is inherited from Aspire common properties; employee alias/domain and AppHost properties are excluded. Standard VS Code metadata remains. Campaign remains disabled pending classification and ingestion approval."
+      },
+      "question_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed version of the Aspire usefulness question, not the question text."
+      }
+    },
+    "aspire/vscode/survey/result": {
+      "campaign_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed usefulness survey campaign identifier. Only is_microsoft_internal is inherited from Aspire common properties; employee alias/domain and AppHost properties are excluded. Standard VS Code metadata remains. Campaign remains disabled pending classification and ingestion approval."
+      },
+      "question_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Fixed version of the Aspire usefulness question, not the question text."
+      },
+      "outcome": {
+        "classification": "PublicNonPersonalData",
+        "purpose": "FeatureInsight",
+        "comment": "One of yes, no, dismissed, or never_again. No free text. Classification requires approval before enabling the campaign."
+      }
+    },
     "aspire/vscode/extension/activated": {
       "workspace_open": {
         "classification": "SystemMetaData",
@@ -42,6 +71,115 @@
         "classification": "SystemMetaData",
         "purpose": "PerformanceAndHealth",
         "comment": "The duration of the command invocation in milliseconds."
+      }
+    },
+    "aspire/vscode/editorassistance/result": {
+      "tool": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded Aspire editor-assistance language model tool name."
+      },
+      "outcome": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded completion outcome returned by the editor-assistance tool."
+      },
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded extension surface that invoked the editor-assistance operation."
+      },
+      "scope": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether a status result describes an AppHost or one resource."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded controller category associated with the result."
+      },
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded run, debug, deploy, publish, or other mode associated with the result."
+      },
+      "stage": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded launch stage for a sanitized failure explanation."
+      },
+      "category": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded sanitized launch failure category."
+      },
+      "provider_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded debugger or runtime provider category for a sanitized launch failure."
+      },
+      "state_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded editor-owned debug session state bucket."
+      },
+      "error_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "A bounded non-sensitive error category when one applies."
+      },
+      "exit_code_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded exit-code category for a sanitized launch failure."
+      },
+      "presentation": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded editor or browser presentation used to open the Dashboard."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The duration of the editor-assistance tool invocation in milliseconds."
+      }
+    },
+    "aspire/vscode/launchfailure/recorded": {
+      "stage": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded launch stage accepted by the in-memory failure store."
+      },
+      "category": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded sanitized launch failure category accepted by the store."
+      },
+      "controller": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the editor or Aspire CLI controlled the failed launch."
+      },
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded run, debug, deploy, publish, or other mode for the failed launch."
+      },
+      "provider_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded debugger or runtime provider category for the failed launch."
+      },
+      "exit_code_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The bounded exit-code category for the failed launch."
+      },
+      "store_size": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The number of AppHosts with a retained latest failure after expiry and capacity maintenance."
       }
     },
     "aspire/vscode/cli/availability": {
@@ -665,6 +803,21 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "comment": "Whether the current workspace contains an AppHost."
+    },
+    "is_microsoft_internal": {
+      "classification": "SystemMetaData",
+      "purpose": "BusinessInsight",
+      "comment": "Whether VS Code reports an account whose home tenant is the Microsoft corporate tenant."
+    },
+    "microsoft_internal_alias": {
+      "classification": "EndUserPseudonymizedInformation",
+      "purpose": "BusinessInsight",
+      "comment": "The normalized Microsoft corporate alias from the tenant-bound VS Code account login."
+    },
+    "microsoft_internal_domain": {
+      "classification": "SystemMetaData",
+      "purpose": "BusinessInsight",
+      "comment": "The normalized Microsoft corporate domain from the tenant-bound VS Code account login."
     }
   }
 }

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Shared.Telemetry;
 using OpenTelemetry;
 
 namespace Aspire.Cli.Telemetry;
@@ -10,25 +11,37 @@ namespace Aspire.Cli.Telemetry;
 /// Processor that applies background-calculated telemetry tags to activities before export.
 /// Tags are sourced from <see cref="TelemetryTagsSource"/> which computes machine/identity
 /// information asynchronously at startup. Event-level enrichment is handled separately in
-/// <see cref="AspireCliTelemetry.RecordError"/> at event creation time.
+/// <see cref="AspireTelemetryBase.RecordError"/> at event creation time.
 /// </summary>
 internal sealed class CliTagEnrichmentProcessor : BaseProcessor<Activity>
 {
     private readonly TelemetryTagsSource _tagsSource;
+    private readonly AspireCliTelemetry _telemetry;
 
-    public CliTagEnrichmentProcessor(TelemetryTagsSource tagsSource)
+    public CliTagEnrichmentProcessor(TelemetryTagsSource tagsSource, AspireCliTelemetry telemetry)
     {
         _tagsSource = tagsSource;
+        _telemetry = telemetry;
     }
 
     public override void OnEnd(Activity activity)
     {
         var tags = _tagsSource.GetResolvedTags();
+        var suppressInternalIdentity = activity.OperationName == TelemetryConstants.Activities.InternalMicrosoftDetector;
 
         // Add tags to the activity itself.
         foreach (var tag in tags)
         {
-            activity.SetTag(tag.Key, tag.Value);
+            // The detector activity reports only bounded outcome metadata. Alias and domain are
+            // already attached to ordinary reported activities and must not be duplicated onto
+            // the detector-health event that measures whether those values were available.
+            if (suppressInternalIdentity &&
+                tag.Key is TelemetryConstants.Tags.InternalMicrosoftAlias or TelemetryConstants.Tags.InternalMicrosoftDomain)
+            {
+                continue;
+            }
+
+            _telemetry.SetActivityProperty(activity, tag.Key, tag.Value);
         }
     }
 }

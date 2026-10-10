@@ -227,8 +227,17 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
         var expectedTypeName = $"{typeof(CommandSpec).Namespace}.{nameof(CommandUpToDateCheck)}";
         var upToDateCheckType = upToDateCheckProperty.PropertyType;
         var inputsProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.Inputs));
+        var outputsProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.Outputs));
         var fileExtensionsProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.FileExtensions));
         var stampFileProperty = upToDateCheckType.GetProperty(nameof(CommandUpToDateCheck.StampFile));
+
+        // Outputs was added after UpToDateCheck. An older force-shared contract can expose the check
+        // but not this member; in that case compile every launch instead of caching without proving
+        // that AppHost.class still exists.
+        if (outputsProperty is null)
+        {
+            return;
+        }
 
         if (upToDateCheckProperty.SetMethod is null ||
             !upToDateCheckProperty.SetMethod.IsPublic ||
@@ -239,6 +248,9 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
             inputsProperty?.PropertyType != typeof(string[]) ||
             inputsProperty.SetMethod is null ||
             !inputsProperty.SetMethod.IsPublic ||
+            outputsProperty.PropertyType != typeof(string[]) ||
+            outputsProperty.SetMethod is null ||
+            !outputsProperty.SetMethod.IsPublic ||
             fileExtensionsProperty?.PropertyType != typeof(string[]) ||
             fileExtensionsProperty.SetMethod is null ||
             !fileExtensionsProperty.SetMethod.IsPublic ||
@@ -259,6 +271,10 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
             "./**",
             $"{GeneratedSourcesDirectory}/**",
             "src/main/java/**"
+        });
+        outputsProperty.SetValue(upToDateCheck, new[]
+        {
+            Path.Combine(classOutputDirectory, $"{AppHostClassName}.class")
         });
         // Only sources are inputs. Without this the .class files javac writes beside the sources in
         // the flat layout would invalidate the very check they were produced under.

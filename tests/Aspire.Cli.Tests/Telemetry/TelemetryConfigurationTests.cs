@@ -41,7 +41,9 @@ public class TelemetryConfigurationTests
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
-        return await Program.BuildApplicationAsync([], startupContext, config);
+        var host = await Program.BuildApplicationAsync([], startupContext, config);
+        host.Services.GetRequiredService<TelemetryManager>().Initialize();
+        return host;
     }
 
     [Fact]
@@ -75,18 +77,19 @@ public class TelemetryConfigurationTests
         Assert.False(telemetryManager.HasAzureMonitor, $"Expected Azure Monitor to be disabled when telemetry opt-out is '{optOutValue}'");
     }
 
-    [Fact]
-    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided()
+    [Theory]
+    [InlineData("--version")]
+    [InlineData("-v")]
+    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided(string versionFlag)
     {
         var configuration = new ConfigurationBuilder().Build();
-        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--version"]);
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [versionFlag]);
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-        using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true
         };
-        var telemetry = new AspireCliTelemetry(
+        using var telemetry = new AspireCliTelemetry(
             NullLogger<AspireCliTelemetry>.Instance,
             new TelemetryFixture.TestMachineInformationProvider(),
             new TelemetryFixture.TestCIEnvironmentDetector(),
@@ -98,12 +101,81 @@ public class TelemetryConfigurationTests
             Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
             tagsSource);
 
+        using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource, telemetry, NullLogger<TelemetryManager>.Instance);
+        telemetryManager.Initialize();
         telemetry.Initialize();
         await tagsSource.TagsTask;
 
         Assert.False(telemetryManager.HasAzureMonitor);
         Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
         Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
+    }
+
+    [Theory]
+    [InlineData("--help")]
+    [InlineData("-h")]
+    [InlineData("-?")]
+    [InlineData("/h")]
+    [InlineData("/?")]
+    public void ReportedTelemetry_Disabled_WhenHelpFlagProvided(string helpFlag)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [helpFlag]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Theory]
+    [InlineData("terminal", "ps", "-v")]
+    [InlineData("run", "--", "-v")]
+    [InlineData("add", "docker", "--version", "9.2.0")]
+    public void ReportedTelemetry_RemainsEnabled_WhenVersionLikeOptionIsNotRootInformational(params string[] args)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, args);
+
+        Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Fact]
+    public void ReportedTelemetry_Disabled_WhenShortVersionFollowsRootOptionValue()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--log-level", "Debug", "-v"]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Theory]
+    [InlineData("--log-level", "--help")]
+    [InlineData("-l", "-h")]
+    [InlineData("--capture-profile-output", "--version")]
+    [InlineData("--capture-profile-delay", "-v")]
+    [InlineData("--log-file", "-?")]
+    public void ReportedTelemetry_Disabled_WhenInformationalFlagIsConsumedAsMissingRootOptionValue(string rootOption, string informationalFlag)
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, [rootOption, informationalFlag]);
+
+        Assert.False(telemetryConfiguration.ReportedTelemetryEnabled);
+    }
+
+    [Fact]
+    public void DetectorDiagnostics_Disabled_ForAgentTelemetryInvocation()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var telemetryConfiguration = TelemetryConfiguration.Create(
+            configuration,
+            ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.True(telemetryConfiguration.ReportedTelemetryEnabled);
+        Assert.False(telemetryConfiguration.EmitInternalMicrosoftDiagnostics);
+        Assert.Equal(TimeSpan.FromSeconds(5), telemetryConfiguration.InternalMicrosoftDetectionTimeout);
     }
 
     [Fact]
@@ -117,12 +189,11 @@ public class TelemetryConfigurationTests
             .Build();
         var telemetryConfiguration = TelemetryConfiguration.Create(configuration);
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-        using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true
         };
-        var telemetry = new AspireCliTelemetry(
+        using var telemetry = new AspireCliTelemetry(
             NullLogger<AspireCliTelemetry>.Instance,
             new TelemetryFixture.TestMachineInformationProvider(),
             new TelemetryFixture.TestCIEnvironmentDetector(),
@@ -134,6 +205,8 @@ public class TelemetryConfigurationTests
             Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
             tagsSource);
 
+        using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource, telemetry, NullLogger<TelemetryManager>.Instance);
+        telemetryManager.Initialize();
         telemetry.Initialize();
         await tagsSource.TagsTask;
 
@@ -180,9 +253,9 @@ public class TelemetryConfigurationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(config.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value)))
             .Build();
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-
-        using var manager = new TelemetryManager(configuration, tagsSource);
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance);
+        manager.Initialize();
 
         Assert.False(manager.HasProfilingProvider, "Expected detached child profiling export to require an actual profiling session");
     }
@@ -256,9 +329,9 @@ public class TelemetryConfigurationTests
     public void AzureMonitor_Disabled_WhenVersionFlagProvided()
     {
         var configuration = new ConfigurationBuilder().Build();
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-
-        var manager = new TelemetryManager(configuration, tagsSource, ["--version"]);
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance, ["--version"]);
+        manager.Initialize();
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -270,9 +343,9 @@ public class TelemetryConfigurationTests
     public void AzureMonitor_Disabled_ForAllHelpFlags(string flag)
     {
         var configuration = new ConfigurationBuilder().Build();
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-
-        var manager = new TelemetryManager(configuration, tagsSource, [flag]);
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance, [flag]);
+        manager.Initialize();
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -288,9 +361,9 @@ public class TelemetryConfigurationTests
                 [AspireCliTelemetry.TelemetryOptOutConfigKey] = optOutValue
             })
             .Build();
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-
-        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        manager.Initialize();
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -299,9 +372,9 @@ public class TelemetryConfigurationTests
     public void AzureMonitor_Enabled_ForAgentTelemetry_WhenNoOptOutSet()
     {
         var configuration = new ConfigurationBuilder().Build();
-        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
-
-        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        using var fixture = new TelemetryFixture(initialize: false);
+        using var manager = new TelemetryManager(configuration, fixture.TagsSource, fixture.Telemetry, NullLogger<TelemetryManager>.Instance, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+        manager.Initialize();
 
         Assert.True(manager.HasAzureMonitor);
     }

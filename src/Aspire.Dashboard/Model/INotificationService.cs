@@ -61,7 +61,7 @@ public sealed class NotificationEntry
 {
     public required string Title { get; init; }
     public string? Body { get; init; }
-    public required MessageIntent Intent { get; init; }
+    public required MessageBarIntent Intent { get; init; }
     public DateTimeOffset Timestamp { get; set; }
     public NotificationAction? PrimaryAction { get; init; }
 }

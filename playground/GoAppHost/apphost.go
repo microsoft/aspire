@@ -3,7 +3,7 @@
 //
 // To run:
 //
-//	aspire config set features:experimentalPolyglot:go true --global
+//	aspire config set features:experimentalPolyglotGo true --global
 //	aspire run
 package main
 

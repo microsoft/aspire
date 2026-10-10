@@ -49,18 +49,33 @@ import type * as vscode from 'vscode';
  * catalog tracks (event, property) pairs — every common property duplicates
  * into a row for every event. The set is deliberately tiny.
  */
-export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_target_versions' | 'apphost_present';
+export type CommonTelemetryProperty =
+    | 'apphost_languages'
+    | 'apphost_target_versions'
+    | 'apphost_present'
+    | 'is_microsoft_internal'
+    | 'microsoft_internal_alias'
+    | 'microsoft_internal_domain';
 
 /**
  * Per-event schema. Each entry lists the event-specific properties and
  * measurements the event is permitted to carry. {@link CommonTelemetryProperty}
  * values are implicitly merged in by the {@link sendTelemetryEvent} wrapper
- * and need not be repeated here.
+ * and need not be repeated here. Survey events allow only the coarse internal
+ * cohort property from this bag, never employee alias/domain or AppHost context.
  *
  * Use `never` for `properties` or `measurements` when the event has no
  * event-specific entries of that kind.
  */
 export interface TelemetryEventSchema {
+    'aspire/vscode/survey/invitation': {
+        properties: 'campaign_id' | 'question_id';
+        measurements: never;
+    };
+    'aspire/vscode/survey/result': {
+        properties: 'campaign_id' | 'question_id' | 'outcome';
+        measurements: never;
+    };
     // ── Extension-emitted events ────────────────────────────────────────────
     'aspire/vscode/extension/activated': {
         properties: 'workspace_open' | 'extension_mode';
@@ -69,6 +84,27 @@ export interface TelemetryEventSchema {
     'aspire/vscode/command/invoked': {
         properties: 'command' | 'outcome' | 'source' | 'error_kind';
         measurements: 'duration_ms';
+    };
+    'aspire/vscode/editorassistance/result': {
+        properties:
+            | 'tool'
+            | 'outcome'
+            | 'source'
+            | 'scope'
+            | 'controller'
+            | 'mode'
+            | 'stage'
+            | 'category'
+            | 'provider_kind'
+            | 'state_bucket'
+            | 'error_kind'
+            | 'exit_code_bucket'
+            | 'presentation';
+        measurements: 'duration_ms';
+    };
+    'aspire/vscode/launchfailure/recorded': {
+        properties: 'stage' | 'category' | 'controller' | 'mode' | 'provider_kind' | 'exit_code_bucket';
+        measurements: 'store_size';
     };
     'aspire/vscode/cli/availability': {
         properties: 'available' | 'source' | 'operation';
@@ -216,15 +252,21 @@ export type TelemetryPropertyValue = string | vscode.TelemetryTrustedValue<strin
 
 /**
  * Property bag accepted by {@link sendTelemetryEvent} for a given event name.
- * The set is the event's own properties plus {@link CommonTelemetryProperty}
- * (which are merged in by the wrapper).
+ * The set is the event's own properties plus the common properties allowed for
+ * that event (which are merged in by the wrapper).
  *
  * Using `Partial<Record<...>>` keeps each property optional while binding the
  * key set to the registry. Assignments to unknown keys (e.g. `props.foo = ...`)
  * are rejected by the type checker.
  */
 export type EventProperties<E extends KnownTelemetryEventName> =
-    Partial<Record<TelemetryEventSchema[E]['properties'] | CommonTelemetryProperty, TelemetryPropertyValue>>;
+    Partial<Record<
+        TelemetryEventSchema[E]['properties'] |
+        (E extends 'aspire/vscode/survey/invitation' | 'aspire/vscode/survey/result'
+            ? 'is_microsoft_internal'
+            : CommonTelemetryProperty),
+        TelemetryPropertyValue
+    >>;
 
 /**
  * Numeric measurement bag accepted by {@link sendTelemetryEvent} for a given

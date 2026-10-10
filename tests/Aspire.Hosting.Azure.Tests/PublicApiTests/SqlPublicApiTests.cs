@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class SqlPublicApiTests
+public class SqlPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(false)]
@@ -102,7 +102,7 @@ public class SqlPublicApiTests
     [InlineData(true)]
     public void AddAzureSqlServerShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureSqlServer(name);
@@ -130,7 +130,7 @@ public class SqlPublicApiTests
     [InlineData(true)]
     public void AddDatabaseShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureSqlServer("sql-server");
         var name = isNull ? null! : string.Empty;
 

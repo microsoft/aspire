@@ -4,27 +4,34 @@
 using System.IO.Hashing;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Npm;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
+using Aspire.TypeSystem;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Projects;
 
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class GuestAppHostProjectTests : IDisposable
 {
     private readonly TemporaryWorkspace _workspace;
@@ -43,6 +50,321 @@ public class GuestAppHostProjectTests : IDisposable
         _profilingTelemetry.Dispose();
         _workspace.Dispose();
         GC.SuppressFinalize(this);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("false")]
+    public async Task NpmIntegrationHosts_DisabledFeatureRejectsBeforeSdkPreparation(string? enabled)
+    {
+        var root = _workspace.WorkspaceRoot;
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, "apphost.mts"), "// test apphost");
+        new AspireConfigFile
+        {
+            Packages = new Dictionary<string, PackageEntry>
+            {
+                ["@test/integration"] = PackageEntry.Npm("integration/host.mts")
+            }
+        }.Save(root.FullName);
+        var project = CreateGuestAppHostProject(
+            configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["features:experimentalHostingIntegrations"] = enabled
+            }).Build(),
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (_, _) => throw new InvalidOperationException("SDK preparation must not start.")
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(ErrorStrings.HostingIntegrationsFeatureNotEnabled, exception.Message);
+    }
+
+    [Fact]
+    public async Task NpmIntegrationHosts_ProjectOptInWorksOutsideCliConfigurationScope()
+    {
+        var root = _workspace.WorkspaceRoot;
+        await File.WriteAllTextAsync(Path.Combine(root.FullName, "apphost.mts"), "// test apphost");
+        new AspireConfigFile
+        {
+            Features = new Dictionary<string, bool>
+            {
+                [KnownFeatures.ExperimentalHostingIntegrations] = true
+            },
+            Packages = new Dictionary<string, PackageEntry>
+            {
+                ["@test/integration"] = PackageEntry.Npm("integration/host.mts")
+            }
+        }.Save(root.FullName);
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: new TestAppHostServerProjectFactory
+            {
+                CreateAsyncCallback = (_, _) => throw new InvalidOperationException("Project opt-in accepted.")
+            });
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            project.BuildAndGenerateSdkAsync(root, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal("Project opt-in accepted.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("restore", 0, 0)]
+    [InlineData("restore", 4, 0)]
+    [InlineData("restore", 0, 3)]
+    [InlineData("run", 0, 0)]
+    [InlineData("run", 4, 0)]
+    [InlineData("run", 0, 3)]
+    [InlineData("publish", 0, 0)]
+    [InlineData("publish", 4, 0)]
+    [InlineData("publish", 0, 3)]
+    public async Task NpmIntegrationHosts_GenerateCoreSdkBeforeLifecycleScriptsAndFinalServer(string operation, int hostInstallExitCode, int guestInstallExitCode)
+    {
+        var root = _workspace.WorkspaceRoot;
+        var appDirectory = root.CreateSubdirectory("app");
+        var integrationDirectory = root.CreateSubdirectory("integration");
+        var binDirectory = root.CreateSubdirectory("tools");
+        var appHostFile = new FileInfo(Path.Combine(appDirectory.FullName, "apphost.mts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test apphost");
+        new AspireConfigFile
+        {
+            Packages = new Dictionary<string, PackageEntry>
+            {
+                ["@test/integration"] = PackageEntry.Npm("integration/host.mts")
+            }
+        }.Save(root.FullName);
+
+        ProcessTestHelpers.CreateScript(
+            binDirectory, "npm",
+            $$"""
+            test -f ../app/.aspire/modules/aspire.mts || exit 91
+            printf installed > installed.txt
+            exit {{hostInstallExitCode}}
+            """,
+            $$"""
+            @echo off
+            if not exist ..\app\.aspire\modules\aspire.mts exit /b 91
+            > installed.txt echo installed
+            exit /b {{hostInstallExitCode}}
+            """);
+        var guestInstaller = ProcessTestHelpers.CreateScript(
+            binDirectory, "guest-install",
+            $$"""
+            test -f .aspire/modules/aspire.mts || exit 91
+            printf installed > app-installed.txt
+            exit {{guestInstallExitCode}}
+            """,
+            $$"""
+            @echo off
+            if not exist .aspire\modules\aspire.mts exit /b 91
+            > app-installed.txt echo installed
+            exit /b {{guestInstallExitCode}}
+            """);
+        using var pathOverride = new EnvVarOverride("PATH", binDirectory.FullName + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH"));
+        using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD;.EXE;.BAT") : null;
+
+        var sessionCount = 0;
+        var generationCount = 0;
+        var hostRestoredBeforeBootstrap = true;
+        var bootstrapCompletedBeforeFinalServer = false;
+        FakeAppHostServerSession? bootstrapSession = null;
+        var rpcClient = new FakeAppHostRpcClient
+        {
+            RuntimeSpec = new RuntimeSpec
+            {
+                Language = "test/runtime",
+                DisplayName = "Test",
+                CodeGenLanguage = "TypeScript",
+                DetectionPatterns = ["apphost.mts"],
+                Execute = new CommandSpec { Command = guestInstaller, Args = [] },
+                InstallDependencies = new CommandSpec { Command = guestInstaller, Args = [] }
+            },
+            GenerateCodeAsyncCallback = (_, _) =>
+            {
+                generationCount++;
+                return Task.FromResult(new Dictionary<string, string> { ["aspire.mts"] = generationCount == 1 ? "core" : "combined" });
+            }
+        };
+        var sessionFactory = new FakeAppHostServerSessionFactory
+        {
+            CreateCallback = () =>
+            {
+                sessionCount++;
+                if (sessionCount == 1)
+                {
+                    bootstrapSession = new FakeAppHostServerSession(rpcClient)
+                    {
+                        StartAsyncCallback = () =>
+                        {
+                            hostRestoredBeforeBootstrap = File.Exists(Path.Combine(integrationDirectory.FullName, "installed.txt"));
+                            return Task.CompletedTask;
+                        }
+                    };
+                    return bootstrapSession;
+                }
+
+                bootstrapCompletedBeforeFinalServer = bootstrapSession?.HasServerExited == true
+                    && File.Exists(Path.Combine(appDirectory.FullName, "app-installed.txt"))
+                    && File.Exists(Path.Combine(integrationDirectory.FullName, "installed.txt"));
+                return operation == "restore"
+                    ? new FakeAppHostServerSession(rpcClient)
+                    : new FakeAppHostServerSession
+                    {
+                        GetRpcClientAsyncCallback = _ => Task.FromException<IAppHostRpcClient>(
+                            new InvalidOperationException("Stop after the final server starts."))
+                    };
+            }
+        };
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var project = CreateGuestAppHostProject(
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory,
+            configuration: new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["features:experimentalHostingIntegrations"] = "true"
+            }).Build(),
+            languageId: "test/runtime");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var buildCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannelCompletion = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        int result;
+        if (operation == "restore")
+        {
+            result = await project.BuildAndGenerateSdkAsync(appDirectory, cancellationToken: cancellationToken).DefaultTimeout() ? 0 : 1;
+        }
+        else if (operation == "run")
+        {
+            result = await project.RunAsync(new AppHostProjectContext
+            {
+                AppHostFile = appHostFile,
+                WorkingDirectory = appDirectory,
+                EnvironmentVariables = new Dictionary<string, string>(),
+                BuildCompletionSource = buildCompletion
+            }, cancellationToken).DefaultTimeout();
+            Assert.False(await buildCompletion.Task.DefaultTimeout());
+        }
+        else
+        {
+            result = await project.PublishAsync(new PublishContext
+            {
+                AppHostFile = appHostFile,
+                WorkingDirectory = appDirectory,
+                BackchannelCompletionSource = backchannelCompletion
+            }, cancellationToken).DefaultTimeout();
+            Assert.True(backchannelCompletion.Task.IsFaulted);
+        }
+
+        var installsSucceeded = hostInstallExitCode == 0 && guestInstallExitCode == 0;
+        Assert.Equal(installsSucceeded ? 2 : 1, sessionCount);
+        Assert.False(hostRestoredBeforeBootstrap);
+        Assert.Equal(guestInstallExitCode == 0, File.Exists(Path.Combine(integrationDirectory.FullName, "installed.txt")));
+        Assert.Equal(installsSucceeded, bootstrapCompletedBeforeFinalServer);
+        var environments = sessionFactory.CreatedSessionEnvironments.ToArray();
+        Assert.Equal(sessionCount, environments.Length);
+        if (environments.Length > 0)
+        {
+            Assert.Equal("true", environments[0]![KnownConfigNames.IntegrationHostBootstrap]);
+        }
+        if (environments.Length > 1)
+        {
+            Assert.False(environments[1]?.ContainsKey(KnownConfigNames.IntegrationHostBootstrap) ?? false);
+        }
+
+        if (operation == "restore" && installsSucceeded)
+        {
+            Assert.Equal(0, result);
+            Assert.Equal(2, generationCount);
+            Assert.Equal("combined", await File.ReadAllTextAsync(Path.Combine(appDirectory.FullName, ".aspire", "modules", "aspire.mts")));
+        }
+        else
+        {
+            Assert.NotEqual(0, result);
+        }
+    }
+
+    [Theory]
+    [InlineData(0, true)]
+    [InlineData(3, false)]
+    public async Task InstallIntegrationHostPackageAsync_ReportsExitCodeAndClosesInput(int exitCode, bool expectedSuccess)
+    {
+        var directory = _workspace.WorkspaceRoot.CreateSubdirectory("integration with spaces");
+        var npmPath = ProcessTestHelpers.CreateScript(
+            directory,
+            "npm",
+            $$"""
+            printf '%s\n' "$@" > arguments.txt
+            read line
+            printf 'final stdout\n'
+            printf 'final stderr\n' >&2
+            exit {{exitCode}}
+            """,
+            $$"""
+            @echo off
+            > arguments.txt echo %~1
+            set /p input=
+            echo final stdout
+            echo final stderr >&2
+            exit /b {{exitCode}}
+            """);
+
+        var result = await CreateGuestAppHostProject().InstallIntegrationHostPackageAsync(
+            "@test/integration", npmPath, directory.FullName, TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(expectedSuccess, result);
+        Assert.Equal(["install"], await File.ReadAllLinesAsync(Path.Combine(directory.FullName, "arguments.txt")));
+    }
+
+    [Fact]
+    public async Task InstallIntegrationHostPackageAsync_CancellationStopsProcessTree()
+    {
+        var directory = _workspace.WorkspaceRoot.CreateSubdirectory("integration with spaces");
+        var npmPath = ProcessTestHelpers.CreateScript(
+            directory,
+            "npm",
+            """
+            sleep 300 &
+            echo $! > child.pid
+            echo $$ > parent.pid
+            wait
+            """,
+            """
+            @echo off
+            powershell.exe -NoLogo -NoProfile -NonInteractive -Command "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 300' -PassThru; Set-Content child.pid $child.Id; Set-Content parent.pid $PID; Wait-Process -Id $child.Id"
+            """);
+        using var installCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var installTask = CreateGuestAppHostProject().InstallIntegrationHostPackageAsync(
+            "@test/integration", npmPath, directory.FullName, installCts.Token);
+        int? parentPid = null;
+        int? childPid = null;
+        try
+        {
+            using var readinessCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            parentPid = await ProcessTestHelpers.WaitForProcessIdAsync(Path.Combine(directory.FullName, "parent.pid"), readinessCts.Token);
+            childPid = await ProcessTestHelpers.WaitForProcessIdAsync(Path.Combine(directory.FullName, "child.pid"), readinessCts.Token);
+
+            installCts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => installTask).DefaultTimeout();
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(parentPid.Value, TimeSpan.FromSeconds(5)));
+            Assert.True(ProcessTestHelpers.WaitForProcessExit(childPid.Value, TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            installCts.Cancel();
+            if (childPid is { } child)
+            {
+                ProcessTestHelpers.TryKillProcess(child);
+            }
+            if (parentPid is { } parent)
+            {
+                ProcessTestHelpers.TryKillProcess(parent);
+            }
+        }
     }
 
     [Fact]
@@ -281,8 +603,8 @@ public class GuestAppHostProjectTests : IDisposable
         var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
 
         // Assert - should include base package (Aspire.Hosting) plus explicit packages
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && !r.IsProjectReference);
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && !r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && r.Source != IntegrationSource.Project);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && r.Source != IntegrationSource.Project);
         Assert.Equal(2, refs.Count);
     }
 
@@ -367,13 +689,13 @@ public class GuestAppHostProjectTests : IDisposable
         var refs = config.GetIntegrationReferences("13.1.0", "/home/user/app").ToList();
 
         // Assert
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.IsPackageReference);
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.IsPackageReference);
-        var projectRef = Assert.Single(refs, r => r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Source == IntegrationSource.Nuget);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Source == IntegrationSource.Nuget);
+        var projectRef = Assert.Single(refs, r => r.Source == IntegrationSource.Project);
         Assert.Equal("Aspire.Hosting.MyCustom", projectRef.Name);
         Assert.Null(projectRef.Version);
-        Assert.NotNull(projectRef.ProjectPath);
-        Assert.EndsWith(".csproj", projectRef.ProjectPath);
+        Assert.NotNull(projectRef.Path);
+        Assert.EndsWith(".csproj", projectRef.Path);
     }
 
     [Fact]
@@ -716,7 +1038,7 @@ public class GuestAppHostProjectTests : IDisposable
     /// <remarks>
     /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> through the
     /// code path that detects updates, then expects the call to throw from
-    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync"/>
+    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync(string, CancellationToken)"/>
     /// throws. The on-disk config should still contain the original versions.
     /// </remarks>
     [Fact]
@@ -753,12 +1075,21 @@ public class GuestAppHostProjectTests : IDisposable
             interactionService: interactionService,
             identityChannel: "pr-99999");
 
+        var additionalStepApplied = false;
         var context = new UpdatePackagesContext
         {
             AppHostFile = new FileInfo(appHostPath),
             Channel = implicitChannel,
             ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+            AdditionalUpdateSteps =
+            [
+                CreateRepositoryToolUpdateStep(() =>
+                {
+                    additionalStepApplied = true;
+                    return Task.CompletedTask;
+                })
+            ]
         };
 
         await Assert.ThrowsAnyAsync<Exception>(
@@ -768,8 +1099,266 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
         Assert.NotNull(reloaded.Packages);
-        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"].Version);
         Assert.Null(reloaded.Channel);
+        Assert.False(additionalStepApplied);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_AppliesRepositoryToolStepAfterRegenerationAndConfigSave()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var originalConfig = await File.ReadAllBytesAsync(configPath);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var installScriptPath = Path.Combine(_workspace.WorkspaceRoot.FullName, OperatingSystem.IsWindows() ? "install.cmd" : "install.sh");
+        await File.WriteAllTextAsync(installScriptPath, OperatingSystem.IsWindows()
+            ? "@echo off\r\ncopy /y package.after-install.json package.json >nul\r\nif errorlevel 1 exit /b 1\r\necho installed> install.marker\r\n"
+            : "cp package.after-install.json package.json && printf installed > install.marker\n");
+        var installMarkerPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "install.marker");
+        var runtimeSpec = new RuntimeSpec
+        {
+            Language = "test/runtime",
+            DisplayName = "Test runtime",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec { Command = "unused", Args = [] },
+            InstallDependencies = new CommandSpec
+            {
+                Command = OperatingSystem.IsWindows() ? Path.Combine(Environment.SystemDirectory, "cmd.exe") : "/bin/sh",
+                Args = OperatingSystem.IsWindows() ? ["/d", "/c", installScriptPath] : [installScriptPath]
+            }
+        };
+        var events = new List<string>();
+        var session = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec })
+        {
+            StartAsyncCallback = async () =>
+            {
+                Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath));
+                events.Add("regenerate");
+            }
+        };
+        var interaction = new TestInteractionService();
+        _workspace.CreateDirectory(".git");
+        var manifestPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "package.json");
+        const string originalManifest = """{"name":"app","devDependencies":{"@microsoft/aspire-cli":"1.0.0"},"scripts":{"start":"aspire run"}}""";
+        const string installedManifest = """{"name":"app","devDependencies":{"@microsoft/aspire-cli":"1.0.0"},"scripts":{"start":"aspire run","build":"tsc"},"custom":"preserve install changes"}""";
+        await File.WriteAllTextAsync(manifestPath, originalManifest);
+        await File.WriteAllTextAsync(Path.Combine(_workspace.WorkspaceRoot.FullName, "package.after-install.json"), installedManifest);
+        var npm = new FakeNpmRunner
+        {
+            ResolvePackageAsyncCallback = (_, _, _) => Task.FromResult<NpmPackageInfo?>(new() { Version = SemVersion.Parse("2.0.0") })
+        };
+        var repositoryUpdater = new RepositoryToolUpdater(npm, interaction, NullLogger<RepositoryToolUpdater>.Instance);
+        var manifests = await repositoryUpdater.FindManifestsAsync(_workspace.WorkspaceRoot, CancellationToken.None);
+        var channel = CreateGuestUpdateChannel("2.0.0", explicitChannel: false);
+        var repositoryStep = await repositoryUpdater.GetUpdateStepAsync(manifests, channel, CancellationToken.None);
+        Assert.NotNull(repositoryStep);
+        interaction.ConfirmCallback = (_, _) =>
+        {
+            Assert.Equal(
+                ["Aspire SDK 1.0.0 to 2.0.0", "Aspire.Hosting 1.0.0 to 2.0.0", Markup.Remove(repositoryStep.GetFormattedDisplayText())],
+                interaction.DisplayedMessages.Select(message => Markup.Remove(message.Message)));
+            events.Add("confirm");
+            return true;
+        };
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var project = CreateGuestAppHostProject(
+            interactionService: interaction,
+            appHostServerProjectFactory: factory,
+            serverSessionFactory: new FakeAppHostServerSessionFactory { Session = session },
+            languageId: "test/runtime");
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = channel,
+            ConfirmBinding = PromptBinding.CreateDefault(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+            AdditionalUpdateSteps =
+            [
+                repositoryStep with
+                {
+                    Callback = async () =>
+                    {
+                        Assert.Equal("installed", (await File.ReadAllTextAsync(installMarkerPath)).Trim());
+                        Assert.Equal(0, session.TryGetServerExitCode());
+                        var savedConfig = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+                        Assert.NotNull(savedConfig);
+                        Assert.Equal("2.0.0", savedConfig.SdkVersion);
+                        Assert.Equal(IntegrationSource.Nuget, savedConfig.Packages?["Aspire.Hosting"].Source);
+                        Assert.Equal("2.0.0", savedConfig.Packages?["Aspire.Hosting"].Version);
+                        Assert.Equal(installedManifest, await File.ReadAllTextAsync(manifestPath));
+                        await repositoryStep.Callback();
+                        events.Add("apply");
+                    }
+                }
+            ]
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.True(result.UpdatesApplied);
+        Assert.Equal(["confirm", "regenerate", "apply"], events);
+        var updatedManifest = JsonNode.Parse(await File.ReadAllTextAsync(manifestPath))!;
+        var expectedManifest = JsonNode.Parse(installedManifest)!;
+        expectedManifest["devDependencies"]!["@microsoft/aspire-cli"] = "2.0.0";
+        Assert.True(JsonNode.DeepEquals(expectedManifest, updatedManifest));
+        Assert.Single(interaction.BooleanPromptCalls);
+        Assert.Equal(
+            [UpdateCommandStrings.RepositoryToolsUpdated, UpdateCommandStrings.UpdateSuccessfulMessage],
+            interaction.DisplayedSuccess);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_UnsuccessfulRegenerationDoesNotApplyAdditionalSteps()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var originalConfig = await File.ReadAllBytesAsync(configPath);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var interaction = new TestInteractionService { ConfirmCallback = (_, _) => true };
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) => Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+        };
+        var project = CreateGuestAppHostProject(interactionService: interaction, appHostServerProjectFactory: factory);
+        var additionalStepApplied = false;
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = CreateGuestUpdateChannel("2.0.0", explicitChannel: true),
+            ConfirmBinding = PromptBinding.CreateDefault(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+            AdditionalUpdateSteps =
+            [
+                CreateRepositoryToolUpdateStep(() =>
+                {
+                    additionalStepApplied = true;
+                    return Task.CompletedTask;
+                })
+            ]
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.False(result.UpdatesApplied);
+        Assert.False(additionalStepApplied);
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath));
+        Assert.Empty(interaction.DisplayedSuccess);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdatePackagesAsync_DecliningAdditionalStepsDoesNotMutateConfig(bool projectUpdate)
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var originalConfig = await File.ReadAllBytesAsync(configPath);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var interaction = new TestInteractionService { ConfirmCallback = (_, _) => false };
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) => throw new InvalidOperationException("Declined updates must not regenerate or install dependencies.")
+        };
+        var project = CreateGuestAppHostProject(interactionService: interaction, appHostServerProjectFactory: factory);
+        var additionalStepApplied = false;
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = CreateGuestUpdateChannel(projectUpdate ? "2.0.0" : "1.0.0", explicitChannel: true),
+            ConfirmBinding = PromptBinding.CreateDefault(true),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+            AdditionalUpdateSteps =
+            [
+                CreateRepositoryToolUpdateStep(() =>
+                {
+                    additionalStepApplied = true;
+                    return Task.CompletedTask;
+                })
+            ]
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.False(result.UpdatesApplied);
+        Assert.False(additionalStepApplied);
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath));
+        Assert.Single(interaction.BooleanPromptCalls);
+        Assert.Empty(interaction.DisplayedSuccess);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_UpToDateProjectAppliesAdditionalStepsWithoutRegeneration()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+        var originalConfig = await File.ReadAllBytesAsync(configPath);
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var interaction = new TestInteractionService();
+        interaction.ConfirmCallback = (_, _) =>
+        {
+            Assert.Equal("@microsoft/aspire-cli 1.0.0 to 2.0.0", Markup.Remove(Assert.Single(interaction.DisplayedMessages).Message));
+            return true;
+        };
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) => throw new InvalidOperationException("Tool-only updates must not regenerate or install dependencies.")
+        };
+        var project = CreateGuestAppHostProject(interactionService: interaction, appHostServerProjectFactory: factory);
+        var additionalStepCalls = 0;
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = CreateGuestUpdateChannel("1.0.0", explicitChannel: false),
+            ConfirmBinding = PromptBinding.CreateDefault(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+            AdditionalUpdateSteps =
+            [
+                CreateRepositoryToolUpdateStep(async () =>
+                {
+                    Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath));
+                    additionalStepCalls++;
+                })
+            ]
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.True(result.UpdatesApplied);
+        Assert.Equal(1, additionalStepCalls);
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath));
+        Assert.Single(interaction.BooleanPromptCalls);
+        Assert.Single(interaction.DisplayedMessages);
+        Assert.Single(interaction.DisplayedSuccess);
     }
 
     [Fact]
@@ -809,7 +1398,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
         Assert.NotNull(reloaded.Packages);
-        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"].Version);
         Assert.False(reloaded.Packages.ContainsKey("Aspire.Hosting.Redis"));
     }
 
@@ -890,7 +1480,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
-        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages?["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"].Version);
     }
 
     [Fact]
@@ -945,7 +1536,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Null(reloaded.Channel);
         Assert.Equal("1.0.0", reloaded.SdkVersion);
-        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages?["Aspire.Hosting"].Source);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"].Version);
     }
 
     [Fact]
@@ -996,7 +1588,8 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.NotNull(reloaded);
         Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
         Assert.Equal("2.0.0", reloaded.SdkVersion);
-        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
+        Assert.Equal(IntegrationSource.Nuget, reloaded.Packages?["Aspire.Hosting"].Source);
+        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"].Version);
     }
 
     /// <summary>
@@ -1135,6 +1728,8 @@ public class GuestAppHostProjectTests : IDisposable
     [Fact]
     public async Task RunAsync_PassesWorkloadIdToAppHostServerEnvironment()
     {
+        const string image = "example.com/aspire-tunnel:configured";
+
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
         var appHostFile = new FileInfo(appHostPath);
@@ -1157,7 +1752,13 @@ public class GuestAppHostProjectTests : IDisposable
         };
         var project = CreateGuestAppHostProject(
             appHostServerProjectFactory: projectFactory,
-            serverSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory,
+            configuration: new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [AspireConfigContainerTunnel.BaseImageConfigPath] = image
+                })
+                .Build());
 
         var context = new AppHostProjectContext
         {
@@ -1172,6 +1773,75 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.True(serverSession.StartAsyncCalled);
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
+        Assert.Equal(image, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.ContainerTunnelBaseImage]);
+    }
+
+    [Fact]
+    public async Task RunAsync_SignalsBuildCompletionAfterGuestAppHostLaunches()
+    {
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var appHostFile = new FileInfo(appHostPath);
+        var buildCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var launchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowLaunchToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var extensionBackchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) => Task.FromResult(capability == "node")
+        };
+        using var extensionServices = new ServiceCollection()
+            .AddSingleton<IExtensionBackchannel>(extensionBackchannel)
+            .BuildServiceProvider();
+        var interactionService = new TestExtensionInteractionService(extensionServices)
+        {
+            LaunchAppHostAsyncCallback = async () =>
+            {
+                launchStarted.TrySetResult();
+                await allowLaunchToComplete.Task;
+            }
+        };
+
+        var runtimeSpec = new RuntimeSpec
+        {
+            Language = "typescript/nodejs",
+            DisplayName = "TypeScript (Node.js)",
+            CodeGenLanguage = "TypeScript",
+            DetectionPatterns = ["apphost.ts"],
+            Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] },
+            ExtensionLaunchCapability = "node"
+        };
+        var serverSession = new FakeAppHostServerSession(new FakeAppHostRpcClient { RuntimeSpec = runtimeSpec });
+        var sessionFactory = new FakeAppHostServerSessionFactory { Session = serverSession };
+        var projectFactory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        };
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            appHostServerProjectFactory: projectFactory,
+            serverSessionFactory: sessionFactory);
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>(),
+            BuildCompletionSource = buildCompletionSource,
+            BackchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        using var cancellationSource = new CancellationTokenSource();
+
+        var runTask = project.RunAsync(context, cancellationSource.Token);
+        await launchStarted.Task.DefaultTimeout();
+
+        Assert.False(buildCompletionSource.Task.IsCompleted);
+
+        allowLaunchToComplete.TrySetResult();
+        Assert.True(await buildCompletionSource.Task.DefaultTimeout());
+
+        await cancellationSource.CancelAsync();
+        Assert.Equal(CliExitCodes.Cancelled, await runTask.DefaultTimeout());
     }
 
     [Fact]
@@ -1234,13 +1904,33 @@ public class GuestAppHostProjectTests : IDisposable
     private GuestAppHostProject CreateGuestAppHostProject()
         => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
 
+    private PackageUpdateStep CreateRepositoryToolUpdateStep(Func<Task> callback)
+        => new(
+            "Update repository CLI reference",
+            callback,
+            "@microsoft/aspire-cli",
+            "1.0.0",
+            "2.0.0",
+            new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "package.json")));
+
+    private static PackageChannel CreateGuestUpdateChannel(string version, bool explicitChannel)
+    {
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+            [
+                new() { Id = packageId, Version = version, Source = "test" }
+            ])
+        };
+        return explicitChannel
+            ? PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [], cache, new TestFeatures(), NullLogger.Instance)
+            : PackageChannel.CreateImplicitChannel(cache, new TestFeatures(), NullLogger.Instance);
+    }
+
     /// <summary>
     /// Regression test for https://github.com/microsoft/aspire/issues/18103:
-    /// During <c>aspire update</c>, the code-generation step calls
-    /// <c>WarnIfCliSdkVersionSkew</c> which reads the SDK version from disk. At that
-    /// point the in-memory config has already been updated to the CLI's version, but
-    /// the file hasn't been saved yet. The method should not emit a version-skew warning
-    /// when the update is actively aligning versions.
+    /// During <c>aspire update</c>, the on-disk SDK version is stale. Code generation
+    /// should not warn when the target SDK is no newer than the CLI.
     /// </summary>
     /// <remarks>
     /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> to demonstrate
@@ -1250,10 +1940,12 @@ public class GuestAppHostProjectTests : IDisposable
     /// succeeds. The assertion validates that the skew-warning method does not emit a spurious
     /// warning for the stale on-disk version when the update is aligning versions to the CLI.
     /// </remarks>
-    [Fact]
-    public async Task UpdatePackagesAsync_DoesNotEmitStaleVersionSkewWarningDuringUpdate()
+    [Theory]
+    [InlineData("13.5.4", "13.5.4")]
+    [InlineData("13.6.0", "13.5.4")]
+    [InlineData("13.6.0-pr.19847.g8be64f3a", "13.5.4")]
+    public async Task UpdatePackagesAsync_DoesNotEmitStaleVersionSkewWarningDuringUpdate(string cliVersion, string updateTargetVersion)
     {
-        var cliVersion = VersionHelper.GetDefaultSdkVersion();
         var staleVersion = "1.0.0";
 
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
@@ -1267,96 +1959,6 @@ public class GuestAppHostProjectTests : IDisposable
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
 
-        // Return the CLI version as the latest available, so aspire update would align them.
-        var fakeCache = new FakeNuGetPackageCache
-        {
-            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
-                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
-                [
-                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = cliVersion, Source = "test" }
-                ])
-        };
-
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
-
-        var interactionService = new TestInteractionService
-        {
-            ConfirmCallback = (_, _) => true
-        };
-
-        var factory = new TestAppHostServerProjectFactory
-        {
-            CreateAsyncCallback = (appPath, _) =>
-                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
-        };
-
-        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
-
-        var project = CreateGuestAppHostProject(
-            interactionService: interactionService,
-            appHostServerProjectFactory: factory,
-            serverSessionFactory: sessionFactory);
-
-        var context = new UpdatePackagesContext
-        {
-            AppHostFile = new FileInfo(appHostPath),
-            Channel = implicitChannel,
-            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
-            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
-        };
-
-        // UpdatePackagesAsync will go through BuildAndGenerateSdkAsync → GenerateCodeViaRpcAsync
-        // which calls WarnIfCliSdkVersionSkew reading the stale on-disk config.
-        // It should NOT warn because the update is aligning versions to match the CLI.
-        await project.UpdatePackagesAsync(context, CancellationToken.None);
-
-        Assert.Empty(interactionService.DisplayedErrors);
-        Assert.Collection(interactionService.DisplayedMessages,
-            m =>
-            {
-                Assert.Equal("package", m.Emoji.Name);
-                Assert.Equal($"Aspire SDK {staleVersion} to {cliVersion}", Markup.Remove(m.Message));
-            },
-            m =>
-            {
-                Assert.Equal("package", m.Emoji.Name);
-                Assert.Equal($"Aspire.Hosting {staleVersion} to {cliVersion}", Markup.Remove(m.Message));
-            },
-            m =>
-            {
-                Assert.Equal("warning", m.Emoji.Name);
-                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
-            },
-            m =>
-            {
-                Assert.Equal("package", m.Emoji.Name);
-                Assert.Equal(UpdateCommandStrings.RegeneratedSdkCode, m.Message);
-            });
-    }
-
-    /// <summary>
-    /// Verifies that <c>WarnIfCliSdkVersionSkew</c> emits the
-    /// <see cref="ErrorStrings.CodegenVersionSkewWarning"/> when the on-disk SDK version
-    /// genuinely differs from the CLI version and the update target does NOT align them.
-    /// </summary>
-    [Fact]
-    public async Task UpdatePackagesAsync_EmitsVersionSkewWarningWhenTargetDiffersFromCli()
-    {
-        var staleVersion = "1.0.0";
-        var updateTargetVersion = "2.0.0"; // Different from CLI version — legitimate skew
-
-        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
-        await File.WriteAllTextAsync(configPath, $$"""
-            {
-              "sdk": { "version": "{{staleVersion}}" },
-              "packages": { "Aspire.Hosting": "{{staleVersion}}" }
-            }
-            """);
-
-        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
-        await File.WriteAllTextAsync(appHostPath, "// test apphost");
-
-        // Return a version that does NOT match the CLI version — the skew is genuine.
         var fakeCache = new FakeNuGetPackageCache
         {
             GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
@@ -1384,7 +1986,8 @@ public class GuestAppHostProjectTests : IDisposable
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            serverSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory,
+            identityVersion: cliVersion);
 
         var context = new UpdatePackagesContext
         {
@@ -1394,15 +1997,9 @@ public class GuestAppHostProjectTests : IDisposable
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
         };
 
-        await project.UpdatePackagesAsync(context, CancellationToken.None);
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
 
-        var cliVersion = VersionHelper.GetDefaultSdkVersion();
-        var expectedWarning = string.Format(
-            System.Globalization.CultureInfo.CurrentCulture,
-            ErrorStrings.CodegenVersionSkewWarning,
-            cliVersion,
-            staleVersion);
-
+        Assert.True(result.UpdatesApplied);
         Assert.Empty(interactionService.DisplayedErrors);
         Assert.Collection(interactionService.DisplayedMessages,
             m =>
@@ -1418,7 +2015,102 @@ public class GuestAppHostProjectTests : IDisposable
             m =>
             {
                 Assert.Equal("warning", m.Emoji.Name);
-                Assert.Contains(expectedWarning, m.Message);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
+            },
+            m =>
+            {
+                Assert.Equal("package", m.Emoji.Name);
+                Assert.Equal(UpdateCommandStrings.RegeneratedSdkCode, m.Message);
+            });
+    }
+
+    /// <summary>
+    /// Verifies that <c>WarnIfCliSdkVersionSkew</c> emits the
+    /// <see cref="ErrorStrings.CodegenVersionSkewWarning"/> for an SDK update target
+    /// newer than the CLI, even when the on-disk SDK is older than or equal to the CLI.
+    /// </summary>
+    [Theory]
+    [InlineData("13.5.0", "13.4.0", "13.6.0")]
+    [InlineData("13.5.0", "13.5.0", "13.6.0")]
+    [InlineData("13.4.0", "13.5.0", "13.6.0")]
+    [InlineData("13.6.0-pr.19847.g8be64f3a", "13.5.4", "13.6.0")]
+    public async Task UpdatePackagesAsync_EmitsVersionSkewWarningWhenTargetIsNewerThanCli(
+        string cliVersion, string staleVersion, string updateTargetVersion)
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, $$"""
+            {
+              "sdk": { "version": "{{staleVersion}}" },
+              "packages": { "Aspire.Hosting": "{{staleVersion}}" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var fakeCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = updateTargetVersion, Source = "test" }
+                ])
+        };
+
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (appPath, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
+        };
+
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
+
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            appHostServerProjectFactory: factory,
+            serverSessionFactory: sessionFactory,
+            identityVersion: cliVersion);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = implicitChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        var expectedWarning = string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            ErrorStrings.CodegenVersionSkewWarning,
+            cliVersion,
+            updateTargetVersion);
+
+        Assert.True(result.UpdatesApplied);
+        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Collection(interactionService.DisplayedMessages,
+            m =>
+            {
+                Assert.Equal("package", m.Emoji.Name);
+                Assert.Equal($"Aspire SDK {staleVersion} to {updateTargetVersion}", Markup.Remove(m.Message));
+            },
+            m =>
+            {
+                Assert.Equal("package", m.Emoji.Name);
+                Assert.Equal($"Aspire.Hosting {staleVersion} to {updateTargetVersion}", Markup.Remove(m.Message));
+            },
+            m =>
+            {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(expectedWarning, Markup.Remove(m.Message));
             },
             m =>
             {
@@ -1438,7 +2130,7 @@ public class GuestAppHostProjectTests : IDisposable
         Directory.CreateDirectory(backchannelsDir);
 
         var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
+        var prefix = BackchannelConstants.ComputeSocketPrefix(resolvedAppHostPath, _workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
         var socketPath = Path.Combine(
             backchannelsDir,
@@ -1448,7 +2140,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     private GuestAppHostProject CreateGuestAppHostProject(
-        TestInteractionService? interactionService = null,
+        IInteractionService? interactionService = null,
         string identityChannel = "local",
         TestAppHostBackchannel? backchannel = null,
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
@@ -1457,9 +2149,11 @@ public class GuestAppHostProjectTests : IDisposable
         string languageId = "typescript/nodejs",
         IEnvironment? environment = null,
         DirectoryInfo? homeDirectory = null,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        string? identityVersion = null)
     {
         var effectiveConfiguration = configuration ?? _configuration;
+        var effectiveEnvironment = environment ?? new TestEnvironment();
 
         var language = new LanguageInfo(
             LanguageId: languageId,
@@ -1474,6 +2168,7 @@ public class GuestAppHostProjectTests : IDisposable
             new DirectoryInfo(AppContext.BaseDirectory),
             identityChannel: identityChannel,
             logFilePath: logFilePath,
+            identityVersion: identityVersion,
             identityOverridden: identityOverridden,
             homeDirectory: homeDirectory);
 
@@ -1491,12 +2186,19 @@ public class GuestAppHostProjectTests : IDisposable
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
+            processExecutionFactory: TestProcessExecutionFactory.CreateForCliGuardian(effectiveEnvironment),
             packagingService: new TestPackagingService(),
             configuration: effectiveConfiguration,
             features: new Features(effectiveConfiguration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             executionContext: executionContext,
-            environment: environment ?? new TestEnvironment(),
+            environment: effectiveEnvironment,
+            appHostConfigurationProjector: new AppHostConfigurationProjector(
+                new TestConfigurationService
+                {
+                    OnGetConfigurationFromDirectory = (key, _) => effectiveConfiguration[key.Replace('.', ':')]
+                },
+                effectiveEnvironment),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,

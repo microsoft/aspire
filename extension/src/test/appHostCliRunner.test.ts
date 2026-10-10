@@ -7,6 +7,7 @@ import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import * as cliModule from '../utils/process/cliProcess';
+import { onDidResolveCliForOperation } from '../utils/cliOperationResolution';
 
 class TestChildProcess extends EventEmitter {
     killed = false;
@@ -150,6 +151,8 @@ suite('data/appHostCliRunner tests', () => {
             });
 
             const runner = new AppHostCliRunner(terminalProvider);
+            const resolutions: string[] = [];
+            const subscription = onDidResolveCliForOperation(resolution => resolutions.push(resolution.cliPath));
             try {
                 await runner.runCliCommand('list pipeline steps', ['do', '--list-steps'], {
                     cliPath: '/repo/tools/aspire',
@@ -157,7 +160,10 @@ suite('data/appHostCliRunner tests', () => {
 
                 assert.strictEqual(getCliPathStub.called, false);
                 assert.strictEqual(spawnStub.firstCall.args[1], '/repo/tools/aspire');
-            } finally {
+                assert.deepStrictEqual(resolutions, ['/repo/tools/aspire']);
+            }
+            finally {
+                subscription.dispose();
                 runner.dispose();
             }
         });

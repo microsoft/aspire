@@ -162,4 +162,19 @@ The Aspire CLI collects usage data. It is collected by Microsoft and is used to 
 Read more about Aspire CLI telemetry: {0}</value>
     <comment>{0} is a clickable URL</comment>
   </data>
+  <data name="CompletionsDescription" xml:space="preserve">
+    <value>Generate shell completion scripts</value>
+  </data>
+  <data name="CompletionScriptDescription" xml:space="preserve">
+    <value>Write a shell completion script to standard output</value>
+  </data>
+  <data name="CompletionShellDescription" xml:space="preserve">
+    <value>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</value>
+  </data>
+  <data name="CompletionShellRequired" xml:space="preserve">
+    <value>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</value>
+  </data>
+  <data name="InvalidCompletionRequest" xml:space="preserve">
+    <value>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</value>
+  </data>
 </root>

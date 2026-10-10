@@ -2,7 +2,8 @@
 # Polyglot SDK Validation - Python validation AppHosts
 # Iterates all Python validation AppHosts under tests/PolyglotAppHosts/*/Python,
 # runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
-# verifies syntax plus any fixture-owned generated SDK API assertions.
+# compiles and type-checks each AppHost against the generated Python modules. The JavaScript
+# fixture also executes its Deno calls without starting an AppHost or external services.
 set -euo pipefail
 
 echo "=== Python Validation AppHost Codegen Validation ==="
@@ -14,6 +15,11 @@ fi
 
 if ! command -v python3 &> /dev/null; then
     echo "ERROR: python3 not found in PATH"
+    exit 1
+fi
+
+if ! command -v pyright &> /dev/null; then
+    echo "ERROR: pyright not found in PATH"
     exit 1
 fi
 
@@ -135,9 +141,6 @@ for app_dir in "${APP_DIRS[@]}"; do
 from pathlib import Path
 
 files = [Path('apphost.py')]
-validator = Path('validate_generated_sdk.py')
-if validator.exists():
-    files.append(validator)
 files.extend(sorted(Path('.aspire/modules').rglob('*.py')))
 for file in files:
     compile(file.read_text(encoding='utf-8'), str(file), 'exec')
@@ -150,11 +153,63 @@ INNERPY
         continue
     fi
 
-    if [ -f "validate_generated_sdk.py" ]; then
-        echo "  -> generated SDK API validation..."
-        if ! PYTHONPATH=".aspire/modules" python3 validate_generated_sdk.py; then
-            echo "  ERROR: generated SDK API validation failed for $integration_name"
-            FAILED+=("$integration_name (generated SDK API validation)")
+    echo "  -> generated SDK type validation..."
+    if ! PYTHONPATH="$PWD/.aspire/modules${PYTHONPATH:+:$PYTHONPATH}" \
+        pyright \
+            --project "$SCRIPT_DIR/pyrightconfig.json" \
+            --pythonpath "$(command -v python3)" \
+            apphost.py; then
+        echo "  ERROR: generated SDK type validation failed for $integration_name"
+        FAILED+=("$integration_name (generated SDK type validation)")
+        echo ""
+        restore_channel_settings
+        continue
+    fi
+
+    if [ "$integration_name" = "Aspire.Hosting.JavaScript" ]; then
+        echo "  -> generated Deno SDK execution..."
+        if ! PYTHONPATH="$PWD/.aspire/modules${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'INNERPY'
+import apphost
+import aspire_app
+
+
+# Syntax compilation does not resolve Python attributes. This client lets the fixture call the
+# generated builder and Deno resource classes while keeping every capability invocation in-process.
+class ValidationClient:
+    def __init__(self):
+        self.next_handle = 0
+
+    def create_handle(self, type_id):
+        self.next_handle += 1
+        return aspire_app.Handle({
+            "$handle": str(self.next_handle),
+            "$type": type_id,
+        })
+
+    def invoke_capability(self, capability_id, args, kwargs=None):
+        if capability_id == "Aspire.Hosting/createBuilder":
+            return self.create_handle("Aspire.Hosting/IDistributedApplicationBuilder")
+        if capability_id == "Aspire.Hosting.JavaScript/addDenoApp":
+            handle = self.create_handle("Aspire.Hosting.JavaScript/DenoAppResource")
+            return aspire_app.DenoAppResource(handle, self)
+
+        return next(
+            value for value in args.values()
+            if isinstance(value, aspire_app.Handle)
+        )
+
+    def disconnect(self):
+        pass
+
+
+client = ValidationClient()
+options = aspire_app.CreateBuilderOptions()
+with aspire_app.DistributedApplicationBuilder(client, options) as builder:
+    apphost.add_deno_app(builder)
+INNERPY
+        then
+            echo "  ERROR: generated Deno SDK execution failed for $integration_name"
+            FAILED+=("$integration_name (generated Deno SDK execution)")
             echo ""
             restore_channel_settings
             continue

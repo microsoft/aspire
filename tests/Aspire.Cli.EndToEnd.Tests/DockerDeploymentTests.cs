@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -18,8 +17,6 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     private const string ProjectName = "AspireDockerDeployTest";
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15882")]
     public async Task CreateAndDeployToDockerCompose()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -109,17 +106,13 @@ builder.Build().Run();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 10: Verify the frontend responds from inside its own network namespace.
-        await auto.TypeAsync("container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1) && docker run --rm --network container:$container curlimages/curl:8.12.1 -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null || echo 'request-failed'");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+        await VerifyFrontendRespondsAsync(auto, counter);
 
         // Step 11: Clean up - destroy the deployment using aspire destroy
         await auto.AspireDestroyAsync(counter);
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15871")]
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -210,11 +203,46 @@ builder.Build().Run();
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 10: Verify the frontend responds from inside its own network namespace.
-        await auto.TypeAsync("container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1) && docker run --rm --network container:$container curlimages/curl:8.12.1 -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null || echo 'request-failed'");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+        await VerifyFrontendRespondsAsync(auto, counter);
 
         // Step 11: Clean up - destroy the deployment using aspire destroy
         await auto.AspireDestroyAsync(counter);
+    }
+
+    /// <summary>
+    /// Asserts the deployed frontend actually serves HTTP 200 from inside its own network namespace.
+    /// </summary>
+    private static async Task VerifyFrontendRespondsAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
+    {
+        // The status comparison is what makes this an assertion. An `|| echo 'request-failed'`
+        // fallback would hide an unreachable frontend behind a zero exit, and matching only the
+        // prompt marker would also accept a 4xx/5xx response, so WaitForSuccessPromptAsync would
+        // pass against a broken deployment.
+        //
+        // `found` carries the outcome out of the loop: an exhausted loop would otherwise end on
+        // `sleep 3` and report success. The trailing `test` turns "never got a 200" into a
+        // non-zero exit.
+        //
+        // The sentinel is split so only the shell can assemble it: the typed line reads
+        // FRONTEND$(echo _OK) while the executed echo emits FRONTEND_OK. Otherwise
+        // WaitUntilTextAsync matches the echoed command still on screen and passes regardless of
+        // the response. Same idiom as DockerComposeDeployWithVolumeTests.
+        //
+        // Retried because the service can still be starting immediately after deploy reports
+        // success, which is a likely contributor to the flakiness that had these tests quarantined.
+        await auto.TypeAsync(
+            "found=0; for i in $(seq 1 20); do " +
+            "container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1); " +
+            "if [ -n \"$container\" ]; then " +
+            "status=$(docker run --rm --network container:$container curlimages/curl:8.12.1 " +
+            "-s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null); " +
+            "echo \"HTTP=[$status]\"; " +
+            "if [ \"$status\" = \"200\" ]; then found=1; echo \"FRONTEND$(echo _OK)\"; break; fi; " +
+            "fi; " +
+            "echo \"Attempt $i: waiting for webfrontend...\"; sleep 3; done; " +
+            "test \"$found\" = 1");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("FRONTEND_OK", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
     }
 }

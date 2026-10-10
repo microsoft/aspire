@@ -17,6 +17,7 @@ namespace Aspire.Cli.Projects;
 internal interface IAppHostServerProjectFactory
 {
     Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default);
+    Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -34,7 +35,10 @@ internal sealed class AppHostServerProjectFactory(
     IProcessExecutionFactory processExecutionFactory,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
-    public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
+    public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
+        => CreateAsync(appPath, restoreRootConfigDirectory: null, cancellationToken);
+
+    public async Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
     {
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
@@ -51,7 +55,8 @@ internal sealed class AppHostServerProjectFactory(
                 processExecutionFactory,
                 environment,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
-                logFilePath: executionContext.LogFilePath);
+                logFilePath: executionContext.LogFilePath,
+                restoreRootConfigDirectory: restoreRootConfigDirectory);
         }
 
         // Priority 2: Ensure bundle is extracted and check for layout

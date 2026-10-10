@@ -78,7 +78,7 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
 
         // Add copy attributes to the copy button.
         var rawCode = GetRawCodeText(obj);
-        var copyToClipboard = _loc[nameof(ControlsStrings.GridValueCopyToClipboard)].Value;
+        var copyToClipboard = _loc[nameof(ControlsStrings.GridValueCopyToClipboard)];
         var attributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(rawCode, copyToClipboard, _loc[nameof(ControlsStrings.GridValueCopied)]);
         var copyButtonAttributes = new HtmlAttributes();
         copyButtonAttributes.AddClass("code-copy-button");
@@ -153,6 +153,6 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
     {
         var sizePx = (int)icon.Size;
         var size = $"{sizePx}px";
-        return $@"<svg viewBox=""0 0 {sizePx} {sizePx}"" width=""{size}"" fill=""var(--accent-fill-rest)"" style=""width: {size};"" aria-hidden=""true"">{icon.Content}</svg>";
+        return $@"<svg viewBox=""0 0 {sizePx} {sizePx}"" width=""{size}"" fill=""var(--colorBrandForegroundLink)"" style=""width: {size};"" aria-hidden=""true"">{icon.Content}</svg>";
     }
 }

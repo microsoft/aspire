@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREUSERSECRETS001
-
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
@@ -32,7 +30,11 @@ internal sealed class UserSecretsDeploymentStateManager : DeploymentStateManager
     }
 
     /// <inheritdoc/>
-    protected override async Task SaveStateToStorageAsync(JsonObject state, CancellationToken cancellationToken)
+    protected override async Task SaveStateToStorageAsync(
+        JsonObject state,
+        string? sectionName,
+        JsonObject? originalSectionData,
+        CancellationToken cancellationToken)
     {
         try
         {

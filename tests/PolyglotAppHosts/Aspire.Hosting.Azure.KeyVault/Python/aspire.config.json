@@ -4,9 +4,9 @@
     "language": "python"
   },
   "features": {
-    "experimentalPolyglot:python": true
+    "experimentalPolyglotPython": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.KeyVault": ""
+    "Aspire.Hosting.Azure.Provisioning.KeyVault": ""
   }
 }

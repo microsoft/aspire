@@ -13,8 +13,9 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <c>addPersistentVolume</c>/<c>withStorageClass</c>/<c>withCapacity</c>/<c>withKubernetesPersistentVolumeMount</c>
 /// produce the same first-class persistent volume wiring as the C# API: the
 /// node-app workload is auto-promoted to a <c>StatefulSet</c>, the generated PVC
-/// binds to the rancher local-path-provisioner that ships with KinD, and a file
-/// written to the mounted volume survives a pod restart.
+/// binds to the rancher local-path-provisioner that ships with KinD, the application
+/// resolves its path through an environment variable, and a file written to the
+/// mounted volume survives a pod restart.
 ///
 /// This is the only TypeScript test exercising the persistent volume API end-to-end —
 /// the C# Postgres counterpart already covers the name-match overload and the
@@ -127,10 +128,9 @@ const scratch = await k8sEnv.addPersistentVolume("scratch");
 await scratch.withStorageClass("standard");
 await scratch.withCapacity("256Mi");
 
-// Mount-path overload — works for any IComputeResource (including node apps
-// and projects) by adding the ContainerMount itself. Binding a workload to
-// a PV auto-promotes it from Deployment to StatefulSet.
-await app.withKubernetesPersistentVolumeMount(scratch, "/srv/data");
+// The environment variable resolves to a local host path in run mode and the
+// deployed mount path in Kubernetes.
+await app.withKubernetesPersistentVolumeMount(scratch, "/srv/data", { env: "DATA_PATH" });
 
 await builder.build().run();
 """);
@@ -150,13 +150,17 @@ await builder.build().run();
                 .Replace(
                     "app.get(\"/health\", (_req, res) => {",
                     """
-const MARKER_PATH = "/srv/data/marker.txt";
+const DATA_PATH = process.env.DATA_PATH;
+if (!DATA_PATH) {
+  throw new Error("DATA_PATH is not configured.");
+}
+const MARKER_PATH = `${DATA_PATH}/marker.txt`;
 const MARKER_TOKEN = "wrote-42";
 
 app.get("/test-deployment", (req, res) => {
   const action = typeof req.query.action === "string" ? req.query.action : undefined;
   if (action === "write") {
-    mkdirSync("/srv/data", { recursive: true });
+    mkdirSync(DATA_PATH, { recursive: true });
     writeFileSync(MARKER_PATH, MARKER_TOKEN);
     res.send(`PASSED: wrote ${MARKER_TOKEN}`);
     return;

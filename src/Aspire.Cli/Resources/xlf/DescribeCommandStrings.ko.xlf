@@ -43,8 +43,13 @@
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
-        <source>Output format (Table or Json)</source>
+        <source>Output format (Table, Json, or Mermaid)</source>
         <target state="needs-review-translation">컴퓨터 사용량에 대한 JSON형식의 출력입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MermaidFollowNotSupported">
+        <source>The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</source>
+        <target state="new">The Mermaid output format does not support --follow. Omit --follow to export a resource graph snapshot.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">

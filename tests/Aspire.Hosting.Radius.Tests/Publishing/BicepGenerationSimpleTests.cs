@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -171,6 +171,23 @@ public class BicepGenerationSimpleTests
         var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
         Assert.Contains("webapp", ex.Message);
         Assert.Contains("WithContainerImage", ex.Message);
+    }
+
+    [Fact]
+    public void GenerateBicep_DotnetProjectResourceWithoutContainerImage_ThrowsActionableError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddRadiusEnvironment("myenv");
+        builder.AddDotnetProject("webapp", "webapp.csproj", options => options.ExcludeLaunchProfile = true);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
+        var context = new RadiusBicepPublishingContext(environment.Resource);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+
+        Assert.Contains("webapp", exception.Message);
+        Assert.Contains("WithContainerImage", exception.Message);
     }
 
     [Fact]

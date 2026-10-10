@@ -20,6 +20,8 @@ using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
+
 namespace Aspire.Hosting.Backchannel;
 
 /// <summary>
@@ -50,7 +52,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1]
+            Capabilities =
+            [
+                AuxiliaryBackchannelCapabilities.V1,
+                AuxiliaryBackchannelCapabilities.V2,
+                AuxiliaryBackchannelCapabilities.V3,
+                AuxiliaryBackchannelCapabilities.Terminals_V1,
+                AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1
+            ]
         });
     }
 
@@ -571,8 +580,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
-    /// Lists every <c>WithTerminal</c>-enabled resource in the AppHost, with current grid size and
-    /// attached-peer details. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
+    /// Lists every terminal in the AppHost. Resource terminals are reported with current grid size and
+    /// attached-peer details; AppHost-owned terminals are reported separately because they have no
+    /// replicas or terminal host. Used by <c>aspire terminal ps</c>. Each per-resource snapshot is
     /// independent: a resource whose terminal host hasn't started yet (or whose control RPC times
     /// out) is reported with <see cref="TerminalSummary.IsHostReachable"/> = false rather than
     /// failing the whole listing.
@@ -617,8 +627,27 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return new ListTerminalsResponse
         {
-            Terminals = [.. terminals],
+            ResourceTerminals = [.. terminals],
+            AppHostTerminals = CollectAppHostTerminals(),
         };
+    }
+
+    /// <summary>
+    /// Projects the terminals the AppHost itself owns — dock tabs, terminals shown in an interaction dialog,
+    /// and terminals driven only through automation — into the listing.
+    /// </summary>
+    private AppHostTerminalSummary[] CollectAppHostTerminals()
+    {
+        var terminalService = serviceProvider.GetRequiredService<TerminalService>();
+
+        return [.. terminalService.ListAll()
+            .Where(t => t.Owner == TerminalOwner.AppHost)
+            .Select(t => new AppHostTerminalSummary
+            {
+                TerminalId = t.Id,
+                Title = t.Title,
+                Placement = t.Placement.ToString(),
+            })];
     }
 
     /// <summary>
@@ -1177,6 +1206,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new ResourceSnapshot
         {
             Name = resourceEvent.ResourceId,
+            Version = snapshot.Version,
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,

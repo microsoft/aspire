@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -15,6 +16,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
 
     public TaskCompletionSource? DisplayMessageAsyncCalled { get; set; }
     public Func<string, string, Task>? DisplayMessageAsyncCallback { get; set; }
+    public Func<string, string, IReadOnlyList<InteractionMessageAction>, Task>? DisplayMessageWithActionsAsyncCallback { get; set; }
 
     public TaskCompletionSource? DisplaySuccessAsyncCalled { get; set; }
     public Func<string, Task>? DisplaySuccessAsyncCallback { get; set; }
@@ -24,6 +26,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
 
     public TaskCompletionSource? DisplayErrorAsyncCalled { get; set; }
     public Func<string, Task>? DisplayErrorAsyncCallback { get; set; }
+    public Func<string, IReadOnlyList<InteractionMessageAction>, Task>? DisplayErrorWithActionsAsyncCallback { get; set; }
 
     public TaskCompletionSource? DisplayEmptyLineAsyncCalled { get; set; }
     public Func<Task>? DisplayEmptyLineAsyncCallback { get; set; }
@@ -46,6 +49,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? PromptForSelectionAsyncCalled { get; set; }
 
     public TaskCompletionSource? PromptForSelectionsAsyncCalled { get; set; }
+    public Func<string, IReadOnlyList<string>, IReadOnlyList<string>, Task<IReadOnlyList<string>>>? PromptForSelectionsAsyncCallback { get; set; }
 
     public TaskCompletionSource? ConfirmAsyncCalled { get; set; }
     public Func<string, bool, Task<bool>>? ConfirmAsyncCallback { get; set; }
@@ -85,6 +89,9 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public TaskCompletionSource? WriteDebugSessionMessageAsyncCalled { get; set; }
     public Func<string, bool, string?, Task>? WriteDebugSessionMessageAsyncCallback { get; set; }
 
+    public TaskCompletionSource? WriteAppHostLogEntryAsyncCalled { get; set; }
+    public Func<ExtensionAppHostLogEntry, Task>? WriteAppHostLogEntryAsyncCallback { get; set; }
+
     public Task ConnectAsync(CancellationToken cancellationToken)
     {
         ConnectAsyncCalled?.SetResult();
@@ -96,6 +103,12 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         DisplayMessageAsyncCalled?.SetResult();
         return DisplayMessageAsyncCallback?.Invoke(emojiName, message) ?? Task.CompletedTask;
+    }
+
+    public Task DisplayMessageAsync(string emojiName, string message, InteractionMessageAction[] actions, CancellationToken cancellationToken)
+    {
+        DisplayMessageAsyncCalled?.SetResult();
+        return DisplayMessageWithActionsAsyncCallback?.Invoke(emojiName, message, actions) ?? Task.CompletedTask;
     }
 
     public Task DisplaySuccessAsync(string message, CancellationToken cancellationToken)
@@ -114,6 +127,12 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     {
         DisplayErrorAsyncCalled?.SetResult();
         return DisplayErrorAsyncCallback?.Invoke(errorMessage) ?? Task.CompletedTask;
+    }
+
+    public Task DisplayErrorAsync(string errorMessage, InteractionMessageAction[] actions, CancellationToken cancellationToken)
+    {
+        DisplayErrorAsyncCalled?.SetResult();
+        return DisplayErrorWithActionsAsyncCallback?.Invoke(errorMessage, actions) ?? Task.CompletedTask;
     }
 
     public Task DisplayEmptyLineAsync(CancellationToken cancellationToken)
@@ -172,16 +191,28 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull
     {
         PromptForSelectionsAsyncCalled?.SetResult();
 
-        if (!choices.Any())
+        var choicesList = choices.ToList();
+        if (choicesList.Count == 0)
         {
             throw new InvalidOperationException($"No items available for selection: {promptText}");
         }
 
-        return Task.FromResult<IReadOnlyList<T>>(choices.ToList());
+        if (PromptForSelectionsAsyncCallback is null)
+        {
+            return choicesList;
+        }
+
+        var choicesByFormattedValue = choicesList.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)), choice => choice);
+        var formattedPreSelected = preSelected?
+            .Select(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)))
+            .ToList() ?? [];
+        var selectedValues = await PromptForSelectionsAsyncCallback(promptText, choicesByFormattedValue.Keys.ToList(), formattedPreSelected);
+
+        return selectedValues.Select(value => choicesByFormattedValue[value]).ToList();
     }
 
     public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)
@@ -282,5 +313,11 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
         return WriteDebugSessionMessageAsyncCallback != null
             ? WriteDebugSessionMessageAsyncCallback.Invoke(message, stdout, textStyle)
             : Task.CompletedTask;
+    }
+
+    public Task WriteAppHostLogEntryAsync(ExtensionAppHostLogEntry entry, CancellationToken cancellationToken)
+    {
+        WriteAppHostLogEntryAsyncCalled?.SetResult();
+        return WriteAppHostLogEntryAsyncCallback?.Invoke(entry) ?? Task.CompletedTask;
     }
 }

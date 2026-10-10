@@ -2,14 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
 /// Guards on the CI wiring that surrounds the SelectTests engine but lives in YAML rather than C#:
 /// the <c>run-full-ci</c> label kill switch (computed in <c>.github/workflows/tests.yml</c>, consumed by
-/// <c>.github/actions/select-tests/action.yml</c>) and the selection-comment posting in
-/// <c>tests.yml</c>. Neither is exercised by the CLI tests, yet both are easy to silently regress
+/// <c>.github/actions/select-tests/action.yml</c>), the top-level changed-file skip gate, and the
+/// selection-comment posting in <c>tests.yml</c>. These are not exercised by the CLI tests, yet are easy to silently regress
 /// (loosen the kill switch, or revert the comment to update-in-place), so they are pinned here.
 /// </summary>
 public sealed class SelectTestsWorkflowTests
@@ -32,6 +33,24 @@ public sealed class SelectTestsWorkflowTests
         Assert.DoesNotContain("full ci", action);
     }
 
+    // The repo SDK can move ahead of the target framework used by SelectTests. The minimal bootstrap
+    // must install that SDK through Arcade's wrapper because MSBuildLocator needs the SDK's MSBuild
+    // assemblies; installing only the runtime can execute SelectTests but cannot build its project graph.
+    [Fact]
+    public void SelectTestsActionInstallsPinnedSdkWithArcadeWrapperArguments()
+    {
+        var action = File.ReadAllText(SelectTestsActionPath);
+
+        Assert.Contains("<DotNetSdkNet10VersionForTesting>", File.ReadAllText(VersionsPropsPath));
+        Assert.Contains("<DotNetSdkNet10VersionForTesting>", action);
+        Assert.Contains("./eng/common/dotnet-install.sh", action);
+        Assert.Contains("-runtime sdk", action);
+        Assert.Contains("-version \"$sdk_version\"", action);
+        Assert.DoesNotContain("-runtime dotnet", action);
+        Assert.DoesNotContain("--install-dir", action);
+        Assert.DoesNotContain("--skip-non-versioned-files", action);
+    }
+
     // tests.yml must compute forceAll from the presence of the 'run-full-ci' label on the PR, read from
     // the event-payload snapshot. If the label name or the contains() expression drifts, the kill
     // switch silently stops working (it would just never force-all), so pin the exact wiring.
@@ -43,6 +62,87 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains(
             "forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}",
             testsYml);
+    }
+
+    [Fact]
+    public void TestsWorkflowEnforcesSelectedTestSubset()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(TestsWorkflowPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var setupForTests = (YamlMappingNode)jobs.Children[new YamlScalarNode("setup_for_tests")];
+        var steps = (YamlSequenceNode)setupForTests.Children[new YamlScalarNode("steps")];
+        var selectTests = Assert.Single(
+            steps.Cast<YamlMappingNode>(),
+            step => step.Children.TryGetValue(new YamlScalarNode("uses"), out var uses) &&
+                    uses.ToString() == "./.github/actions/select-tests");
+        var inputs = (YamlMappingNode)selectTests.Children[new YamlScalarNode("with")];
+
+        Assert.Equal("true", inputs.Children[new YamlScalarNode("enforce")].ToString());
+    }
+
+    // The native ARM64 MSVC linker in the VS 2022 image fails on the Native AOT Dashboard object
+    // with LNK1322. Keep win-arm64 on the newer VS 2026 ARM image in both the PR override and the
+    // reusable workflow default so scheduled/direct callers do not regress to windows-11-arm.
+    [Fact]
+    public void WindowsArm64NativeArchiveUsesVs2026ArmRunner()
+    {
+        var testsYml = File.ReadAllText(TestsWorkflowPath);
+        var nativeArchivesYml = File.ReadAllText(BuildCliNativeArchivesWorkflowPath);
+        const string expectedTarget = "{\"os\": \"windows-latest\", \"runner\": \"windows-11-vs2026-arm\", \"rids\": \"win-arm64\"}";
+
+        Assert.Contains(expectedTarget, testsYml);
+        Assert.Contains(expectedTarget, nativeArchivesYml);
+        Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", testsYml);
+        Assert.DoesNotContain("\"runner\": \"windows-11-arm\", \"rids\": \"win-arm64\"", nativeArchivesYml);
+    }
+
+    [Fact]
+    public void NativeArchiveDependencyPackagesUseMatrixRid()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(BuildCliNativeArchivesWorkflowPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var archiveJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("build_cli_archives")];
+        var steps = (YamlSequenceNode)archiveJob.Children[new YamlScalarNode("steps")];
+        var packageBuild = Assert.Single(
+            steps.Cast<YamlMappingNode>(),
+            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
+                    name.ToString() == "Build RID-specific packages");
+        var command = packageBuild.Children[new YamlScalarNode("run")].ToString();
+
+        Assert.Contains("/p:BuildBundleDepsOnly=true", command);
+        Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command);
+    }
+
+    [Fact]
+    public void NativeDashboardInteractivityOptsIntoOuterloopTests()
+    {
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(NativeDashboardValidationWorkflowPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
+        var validationJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("validate")];
+        var steps = (YamlSequenceNode)validationJob.Children[new YamlScalarNode("steps")];
+        var interactiveTest = Assert.Single(
+            steps.Cast<YamlMappingNode>(),
+            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
+                    name.ToString() == "Test Native AOT Dashboard interactivity");
+        var command = interactiveTest.Children[new YamlScalarNode("run")].ToString();
+
+        Assert.Equal("${{ inputs.rid == 'win-x64' }}", interactiveTest.Children[new YamlScalarNode("if")].ToString());
+        Assert.Contains("/p:RunOuterloopTests=true --", command);
+        Assert.EndsWith(
+            "--filter-method \"*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors\" --filter-not-trait \"quarantined=true\"",
+            command.Trim());
     }
 
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
@@ -132,11 +232,37 @@ public sealed class SelectTestsWorkflowTests
         Assert.DoesNotContain("exit", mergeBaseRegion);
     }
 
+    // The top-level skip gate runs before SelectTests. Git's default rename detection can report only
+    // the destination, so moving compiled source into a skippable baseline-shaped path could otherwise
+    // hide the deleted source and skip the entire CI workflow. Keep both rename sides visible, matching
+    // the selector's own changed-file resolution.
+    [Fact]
+    public void CheckChangedFilesActionDisablesRenameDetection()
+    {
+        var action = File.ReadAllText(CheckChangedFilesActionPath);
+
+        Assert.Contains(
+            "git diff --name-only --no-renames \"$BASE_REF\"...\"$HEAD_REF\"",
+            action);
+    }
+
     private static string SelectTestsActionPath
         => Path.Combine(RepoRoot.Path, ".github", "actions", "select-tests", "action.yml");
 
+    private static string CheckChangedFilesActionPath
+        => Path.Combine(RepoRoot.Path, ".github", "actions", "check-changed-files", "action.yml");
+
     private static string TestsWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml");
+
+    private static string VersionsPropsPath
+        => Path.Combine(RepoRoot.Path, "eng", "Versions.props");
+
+    private static string BuildCliNativeArchivesWorkflowPath
+        => Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml");
+
+    private static string NativeDashboardValidationWorkflowPath
+        => Path.Combine(RepoRoot.Path, ".github", "workflows", "native-dashboard-validation.yml");
 
     private static string ExtractCommentSelectionJob()
     {

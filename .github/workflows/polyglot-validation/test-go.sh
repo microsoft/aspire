@@ -21,18 +21,15 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
-# TODO: once go is not an experiment feature, remove 
-cat << 'EOF' > aspire.config.json
+aspire init --language go --non-interactive -d
+
+cat <<'EOF' > appsettings.json
 {
-  "appHost": {},
-  "features": {
-    "experimentalPolyglot:go": true
-  },
-  "packages": {}
+  "PolyglotTest": {
+    "Value": "from-appsettings"
+  }
 }
 EOF
-
-aspire init --language go --non-interactive -d
 
 # Add Redis integration
 echo "Adding Redis integration..."
@@ -48,11 +45,19 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-# Insert Redis code into apphost.go
-echo "Configuring apphost.go with Redis..."
+# Verify appsettings.json through the generated SDK before adding Redis.
+echo "Configuring apphost.go with appsettings validation and Redis..."
 if grep -q "builder.Build()" apphost.go; then
     # Use awk for portable multi-line insertion (works on both GNU/Linux and BSD/macOS)
     awk '/builder\.Build\(\)/{
+        print "\tappSettingsValue, err := builder.GetConfiguration().GetConfigValue(\"PolyglotTest:Value\")"
+        print "\tif err != nil {"
+        print "\t\tlog.Fatalf(\"Failed to read appsettings.json: %v\", err)"
+        print "\t}"
+        print "\tif appSettingsValue != \"from-appsettings\" {"
+        print "\t\tlog.Fatalf(\"Expected appsettings.json value, got %q\", appSettingsValue)"
+        print "\t}"
+        print ""
         print "\t// Add Redis cache resource"
         print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
         print "\tif err := redis.Err(); err != nil {"
@@ -60,7 +65,7 @@ if grep -q "builder.Build()" apphost.go; then
         print "\t}"
         print ""
     }1' apphost.go > apphost.go.tmp && mv apphost.go.tmp apphost.go
-    echo "✅ Redis configuration added to apphost.go"
+    echo "✅ appsettings validation and Redis configuration added to apphost.go"
 fi
 
 echo "=== apphost.go ==="

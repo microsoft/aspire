@@ -1,9 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 
@@ -32,13 +37,233 @@ public class AtsGoCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
 
         // Assert
-        Assert.Contains("aspire.go", files.Keys);
-        Assert.Contains("transport.go", files.Keys);
-        Assert.Contains("base.go", files.Keys);
-        Assert.Contains("go.mod", files.Keys);
+        Assert.Equal(
+            ["go.mod", "transport.go", "base.go", "aspire.go"],
+            files.Keys);
 
-        await Verify(files["aspire.go"], extension: "go")
+        var generatedCode = string.Join(
+            "\n",
+            files.OrderBy(file => file.Key, StringComparer.Ordinal)
+                .Select(file => $"// ===== {file.Key} =====\n{file.Value}"));
+
+        await Verify(generatedCode, extension: "go")
             .UseFileName("AtsGeneratedAspire");
+    }
+
+    [Fact]
+    [RequiresTools(["go"])]
+    public async Task GeneratedTransport_SupportsDuplexCommunication()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(3));
+        using var process = new Process();
+        try
+        {
+            var files = _generator.GenerateDistributedApplication(new AtsContext
+            {
+                Capabilities = [],
+                HandleTypes = [],
+                EnumTypes = [],
+                DtoTypes = []
+            });
+            foreach (var (name, content) in files)
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory.FullName, name), content, timeout.Token);
+            }
+
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "transport_test.go"), """
+                package aspire
+
+                import (
+                    "io"
+                    "os"
+                    "testing"
+                    "time"
+                )
+
+                func TestDuplexConnection(t *testing.T) {
+                    conn, err := openConnection(os.Getenv("TEST_SOCKET_PATH"), 5*time.Second)
+                    if err != nil {
+                        t.Fatal(err)
+                    }
+                    defer conn.Close()
+
+                    // Deadline support proves the Windows handle is pollable rather than
+                    // synchronous, without relying on which I/O goroutine runs first.
+                    deadlines, ok := conn.(interface { SetDeadline(time.Time) error })
+                    if !ok {
+                        t.Fatal("connection does not support deadlines")
+                    }
+                    if err := deadlines.SetDeadline(time.Now().Add(10*time.Second)); err != nil {
+                        t.Fatal(err)
+                    }
+
+                    received := make(chan error, 1)
+                    go func() {
+                        response := make([]byte, 4)
+                        _, err := io.ReadFull(conn, response)
+                        if err == nil && string(response) != "pong" {
+                            t.Errorf("expected pong, got %q", response)
+                        }
+                        received <- err
+                    }()
+                    if _, err := conn.Write([]byte("ping")); err != nil {
+                        t.Fatal(err)
+                    }
+                    if err := <-received; err != nil {
+                        t.Fatal(err)
+                    }
+
+                    // Closing a connection must release a pending background read.
+                    go func() {
+                        _, err := conn.Read(make([]byte, 1))
+                        received <- err
+                    }()
+                    if err := conn.Close(); err != nil {
+                        t.Fatal(err)
+                    }
+                    select {
+                    case err := <-received:
+                        if err == nil {
+                            t.Fatal("expected the read to fail after close")
+                        }
+                    case <-time.After(5*time.Second):
+                        t.Fatal("close did not unblock the reader")
+                    }
+                }
+                """, timeout.Token);
+
+            var socketPath = OperatingSystem.IsWindows()
+                ? $"aspire-go-{Guid.NewGuid():N}"
+                : Path.Combine(directory.FullName, "socket");
+            using var pipe = OperatingSystem.IsWindows()
+                ? new NamedPipeServerStream(socketPath, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous)
+                : null;
+            using var socket = OperatingSystem.IsWindows()
+                ? null
+                : new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            if (socket is not null)
+            {
+                socket.Bind(new UnixDomainSocketEndPoint(socketPath));
+                socket.Listen(1);
+            }
+
+            process.StartInfo = new ProcessStartInfo("go")
+            {
+                WorkingDirectory = directory.FullName,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList = { "test", "-timeout", "30s", "." },
+                Environment = { ["TEST_SOCKET_PATH"] = socketPath }
+            };
+            process.Start();
+            var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+            var exchange = ExchangeAsync();
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+                Assert.True(process.ExitCode == 0, $"Go transport test failed:{Environment.NewLine}{await stdout}{await stderr}");
+                await exchange;
+            }
+            finally
+            {
+                await timeout.CancelAsync();
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+                await exchange.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing | ConfigureAwaitOptions.ContinueOnCapturedContext);
+            }
+
+            async Task ExchangeAsync()
+            {
+                using var stream = pipe is not null
+                    ? await AcceptPipeAsync()
+                    : new NetworkStream(await socket!.AcceptAsync(timeout.Token), ownsSocket: true);
+                var request = new byte[4];
+                await stream.ReadExactlyAsync(request, timeout.Token);
+                Assert.Equal("ping"u8.ToArray(), request);
+                await stream.WriteAsync("pong"u8.ToArray(), timeout.Token);
+
+                // Keep the server connected until the client closes its pending read.
+                Assert.Equal(0, await stream.ReadAsync(new byte[1], timeout.Token));
+            }
+
+            async Task<Stream> AcceptPipeAsync()
+            {
+                await pipe!.WaitForConnectionAsync(timeout.Token);
+                return pipe;
+            }
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_NullablePrimitiveArrayElementsUsePointers()
+    {
+        var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Tests/NullableArrayDto",
+                    Name = "NullableArrayDto",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo
+                        {
+                            Name = "Values",
+                            Type = nullableNumbers
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var generated = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        Assert.Contains("Values []*float64", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ExportedNullablePrimitiveArraysUsePointerInitializers()
+    {
+        var nullableNumbers = Assert.IsType<AtsTypeRef>(AtsCapabilityScanner.CreateTypeRef(typeof(double?[])));
+        var atsContext = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes = [],
+            ExportedValues =
+            [
+                new AtsExportedValueInfo
+                {
+                    OwningAssemblyName = TestTypesAssemblyName,
+                    PathSegments = ["NullableArrays", "Numbers"],
+                    Value = JsonNode.Parse("[1,null,2.5]"),
+                    Type = nullableNumbers
+                }
+            ]
+        };
+
+        var generated = _generator.GenerateDistributedApplication(atsContext)["aspire.go"];
+
+        Assert.Contains(
+            "[]*float64{func(value float64) *float64 { return &value }(1), nil, func(value float64) *float64 { return &value }(2.5)}",
+            generated,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -305,6 +530,80 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_RequiredNullablePrimitiveAndEnumSettersSendNullValues()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
+        var primitiveSetter = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *endpointUpdateContext) SetPort(value *float64)");
+        var enumSetter = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *containerBuildOptionsCallbackContext) SetDestination(value *ContainerImageDestination)");
+
+        Assert.Contains("reqArgs[\"value\"] = serializeValue(value)", primitiveSetter, StringComparison.Ordinal);
+        Assert.DoesNotContain("if value != nil", primitiveSetter, StringComparison.Ordinal);
+        Assert.Contains("reqArgs[\"value\"] = serializeValue(value)", enumSetter, StringComparison.Ordinal);
+        Assert.DoesNotContain("if value != nil", enumSetter, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(
+        "func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(config *TestConfigDto)",
+        "config",
+        "config != nil")]
+    [InlineData(
+        "func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression)",
+        "connectionString",
+        "connectionString != nil")]
+    [InlineData(
+        "func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url any",
+        "url",
+        "!isNil(url)")]
+    public void GeneratedCode_RequiredNonNullableNilableArgumentsOmitNilValues(
+        string signature,
+        string parameterName,
+        string nilGuard)
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"].ReplaceLineEndings("\n");
+        var method = ExtractGeneratedMethod(aspireGo, signature);
+
+        Assert.Contains(
+            $"if {nilGuard} {{ reqArgs[\"{parameterName}\"] = serializeValue({parameterName}) }}",
+            method,
+            StringComparison.Ordinal);
+        Assert.Contains("func isNil(value any) bool", files["base.go"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GeneratedCode_InteractionInputValueHelpersHandleNullableValues()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
+
+        Assert.Contains(
+            "func (s *interactionInputCollection) Value(name string) (string, error) {\n" +
+            "\tinput, err := s.Get(name)\n" +
+            "\tif err != nil { return \"\", err }\n" +
+            "\tif input == nil || input.Value == nil { return \"\", nil }\n" +
+            "\treturn *input.Value, nil\n" +
+            "}",
+            aspireGo,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "func (s *interactionInputCollection) RequiredValue(name string) (string, error) {\n" +
+            "\tinput, err := s.Required(name)\n" +
+            "\tif err != nil { return \"\", err }\n" +
+            "\tif input.Value == nil { return \"\", nil }\n" +
+            "\treturn *input.Value, nil\n" +
+            "}",
+            aspireGo,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GeneratedCode_CallbackArgsSkipUndecodableStructFields()
     {
         var atsContext = CreateContextFromBothAssemblies();
@@ -429,6 +728,16 @@ public class AtsGoCodeGeneratorTests
         var testAssembly = typeof(TestRedisResource).Assembly;
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         return (testAssembly, hostingAssembly);
+    }
+
+    private static string ExtractGeneratedMethod(string generatedCode, string signature)
+    {
+        var methodStart = generatedCode.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(methodStart >= 0, $"Generated method not found: {signature}");
+        var methodEnd = generatedCode.IndexOf("\n}\n", methodStart, StringComparison.Ordinal);
+        Assert.True(methodEnd >= 0, $"Generated method is incomplete: {signature}");
+
+        return generatedCode[methodStart..methodEnd];
     }
 
 }

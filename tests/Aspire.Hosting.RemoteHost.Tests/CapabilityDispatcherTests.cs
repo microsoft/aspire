@@ -389,8 +389,8 @@ public class CapabilityDispatcherTests
         Assert.True(handleRef.ContainsKey("$type"), "Result should have a type");
         var nestedHandleId = handleRef["$handle"]!.GetValue<string>();
         var nestedTypeId = handleRef["$type"]!.GetValue<string>();
-        // Handle ID is now just a numeric instance ID
-        Assert.True(long.TryParse(nestedHandleId, out _), "Handle ID should be numeric");
+        Assert.Matches("^[0-9a-f]{32}$", nestedHandleId);
+        Assert.Same(nestedContext, handles.GetObject(nestedHandleId));
         // Type ID is in the $type field
         Assert.StartsWith("Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestNestedContextType", nestedTypeId);
 
@@ -1631,6 +1631,24 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void GetDto_DeserializesTimeSpanPropertyFromMilliseconds()
+    {
+        var args = new JsonObject
+        {
+            ["dto"] = new JsonObject
+            {
+                ["label"] = "item",
+                ["timeout"] = 90_000
+            }
+        };
+
+        var result = args.GetDto<TestDtoWithEnum>("dto");
+
+        Assert.NotNull(result);
+        Assert.Equal(TimeSpan.FromSeconds(90), result.Timeout);
+    }
+
+    [Fact]
     public void GetDto_ReturnsNullWhenPropertyMissing()
     {
         var args = new JsonObject();
@@ -2607,6 +2625,7 @@ internal sealed class TestDtoWithEnum
 {
     public string? Label { get; set; }
     public TestDispatchEnum Status { get; set; }
+    public TimeSpan? Timeout { get; set; }
 }
 
 [AspireDto]

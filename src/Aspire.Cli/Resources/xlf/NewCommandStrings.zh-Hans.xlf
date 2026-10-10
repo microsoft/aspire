@@ -57,9 +57,19 @@
         <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoMatchingLocalTemplatePackage">
+        <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
+        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
         <target state="new">No package channels are available.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoTemplateVersionsFoundInChannel">
+        <source>No template versions found in channel '{0}'.</source>
+        <target state="new">No template versions found in channel '{0}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">

@@ -2,12 +2,28 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using System.Security.AccessControl;
+using System.Security.Cryptography;
+using System.Security.Principal;
+using System.Text.Json;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Playwright;
+using Aspire.Cli.Certificates;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Npm;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
+using Aspire.TestUtilities;
+using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Sigstore;
+using Tuf;
 
 #if DEBUG
 using System.Globalization;
@@ -18,17 +34,15 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Tests;
 
 /// <summary>
-/// Integration tests for the bootstrap wiring: the running CLI's
-/// <see cref="CliExecutionContext.IdentityChannel"/> is sourced from the binary's
-/// <c>[AssemblyMetadata("AspireCliChannel")]</c> value via
-/// <see cref="IIdentityChannelReader"/>, registered in DI by
-/// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/>.
+/// Integration tests for the production registrations in
+/// <see cref="Program.BuildApplicationAsync"/>.
 /// </summary>
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
-    private static async Task<IHost> BuildHostAsync()
+    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? configurationValues = null)
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
@@ -36,7 +50,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
-        return await Program.BuildApplicationAsync([], startupContext);
+        return await Program.BuildApplicationAsync([], startupContext, configurationValues);
     }
 
     private static string GetBakedEntryAssemblyChannel()
@@ -97,6 +111,170 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BuildApplication_SharesSigstoreVerifierAcrossAttestationClientsAndScopes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync();
+        var verifier = host.Services.GetRequiredService<SigstoreVerifier>();
+        var trustRootProvider = host.Services.GetRequiredService<ITrustRootProvider>();
+
+        for (var i = 0; i < 2; i++)
+        {
+            using var scope = host.Services.CreateScope();
+            Assert.Same(verifier, scope.ServiceProvider.GetRequiredService<SigstoreVerifier>());
+            Assert.Same(trustRootProvider, scope.ServiceProvider.GetRequiredService<ITrustRootProvider>());
+            var npmChecker = Assert.IsType<SigstoreNpmProvenanceChecker>(
+                scope.ServiceProvider.GetRequiredService<INpmProvenanceChecker>());
+            var gitHubVerifier = Assert.IsType<GitHubArtifactAttestationVerifier>(
+                scope.ServiceProvider.GetRequiredService<IGitHubArtifactAttestationVerifier>());
+
+            // Inspect the dependencies actually retained by the clients, rather than only
+            // resolving the singleton twice. Match field types, not compiler-generated
+            // closure/primary-constructor field names, without adding test-only accessors.
+            var verifyBundle = GetInstanceField<SigstoreBundleVerificationHandler>(npmChecker);
+            Assert.NotNull(verifyBundle.Target);
+            Assert.Same(verifier, GetInstanceField<SigstoreVerifier>(verifyBundle.Target));
+            Assert.Same(verifier, GetInstanceField<SigstoreVerifier>(gitHubVerifier));
+        }
+    }
+
+    [Fact]
+    public async Task BuildApplication_CreatesPrivateTufCacheUnderAspireHome_AndDisposesProvider()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        TufTrustRootProvider provider;
+        using (var host = await BuildHostAsync())
+        {
+            var context = host.Services.GetRequiredService<CliExecutionContext>();
+            Assert.Equal(Path.Combine(aspireHome.FullName, "cache"), context.CacheDirectory.FullName);
+            provider = Assert.IsType<TufTrustRootProvider>(host.Services.GetRequiredService<ITrustRootProvider>());
+
+            // Cache construction creates these directories without contacting the TUF service.
+            var cacheDirectory = Path.Combine(context.CacheDirectory.FullName, "tuf");
+            foreach (var directory in new[] { cacheDirectory, Path.Combine(cacheDirectory, "targets") })
+            {
+                Assert.True(Directory.Exists(directory), $"Expected TUF cache directory: {directory}");
+                if (!OperatingSystem.IsWindows())
+                {
+                    Assert.Equal(
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute,
+                        File.GetUnixFileMode(directory));
+                }
+            }
+        }
+
+        // Cancellation prevents network access even if host disposal stops disposing the provider.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            provider.GetTrustRootAsync(new CancellationToken(canceled: true)));
+    }
+
+    [Fact]
+    [PlatformSpecific(TestPlatforms.Windows)]
+    public async Task BuildApplication_UnwritableTufCache_DoesNotPreventCommandTreeCreation()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        var tufDirectory = Directory.CreateDirectory(Path.Combine(aspireHome.FullName, "cache", "tuf"));
+        Directory.CreateDirectory(Path.Combine(tufDirectory.FullName, "targets"));
+        using var identity = WindowsIdentity.GetCurrent();
+        var denyFileCreation = new FileSystemAccessRule(
+            identity.User!,
+            FileSystemRights.CreateFiles,
+            AccessControlType.Deny);
+        var security = tufDirectory.GetAccessControl();
+        security.AddAccessRule(denyFileCreation);
+        tufDirectory.SetAccessControl(security);
+
+        try
+        {
+            using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+            using var host = await BuildHostAsync();
+
+            Assert.NotNull(host.Services.GetRequiredService<RootCommand>());
+            Assert.IsType<TufTrustRootProvider>(host.Services.GetRequiredService<ITrustRootProvider>());
+        }
+        finally
+        {
+            security.RemoveAccessRuleSpecific(denyFileCreation);
+            tufDirectory.SetAccessControl(security);
+        }
+    }
+
+    [Fact]
+    [OuterloopTest("Requires network access to the public npm registry and Sigstore TUF service")]
+    public async Task BuildApplication_VerifiesLatestPlaywrightNpmProvenance_UsingConfiguredTufCache()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        var cancellationToken = timeout.Token;
+        using var httpClient = new HttpClient();
+
+        // Intentionally use the live latest release in outerloop: recorded bundles cannot
+        // detect npm provenance changes that would break secure Playwright installation.
+        var package = await httpClient.GetFromJsonAsync<JsonElement>(
+            $"https://registry.npmjs.org/{Uri.EscapeDataString(PlaywrightCliInstaller.PackageName)}/latest",
+            cancellationToken);
+        Assert.Equal(PlaywrightCliInstaller.PackageName, package.GetProperty("name").GetString());
+        var version = package.GetProperty("version").GetString();
+        Assert.False(string.IsNullOrEmpty(version));
+        outputHelper.WriteLine($"Verifying {PlaywrightCliInstaller.PackageName}@{version}");
+
+        var distribution = package.GetProperty("dist");
+        var tarballUrl = distribution.GetProperty("tarball").GetString();
+        Assert.NotNull(tarballUrl);
+        using var tarball = await httpClient.GetStreamAsync(tarballUrl, cancellationToken);
+        var digest = await SHA512.HashDataAsync(tarball, cancellationToken);
+        var integrity = $"sha512-{Convert.ToBase64String(digest)}";
+        Assert.Equal(distribution.GetProperty("integrity").GetString(), integrity);
+
+        var checker = host.Services.GetRequiredService<INpmProvenanceChecker>();
+        var result = await checker.VerifyProvenanceAsync(
+            PlaywrightCliInstaller.PackageName,
+            version,
+            PlaywrightCliInstaller.ExpectedSourceRepository,
+            PlaywrightCliInstaller.ExpectedWorkflowPath,
+            PlaywrightCliInstaller.ExpectedBuildType,
+            refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+                       (string.Equals(refInfo.Name, version, StringComparison.Ordinal) ||
+                        string.Equals(refInfo.Name, $"v{version}", StringComparison.Ordinal)),
+            integrity,
+            cancellationToken);
+
+        Assert.True(result.IsVerified, $"Provenance verification failed for {PlaywrightCliInstaller.PackageName}@{version}: {result.Outcome}");
+
+        var context = host.Services.GetRequiredService<CliExecutionContext>();
+        Assert.Equal(Path.Combine(aspireHome.FullName, "cache"), context.CacheDirectory.FullName);
+        var cacheDirectory = Path.Combine(context.CacheDirectory.FullName, "tuf");
+        var cache = new FileSystemTufCache(cacheDirectory);
+        foreach (var role in new[] { "root", "timestamp", "snapshot", "targets" })
+        {
+            Assert.NotEmpty(Assert.IsType<byte[]>(cache.LoadMetadata(role)));
+        }
+        Assert.NotEmpty(Assert.IsType<byte[]>(cache.LoadTarget("trusted_root.json")));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            foreach (var file in Directory.EnumerateFiles(cacheDirectory, "*", SearchOption.AllDirectories))
+            {
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(file));
+            }
+        }
+    }
+
+    [Fact]
     public async Task BuildApplication_CliExecutionContextChannel_MatchesAssemblyMetadataAttribute()
     {
         // End-to-end coherence: the channel flowing through the DI container must equal the
@@ -113,6 +291,51 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var context = host.Services.GetRequiredService<CliExecutionContext>();
 
         Assert.Equal(bakedChannel, context.IdentityChannel);
+    }
+
+    [Fact]
+    public async Task BuildApplication_ConfigurationValuesOverrideGlobalSettingsFile()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var aspireHome = workspace.CreateDirectory("aspire-home");
+        var ambientNssDbDirectory = workspace.CreateDirectory("ambient-nssdb");
+        var configuredNssDbDirectory = workspace.CreateDirectory("configured-nssdb");
+        var globalConfig = JsonSerializer.Serialize(new
+        {
+            certificates = new
+            {
+                nssDbPaths = $"firefox={ambientNssDbDirectory.FullName}"
+            }
+        });
+        File.WriteAllText(Path.Combine(aspireHome.FullName, AspireConfigFile.FileName), globalConfig);
+
+        using var aspireHomeOverride = new EnvVarOverride(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome.FullName);
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
+        {
+            [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={configuredNssDbDirectory.FullName}"
+        });
+
+        var configuration = host.Services.GetRequiredService<IConfiguration>();
+
+        Assert.Equal($"firefox={configuredNssDbDirectory.FullName}", configuration[CertificateConfiguration.NssDbPathsConfigPath]);
+    }
+
+    [Fact]
+    public async Task BuildApplication_ConfiguresCertificateManagerWithNssDbPaths()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "NSS certificate trust is only configured on Linux.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var nssDbDirectory = workspace.CreateDirectory("nssdb");
+        using var host = await BuildHostAsync(new Dictionary<string, string?>
+        {
+            [CertificateConfiguration.NssDbPathsConfigPath] = $"firefox={nssDbDirectory.FullName}"
+        });
+
+        var manager = Assert.IsType<UnixCertificateManager>(host.Services.GetRequiredService<CertificateManager>());
+        var nssDb = Assert.Single(manager.GetNssDbs(workspace.WorkspaceRoot.FullName));
+
+        Assert.Equal(nssDbDirectory.FullName, nssDb.Path);
     }
 
     [Fact]
@@ -257,6 +480,14 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.Empty(testInteractionService.ShownStatuses);
     }
 #endif
+
+    private static T GetInstanceField<T>(object instance)
+    {
+        var field = Assert.Single(instance.GetType().GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic),
+            field => field.FieldType == typeof(T));
+
+        return Assert.IsType<T>(field.GetValue(instance));
+    }
 
     private static string WriteBinaryWithSidecar(string binaryDir, string source, string? channel = null)
     {

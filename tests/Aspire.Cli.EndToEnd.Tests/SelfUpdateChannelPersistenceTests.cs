@@ -58,12 +58,22 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
 
         // Copy the current build into a dedicated get-aspire-cli.sh-style prefix. This gives the
         // self-update a realistic writable route without replacing the harness's original install.
+        //
+        // The sidecar's "packages" field pins Aspire package resolution to the harness's local
+        // hive. Without it the relaunched CLI derives its feed from the identity it just persisted
+        // (darc-pub-microsoft-aspire-<commit>), which stops carrying matching packages once that
+        // staging build is promoted to GA -- the exact failure reported in
+        // https://github.com/microsoft/aspire/issues/19708. InstallSidecarWriter.PrepareForSelfUpdate
+        // rewrites only channel/version/commit, so this field survives the self-update below.
         await auto.RunCommandAsync(
             "install_root=$HOME/.aspire-self-update-e2e; " +
+            "package_path=$(find ~/.aspire/hives -type f -name 'Aspire.Hosting.*.nupkg' -print -quit); " +
+            "test -n \"$package_path\"; " +
+            "packages_dir=$(dirname \"$package_path\"); " +
             "mkdir -p \"$install_root/bin\"; " +
             "cp \"$(command -v aspire)\" \"$install_root/bin/aspire\"; " +
             "chmod +x \"$install_root/bin/aspire\"; " +
-            "printf '%s\\n' '{\"source\":\"script\",\"channel\":\"stable\"}' > \"$install_root/bin/.aspire-install.json\"; " +
+            "printf '{\"source\":\"script\",\"channel\":\"stable\",\"packages\":\"%s\"}\\n' \"$packages_dir\" > \"$install_root/bin/.aspire-install.json\"; " +
             "export PATH=\"$install_root/bin:$PATH\" ASPIRE_CLI_TELEMETRY_OPTOUT=true; hash -r; " +
             "test \"$(command -v aspire)\" = \"$install_root/bin/aspire\"",
             counter);
@@ -73,10 +83,16 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
             counter,
             timeout: TimeSpan.FromMinutes(10));
 
-        // This is a new process launched from the path that was replaced above.
-        await auto.RunCommandAsync("hash -r; aspire --version", counter);
+        await auto.ClearScreenAsync(counter);
+
         await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
 
+        // Relaunch from the replaced path without specifying a channel. Seeing staging land in the
+        // project config proves the new process resolved the identity persisted in the install
+        // sidecar. A second `aspire update --self` cannot be used to assert this: the preserved
+        // "packages" field synthesizes a local-hive channel that replaces the same-named built-in
+        // one (PackagingService.GetChannelsAsync), and a local hive has no CliDownloadBaseUrl, so
+        // self-download reports "Channel 'staging' does not support CLI downloads".
         await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.RunCommandAsync(
             "aspire update --non-interactive --yes",

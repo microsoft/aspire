@@ -25,5 +25,23 @@ void main() throws Exception {
         viteApp.name();
         viteApp.command();
         viteApp.workingDirectory();
+        var denoApp = builder.addDenoApp("deno-app", "./deno-app", "main.ts");
+        denoApp.withDeno(new WithDenoOptions().install(false).installArgs(new String[] { "--cached-only" }));
+        denoApp.withDenoAllowAll(false);
+        denoApp.withDenoAllow(DenoPermissionKind.NET, new String[] { "localhost:8000" });
+        denoApp.withDenoDeny(DenoPermissionKind.READ, new String[] { "./secrets" });
+        denoApp.withDenoConfig("./deno.json");
+        denoApp.withDenoImportMap("./import_map.json");
+        denoApp.withDenoLock("./deno.lock");
+        denoApp.withDenoNoLock();
+        denoApp.withDenoNodeModulesDir(DenoNodeModulesDirMode.AUTO);
+        denoApp.withDenoUnstable(new String[] { "kv", "worker-options" });
+        denoApp.withDenoWatch(true);
+        denoApp.withDenoInspect(new WithDenoInspectOptions().mode(DenoInspectMode.INSPECT_WAIT).hostPort("127.0.0.1:9229"));
+        denoApp.withDenoRun();
+        denoApp.withDenoTask("dev");
+        denoApp.withDenoServe();
+        denoApp.withDenoScriptArgs(new String[] { "--port", "8000" });
+        denoApp.withDenoRuntimeArgs(new String[] { "--quiet" });
         builder.build().run();
     }

@@ -1,0 +1,63 @@
+.aspire-progress-ring {
+    width: var(--aspire-progress-ring-size, 28px);
+    height: var(--aspire-progress-ring-size, 28px);
+    flex-shrink: 0;
+}
+
+.aspire-progress-ring svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.aspire-progress-ring circle {
+    fill: none;
+    stroke-width: 2px;
+    transform-origin: 50% 50%;
+}
+
+.progress-track {
+    stroke: var(--colorNeutralStroke2);
+}
+
+.progress-value {
+    stroke: var(--colorBrandStroke1);
+    stroke-linecap: round;
+}
+
+.determinate .progress-value {
+    /* Circumference of the SVG circle: 2 * pi * 7. */
+    stroke-dasharray: 43.9822971503px;
+    stroke-dashoffset: var(--aspire-progress-ring-dash-offset);
+    stroke-linecap: unset;
+    transform: rotate(-90deg);
+}
+
+.indeterminate .progress-value {
+    animation: aspire-progress-ring-spin-infinite 2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .indeterminate .progress-value {
+        animation: none;
+        stroke-dasharray: 21.99px, 21.99px;
+        transform: rotate(-90deg);
+    }
+}
+
+@keyframes aspire-progress-ring-spin-infinite {
+    0% {
+        stroke-dasharray: 0.01px, 43.97px;
+        transform: rotate(0deg);
+    }
+
+    50% {
+        stroke-dasharray: 21.99px, 21.99px;
+        transform: rotate(450deg);
+    }
+
+    100% {
+        stroke-dasharray: 0.01px, 43.97px;
+        transform: rotate(1080deg);
+    }
+}

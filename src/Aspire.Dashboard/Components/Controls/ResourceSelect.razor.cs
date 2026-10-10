@@ -48,11 +48,6 @@ public partial class ResourceSelect
         });
     }
 
-    private static void ValuedChanged(string? value)
-    {
-        // Do nothing. Required for bunit change to trigger SelectedOptionChanged.
-    }
-
     private string? GetPopupHeight()
     {
         if (Resources?.TryGetNonEnumeratedCount(out var count) is false or null)

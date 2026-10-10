@@ -1,5 +1,7 @@
 <Project>
 
+  <Import Project="Aspire.Hosting.Hex1b.targets" />
+
   <PropertyGroup>
     <EnableAspireIntegrationAnalyzers Condition="'$(EnableAspireIntegrationAnalyzers)' == ''">false</EnableAspireIntegrationAnalyzers>
     <_AspireIntegrationAnalyzerAssembly Condition="'$(_AspireIntegrationAnalyzerAssembly)' == ''">$(MSBuildThisFileDirectory)Aspire.Hosting.Integration.Analyzers.dll</_AspireIntegrationAnalyzerAssembly>

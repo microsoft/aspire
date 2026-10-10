@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -47,6 +48,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly ILogger<ScaffoldingService> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly IFeatures _features;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
@@ -56,7 +59,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
         IEnvironment environment,
         ILogger<ScaffoldingService> logger,
         CliExecutionContext executionContext,
-        ProfilingTelemetry profilingTelemetry)
+        ProfilingTelemetry profilingTelemetry,
+        IFeatures features,
+        IProcessExecutionFactory processExecutionFactory)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _serverSessionFactory = serverSessionFactory;
@@ -66,6 +71,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _logger = logger;
         _executionContext = executionContext;
         _profilingTelemetry = profilingTelemetry;
+        _features = features;
+        _processExecutionFactory = processExecutionFactory;
     }
 
     /// <inheritdoc />
@@ -124,6 +131,12 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // Include the code generation package for scaffolding and code gen
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(language.LanguageId, cancellationToken);
         var integrations = config.GetIntegrationReferences(sdkVersion, directory.FullName).ToList();
+        if (integrations.Any(i => i.Source == IntegrationSource.Npm)
+            && !KnownFeatures.IsHostingIntegrationsEnabled(_features, config))
+        {
+            throw new InvalidOperationException(ErrorStrings.HostingIntegrationsFeatureNotEnabled);
+        }
+
         if (codeGenPackage is not null)
         {
             var codeGenVersion = config.GetEffectiveSdkVersion(sdkVersion);
@@ -389,6 +402,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
             TypeScriptAppHostToolchain.Pnpm => $"pnpm --dir {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Yarn => $"yarn --cwd {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run {scriptName}",
+            // Deno has no `run <script>` for package.json scripts; `deno task` runs them and `--cwd`
+            // scopes the task to the nested AppHost package, mirroring npm's `--prefix`.
+            TypeScriptAppHostToolchain.Deno => $"deno task --cwd {relativeAppHostDirectory} {scriptName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -426,7 +442,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry, _processExecutionFactory);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)
@@ -443,7 +459,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
             return initResult;
         }
 
-        var (result, output) = await runtime.InstallDependenciesAsync(directory, cancellationToken);
+        var (result, output) = await runtime.InstallDependenciesAsync(
+            directory,
+            new Dictionary<string, string>(),
+            cancellationToken);
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();

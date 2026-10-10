@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Cli;
+using Aspire.Cli.Certificates;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -52,13 +53,13 @@ internal abstract class CertificateManager
 
     public const int RSAMinimumKeySizeInBits = 2048;
 
-    public static CertificateManager Create(ILogger logger, IEnvironment environment) => environment.IsWindows() ?
+    public static CertificateManager Create(ILogger logger, IEnvironment environment, CertificateConfiguration.NssDbOverride? nssDbOverride) => environment.IsWindows() ?
 #pragma warning disable CA1416 // Validate platform compatibility
             new WindowsCertificateManager(logger) :
 #pragma warning restore CA1416 // Validate platform compatibility
             environment.IsMacOS() ?
             new MacOSCertificateManager(logger) as CertificateManager :
-            new UnixCertificateManager(logger, environment);
+            new UnixCertificateManager(logger, environment, nssDbOverride);
 
     protected CertificateManagerLogger Log { get; }
 
@@ -1373,12 +1374,12 @@ internal abstract class CertificateManager
             _logger.LogDebug("Reading OpenSSL trusted certificates location from {NssDbOverrideVariableName}.", nssDbOverrideVariableName);
 
         // Event 73 - Verbose
-        internal void UnixNssDbOverridePresent(string environmentVariable) =>
-            _logger.LogDebug("Reading NSS database locations from {EnvironmentVariable}.", environmentVariable);
+        internal void UnixNssDbOverridePresent(string source) =>
+            _logger.LogDebug("Reading NSS database locations from {Source}.", source);
 
         // Event 74 - Warning
-        internal void UnixNssDbDoesNotExist(string nssDb, string environmentVariable) =>
-            _logger.LogWarning("The NSS database '{NssDb}' provided via {EnvironmentVariable} does not exist.", nssDb, environmentVariable);
+        internal void UnixNssDbDoesNotExist(string nssDb, string source) =>
+            _logger.LogWarning("The NSS database '{NssDb}' provided via {Source} does not exist.", nssDb, source);
 
         // Event 75 - Warning
         internal void UnixNotTrustedByDotnet() =>

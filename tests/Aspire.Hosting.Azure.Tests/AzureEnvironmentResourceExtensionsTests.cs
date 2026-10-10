@@ -1,6 +1,3 @@
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -26,7 +23,7 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureEnvironmentResourceExtensionsTests
+public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureEnvironment_ShouldAddResourceToBuilder_InPublishMode()
@@ -4888,6 +4885,18 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public void AddAzureEnvironment_UsesCloudCubeIcon()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+
+        var resourceBuilder = builder.AddAzureEnvironment();
+
+        var icon = Assert.Single(resourceBuilder.Resource.Annotations.OfType<ResourceIconAnnotation>());
+        Assert.Equal("CloudCube", icon.IconName);
+        Assert.Equal(IconVariant.Filled, icon.IconVariant);
+    }
+
+    [Fact]
     public void AzureEnvironmentResource_PreservesDefaultResourceNameValidation()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -4947,10 +4956,10 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.Equal(expectedResourceGroup.Resource, resource.ResourceGroupName);
     }
 
-    private static IDistributedApplicationBuilder CreateBuilder(bool isRunMode = false)
+    private IDistributedApplicationBuilder CreateBuilder(bool isRunMode = false)
     {
         var operation = isRunMode ? DistributedApplicationOperation.Run : DistributedApplicationOperation.Publish;
-        return TestDistributedApplicationBuilder.Create(operation);
+        return TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
     }
 
     /// <summary>
@@ -5382,6 +5391,9 @@ public class AzureEnvironmentResourceExtensionsTests
 
             return Task.FromResult(new DeploymentStateSection(sectionName, data, version: 0));
         }
+
+        public Task<DeploymentStateSection> AcquireCurrentSectionAsync(string sectionName, CancellationToken cancellationToken = default)
+            => AcquireSectionAsync(sectionName, cancellationToken);
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {

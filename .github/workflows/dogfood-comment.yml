@@ -4,6 +4,7 @@ on:
   # Use pull_request_target to run in the context of the base branch
   # This allows commenting on PRs from forks
   pull_request_target:
+    # zizmor: ignore[dangerous-triggers] - the workflow never checks out or executes pull request code
     types: [opened, reopened, synchronize]
     branches:
       - 'main'

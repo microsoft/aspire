@@ -154,6 +154,83 @@ public class KubernetesIngressTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddIngress_WithRuntimeOnlyHostnameParameter_DefersValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var hostname = builder.AddParameter("hostname", "localhost");
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var ingress = k8s.AddIngress("public")
+            .WithHostname(hostname)
+            .WithTls();
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        ingress.WithPath("/api", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
+
+        await Verify(File.ReadAllText(ingressPath), "yaml")
+            .AppendContentAsFile(File.ReadAllText(valuesPath), "yaml");
+    }
+
+    [Fact]
+    public async Task AddIngress_WithHostname_AppliesToHostlessPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com")
+            .WithHostname("www.example.com");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        ingress.WithPath("/api", api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+
+        await Verify(File.ReadAllText(ingressPath), "yaml");
+    }
+
+    [Fact]
+    public async Task AddIngress_HostnameWithDefaultBackendWithoutTls_DoesNotGenerateHostRule()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var ingress = k8s.AddIngress("public")
+            .WithHostname("api.example.com");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
+
+        ingress.WithDefaultBackend(api.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        app.Run();
+
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
+
+        await Verify(File.ReadAllText(ingressPath), "yaml");
+    }
+
+    [Fact]
     public async Task AddIngress_WithTls_GeneratesTlsSection()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

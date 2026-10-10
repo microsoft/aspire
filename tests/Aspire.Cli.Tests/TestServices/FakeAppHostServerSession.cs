@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Text.Json;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
@@ -82,7 +84,28 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
 {
     public IAppHostServerSession? Session { get; init; }
 
+    public Func<IAppHostServerSession>? CreateCallback { get; init; }
+
     public Dictionary<string, string>? CapturedEnvironmentVariables { get; private set; }
+
+    public ConcurrentQueue<Dictionary<string, string>?> CreatedSessionEnvironments { get; } = new();
+
+    public static FakeAppHostServerSessionFactory CreateForScaffolding(
+        IReadOnlyDictionary<string, string>? scaffoldFiles = null)
+    {
+        var rpcClient = new FakeAppHostRpcClient
+        {
+            ScaffoldAppHostAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(scaffoldFiles is null
+                    ? new Dictionary<string, string>()
+                    : new Dictionary<string, string>(scaffoldFiles))
+        };
+
+        return new FakeAppHostServerSessionFactory
+        {
+            Session = new FakeAppHostServerSession(rpcClient)
+        };
+    }
 
     public IAppHostServerSession Create(
         IAppHostServerProject appHostServerProject,
@@ -94,18 +117,24 @@ internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFac
         CancellationToken stopRequested)
     {
         CapturedEnvironmentVariables = environmentVariables is null ? null : new Dictionary<string, string>(environmentVariables);
-        return Session ?? new FakeAppHostServerSession();
+        CreatedSessionEnvironments.Enqueue(CapturedEnvironmentVariables);
+        return CreateCallback?.Invoke() ?? Session ?? new FakeAppHostServerSession();
     }
 }
 
 /// <summary>
 /// Fake RPC client that returns empty results for all operations.
 /// Used to exercise code paths that run after RPC connection without needing a real server.
+/// Members are virtual so a test can override just the call it exercises.
 /// </summary>
-internal sealed class FakeAppHostRpcClient : IAppHostRpcClient
+internal class FakeAppHostRpcClient : IAppHostRpcClient
 {
-    public Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
-        => Task.FromResult(new RuntimeSpec
+    public RuntimeSpec? RuntimeSpec { get; init; }
+    public Func<string, string, string?, CancellationToken, Task<Dictionary<string, string>>>? ScaffoldAppHostAsyncCallback { get; init; }
+    public Func<string, CancellationToken, Task<Dictionary<string, string>>>? GenerateCodeAsyncCallback { get; init; }
+
+    public virtual Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
+        => Task.FromResult(RuntimeSpec ?? new RuntimeSpec
         {
             Language = languageId,
             DisplayName = "Fake",
@@ -114,25 +143,31 @@ internal sealed class FakeAppHostRpcClient : IAppHostRpcClient
             Execute = new CommandSpec { Command = "node", Args = ["apphost.js"] }
         });
 
-    public Task<Dictionary<string, string>> ScaffoldAppHostAsync(string languageId, string targetPath, string? projectName, CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    public virtual Task<Dictionary<string, string>> ScaffoldAppHostAsync(string languageId, string targetPath, string? projectName, CancellationToken cancellationToken)
+        => ScaffoldAppHostAsyncCallback is not null
+            ? ScaffoldAppHostAsyncCallback(languageId, targetPath, projectName, cancellationToken)
+            : throw new NotSupportedException();
 
-    public Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
+    public virtual Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
+        => GenerateCodeAsyncCallback?.Invoke(languageId, cancellationToken)
+            ?? Task.FromResult(new Dictionary<string, string>());
+
+    public virtual Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
         => Task.FromResult(new Dictionary<string, string>());
 
-    public Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
-        => Task.FromResult(new Dictionary<string, string>());
-
-    public Task<CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken)
+    public virtual Task<CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
+    public virtual Task<CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    public virtual Task<JsonElement> ExportApiAsync(string languageId, string packageName, string packageVersion, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    public virtual Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public virtual Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

@@ -4,80 +4,71 @@
 @using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons
 @inject IStringLocalizer<ControlsStrings> Loc
 
-<div class="structured-log-details-layout">
-    <FluentToolbar Orientation="Orientation.Horizontal">
+<div class="details-layout structured-log-details-layout">
+    <div class="details-toolbar" role="toolbar">
         <div>
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
-        <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
         <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
-        <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
-                      Immediate="true"
-                      Autofocus="true"
-                      AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
-        <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-        <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                          Icon="@(new Icons.Regular.Size20.Options())"
-                          ItemsProvider="@(() => _logActionsMenuItems)"
-                          Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]"
-                          slot="end" />
-    </FluentToolbar>
+        <div class="toolbar-end">
+            <FluentTextInput TextInputType="TextInputType.Search" Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
+                          Immediate="true"
+                          Autofocus="true"
+                          AutoComplete="off"
+                          @bind-Value="_filter">
+                <StartTemplate>
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+                </StartTemplate>
+            </FluentTextInput>
+            <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"
+                              ButtonClass="toolbar-button details-toolbar-button structured-log-details-actions"
+                              Icon="@(new Icons.Regular.Size20.Options())"
+                              ItemsProvider="@(() => _logActionsMenuItems)"
+                              Title="@Loc[nameof(ControlsStrings.ActionsButtonText)]" />
+        </div>
+    </div>
     <div class="property-grid-container">
-        <FluentAccordion>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredItems.Count()
-                    </FluentBadge>
-                </div>
+        <FluentAccordion Block="true">
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]"
+                                                Count="@FilteredItems.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsContextHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredContextItems.Count()
-                    </FluentBadge>
-                </div>
+            </AspirePropertyDetailsAccordionItem>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.StructuredLogsDetailsContextHeader)]"
+                                                Count="@FilteredContextItems.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredContextItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
+            </AspirePropertyDetailsAccordionItem>
             @if (_exceptionAttributes.Count > 0)
             {
-                <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsExceptionHeader)]" Expanded="true">
-                    <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                            @FilteredExceptionItems.Count()
-                        </FluentBadge>
-                    </div>
+                <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.StructuredLogsDetailsExceptionHeader)]"
+                                                    Count="@FilteredExceptionItems.Count()"
+                                                    Expanded="true">
                     <PropertyGrid TItem="TelemetryPropertyViewModel"
                                   Items="@FilteredExceptionItems"
                                   GridTemplateColumns="1fr 2fr"
                                   HighlightText="@_filter" />
-                </FluentAccordionItem>
+                </AspirePropertyDetailsAccordionItem>
             }
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceHeader)]" Expanded="true">
-                <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
-                        @FilteredResourceItems.Count()
-                    </FluentBadge>
-                </div>
+            <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceHeader)]"
+                                                Count="@FilteredResourceItems.Count()"
+                                                Expanded="true">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredResourceItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
+            </AspirePropertyDetailsAccordionItem>
         </FluentAccordion>
     </div>
 </div>

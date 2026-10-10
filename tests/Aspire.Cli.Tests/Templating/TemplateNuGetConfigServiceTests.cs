@@ -2,24 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Globalization;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Templating;
 
 /// <summary>
 /// Channel-resolution behavior for <see cref="TemplateNuGetConfigService"/>.
-/// None of the channel-resolving entry points
-/// (<see cref="TemplateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(string?, string, CancellationToken)"/>,
-/// <see cref="TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(string?, string, CancellationToken)"/>,
-/// <see cref="TemplateNuGetConfigService.ResolveTemplatePackageAsync(TemplatePackageQuery, CancellationToken)"/>)
-/// may resolve a channel by reading from a global identity-channel source; channel input
-/// must come from the caller-supplied argument or fall back to the implicit channel only.
+/// Unqualified local CLI template resolution uses directory-backed channels, while other
+/// unqualified template resolution retains the implicit-channel and opted-in hive rules.
+/// Explicit channel input for every entry point comes from its caller-supplied argument.
 /// </summary>
 public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 {
@@ -438,6 +437,46 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResolveTemplatePackageAsync_LocalSourceOverrideDoesNotFilterToChannelPin()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(
+            packagesDirectory.FullName,
+            "aspire.projecttemplates",
+            "13.5.0"));
+        File.WriteAllText(
+            Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.13.5.0.nupkg"),
+            string.Empty);
+
+        var sourceOverride = packagesDirectory.FullName.Replace('\\', '/');
+        var channel = PackageChannel.CreateExplicitChannel(
+            "staging",
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", "https://example.invalid/staging/v3/index.json")],
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "13.6.0");
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+        var service = CreateService(packagingService: packagingService);
+
+        var selection = await service.ResolveTemplatePackageAsync(
+            new TemplatePackageQuery(
+                RequestedChannel: "staging",
+                VersionOverride: null,
+                SourceOverride: sourceOverride,
+                IncludePrHives: true),
+            CancellationToken.None);
+
+        Assert.Equal("13.5.0", selection.Package.Version);
+        Assert.Equal(sourceOverride, selection.Package.Source);
+    }
+
+    [Fact]
     public async Task InstallTemplatePackageAsync_SourceOverride_UsesExclusiveSource()
     {
         const string channelSource = "https://channel.example/v3/index.json";
@@ -597,10 +636,330 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_UnqualifiedLocalIdentityWithoutMatchingIdentityChannelPackage_ThrowsActionableError()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var hivesDirectory = workspace.CreateDirectory("hives");
+        hivesDirectory.CreateSubdirectory("unrelated");
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var prPackagesDirectory = workspace.CreateDirectory("pr-packages");
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.5.0.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(prPackagesDirectory.FullName, "Aspire.ProjectTemplates.13.6.0-dev.nupkg"), string.Empty);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            hivesDirectory: hivesDirectory,
+            identityVersion: "13.6.0-dev");
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                    [
+                        new Aspire.Shared.NuGetPackageCli
+                        {
+                            Id = TemplateNuGetConfigService.TemplatesPackageName,
+                            Version = "13.5.0",
+                            Source = PackageSources.NuGetOrg
+                        }
+                    ])
+                }, new TestFeatures(), NullLogger.Instance);
+                var stagingChannel = PackageChannel.CreateExplicitChannel(
+                    "staging",
+                    PackageChannelQuality.Prerelease,
+                    [new PackageMapping("Aspire*", "https://example.invalid/staging/v3/index.json")],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "13.6.0-dev");
+                var prChannel = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", prPackagesDirectory.FullName.Replace('\\', '/'))],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "13.6.0-dev");
+                var localChannel = PackageChannel.CreateExplicitChannel(
+                    PackageChannelNames.Local,
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/'))],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "13.6.0-dev");
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel, stagingChannel, prChannel, localChannel]);
+            }
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+        var query = new TemplatePackageQuery(
+            RequestedChannel: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: true);
+
+        var exception = await Assert.ThrowsAsync<Aspire.Cli.Interaction.EmptyChoicesException>(
+            async () => await service.ResolveTemplatePackageAsync(query, CancellationToken.None));
+
+        Assert.Equal(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                TemplatingStrings.NoMatchingLocalTemplatePackage,
+                "13.6.0-dev"),
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_LocalIdentityWithExplicitLocalChannel_UsesRequestedChannelVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.5.0.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.6.0.nupkg"), string.Empty);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            identityVersion: "13.6.0-dev");
+        var localChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/'))],
+            new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "13.5.0");
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([localChannel])
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var selection = await service.ResolveTemplatePackageAsync(
+            new TemplatePackageQuery(
+                RequestedChannel: PackageChannelNames.Local,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: true),
+            CancellationToken.None);
+
+        Assert.Equal(PackageChannelNames.Local, selection.Channel.Name);
+        Assert.Equal("13.5.0", selection.Package.Version);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_InitLocalChannelDoesNotFilterToPinnedVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        var nestedDirectory = Directory.CreateDirectory(Path.Combine(
+            packagesDirectory.FullName,
+            "aspire.projecttemplates",
+            "13.6.0"));
+        File.WriteAllText(
+            Path.Combine(nestedDirectory.FullName, "Aspire.ProjectTemplates.13.6.0.nupkg"),
+            string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            identityVersion: "13.7.0");
+        var localChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/'))],
+            new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "13.7.0");
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([localChannel])
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var selection = await service.ResolveTemplatePackageAsync(
+            new TemplatePackageQuery(
+                RequestedChannel: PackageChannelNames.Local,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false),
+            CancellationToken.None);
+
+        Assert.Equal("13.6.0", selection.Package.Version);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_ExplicitVersionFindsExactLocalPackageBelowNewerPinnedVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.6.0-dev.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.99.0.0.nupkg"), string.Empty);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            identityVersion: "13.6.0-dev");
+        var localChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/'))],
+            new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0");
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([localChannel])
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var selection = await service.ResolveTemplatePackageAsync(
+            new TemplatePackageQuery(
+                RequestedChannel: null,
+                VersionOverride: "13.6.0-dev",
+                SourceOverride: null,
+                IncludePrHives: true),
+            CancellationToken.None);
+
+        Assert.Equal("13.6.0-dev", selection.Package.Version);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_ExplicitVersionNotFound_ThrowsInsteadOfSelectingAnotherVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.99.0.0.nupkg"), string.Empty);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            identityVersion: "13.6.0-dev");
+        var localChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Local,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/'))],
+            new FakeNuGetPackageCache(),
+            features: new TestFeatures(),
+            NullLogger.Instance,
+            pinnedVersion: "99.0.0");
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([localChannel])
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+
+        var exception = await Assert.ThrowsAsync<Aspire.Cli.Interaction.EmptyChoicesException>(
+            async () => await service.ResolveTemplatePackageAsync(
+                new TemplatePackageQuery(
+                    RequestedChannel: null,
+                    VersionOverride: "13.5.0-dev",
+                    SourceOverride: null,
+                    IncludePrHives: true),
+                CancellationToken.None));
+
+        Assert.Equal(
+            string.Format(
+                CultureInfo.CurrentCulture,
+                TemplatingStrings.TemplateVersionNotFound,
+                "13.5.0-dev"),
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_UnqualifiedLocalIdentity_PrefersMatchingLocalPackage()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.6.0-dev.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.13.7.0-dev.nupkg"), string.Empty);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            identityVersion: "13.6.0-dev");
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var stagingChannel = PackageChannel.CreateExplicitChannel(
+                    "staging",
+                    PackageChannelQuality.Prerelease,
+                    [new PackageMapping("Aspire*", "https://example.invalid/staging/v3/index.json")],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "13.6.0-dev");
+                var localChannel = PackageChannel.CreateExplicitChannel(
+                    PackageChannelNames.Local,
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", packagesDirectory.FullName.Replace('\\', '/'))],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "13.7.0-dev");
+                return Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel, localChannel]);
+            }
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+        var query = new TemplatePackageQuery(
+            RequestedChannel: null,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: true);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal(PackageChannelNames.Local, selection.Channel.Name);
+        Assert.True(selection.Channel.IsBackedByLocalPackageDirectory);
+        Assert.Equal("13.6.0-dev", selection.Package.Version);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_LocalIdentityWithExplicitChannel_UsesRequestedChannel()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Local,
+            identityVersion: "13.6.0-dev");
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var stagingChannel = PackageChannel.CreateExplicitChannel(
+                    "staging",
+                    PackageChannelQuality.Prerelease,
+                    [new PackageMapping("Aspire*", "https://example.invalid/staging/v3/index.json")],
+                    new FakeNuGetPackageCache(),
+                    features: new TestFeatures(),
+                    NullLogger.Instance,
+                    pinnedVersion: "13.6.0-dev");
+                return Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel]);
+            }
+        };
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
+        var query = new TemplatePackageQuery(
+            RequestedChannel: "staging",
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: true);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("staging", selection.Channel.Name);
+        Assert.Equal("13.6.0-dev", selection.Package.Version);
+    }
+
     private static CliExecutionContext CreateExecutionContextWithHives(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory)
     {
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
+            identityChannel: PackageChannelNames.Daily,
             hivesDirectory: hivesDirectory);
     }
 
@@ -616,6 +975,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDir = workspace.CreateDirectory("identity-packages");
+        File.WriteAllText(Path.Combine(packagesDir.FullName, "Aspire.ProjectTemplates.13.5.0.nupkg"), string.Empty);
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(
             workspace.WorkspaceRoot,
             identityChannel: "stable",
@@ -673,6 +1033,10 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             "Aspire.ProjectTemplates.13.4.0.nupkg");
         Directory.CreateDirectory(Path.GetDirectoryName(templatePackagePath)!);
         await File.WriteAllTextAsync(templatePackagePath, string.Empty);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: "pr-12345",
+            identityVersion: "13.4.0");
 
         var packagingService = new TestPackagingService
         {
@@ -693,7 +1057,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var service = CreateService(packagingService: packagingService);
+        var service = CreateService(packagingService: packagingService, executionContext: executionContext);
 
         var selection = await service.ResolveTemplatePackageAsync(
             new TemplatePackageQuery(

@@ -23,6 +23,73 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenPackageManagerIsDeno_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"deno@2.9.0\" }");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, toolchain);
+    }
+
+    [Theory]
+    [InlineData("deno@0.224.0")]
+    [InlineData("deno@1.46.3")]
+    public void Resolve_WhenPackageManagerIsPreV2Deno_Throws(string packageManager)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "package.json");
+        File.WriteAllText(packageJsonPath, $$"""{ "packageManager": "{{packageManager}}" }""");
+
+        var exception = Assert.Throws<DenoVersionNotSupportedException>(
+            () => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
+
+        Assert.Equal(
+            $"Deno versions earlier than 2 are not supported for TypeScript AppHosts because dependency restore requires Deno 2 or later. Upgrade '{packageManager}' in {packageJsonPath} to Deno 2 or later.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoLockExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.lock"), "{ \"version\": \"5\" }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.lock found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoJsonExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.json"), "{}");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.json found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoJsoncExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.jsonc"), "{ /* Deno configuration */ }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.jsonc found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
     public void Resolve_WhenPnpmLockExists_ReturnsPnpm()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -43,7 +110,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade 'yarn@1.22.22' in {packageJsonPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
@@ -67,7 +134,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
@@ -83,7 +150,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var exception = Assert.Throws<YarnClassicNotSupportedException>(() => TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, new TestEnvironment(), logger: null));
 
-        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, or Bun.", exception.Message);
+        Assert.Equal($"Yarn Classic is not supported for TypeScript AppHosts. Upgrade the Yarn lockfile at {yarnLockPath} to Yarn 4 or later, or use npm, pnpm, Bun, or Deno.", exception.Message);
     }
 
     [Fact]
@@ -345,6 +412,27 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("pnpm", runtimeSpec.WatchExecute?.Command);
         Assert.Contains("pnpm exec tsc --noEmit -p tsconfig.apphost.json && pnpm exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenDenoSelected_UsesDenoRunCommands()
+    {
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Deno);
+
+        Assert.Equal("TypeScript (Deno)", runtimeSpec.DisplayName);
+        Assert.Equal("deno", runtimeSpec.InstallDependencies?.Command);
+        Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("deno", preExecute.Command);
+        Assert.Equal(["check", "--unstable-sloppy-imports", "{appHostFile}"], preExecute.Args);
+        Assert.Equal("deno", runtimeSpec.Execute.Command);
+        Assert.Equal(["run", "-A", "--unstable-sloppy-imports", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal("deno", runtimeSpec.WatchExecute?.Command);
+        Assert.Equal(["run", "-A", "--unstable-sloppy-imports", "--check", "--watch", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
+        Assert.Equal("deno.v1", runtimeSpec.ExtensionLaunchCapability);
+        Assert.Equal("DENO_CERT", runtimeSpec.CertificateBundleEnvironmentVariable);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()

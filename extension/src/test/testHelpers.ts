@@ -1,6 +1,18 @@
 import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
+export function isProcessAlive(pid: number): boolean {
+    try {
+        process.kill(pid, 0);
+        return true;
+    } catch (error) {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'ESRCH') {
+            return false;
+        }
+        throw error;
+    }
+}
+
 export function languageIdForPath(filePath: string): string {
     if (filePath.endsWith('.cs')) { return 'csharp'; }
     if (filePath.endsWith('.ts')) { return 'typescript'; }
@@ -97,6 +109,19 @@ export function createWorkspaceFolder(name: string, fsPath: string, index: numbe
         uri: Object.create(uri, { fsPath: { value: fsPath, enumerable: true } }) as vscode.Uri,
         name,
         index,
+    };
+}
+
+export function createMockExtension<T>(id: string, extensionPath: string, api: T): vscode.Extension<T> {
+    return {
+        id,
+        extensionPath,
+        extensionUri: vscode.Uri.file(extensionPath),
+        isActive: false,
+        packageJSON: {},
+        extensionKind: vscode.ExtensionKind.Workspace,
+        exports: api,
+        activate: async () => api,
     };
 }
 

@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Hosting.Dcp.Model;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -22,11 +21,9 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
 {
     private SupportsDebuggingAnnotation(
         string launchConfigurationType,
-        Func<Executable, LaunchConfigurationCallbackContext, Task> launchConfigurationAnnotator,
         Func<LaunchConfigurationCallbackContext, Task<object>> launchConfigurationProducer)
     {
         LaunchConfigurationType = launchConfigurationType;
-        LaunchConfigurationAnnotator = launchConfigurationAnnotator;
         LaunchConfigurationProducer = launchConfigurationProducer;
     }
 
@@ -37,16 +34,13 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     /// The IDE advertises the launch configuration types it can handle; a resource whose type is not
     /// advertised is started as a plain process instead.
     /// <para>
-    /// Exception: when the active debug session does not
-    /// advertise any launch configuration types at all (for example Visual Studio, which does not send a
-    /// capability list), <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly
-    /// supported rather than falling back to plain process execution.
+    /// Exception: when the active debug session does not provide a usable launch configuration capability list
+    /// (for example Visual Studio, which does not send one), <see cref="KnownLaunchConfigurationTypes.Project"/>
+    /// is treated as implicitly supported for non-file-based project resources. File-based C# apps require the
+    /// IDE to advertise explicit project support.
     /// </para>
     /// </remarks>
     public string LaunchConfigurationType { get; }
-
-    // Takes the internal DCP Executable object, so it stays internal even though the annotation is public.
-    internal Func<Executable, LaunchConfigurationCallbackContext, Task> LaunchConfigurationAnnotator { get; }
 
     // The producer callback supplied to WithDebugSupport, with the launch configuration boxed as object.
     // Internal because only Aspire constructs LaunchConfigurationCallbackContext values and because the
@@ -58,13 +52,8 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
         string launchConfigurationType,
         Func<LaunchConfigurationCallbackContext, Task<T>> launchConfigurationProducer)
     {
-        // The annotator stays generic over T so the DCP annotation is serialized against the concrete
-        // launch configuration type rather than a boxed object, which would change the emitted JSON.
         return new SupportsDebuggingAnnotation(
             launchConfigurationType,
-            async (exe, context) => exe.AnnotateAsObjectList(
-                Executable.LaunchConfigurationsAnnotation,
-                await ProduceAsync(context).ConfigureAwait(false)),
             // The suppression is safe because ProduceAsync throws rather than returning null; the
             // compiler cannot see that because T is unconstrained and so may be a nullable type.
             async context => (await ProduceAsync(context).ConfigureAwait(false))!);

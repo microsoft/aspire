@@ -7,12 +7,12 @@ using Azure.Provisioning.AppContainers;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureProvisioningResourceExtensionsTests
+public class AzureProvisioningResourceExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public async Task AsProvisioningParameterTests()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var apiProject = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpsEndpoint();

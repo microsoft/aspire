@@ -8,8 +8,10 @@ using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Layout;
 
-public partial class AspirePageContentLayout : ComponentBase
+public partial class AspirePageContentLayout : ComponentBase, IDisposable
 {
+    private bool _disposed;
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
 
@@ -54,7 +56,10 @@ public partial class AspirePageContentLayout : ComponentBase
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IDialogReference? _toolbarPanel;
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    private DashboardDialogReference? _toolbarPanel;
 
     public bool IsToolbarPanelOpen => _toolbarPanel is not null;
 
@@ -81,7 +86,8 @@ public partial class AspirePageContentLayout : ComponentBase
 
     public async Task OpenMobileToolbarAsync()
     {
-        _toolbarPanel = await DialogService.ShowPanelAsync<ToolbarPanel>(
+        var openedAtUri = NavigationManager.Uri;
+        _toolbarPanel = await DialogService.ShowDialogAsync<ToolbarPanel>(
             new MobileToolbar(
                 ToolbarSection!,
                 MobileToolbarButtonText ?? LayoutLoc[nameof(Resources.Layout.PageLayoutViewFilters)]),
@@ -89,33 +95,45 @@ public partial class AspirePageContentLayout : ComponentBase
             {
                 Alignment = HorizontalAlignment.Center,
                 Title = MobileToolbarButtonText ?? ControlsStringsLoc[nameof(ControlsStrings.ChartContainerFiltersHeader)],
-                Width = "100%",
-                Height = "90%",
+                Width = "100vw",
+                Height = "100dvh",
                 Modal = false,
                 PrimaryAction = null,
                 SecondaryAction = null,
-                OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, async () =>
+                OnDialogClosing = EventCallback.Factory.Create<IDialogInstance>(this, async () =>
                 {
-                    await InvokeListenersAsync();
                     _toolbarPanel = null;
+                    if (NavigationManager.Uri == openedAtUri)
+                    {
+                        await InvokeListenersAsync();
+                    }
+                    else
+                    {
+                        // Navigation also dismisses dialogs. Don't apply a filter from the old
+                        // page after the browser has already navigated elsewhere.
+                        DialogCloseListeners.Clear();
+                    }
                 })
             });
     }
 
     public async Task CloseMobileToolbarAsync()
     {
-        if (_toolbarPanel is not null)
+        if (_toolbarPanel is { } toolbarPanel)
         {
-            await _toolbarPanel.CloseAsync();
-            // CloseAsync doesn't invoke OnDialogClosing, so we need to call InvokeListeners ourselves
-            await InvokeListenersAsync();
-
             _toolbarPanel = null;
+            await toolbarPanel.CloseAsync();
+            await toolbarPanel.Result;
         }
     }
 
     private async Task InvokeListenersAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         foreach (var dialogCloseListener in DialogCloseListeners.Values)
         {
             await dialogCloseListener.Invoke();
@@ -124,6 +142,11 @@ public partial class AspirePageContentLayout : ComponentBase
         DialogCloseListeners.Clear();
     }
 
+    public void Dispose()
+    {
+        _disposed = true;
+        DialogCloseListeners.Clear();
+    }
+
     public record MobileToolbar(RenderFragment ToolbarSection, string MobileToolbarButtonText);
 }
-

@@ -228,7 +228,7 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
         RequiredText:
         [
             "apphost.mts(1,15): error TS1109: Expression expected.",
-            "The TypeScript (Node.js) apphost failed."
+            InteractionServiceStrings.ProjectCouldNotBeBuilt
         ],
         ForbiddenText:
         [

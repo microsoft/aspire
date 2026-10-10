@@ -52,7 +52,7 @@ public static class AspireOracleEFCoreExtensions
             (settings, section) => section.Bind(settings)
         );
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ConnectionString = connectionString;
         }
@@ -117,11 +117,7 @@ public static class AspireOracleEFCoreExtensions
             {
                 builder.CheckDbContextRegistered<TContext>();
 
-#if NET9_0_OR_GREATER
                 builder.Services.ConfigureDbContext<TContext>(ConfigureRetryAndTimeout);
-#else
-                builder.PatchServiceDescriptor<TContext>(ConfigureRetryAndTimeout);
-#endif
 
                 void ConfigureRetryAndTimeout(DbContextOptionsBuilder optionsBuilder)
                 {

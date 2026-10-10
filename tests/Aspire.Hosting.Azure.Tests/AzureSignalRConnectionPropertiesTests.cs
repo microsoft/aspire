@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSignalRConnectionPropertiesTests
+public class AzureSignalRConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureSignalRResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var signalr = builder.AddAzureSignalR("signalr");
 
         var properties = ((IResourceWithConnectionString)signalr.Resource).GetConnectionProperties().ToArray();

@@ -38,8 +38,10 @@ if (setupInstallPath is not null)
 {
     var dcpDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dcp"));
     var managedDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "managed"));
+    var dashboardDirectory = Directory.CreateDirectory(Path.Combine(setupInstallPath, "bundle", "dashboard"));
     File.WriteAllText(Path.Combine(dcpDirectory.FullName, OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), "");
     File.WriteAllText(Path.Combine(managedDirectory.FullName, OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), "");
+    File.WriteAllText(Path.Combine(dashboardDirectory.FullName, OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard"), "");
     return;
 }
 

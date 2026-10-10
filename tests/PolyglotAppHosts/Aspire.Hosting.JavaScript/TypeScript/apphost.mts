@@ -1,4 +1,9 @@
-import { createBuilder } from './.aspire/modules/aspire.mjs';
+import {
+    createBuilder,
+    DenoInspectMode,
+    DenoNodeModulesDirMode,
+    DenoPermissionKind,
+} from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -27,6 +32,25 @@ await viteApp.withRunScript('dev', { args: ['--host'] });
 const _viteAppName = await viteApp.name();
 const _viteAppCommand = await viteApp.command();
 const _viteAppWorkingDirectory = await viteApp.workingDirectory();
+
+const denoApp = await builder.addDenoApp('deno-app', './deno-app', 'main.ts');
+await denoApp.withDeno({ install: false, installArgs: ['--cached-only'] });
+await denoApp.withDenoAllowAll({ enabled: false });
+await denoApp.withDenoAllow(DenoPermissionKind.Net, ['localhost:8000']);
+await denoApp.withDenoDeny(DenoPermissionKind.Read, ['./secrets']);
+await denoApp.withDenoConfig('./deno.json');
+await denoApp.withDenoImportMap('./import_map.json');
+await denoApp.withDenoLock('./deno.lock');
+await denoApp.withDenoNoLock();
+await denoApp.withDenoNodeModulesDir({ mode: DenoNodeModulesDirMode.Auto });
+await denoApp.withDenoUnstable(['kv', 'worker-options']);
+await denoApp.withDenoWatch({ hmr: true });
+await denoApp.withDenoInspect({ mode: DenoInspectMode.InspectWait, hostPort: '127.0.0.1:9229' });
+await denoApp.withDenoRun();
+await denoApp.withDenoTask('dev');
+await denoApp.withDenoServe();
+await denoApp.withDenoScriptArgs(['--port', '8000']);
+await denoApp.withDenoRuntimeArgs(['--quiet']);
 
 const nextJsApp = await builder.addNextJsApp('nextjs-app', './nextjs-app', { runScriptName: 'dev' });
 await nextJsApp.disableBuildValidation();

@@ -4,6 +4,10 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var registry = builder.addAzureContainerRegistry("containerregistry")
             .withPurgeTask("0 1 * * *", new WithPurgeTaskOptions().filter("samples:*").ago(7.0).keep(5.0).taskName("purge-samples"));
+        registry.configureInfrastructure((infrastructure) -> {
+            var service = infrastructure.getContainerRegistryService();
+            service.tags().set("provisioning-proxy", "java");
+        });
         var environment = builder.addAzureContainerAppEnvironment("environment");
         environment.withAzureContainerRegistry(registry);
         environment.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] { AzureContainerRegistryRole.ACR_PULL, AzureContainerRegistryRole.ACR_PUSH });

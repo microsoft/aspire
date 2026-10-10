@@ -13,6 +13,12 @@ func main() {
 	}
 
 	storage := builder.AddAzureStorage("storage")
+	_ = storage.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		account := infrastructure.GetStorageAccount()
+		account.Tags().Set("provisioning-proxy", "go")
+		immutabilityPolicy := infrastructure.CreateAccountImmutabilityPolicy()
+		immutabilityPolicy.SetImmutabilityPeriodSinceCreationInDays(float64(30))
+	})
 	if storage.Err() != nil {
 		log.Fatalf(aspire.FormatError(storage.Err()))
 	}

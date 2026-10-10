@@ -1,0 +1,11 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "first-config"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "first"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  URL: "http://{{ .Values.config.first.shared_host }}/first"

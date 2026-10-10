@@ -40,7 +40,8 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         ".woff",
         ".woff2",
         ".ttf",
-        ".otf"
+        ".otf",
+        ".jar"
     ];
 
     // Embedded resources carry no file mode, so every scaffolded file lands with the default

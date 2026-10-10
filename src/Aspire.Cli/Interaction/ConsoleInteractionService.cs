@@ -278,7 +278,7 @@ internal class ConsoleInteractionService : IInteractionService
         return result;
     }
 
-    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
     {
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
@@ -641,6 +641,13 @@ internal class ConsoleInteractionService : IInteractionService
 
     public async Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
+        if (!_hostEnvironment.SupportsInteractiveOutput)
+        {
+            // The callback supplies replacement snapshots, so appending them would duplicate prior
+            // content. Callers must define incremental static output when a live region is unavailable.
+            throw new InvalidOperationException("Live rendering requires interactive output.");
+        }
+
         await MessageConsole.Live(initialRenderable)
             .AutoClear(false)
             .StartAsync(async ctx =>

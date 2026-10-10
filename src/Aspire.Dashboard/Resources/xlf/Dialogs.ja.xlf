@@ -303,6 +303,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">ユーザー</target>
         <note />
       </trans-unit>
+      <trans-unit id="GenAIMessageTreeLabel">
+        <source>Generative AI messages</source>
+        <target state="new">Generative AI messages</target>
+        <note />
+      </trans-unit>
       <trans-unit id="GenAINAText">
         <source>n/a</source>
         <target state="translated">N/A</target>
@@ -463,6 +468,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">構造化ログに移動</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogGoToTerminals">
+        <source>Go to Terminals</source>
+        <target state="new">Go to Terminals</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Go to Traces</source>
         <target state="translated">トレースに移動</target>
@@ -491,6 +501,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="HelpDialogTogglePanelOrientation">
         <source>Toggle panel orientation</source>
         <target state="translated">パネルの向きを切り替える</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogToggleTerminalDock">
+        <source>Toggle terminal</source>
+        <target state="new">Toggle terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -746,6 +761,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
         <source>Unformatted</source>
         <target state="translated">書式設定なし</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextVisualizerDialogSqlFormat">
+        <source>SQL</source>
+        <target state="new">SQL</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">

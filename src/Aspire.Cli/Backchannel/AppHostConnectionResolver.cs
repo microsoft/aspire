@@ -9,6 +9,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -51,20 +52,22 @@ internal sealed class AppHostConnectionResolver(
 {
     /// <summary>
     /// Resolves all running AppHost connections using socket-first discovery.
-    /// Used when stopping all running AppHosts (e.g., via --all flag).
+    /// Supports global discovery without project selection.
     /// </summary>
     /// <param name="scanningMessage">Message to display while scanning for AppHosts.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="pruneOrphanedSockets">Whether to delete unrelated orphaned sockets during discovery.</param>
     /// <returns>All resolved connections, or an empty array if none found.</returns>
     public async Task<AppHostConnectionResult[]> ResolveAllConnectionsAsync(
         string scanningMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool pruneOrphanedSockets = true)
     {
         var connections = await interactionService.ShowStatusAsync(
             scanningMessage,
             async () =>
             {
-                await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                await backchannelMonitor.ScanAsync(cancellationToken, pruneOrphanedSockets).ConfigureAwait(false);
                 return backchannelMonitor.Connections.ToList();
             });
 
@@ -142,19 +145,19 @@ internal sealed class AppHostConnectionResolver(
                 };
             }
 
-            var matchingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            var matchingSockets = AppHostSocketManager.FindSockets(
                 projectFile.FullName,
                 executionContext.HomeDirectory.FullName,
                 Environment.ProcessId,
                 logger);
 
             // Try each matching socket until we get a connection
-            foreach (var socketPath in matchingSockets)
+            foreach (var appHostSocket in matchingSockets)
             {
                 try
                 {
                     var connection = await AppHostAuxiliaryBackchannel.ConnectAsync(
-                        socketPath, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
+                        appHostSocket, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
                     if (connection is not null)
                     {
                         var result = new AppHostConnectionResult { Connection = connection };
@@ -164,7 +167,7 @@ internal sealed class AppHostConnectionResolver(
                 }
                 catch (Exception ex)
                 {
-                    logger.LogDebug(ex, "Failed to connect to socket at {SocketPath}", socketPath);
+                    logger.LogDebug(ex, "Failed to connect to socket at {SocketPath}", appHostSocket.SocketPath);
                 }
             }
 

@@ -61,11 +61,11 @@ public class AgentEnvironmentApplicatorTests
         var applicator = new AgentEnvironmentApplicator(
             "My Description",
             _ => Task.CompletedTask,
-            promptGroup: McpInitPromptGroup.AdditionalOptions,
+            promptGroup: McpInitPromptGroup.Tools,
             priority: 5);
 
         Assert.Equal("My Description", applicator.Description);
-        Assert.Equal(McpInitPromptGroup.AdditionalOptions, applicator.PromptGroup);
+        Assert.Equal(McpInitPromptGroup.Tools, applicator.PromptGroup);
         Assert.Equal(5, applicator.Priority);
     }
 }

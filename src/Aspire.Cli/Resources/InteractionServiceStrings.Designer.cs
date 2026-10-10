@@ -22,7 +22,7 @@ namespace Aspire.Cli.Resources {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class InteractionServiceStrings {
+    internal class InteractionServiceStrings {
 
         private static global::System.Resources.ResourceManager resourceMan;
 
@@ -36,7 +36,7 @@ namespace Aspire.Cli.Resources {
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Resources.ResourceManager ResourceManager {
+        internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
                     global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Aspire.Cli.Resources.InteractionServiceStrings", typeof(InteractionServiceStrings).Assembly);
@@ -51,7 +51,7 @@ namespace Aspire.Cli.Resources {
         ///   resource lookups using this strongly typed resource class.
         /// </summary>
         [global::System.ComponentModel.EditorBrowsableAttribute(global::System.ComponentModel.EditorBrowsableState.Advanced)]
-        public static global::System.Globalization.CultureInfo Culture {
+        internal static global::System.Globalization.CultureInfo Culture {
             get {
                 return resourceCulture;
             }
@@ -61,144 +61,9 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The apphost version is not compatible. Please upgrade the apphost or Aspire CLI..
-        /// </summary>
-        public static string AppHostNotCompatibleConsiderUpgrading {
-            get {
-                return ResourceManager.GetString("AppHostNotCompatibleConsiderUpgrading", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost&apos;s Aspire packages to continue..
-        /// </summary>
-        public static string AppHostNotCompatibleUpdateAppHost {
-            get {
-                return ResourceManager.GetString("AppHostNotCompatibleUpdateAppHost", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue..
-        /// </summary>
-        public static string AppHostNotCompatibleUpdateCli {
-            get {
-                return ResourceManager.GetString("AppHostNotCompatibleUpdateCli", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI version.
-        /// </summary>
-        public static string AspireCLIVersion {
-            get {
-                return ResourceManager.GetString("AspireCLIVersion", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire.Hosting version.
-        /// </summary>
-        public static string AspireHostingSDKVersion {
-            get {
-                return ResourceManager.GetString("AspireHostingSDKVersion", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Building apphost....
-        /// </summary>
-        public static string BuildingAppHost {
-            get {
-                return ResourceManager.GetString("BuildingAppHost", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Checking certificates....
-        /// </summary>
-        public static string CheckingCertificates {
-            get {
-                return ResourceManager.GetString("CheckingCertificates", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Checking project type....
-        /// </summary>
-        public static string CheckingProjectType {
-            get {
-                return ResourceManager.GetString("CheckingProjectType", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Codespaces.
-        /// </summary>
-        public static string CodespacesLink {
-            get {
-                return ResourceManager.GetString("CodespacesLink", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Created settings file at {0}..
-        /// </summary>
-        public static string CreatedSettingsFile {
-            get {
-                return ResourceManager.GetString("CreatedSettingsFile", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Updated settings file at {0}..
-        /// </summary>
-        public static string UpdatedSettingsFile {
-            get {
-                return ResourceManager.GetString("UpdatedSettingsFile", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Other (specify next).
-        /// </summary>
-        public static string CustomChoiceLabel {
-            get {
-                return ResourceManager.GetString("CustomChoiceLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Dashboard.
-        /// </summary>
-        public static string Dashboard {
-            get {
-                return ResourceManager.GetString("Dashboard", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Direct.
-        /// </summary>
-        public static string DirectLink {
-            get {
-                return ResourceManager.GetString("DirectLink", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to An error occurred while connecting to the AppHost: {0}.
-        /// </summary>
-        public static string ErrorConnectingToAppHost {
-            get {
-                return ResourceManager.GetString("ErrorConnectingToAppHost", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to The connection to the AppHost was lost: {0}.
         /// </summary>
-        public static string AppHostConnectionLost {
+        internal static string AppHostConnectionLost {
             get {
                 return ResourceManager.GetString("AppHostConnectionLost", resourceCulture);
             }
@@ -207,25 +72,151 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The connection to the application was lost..
         /// </summary>
-        public static string AppHostConnectionLostGeneric {
+        internal static string AppHostConnectionLostGeneric {
             get {
                 return ResourceManager.GetString("AppHostConnectionLostGeneric", resourceCulture);
             }
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI..
+        /// </summary>
+        internal static string AppHostNotCompatibleConsiderUpgrading {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleConsiderUpgrading", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost&apos;s Aspire packages to continue..
+        /// </summary>
+        internal static string AppHostNotCompatibleUpdateAppHost {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue..
+        /// </summary>
+        internal static string AppHostNotCompatibleUpdateCli {
+            get {
+                return ResourceManager.GetString("AppHostNotCompatibleUpdateCli", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The application shut down..
         /// </summary>
-        public static string AppHostShutDown {
+        internal static string AppHostShutDown {
             get {
                 return ResourceManager.GetString("AppHostShutDown", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Finding apphosts....
+        ///   Looks up a localized string similar to Aspire CLI version.
         /// </summary>
-        public static string FindingAppHosts {
+        internal static string AspireCLIVersion {
+            get {
+                return ResourceManager.GetString("AspireCLIVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire.Hosting version.
+        /// </summary>
+        internal static string AspireHostingSDKVersion {
+            get {
+                return ResourceManager.GetString("AspireHostingSDKVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Building AppHost....
+        /// </summary>
+        internal static string BuildingAppHost {
+            get {
+                return ResourceManager.GetString("BuildingAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Checking certificates....
+        /// </summary>
+        internal static string CheckingCertificates {
+            get {
+                return ResourceManager.GetString("CheckingCertificates", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Checking project type....
+        /// </summary>
+        internal static string CheckingProjectType {
+            get {
+                return ResourceManager.GetString("CheckingProjectType", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Codespaces.
+        /// </summary>
+        internal static string CodespacesLink {
+            get {
+                return ResourceManager.GetString("CodespacesLink", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Created settings file at {0}..
+        /// </summary>
+        internal static string CreatedSettingsFile {
+            get {
+                return ResourceManager.GetString("CreatedSettingsFile", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Other (specify next).
+        /// </summary>
+        internal static string CustomChoiceLabel {
+            get {
+                return ResourceManager.GetString("CustomChoiceLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard.
+        /// </summary>
+        internal static string Dashboard {
+            get {
+                return ResourceManager.GetString("Dashboard", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Direct.
+        /// </summary>
+        internal static string DirectLink {
+            get {
+                return ResourceManager.GetString("DirectLink", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to An error occurred while connecting to the AppHost: {0}.
+        /// </summary>
+        internal static string ErrorConnectingToAppHost {
+            get {
+                return ResourceManager.GetString("ErrorConnectingToAppHost", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Finding AppHosts....
+        /// </summary>
+        internal static string FindingAppHosts {
             get {
                 return ResourceManager.GetString("FindingAppHosts", resourceCulture);
             }
@@ -234,61 +225,34 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution..
         /// </summary>
-        public static string InteractiveInputNotSupported {
+        internal static string InteractiveInputNotSupported {
             get {
                 return ResourceManager.GetString("InteractiveInputNotSupported", resourceCulture);
             }
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Invalid selection..
+        /// </summary>
+        internal static string InvalidSelection {
+            get {
+                return ResourceManager.GetString("InvalidSelection", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to [dim]For more information, see: {0}[/].
         /// </summary>
-        public static string MoreInfoNewCliVersion {
+        internal static string MoreInfoNewCliVersion {
             get {
                 return ResourceManager.GetString("MoreInfoNewCliVersion", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Available values: {0}.
-        /// </summary>
-        public static string NonInteractiveAvailableValues {
-            get {
-                return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No supported app hosts were found..
-        /// </summary>
-        public static string NoSupportedAppHostsFound {
-            get {
-                return ResourceManager.GetString("NoSupportedAppHostsFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The value &apos;{0}&apos; is not valid for {1}..
-        /// </summary>
-        public static string NonInteractiveInvalidValue {
-            get {
-                return ResourceManager.GetString("NonInteractiveInvalidValue", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The {0} option must be specified when running in non-interactive mode..
-        /// </summary>
-        public static string NonInteractiveOptionRequired {
-            get {
-                return ResourceManager.GetString("NonInteractiveOptionRequired", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to [yellow]A new version of Aspire is available: {0}[/].
         /// </summary>
-        public static string NewCliVersionAvailable {
+        internal static string NewCliVersionAvailable {
             get {
                 return ResourceManager.GetString("NewCliVersionAvailable", resourceCulture);
             }
@@ -297,16 +261,70 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to No items available for selection: {0}.
         /// </summary>
-        public static string NoItemsAvailableForSelection {
+        internal static string NoItemsAvailableForSelection {
             get {
                 return ResourceManager.GetString("NoItemsAvailableForSelection", resourceCulture);
             }
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Available values: {0}.
+        /// </summary>
+        internal static string NonInteractiveAvailableValues {
+            get {
+                return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The value &apos;{0}&apos; is not valid for {1}..
+        /// </summary>
+        internal static string NonInteractiveInvalidValue {
+            get {
+                return ResourceManager.GetString("NonInteractiveInvalidValue", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} option must be specified when running in non-interactive mode..
+        /// </summary>
+        internal static string NonInteractiveOptionRequired {
+            get {
+                return ResourceManager.GetString("NonInteractiveOptionRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No supported app hosts were found..
+        /// </summary>
+        internal static string NoSupportedAppHostsFound {
+            get {
+                return ResourceManager.GetString("NoSupportedAppHostsFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open AppHost Log.
+        /// </summary>
+        internal static string OpenAppHostLog {
+            get {
+                return ResourceManager.GetString("OpenAppHostLog", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open CLI Log.
+        /// </summary>
+        internal static string OpenCliLog {
+            get {
+                return ResourceManager.GetString("OpenCliLog", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The operation was canceled..
         /// </summary>
-        public static string OperationCancelled {
+        internal static string OperationCancelled {
             get {
                 return ResourceManager.GetString("OperationCancelled", resourceCulture);
             }
@@ -315,7 +333,7 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
-        public static string ProjectCouldNotBeBuilt {
+        internal static string ProjectCouldNotBeBuilt {
             get {
                 return ResourceManager.GetString("ProjectCouldNotBeBuilt", resourceCulture);
             }
@@ -324,43 +342,25 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The app could not be created..
         /// </summary>
-        public static string ProjectCouldNotBeCreated {
+        internal static string ProjectCouldNotBeCreated {
             get {
                 return ResourceManager.GetString("ProjectCouldNotBeCreated", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The --apphost option specified a project that does not exist..
         /// </summary>
-        public static string ProjectOptionDoesntExist {
+        internal static string ProjectOptionDoesntExist {
             get {
                 return ResourceManager.GetString("ProjectOptionDoesntExist", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The --apphost option specified a directory that contains multiple apphost project files..
+        ///   Looks up a localized string similar to The --apphost option was not specified and multiple AppHost project files were detected..
         /// </summary>
-        public static string ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts {
-            get {
-                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The --apphost option specified a directory that does not contain any apphost project files..
-        /// </summary>
-        public static string ProjectOptionSpecifiedDirectoryContainsNoAppHosts {
-            get {
-                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsNoAppHosts", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The --apphost option was not specified and multiple apphost project files were detected..
-        /// </summary>
-        public static string ProjectOptionNotSpecifiedMultipleAppHostsFound {
+        internal static string ProjectOptionNotSpecifiedMultipleAppHostsFound {
             get {
                 return ResourceManager.GetString("ProjectOptionNotSpecifiedMultipleAppHostsFound", resourceCulture);
             }
@@ -369,16 +369,34 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The --apphost option was not specified and no AppHost project files were detected..
         /// </summary>
-        public static string ProjectOptionNotSpecifiedNoAppHostsFound {
+        internal static string ProjectOptionNotSpecifiedNoAppHostsFound {
             get {
                 return ResourceManager.GetString("ProjectOptionNotSpecifiedNoAppHostsFound", resourceCulture);
             }
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that contains multiple AppHost project files..
+        /// </summary>
+        internal static string ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that does not contain any AppHost project files..
+        /// </summary>
+        internal static string ProjectOptionSpecifiedDirectoryContainsNoAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsNoAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Required capability.
         /// </summary>
-        public static string RequiredCapability {
+        internal static string RequiredCapability {
             get {
                 return ResourceManager.GetString("RequiredCapability", resourceCulture);
             }
@@ -387,25 +405,43 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Searching....
         /// </summary>
-        public static string SearchingProjects {
+        internal static string SearchingProjects {
             get {
                 return ResourceManager.GetString("SearchingProjects", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Select an apphost to use:.
+        ///   Looks up a localized string similar to See AppHost logs at {0}.
         /// </summary>
-        public static string SelectAppHostToUse {
+        internal static string SeeAppHostLogsAt {
+            get {
+                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to See logs at {0}.
+        /// </summary>
+        internal static string SeeLogsAt {
+            get {
+                return ResourceManager.GetString("SeeLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select an AppHost to use:.
+        /// </summary>
+        internal static string SelectAppHostToUse {
             get {
                 return ResourceManager.GetString("SelectAppHostToUse", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The specified project file is not an Aspire apphost project..
+        ///   Looks up a localized string similar to The specified project file is not an Aspire AppHost project..
         /// </summary>
-        public static string SpecifiedProjectFileNotAppHostProject {
+        internal static string SpecifiedProjectFileNotAppHostProject {
             get {
                 return ResourceManager.GetString("SpecifiedProjectFileNotAppHostProject", resourceCulture);
             }
@@ -414,25 +450,34 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Stopping Aspire..
         /// </summary>
-        public static string StoppingAspire {
+        internal static string StoppingAspire {
             get {
                 return ResourceManager.GetString("StoppingAspire", resourceCulture);
             }
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to [dim]To update, run: {0}[/].
+        /// </summary>
+        internal static string ToUpdateRunCommand {
+            get {
+                return ResourceManager.GetString("ToUpdateRunCommand", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Trusting certificates....
         /// </summary>
-        public static string TrustingCertificates {
+        internal static string TrustingCertificates {
             get {
                 return ResourceManager.GetString("TrustingCertificates", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No apphosts were found (there may be apphosts project files with syntax errors/invalid SDK versions)..
+        ///   Looks up a localized string similar to No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions)..
         /// </summary>
-        public static string UnbuildableAppHostsDetected {
+        internal static string UnbuildableAppHostsDetected {
             get {
                 return ResourceManager.GetString("UnbuildableAppHostsDetected", resourceCulture);
             }
@@ -441,45 +486,27 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to An unexpected error occurred: {0}.
         /// </summary>
-        public static string UnexpectedErrorOccurred {
+        internal static string UnexpectedErrorOccurred {
             get {
                 return ResourceManager.GetString("UnexpectedErrorOccurred", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to See logs at {0}.
+        ///   Looks up a localized string similar to Updated settings file at {0}..
         /// </summary>
-        public static string SeeLogsAt {
+        internal static string UpdatedSettingsFile {
             get {
-                return ResourceManager.GetString("SeeLogsAt", resourceCulture);
+                return ResourceManager.GetString("UpdatedSettingsFile", resourceCulture);
             }
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to See app host logs at {0}.
+        ///   Looks up a localized string similar to Waiting for debugger to attach to AppHost process.
         /// </summary>
-        public static string SeeAppHostLogsAt {
-            get {
-                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Waiting for debugger to attach to apphost process.
-        /// </summary>
-        public static string WaitingForDebuggerToAttachToAppHost {
+        internal static string WaitingForDebuggerToAttachToAppHost {
             get {
                 return ResourceManager.GetString("WaitingForDebuggerToAttachToAppHost", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to [dim]To update, run: {0}[/].
-        /// </summary>
-        public static string ToUpdateRunCommand {
-            get {
-                return ResourceManager.GetString("ToUpdateRunCommand", resourceCulture);
             }
         }
     }

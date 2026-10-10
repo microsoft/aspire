@@ -73,9 +73,9 @@
         <note>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</note>
       </trans-unit>
       <trans-unit id="CodegenVersionSkewWarning">
-        <source>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</source>
-        <target state="new">The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</target>
-        <note>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</note>
+        <source>The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</source>
+        <target state="new">The installed Aspire CLI version ({0}) differs from the Aspire SDK version ({1}) used for code generation. If you run into errors, update the Aspire CLI to match or exceed the SDK version.</target>
+        <note>{0} is the CLI version, {1} is the SDK version used for code generation, including the target version during aspire update.</note>
       </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
@@ -177,6 +177,11 @@
         <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
         <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
       </trans-unit>
+      <trans-unit id="HostingIntegrationsFeatureNotEnabled">
+        <source>Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</source>
+        <target state="new">Hosting integrations authored outside .NET are experimental and disabled by default. Run 'aspire config set features.experimentalHostingIntegrations true' to enable them.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IntegrationBuildFailed">
         <source>The integration project could not be built.</source>
         <target state="new">The integration project could not be built.</target>
@@ -266,6 +271,16 @@
         <source>The project does not contain an Aspire AppHost.</source>
         <target state="needs-review-translation">Le projet ne contient pas d’Aspire AppHost.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SdkExportGeneratorPackageNotExportable">
+        <source>SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</source>
+        <target state="new">SDK API export cannot export {0} because that package supplies the selected language's code generator instead of an integration API surface.</target>
+        <note>{0} is the code-generation package name.</note>
+      </trans-unit>
+      <trans-unit id="SdkExportLanguageDoesNotSupportCodeGeneration">
+        <source>SDK API export is not supported for {0} because it does not use a code generator.</source>
+        <target state="new">SDK API export is not supported for {0} because it does not use a code generator.</target>
+        <note>{0} is the AppHost language display name, for example "C# (.NET)".</note>
       </trans-unit>
       <trans-unit id="SingleFileAppHostFeatureNotEnabled">
         <source>Single file AppHost feature is not enabled. To use .cs AppHost files, enable the feature using configuration.</source>

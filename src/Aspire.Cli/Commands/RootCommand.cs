@@ -8,7 +8,6 @@ using Spectre.Console;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -93,6 +92,19 @@ internal sealed class RootCommand : BaseRootCommand
         DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
+    internal static readonly Option<string?> s_logFileOption = new("--log-file")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
+    internal static IReadOnlyList<Option> GlobalOptions { get; } =
+    [
+        DebugOption, DebugLevelOption, NonInteractiveOption, NoLogoOption, BannerOption,
+        WaitForDebuggerOption, CliWaitForDebuggerOption, CaptureProfileOption,
+        CaptureProfileOutputOption, CaptureProfileDelayOption, s_logFileOption
+    ];
+
     /// <summary>
     /// Global options that should be passed through to child CLI processes when spawning.
     /// Add new global options here to ensure they are forwarded during detached mode execution.
@@ -150,6 +162,7 @@ internal sealed class RootCommand : BaseRootCommand
         DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
+        CompletionsCommand completionsCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
@@ -159,6 +172,7 @@ internal sealed class RootCommand : BaseRootCommand
         TelemetryCommand telemetryCommand,
         ExportCommand exportCommand,
         DashboardCommand dashboardCommand,
+        TrayCommand trayCommand,
         DocsCommand docsCommand,
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
@@ -170,27 +184,20 @@ internal sealed class RootCommand : BaseRootCommand
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
         IInteractionService interactionService,
-        IFeatures features,
         IAnsiConsole ansiConsole,
         CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
         _ansiConsole = ansiConsole;
 
-        Options.Add(DebugOption);
-        Options.Add(DebugLevelOption);
-        Options.Add(NonInteractiveOption);
-        Options.Add(NoLogoOption);
-        Options.Add(BannerOption);
-        Options.Add(WaitForDebuggerOption);
-        Options.Add(CliWaitForDebuggerOption);
+        foreach (var option in GlobalOptions)
+        {
+            Options.Add(option);
+        }
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
             Options.Add(StartDebugSessionOption);
         }
-        Options.Add(CaptureProfileOption);
-        Options.Add(CaptureProfileOutputOption);
-        Options.Add(CaptureProfileDelayOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
@@ -221,15 +228,11 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
         Subcommands.Add(integrationCommand);
-        // 'aspire terminal' is hidden behind a feature flag while WithTerminal() is experimental.
-        // Toggle with `aspire config set features.terminalCommandsEnabled true`.
-        if (features.IsFeatureEnabled(KnownFeatures.TerminalCommandsEnabled, defaultValue: false))
-        {
-            Subcommands.Add(terminalCommand);
-        }
+        Subcommands.Add(terminalCommand);
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
+        Subcommands.Add(completionsCommand);
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
@@ -244,6 +247,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
         Subcommands.Add(dashboardCommand);
+        Subcommands.Add(trayCommand);
         Subcommands.Add(secretCommand);
 
 #if DEBUG

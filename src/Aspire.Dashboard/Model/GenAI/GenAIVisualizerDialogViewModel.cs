@@ -47,12 +47,13 @@ public sealed class GenAIVisualizerDialogViewModel
     public int? InputTokens { get; set; }
     public int? OutputTokens { get; set; }
 
-    public static GenAIVisualizerDialogViewModel Create(
+    public static async Task<GenAIVisualizerDialogViewModel> CreateAsync(
         SpanDetailsViewModel spanDetailsViewModel,
         long? selectedLogEntryId,
         ITelemetryErrorRecorder errorRecorder,
-        TelemetryRepository telemetryRepository,
-        Func<List<OtlpSpan>> getContextGenAISpans)
+        ITelemetryRepository telemetryRepository,
+        Func<List<OtlpSpan>> getContextGenAISpans,
+        CancellationToken cancellationToken)
     {
         var resources = telemetryRepository.GetResources();
 
@@ -125,9 +126,9 @@ public sealed class GenAIVisualizerDialogViewModel
 
         try
         {
-            CreateMessages(viewModel, telemetryRepository);
+            await CreateMessagesAsync(viewModel, telemetryRepository, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // We're catching errors here to avoid it going to Blazor global error handling. But we still want to record errors from reading messages to telemetry.
             // This can be changed to just using logging once we have confidence that we're handling popular content well.
@@ -155,9 +156,9 @@ public sealed class GenAIVisualizerDialogViewModel
 
         try
         {
-            ParseEvaluations(viewModel, telemetryRepository);
+            await ParseEvaluationsAsync(viewModel, telemetryRepository, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Log error but don't fail the entire view model creation
             errorRecorder.RecordError($"Error parsing GenAI evaluation results for span {viewModel.Span.SpanId}", ex, writeToLogging: true);
@@ -277,7 +278,7 @@ public sealed class GenAIVisualizerDialogViewModel
     // - Span attributes.
     // - Log entry bodies.
     // - Span event attributes.
-    private static void CreateMessages(GenAIVisualizerDialogViewModel viewModel, TelemetryRepository telemetryRepository)
+    private static async Task CreateMessagesAsync(GenAIVisualizerDialogViewModel viewModel, ITelemetryRepository telemetryRepository, CancellationToken cancellationToken)
     {
         var currentIndex = 0;
 
@@ -311,7 +312,7 @@ public sealed class GenAIVisualizerDialogViewModel
         }
 
         // Attempt to get messages from log entries.
-        var logEntries = GetSpanLogEntries(telemetryRepository, viewModel.Span);
+        var logEntries = await GetSpanLogEntriesAsync(telemetryRepository, viewModel.Span, cancellationToken).ConfigureAwait(false);
         foreach (var (item, index) in logEntries.OrderBy(i => i.TimeStamp).Select((l, i) => (l, i)))
         {
             if (!string.IsNullOrEmpty(item.Message) && OtlpHelpers.GetEventName(item) is { } name && TryMapEventName(name, out var type))
@@ -593,7 +594,7 @@ public sealed class GenAIVisualizerDialogViewModel
         return type != null;
     }
 
-    private static List<OtlpLogEntry> GetSpanLogEntries(TelemetryRepository telemetryRepository, OtlpSpan span)
+    private static async Task<List<OtlpLogEntry>> GetSpanLogEntriesAsync(ITelemetryRepository telemetryRepository, OtlpSpan span, CancellationToken cancellationToken)
     {
         var logsContext = new GetLogsContext
         {
@@ -609,16 +610,16 @@ public sealed class GenAIVisualizerDialogViewModel
                 }
             ]
         };
-        var logsResult = telemetryRepository.GetLogs(logsContext);
+        var logsResult = await telemetryRepository.GetLogsAsync(logsContext, cancellationToken).ConfigureAwait(false);
         return logsResult.Items;
     }
 
-    private static void ParseEvaluations(GenAIVisualizerDialogViewModel viewModel, TelemetryRepository telemetryRepository)
+    private static async Task ParseEvaluationsAsync(GenAIVisualizerDialogViewModel viewModel, ITelemetryRepository telemetryRepository, CancellationToken cancellationToken)
     {
         var evaluations = new List<EvaluationResultViewModel>();
 
         // Parse evaluation results from log entries
-        var logEntries = GetSpanLogEntries(telemetryRepository, viewModel.Span);
+        var logEntries = await GetSpanLogEntriesAsync(telemetryRepository, viewModel.Span, cancellationToken).ConfigureAwait(false);
         foreach (var logEntry in logEntries)
         {
             if (OtlpHelpers.GetEventName(logEntry) == GenAIHelpers.GenAIEvaluationResultEventName)

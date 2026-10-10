@@ -1,6 +1,7 @@
 # Polyglot AppHost Support
 
 > **Note:** This feature is experimental and may change in future releases.
+> **Related:** [Polyglot Integrations](./polyglot-integrations.md) — the sibling spec covering the *integration* side of polyglot support (how integrations authored in any language — not just .NET — can project into any consumer's SDK via out-of-process integration hosts). **This** spec covers the *AppHost* side: how a guest AppHost written in TypeScript, Python, etc. talks to the .NET AppHost server, how ATS projects the built-in .NET integrations into each guest language, and how codegen produces the per-language SDK a guest AppHost imports.
 
 This document describes how the Aspire CLI supports non-.NET app hosts using the **Aspire Type System (ATS)**.
 
@@ -277,6 +278,11 @@ The CLI passes the connection path via **environment variable**:
 |---------------------|-------------|---------|
 | `REMOTE_APP_HOST_SOCKET_PATH` | Unix socket path (or named pipe name on Windows) | `/tmp/aspire/host.sock` |
 
+The CLI normally allocates a randomized Unix socket path under `~/.aspire/cli/bch`.
+Explicit paths such as the example above are also supported. If the parent directory
+already exists on Unix, it must have mode `0700`; its permissions are not rewritten.
+A missing parent directory is created with mode `0700`.
+
 **Security:** The socket is protected by file system permissions (Unix: `0600`, Windows: current user ACL). Only processes running as the same user can connect.
 
 **Guest startup requirements:**
@@ -493,11 +499,11 @@ public static IResourceBuilder<RedisResource> AddRedis(
 
 Handles are opaque references to .NET objects. They carry an ATS type ID for identification.
 
-**Format:** Handle ID is an instance number. Type is provided separately.
+**Format:** Handle IDs are opaque, cryptographically random 128-bit tokens. Type is provided separately. Passing a handle delegates access to its object; clients must not interpret IDs or assume they are sequential.
 
 ```json
 {
-    "$handle": "42",
+    "$handle": "e69a6f159467fe4c9c2c8a2f170d6860",
     "$type": "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource"
 }
 ```
@@ -508,6 +514,18 @@ Handles are opaque references to .NET objects. They carry an ATS type ID for ide
 - Methods with `DistributedApplication` as first param → on `DistributedApplication`
 
 Type validation happens at runtime when the CLR invokes the method. Invalid type combinations produce `TYPE_MISMATCH` errors.
+
+#### Builder → resource handle conversion (one-way)
+
+A capability parameter typed as a **resource** (`IResource` or a concrete resource type) also accepts a **resource builder** handle: the dispatcher reads the builder's underlying resource and binds that (`PolyglotCapabilityInvocationException.TryConvertHandle`). The reverse is **not** true — a parameter typed as a resource *builder* (`IResourceBuilder<T>`) cannot be satisfied by a bare resource handle, because a resource has no canonical builder to recover. The conversion is one-directional by design.
+
+This matters for **deferred run-time callbacks**. Build-time guest calls (`builder.addX(...)`, `builder.withY(...)`) carry *builder* handles, but callbacks that run later — an args callback, a Dockerfile-builder callback — are invoked with the *resource* handle. Combined with the no-overloading rule (one capability per target type + method name; see [Collision Detection](#collision-detection)), this constrains how a capability that must be reachable from both phases is exported:
+
+- A capability exported on **`IResource`** is reachable from both phases: build-time builder handles convert down to the resource, and run-time resource handles match directly. This is the more permissive target.
+- A capability exported on **`IResourceBuilder<T>`** is reachable only at build time; a deferred callback handing it a resource handle fails with `TYPE_MISMATCH`.
+- Exporting the *same* method name on **both** `IResource` and `IResourceBuilder<T>` is invalid for this pattern. ATS cannot represent the overload, so only one projection survives and it shadows the other — do not rely on which one wins. When a capability must work from deferred callbacks, export it on `IResource` only and, if a builder-targeted convenience is desirable, keep it as a non-exported helper that delegates to the resource-targeted capability.
+
+The built-in [resource annotation](./polyglot-integrations.md#resource-annotations-cross-language-resource-state) capabilities (`withSerializedAnnotation` / `getSerializedAnnotation` / `hasSerializedAnnotation`) follow exactly this rule: they are exported on `IResource` so an integration can write annotation state during composition and read it back from a deferred run-time callback.
 
 ### DTOs
 
@@ -889,7 +907,7 @@ Fields starting with `$` are reserved for ATS protocol metadata:
 
 | Field | Purpose |
 |-------|---------|
-| `$handle` | Handle instance ID |
+| `$handle` | Opaque object-access token |
 | `$type` | ATS type ID |
 | `$error` | Error response |
 | `$expr` | Reference expression |
@@ -1324,7 +1342,7 @@ classDiagram
 
 **How it works:**
 
-1. `GuestAppHostProject` detects language from `settings.json` or file patterns
+1. `GuestAppHostProject` detects language from `aspire.config.json` or file patterns
 2. Asks the server for `RuntimeSpec` via `getRuntimeSpec` RPC
 3. `GuestRuntime` interprets the spec to execute commands
 
@@ -1340,30 +1358,92 @@ classDiagram
 
 ## Configuration
 
-### .aspire/settings.json
+### aspire.config.json
 
-Configuration for polyglot app hosts:
+The unified config file for polyglot AppHosts. Replaces the legacy split across `.aspire/settings.json` and `apphost.run.json` — launch profiles, language selection, SDK version, and package references all live in one file.
 
 ```json
 {
-  "appHostPath": "apphost.ts",
-  "language": "typescript",
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "sdk": {
+    "version": "13.3.0"
+  },
   "channel": "stable",
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:17193;http://localhost:15069",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  },
   "packages": {
     "Aspire.Hosting.Redis": "9.0.0",
-    "Aspire.Hosting.PostgreSQL": "9.0.0"
+    "Aspire.Hosting.PostgreSQL": ""
   }
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `appHostPath` | Path to the apphost file (relative to settings.json) |
-| `language` | Language identifier (e.g., `typescript`, `python`). Auto-detected on first run and persisted. |
-| `channel` | NuGet channel for package resolution (`stable`, `preview`, etc.) |
-| `packages` | Package references added via `aspire add` |
+| `appHost.path` | Path to the apphost file (relative to `aspire.config.json`). |
+| `appHost.language` | Language identifier — `typescript/nodejs`, `python`, etc. Auto-detected on first run and persisted. |
+| `sdk.version` | Aspire SDK version. Used as the default for package versions and codegen. |
+| `channel` | NuGet channel for package resolution (`stable`, `preview`, ...). |
+| `profiles` | Launch profiles (ports, environment variables). Replaces the legacy `apphost.run.json`. |
+| `packages` | Package references added via `aspire add`. Per-entry shape is string-or-object — see below. |
 
-**Language persistence:** On first `aspire run`, if `language` is not set, the CLI detects it from file patterns and saves it to `settings.json`. Subsequent runs use the persisted value.
+**Language persistence:** On first `aspire run`, if `appHost.language` is not set, the CLI detects it from file patterns and saves it to `aspire.config.json`. Subsequent runs use the persisted value.
+
+**Package entry shape.** Each value in `packages` is either a **string** (short form: a `.csproj` path is a project reference; otherwise empty means the SDK version and non-empty is an explicit NuGet version) or an **object** (long form, carries a required `source` discriminator — `nuget`, `project`, or `npm` — with per-source fields). See the [Integration Declaration](./polyglot-integrations.md#integration-declaration) section of the sibling spec for the full schema and examples.
+
+### Project-local experimental language flags
+
+The experimental polyglot AppHost flags use the same flat naming pattern:
+`experimentalPolyglotJava`, `experimentalPolyglotGo`, `experimentalPolyglotPython`,
+and `experimentalPolyglotRust`. To enable Java for a single AppHost, run this from
+its project directory:
+
+```console
+aspire config set features.experimentalPolyglotJava true
+```
+
+This writes a single key in the `features` dictionary of `aspire.config.json`:
+
+```json
+{
+  "features": {
+    "experimentalPolyglotJava": "true"
+  }
+}
+```
+
+The configuration reader accepts both `"true"` and `true` for feature values.
+Existing project or global configurations using `experimentalPolyglot:java`,
+`experimentalPolyglot:go`, `experimentalPolyglot:python`, or
+`experimentalPolyglot:rust` must rename those keys to the flat names above.
+
+### Application settings
+
+Polyglot AppHosts use the standard .NET configuration convention. The managed application builder loads these optional files from the directory containing the AppHost:
+
+- `appsettings.json`
+- `appsettings.{Environment}.json`
+
+The environment-specific file overrides the base file. Environment variables and AppHost command-line arguments retain the standard .NET configuration precedence over both JSON files.
+
+The generated guest SDK exposes the resulting configuration through the application builder. For example, a TypeScript AppHost can read a value as follows:
+
+```typescript
+const builder = await createBuilder();
+const configuration = await builder.getConfiguration();
+const region = await configuration.getConfigValue("Deployment:Region");
+```
+
+The managed server keeps its own internal configuration separate, so application settings do not replace ATS assembly discovery or server logging settings.
 
 ### apphost.run.json
 
@@ -1403,6 +1483,8 @@ public interface ILanguageSupport
     RuntimeSpec GetRuntimeSpec();
 }
 ```
+
+> **Note:** A provider may also expose an optional `JsonElement GetIntegrationHostSpec()` method for hosting *cross-language* integrations, such as an npm integration consumed by a Python AppHost. This is discovered reflectively and is not an `ILanguageSupport` member, so newer providers remain loadable with an older CLI's shared TypeSystem assembly. Providers that only support running guest AppHosts omit the hook. See [Polyglot Integrations](./polyglot-integrations.md) for the protocol and JSON launch specification.
 
 Example implementation:
 
@@ -1465,7 +1547,7 @@ The generator receives an `AtsContext` containing all scanned capabilities, type
 
 ### Step 2: Register in CLI
 
-> **Note:** This step is temporary while we determine the language discovery story. In the future, languages may be discovered automatically from NuGet packages or configuration files.
+> **Note:** This step exists because the CLI-side language registry (`DefaultLanguageDiscovery` / `LanguageInfo`) is currently **independent** of the server-side registry (`ILanguageSupport` discovered via reflection over loaded assemblies). The two drift by construction — adding a language means editing both places. Consolidating them into a single source of truth is tracked as tech debt in [Polyglot Integrations — CLI ergonomics that still assume .NET](./polyglot-integrations.md#current-limitations); once that lands, this step goes away and languages are discovered purely server-side.
 
 Add the language to `DefaultLanguageDiscovery` in `Aspire.Cli`:
 

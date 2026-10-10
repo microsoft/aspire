@@ -10,8 +10,8 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -19,19 +19,19 @@ namespace Aspire.Dashboard.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Traces {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Traces() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to A maximum of {0} traces are stored. Old traces are automatically removed..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageExceededLimitBody", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Exceeded trace limit.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("MessageExceededLimitTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Traces capture paused at {0}.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("PauseInProgressText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SpanTypeLabel", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Select span type.
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SpanTypeSelectSpanType", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} traces&lt;/strong&gt;.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} trace&lt;/strong&gt;.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Name: {0}.
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesFullName", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Traces.
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Name filter.
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesNameFilter", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to No traces found.
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesNoTraces", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} traces.
         /// </summary>
@@ -167,7 +167,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesPageTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} spans.
         /// </summary>
@@ -176,7 +176,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesResourceSpans", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Spans.
         /// </summary>
@@ -185,7 +185,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesSpansColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Errored: {0}.
         /// </summary>
@@ -194,7 +194,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesTotalErroredTraces", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Total: {0}.
         /// </summary>
@@ -203,13 +203,22 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TracesTotalTraces", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Trace Id: {0}.
         /// </summary>
         public static string TracesTraceId {
             get {
                 return ResourceManager.GetString("TracesTraceId", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results.
+        /// </summary>
+        public static string VirtualizedLimitText {
+            get {
+                return ResourceManager.GetString("VirtualizedLimitText", resourceCulture);
             }
         }
     }

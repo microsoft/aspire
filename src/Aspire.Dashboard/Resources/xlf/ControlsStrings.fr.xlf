@@ -52,6 +52,11 @@
         <target state="translated">Graphique</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChartContainerIncompatibleHistogramBounds">
+        <source>Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</source>
+        <target state="new">Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChartContainerOptionsHeader">
         <source>Options</source>
         <target state="translated">Options</target>

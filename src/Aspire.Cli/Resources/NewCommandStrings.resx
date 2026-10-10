@@ -184,4 +184,10 @@
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>
   </data>
+  <data name="NoMatchingLocalTemplatePackage" xml:space="preserve">
+    <value>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</value>
+  </data>
+  <data name="NoTemplateVersionsFoundInChannel" xml:space="preserve">
+    <value>No template versions found in channel '{0}'.</value>
+  </data>
 </root>

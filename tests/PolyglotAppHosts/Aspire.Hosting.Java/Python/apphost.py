@@ -15,7 +15,7 @@ with create_builder() as builder:
                                            args=["--spring.profiles.active=ci"])
     worker.with_maven_build(["clean", "package", "-DskipTests"])
     worker.with_jar_artifact("target/worker.jar")
-    worker.with_otel_agent("../agents/opentelemetry-javaagent.jar")
+    worker.with_otel_agent(agent_path="../agents/opentelemetry-javaagent.jar")
 
     # Gradle-launched app whose wrapper lives above the app directory
     gateway = builder.add_java_app("gateway", "../java-gateway")
@@ -23,7 +23,9 @@ with create_builder() as builder:
     gateway.with_wrapper_path("../gradlew")
 
     # Prebuilt JAR produced by a Gradle build, so the task only has to assemble it
-    reports = builder.add_java_app_with_jar("reports", "../java-reports", "build/libs/reports.jar")
+    reports = builder.add_java_app_with_jar(
+        "reports", "../java-reports", "build/libs/reports.jar", []
+    )
     reports.with_gradle_build(["clean", "bootJar"])
 
     builder.run()

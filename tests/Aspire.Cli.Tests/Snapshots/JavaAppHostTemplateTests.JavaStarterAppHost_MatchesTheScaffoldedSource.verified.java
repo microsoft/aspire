@@ -4,13 +4,13 @@ final class AppHost {
     void main() throws Exception {
         IDistributedApplicationBuilder builder = DistributedApplication.CreateBuilder();
 
-        // The Spring Boot API in ./api. Maven is detected from its pom.xml, so the AppHost never
+        // The Spring Boot API in ./api. Gradle is detected from its build.gradle, so the AppHost never
         // names a build tool: addSpringBootApp builds the project, launches it through
-        // spring-boot:run, and declares an HTTP endpoint by setting SERVER_PORT.
+        // bootRun, and declares an HTTP endpoint by setting SERVER_PORT.
         JavaAppResource api = builder.addSpringBootApp("api", "./api");
 
-        // Attaches target/agent/opentelemetry-javaagent.jar, which the POM downloads during the
-        // build. The agent instruments Spring's web and HTTP client layers, so traces, metrics, and
+        // Attaches build/agent/opentelemetry-javaagent.jar, which Gradle downloads during the build.
+        // The agent instruments Spring's web and HTTP client layers, so traces, metrics, and
         // logs reach the Aspire dashboard without any code in the service.
         api.withOtelAgentDefaultPath();
 

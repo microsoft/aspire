@@ -1,21 +1,28 @@
 import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel } from '../loc/strings';
+import { yesLabel, noLabel, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
-import { AnsiColors } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
+import {
+    openDashboardLaunchBehaviorSettings,
+    resolveDashboardLaunchBehavior,
+    showDashboardLaunchNotification,
+    type DashboardLaunchBehaviorSource,
+} from '../debugger/session/dashboardLauncher';
 import { appHostSelectionOriginConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import type { AppHostSelectionOrigin } from '../debugger/AspireDebugConfigurationMetadata';
 import { isDirectory } from '../utils/io';
-import { sendTelemetryEvent } from '../utils/telemetry';
+import { isCommandCancellation, sendTelemetryEvent } from '../utils/telemetry';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
+import { AppHostLogEntry } from '../debugger/appHostLogOutput';
+import { AnsiColors } from '../utils/AspireTerminalProvider';
 
 export interface IInteractionService extends vscode.Disposable {
     showStatus: (statusText: string | null) => void;
@@ -25,10 +32,10 @@ export interface IInteractionService extends vscode.Disposable {
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
     confirm: (promptText: string, defaultValue: boolean) => Promise<boolean | null>;
     promptForSelection: (promptText: string, choices: string[]) => Promise<string | null>;
-    promptForSelections: (promptText: string, choices: string[]) => Promise<string[] | null>;
+    promptForSelections: (promptText: string, choices: string[], preSelected?: string[]) => Promise<string[] | null>;
     displayIncompatibleVersionError: (requiredCapability: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) => Promise<void>;
-    displayError: (errorMessage: string) => void;
-    displayMessage: (emoji: string, message: string) => void;
+    displayError: (errorMessage: string, actions?: InteractionMessageAction[]) => Promise<void>;
+    displayMessage: (emoji: string, message: string, actions?: InteractionMessageAction[]) => Promise<void>;
     displaySuccess: (message: string) => void;
     displaySubtleMessage: (message: string) => void;
     displayEmptyLine: () => void;
@@ -44,15 +51,10 @@ export interface IInteractionService extends vscode.Disposable {
     notifyAppHostStartupCompleted: () => void;
     startDebugSession: (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => Promise<void>;
     writeDebugSessionMessage: (message: string, stdout: boolean, textStyle?: string) => void;
+    writeAppHostLogEntry: (entry: AppHostLogEntry) => void;
 }
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
-const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
-type DashboardLaunchBehaviorSource = 'debugConfiguration' | 'globalConfiguration' | 'legacyConfiguration' | 'default';
-type ResolvedDashboardLaunchBehavior = {
-    behavior: DashboardLaunchBehavior;
-    source: DashboardLaunchBehaviorSource;
-};
 
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility
 // with different versions of the CLI/AppHost.
@@ -95,52 +97,6 @@ function sanitizeDashboardUrlForLog(url: string): string {
     }
 }
 
-function normalizeDashboardLaunchBehavior(value: unknown): DashboardLaunchBehavior | undefined {
-    return value === 'none'
-        || value === 'notification'
-        || value === 'openExternalBrowser'
-        || value === 'integratedBrowser'
-        || value === 'debugChrome'
-        || value === 'debugEdge'
-        || value === 'debugFirefox'
-        ? value
-        : undefined;
-}
-
-function getConfiguredLegacyDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): 'launch' | 'notification' | 'none' | undefined {
-    const inspection = aspireConfig.inspect<unknown>('enableAspireDashboardAutoLaunch');
-    const configuredValue = inspection?.workspaceFolderValue
-        ?? inspection?.workspaceValue
-        ?? inspection?.globalValue;
-
-    if (configuredValue === undefined) {
-        return undefined;
-    }
-
-    if (configuredValue === true || configuredValue === 'launch') {
-        return 'launch';
-    }
-
-    if (configuredValue === false || configuredValue === 'notification') {
-        return 'notification';
-    }
-
-    if (configuredValue === 'off') {
-        return 'none';
-    }
-
-    return undefined;
-}
-
-function getConfiguredDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): DashboardLaunchBehavior | undefined {
-    const inspection = aspireConfig.inspect<unknown>('dashboardBrowser');
-    const configuredValue = inspection?.workspaceFolderValue
-        ?? inspection?.workspaceValue
-        ?? inspection?.globalValue;
-
-    return normalizeDashboardLaunchBehavior(configuredValue);
-}
-
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility.
 // DisplayLineState is serialized with ModelContextProtocol.McpJsonUtilities.DefaultOptions
 // which changed to camelCase in version 0.2.0+
@@ -165,6 +121,16 @@ type DebugSessionOptions = {
     env?: { [key: string]: string };
     appHostSelectionOrigin?: AppHostSelectionOrigin;
 };
+
+type InteractionMessageAction = {
+    displayName?: unknown;
+    command?: unknown;
+    filePath?: unknown;
+};
+
+interface ResolvedInteractionMessageAction extends vscode.MessageItem {
+    execute(): Promise<void>;
+}
 
 export class InteractionService implements IInteractionService {
     private _getAspireDebugSession: () => AspireDebugSession | null;
@@ -311,16 +277,21 @@ export class InteractionService implements IInteractionService {
         return selected ?? null;
     }
 
-    async promptForSelections(promptText: string, choices: string[]): Promise<string[] | null> {
+    async promptForSelections(promptText: string, choices: string[], preSelected: string[] = []): Promise<string[] | null> {
         extensionLogOutputChannel.info(`Prompting for multiple selections: ${promptText}`);
 
-        const selected = await vscode.window.showQuickPick(choices, {
+        const preSelectedSet = new Set(preSelected);
+        const items: vscode.QuickPickItem[] = choices.map(label => ({
+            label,
+            picked: preSelectedSet.has(label)
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
             placeHolder: formatText(promptText),
             canPickMany: true,
             ignoreFocusOut: true
         });
 
-        return selected ?? null;
+        return selected?.map(item => item.label) ?? null;
     }
 
     async displayIncompatibleVersionError(requiredCapabilityStr: string, appHostHostingSdkVersion: string, rpcClient: ICliRpcClient) {
@@ -342,18 +313,21 @@ export class InteractionService implements IInteractionService {
         });
     }
 
-    displayError(errorMessage: string) {
+    async displayError(errorMessage: string, actions?: InteractionMessageAction[]): Promise<void> {
         if (errorMessage.length === 0) {
             extensionLogOutputChannel.warn('Attempted to display an empty error message.');
             return;
         }
 
         extensionLogOutputChannel.error(`Displaying error: ${errorMessage}`);
-        vscode.window.showErrorMessage(formatText(errorMessage));
         this.clearProgressNotification();
+
+        const resolvedActions = await this._resolveMessageActions(actions);
+        this._handleMessageActionSelection(
+            vscode.window.showErrorMessage(formatText(errorMessage), ...resolvedActions));
     }
 
-    displayMessage(emoji: string, message: string) {
+    async displayMessage(emoji: string, message: string, actions?: InteractionMessageAction[]): Promise<void> {
         if (message.length === 0) {
             extensionLogOutputChannel.warn('Attempted to display an empty message.');
             return;
@@ -361,7 +335,10 @@ export class InteractionService implements IInteractionService {
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
         this.clearProgressNotification();
-        vscode.window.showInformationMessage(formatText(message));
+
+        const resolvedActions = await this._resolveMessageActions(actions);
+        this._handleMessageActionSelection(
+            vscode.window.showInformationMessage(formatText(message), ...resolvedActions));
     }
 
     // There is no need for a different success message handler, as a general informative message ~= success
@@ -422,7 +399,10 @@ export class InteractionService implements IInteractionService {
         });
 
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
-        const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);
+        const debugSession = this._getAspireDebugSession();
+        const dashboardLaunchBehavior = resolveDashboardLaunchBehavior(
+            aspireConfig,
+            debugSession?.configuration.dashboardBrowser);
         sendTelemetryEvent('aspire/vscode/dashboard/launch/resolved', {
             behavior: dashboardLaunchBehavior.behavior,
             source: dashboardLaunchBehavior.source,
@@ -436,89 +416,19 @@ export class InteractionService implements IInteractionService {
         if (dashboardLaunchBehavior.behavior !== 'notification') {
             // Open the dashboard URL in the configured browser. Prefer codespaces URL if available.
             const urlToOpen = codespacesUrl || baseUrl;
-            const debugSession = this._getAspireDebugSession();
             if (debugSession) {
-                await debugSession.openDashboard(urlToOpen, dashboardLaunchBehavior.behavior);
+                await debugSession.openDashboard(urlToOpen, dashboardLaunchBehavior.behavior, false);
             }
             return;
         }
 
-        const actions: vscode.MessageItem[] = [
-            { title: directLink }
-        ];
-
-        if (codespacesUrl) {
-            actions.push({ title: codespacesLink });
-        }
-
-        actions.push({ title: settingsLabel });
-
         // Delay 1 second to allow a slight pause between progress notification and message
-        setTimeout(() => {
-            // Don't await - fire and forget to avoid blocking
-            vscode.window.showInformationMessage(
-                openAspireDashboard,
-                ...actions
-            ).then(selected => {
-                if (!selected) {
-                    return;
-                }
-
-                extensionLogOutputChannel.info(`Selected action: ${selected.title}`);
-
-                if (selected.title === directLink) {
-                    vscode.env.openExternal(vscode.Uri.parse(baseUrl));
-                }
-                else if (selected.title === codespacesLink && codespacesUrl) {
-                    vscode.env.openExternal(vscode.Uri.parse(codespacesUrl));
-                }
-                else if (selected.title === settingsLabel) {
-                    this.openDashboardLaunchBehaviorSettings(dashboardLaunchBehavior.source);
-                }
-            });
-        }, 1000);
-    }
-
-    private getDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): ResolvedDashboardLaunchBehavior {
-        const debugSession = this._getAspireDebugSession();
-        const debugConfigurationBehavior = normalizeDashboardLaunchBehavior(debugSession?.configuration.dashboardBrowser);
-        if (debugConfigurationBehavior) {
-            return { behavior: debugConfigurationBehavior, source: 'debugConfiguration' };
-        }
-
-        const configuredGlobalBehavior = getConfiguredDashboardLaunchBehavior(aspireConfig);
-        if (configuredGlobalBehavior === 'none' || configuredGlobalBehavior === 'notification') {
-            return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
-        }
-
-        // Migration precedence is intentionally conservative:
-        // - per-launch `dashboardBrowser` always wins because it only affects this debug run;
-        // - explicit global `none`/`notification` always wins so users can opt out or opt into the toast;
-        // - legacy `notification`/`off` keeps the less intrusive historical behavior even if a new
-        //   browser preference is also configured;
-        // - legacy `launch` falls through to the new browser preference, or to the pinned pre-opt-in
-        //   integrated-browser default when no new preference exists.
-        const legacyBehavior = getConfiguredLegacyDashboardLaunchBehavior(aspireConfig);
-
-        if (legacyBehavior) {
-            if (legacyBehavior === 'notification' || legacyBehavior === 'none') {
-                return { behavior: legacyBehavior, source: 'legacyConfiguration' };
-            }
-
-            return {
-                behavior: configuredGlobalBehavior ?? preOptInDefaultDashboardBrowser,
-                source: configuredGlobalBehavior ? 'globalConfiguration' : 'legacyConfiguration'
-            };
-        }
-
-        if (configuredGlobalBehavior) {
-            return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
-        }
-
-        return {
-            behavior: normalizeDashboardLaunchBehavior(aspireConfig.get<unknown>('dashboardBrowser', 'none')) ?? 'none',
-            source: 'default'
-        };
+        void showDashboardLaunchNotification({
+            baseUrl,
+            ...(codespacesUrl ? { codespacesUrl } : {}),
+            source: dashboardLaunchBehavior.source,
+            delayMs: 1000,
+        });
     }
 
     private async showDashboardDefaultChangedNotificationIfNeeded(source: DashboardLaunchBehaviorSource): Promise<void> {
@@ -535,7 +445,7 @@ export class InteractionService implements IInteractionService {
         vscode.window.showInformationMessage(dashboardLaunchBehaviorChanged, settingsLabel, changelogLabel).then(selected => {
             if (selected === settingsLabel) {
                 sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'settings' });
-                this.openDashboardLaunchBehaviorSettings(source);
+                openDashboardLaunchBehaviorSettings(source);
             }
             else if (selected === changelogLabel) {
                 sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'changelog' });
@@ -545,19 +455,6 @@ export class InteractionService implements IInteractionService {
                 sendTelemetryEvent('aspire/vscode/dashboard/launch/migration', { action: 'dismissed' });
             }
         });
-    }
-
-    private openDashboardLaunchBehaviorSettings(source: DashboardLaunchBehaviorSource): void {
-        if (source === 'debugConfiguration') {
-            vscode.commands.executeCommand('workbench.action.debug.configure');
-            return;
-        }
-
-        vscode.commands.executeCommand(
-            'workbench.action.openSettings',
-            source === 'legacyConfiguration'
-                ? 'aspire.enableAspireDashboardAutoLaunch'
-                : 'aspire.dashboardBrowser');
     }
 
     async displayLines(lines: ConsoleLine[]) {
@@ -639,7 +536,20 @@ export class InteractionService implements IInteractionService {
             return;
         }
 
+        // CLIs without `apphost-log-output.v1` deliver AppHost logs here without record
+        // identity or provenance. Preserve that output as-is rather than guessing by
+        // message text and potentially dropping a distinct record.
         debugSession.sendMessage(applyTextStyle(message, textStyle), addNewLine, stdout ? 'stdout' : 'stderr');
+    }
+
+    writeAppHostLogEntry(entry: AppHostLogEntry) {
+        const debugSession = this._getAspireDebugSession();
+        if (!debugSession) {
+            extensionLogOutputChannel.warn('Attempted to write an AppHost log entry, but no active debug session exists.');
+            return;
+        }
+
+        debugSession.sendAppHostLogEntry(entry);
     }
 
     async launchAppHost(projectFile: string, args: string[], environment: EnvVar[], debug: boolean): Promise<void> {
@@ -664,7 +574,7 @@ export class InteractionService implements IInteractionService {
         // Await the ordered shutdown so the CLI (and the user, via the endpoint middleware) learns
         // if a resource, AppHost, or parent debug session did not stop. Disposable.dispose() starts
         // the same bounded work in the background but cannot return its failures.
-        await this._getAspireDebugSession()?.stopDebugging();
+        await this._getAspireDebugSession()?.stopDebuggingFromCli();
     }
 
     notifyAppHostStartupCompleted() {
@@ -712,6 +622,84 @@ export class InteractionService implements IInteractionService {
         // "Building..." indicator that nothing is left alive to clear.
         this._isDisposed = true;
         this._progressNotifier.clear();
+    }
+
+    private async _resolveMessageActions(actions: InteractionMessageAction[] | undefined): Promise<ResolvedInteractionMessageAction[]> {
+        if (!Array.isArray(actions) || actions.length === 0) {
+            return [];
+        }
+
+        let registeredCommands = new Set<string>();
+        if (actions.some(action => typeof action?.command === 'string')) {
+            try {
+                registeredCommands = new Set(await vscode.commands.getCommands(true));
+            }
+            catch (error) {
+                extensionLogOutputChannel.error(`Failed to enumerate commands for interaction message actions: ${error}`);
+            }
+        }
+
+        const resolvedActions: ResolvedInteractionMessageAction[] = [];
+        for (const action of actions) {
+            const displayName = typeof action?.displayName === 'string' ? action.displayName.trim() : '';
+            const command = typeof action?.command === 'string' ? action.command.trim() : '';
+            const filePath = typeof action?.filePath === 'string' ? action.filePath : '';
+            if (!displayName || Boolean(command) === Boolean(filePath)) {
+                extensionLogOutputChannel.warn('Ignoring an invalid interaction message action.');
+                continue;
+            }
+
+            if (command) {
+                if (!registeredCommands.has(command)) {
+                    extensionLogOutputChannel.warn(`Ignoring interaction message action for unavailable command '${command}'.`);
+                    continue;
+                }
+
+                resolvedActions.push({
+                    title: displayName,
+                    execute: async () => {
+                        await vscode.commands.executeCommand(command);
+                    },
+                });
+                continue;
+            }
+
+            if (!path.isAbsolute(filePath) || !await isFile(filePath)) {
+                extensionLogOutputChannel.warn('Ignoring interaction message action for an unavailable file.');
+                continue;
+            }
+
+            resolvedActions.push({
+                title: displayName,
+                execute: async () => {
+                    await this.openEditor(filePath);
+                },
+            });
+        }
+
+        return resolvedActions;
+
+        async function isFile(filePath: string): Promise<boolean> {
+            try {
+                return (await fs.stat(filePath)).isFile();
+            }
+            catch {
+                return false;
+            }
+        }
+    }
+
+    private _handleMessageActionSelection(selection: Thenable<ResolvedInteractionMessageAction | undefined>): void {
+        void Promise.resolve(selection).then(async selected => {
+            await selected?.execute();
+        }).catch((error: unknown) => {
+            if (isCommandCancellation(error)) {
+                return;
+            }
+
+            extensionLogOutputChannel.error(`Failed to execute an interaction message action: ${error}`);
+            void vscode.window.showErrorMessage(errorMessage(error));
+        });
     }
 
     /**
@@ -765,6 +753,7 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("notifyAppHostStartupCompleted", middleware('notifyAppHostStartupCompleted', interactionService.notifyAppHostStartupCompleted.bind(interactionService)));
     connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => interactionService.startDebugSession(workingDirectory, projectFile, debug, options)));
     connection.onRequest("writeDebugSessionMessage", middleware('writeDebugSessionMessage', interactionService.writeDebugSessionMessage.bind(interactionService)));
+    connection.onRequest("writeAppHostLogEntry", middleware('writeAppHostLogEntry', interactionService.writeAppHostLogEntry.bind(interactionService)));
 }
 
 function delayStatusForE2E(): void {

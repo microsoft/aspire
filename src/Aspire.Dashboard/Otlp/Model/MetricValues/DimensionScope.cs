@@ -31,8 +31,9 @@ public class DimensionScope
 
     public void AddPointValue(NumberDataPoint d, OtlpContext context)
     {
-        var start = OtlpHelpers.UnixNanoSecondsToDateTime(d.StartTimeUnixNano);
-        var end = OtlpHelpers.UnixNanoSecondsToDateTime(d.TimeUnixNano);
+        OtlpHelpers.ValidateNumberDataPoint(d);
+        var start = d.StartTimeUnixNano;
+        var end = d.TimeUnixNano;
 
         if (d.ValueCase == NumberDataPoint.ValueOneofCase.AsInt)
         {
@@ -40,7 +41,7 @@ public class DimensionScope
             var lastLongValue = _lastValue as MetricValue<long>;
             if (lastLongValue is not null && lastLongValue.Value == value)
             {
-                lastLongValue.End = end;
+                lastLongValue.EndTimeUnixNano = end;
                 AddExemplars(lastLongValue, d.Exemplars, context);
                 Interlocked.Increment(ref lastLongValue.Count);
             }
@@ -48,7 +49,7 @@ public class DimensionScope
             {
                 if (lastLongValue is not null)
                 {
-                    start = lastLongValue.End;
+                    start = lastLongValue.EndTimeUnixNano;
                 }
                 _lastValue = new MetricValue<long>(d.AsInt, start, end);
                 AddExemplars(_lastValue, d.Exemplars, context);
@@ -60,7 +61,7 @@ public class DimensionScope
             var lastDoubleValue = _lastValue as MetricValue<double>;
             if (lastDoubleValue is not null && lastDoubleValue.Value == d.AsDouble)
             {
-                lastDoubleValue.End = end;
+                lastDoubleValue.EndTimeUnixNano = end;
                 AddExemplars(lastDoubleValue, d.Exemplars, context);
                 Interlocked.Increment(ref lastDoubleValue.Count);
             }
@@ -68,7 +69,7 @@ public class DimensionScope
             {
                 if (lastDoubleValue is not null)
                 {
-                    start = lastDoubleValue.End;
+                    start = lastDoubleValue.EndTimeUnixNano;
                 }
                 _lastValue = new MetricValue<double>(d.AsDouble, start, end);
                 AddExemplars(_lastValue, d.Exemplars, context);
@@ -77,47 +78,24 @@ public class DimensionScope
         }
     }
 
-    public void AddHistogramValue(HistogramDataPoint h, OtlpContext context)
+    /// <summary>
+    /// Adds a histogram point, merging unchanged cumulative snapshots but retaining delta intervals.
+    /// </summary>
+    /// <param name="h">The histogram point to add.</param>
+    /// <param name="temporality">The histogram's aggregation temporality.</param>
+    /// <param name="context">The telemetry ingestion context.</param>
+    public void AddHistogramValue(HistogramDataPoint h, OtlpAggregationTemporality temporality, OtlpContext context)
     {
-        var start = OtlpHelpers.UnixNanoSecondsToDateTime(h.StartTimeUnixNano);
-        var end = OtlpHelpers.UnixNanoSecondsToDateTime(h.TimeUnixNano);
-
-        if (h.BucketCounts.Count > 0 && h.ExplicitBounds.Count == 0)
-        {
-            throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
-        }
-
+        OtlpHelpers.ValidateHistogramDataPoint(h);
         var lastHistogramValue = _lastValue as HistogramValue;
-        if (lastHistogramValue is not null && lastHistogramValue.Values.Length != h.BucketCounts.Count)
+        var value = HistogramValue.Create(h, temporality, lastHistogramValue);
+        if (ReferenceEquals(value, lastHistogramValue))
         {
-            // Histogram bucket layouts must remain stable within a series so cumulative values can
-            // be subtracted and combined. A changed bucket count would make the series unusable.
-            throw new InvalidOperationException("Histogram data point bucket count length changed.");
-        }
-
-        if (lastHistogramValue is not null && lastHistogramValue.Count == h.Count)
-        {
-            lastHistogramValue.End = end;
-            AddExemplars(lastHistogramValue, h.Exemplars, context);
+            AddExemplars(value, h.Exemplars, context);
         }
         else
         {
-            // If the explicit bounds are the same as the last value, reuse them.
-            double[] explicitBounds;
-            if (lastHistogramValue is not null)
-            {
-                start = lastHistogramValue.End;
-                explicitBounds = lastHistogramValue.ExplicitBounds.SequenceEqual(h.ExplicitBounds)
-                    ? lastHistogramValue.ExplicitBounds
-                    : h.ExplicitBounds.ToArray();
-            }
-            else
-            {
-                explicitBounds = h.ExplicitBounds.ToArray();
-            }
-
-            var bucketCounts = h.BucketCounts.ToArray();
-            _lastValue = new HistogramValue(bucketCounts, h.Sum, h.Count, start, end, explicitBounds);
+            _lastValue = value;
             AddExemplars(_lastValue, h.Exemplars, context);
             _values.Add(_lastValue);
         }
@@ -135,13 +113,16 @@ public class DimensionScope
                     continue;
                 }
 
-                var start = OtlpHelpers.UnixNanoSecondsToDateTime(exemplar.TimeUnixNano);
                 var exemplarValue = exemplar.HasAsDouble ? exemplar.AsDouble : exemplar.AsInt;
+                if (!double.IsFinite(exemplarValue) || !OtlpHelpers.TryValidateMetricExemplarTimestamp(exemplar, context))
+                {
+                    continue;
+                }
 
                 var exists = false;
                 foreach (var existingExemplar in value.Exemplars)
                 {
-                    if (start == existingExemplar.Start && exemplarValue == existingExemplar.Value)
+                    if (exemplar.TimeUnixNano == existingExemplar.TimeUnixNano && exemplarValue == existingExemplar.Value)
                     {
                         exists = true;
                         break;
@@ -154,7 +135,7 @@ public class DimensionScope
 
                 value.Exemplars.Add(new MetricsExemplar
                 {
-                    Start = start,
+                    TimeUnixNano = exemplar.TimeUnixNano,
                     Value = exemplarValue,
                     Attributes = exemplar.FilteredAttributes.ToKeyValuePairs(context),
                     SpanId = exemplar.SpanId.ToHexString(),

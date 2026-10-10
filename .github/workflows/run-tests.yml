@@ -14,7 +14,7 @@ on:
         required: false
         type: string
       # MTP diagnostic arguments (hangdump, crashdump, timeouts).
-      # Single source of truth is eng/Testing.props; the runsheet pipeline forwards per-project values.
+      # Single source of truth is eng/Testing.targets; the runsheet pipeline forwards per-project values.
       mtpBaseArgs:
         required: false
         type: string
@@ -81,23 +81,34 @@ jobs:
         run: |
           echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
           echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "TEST_RUN_PATH=${{ github.workspace }}\run-tests" >> $env:GITHUB_ENV
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
 
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up .NET Core
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         # Used for running tests outside the repo
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         with:
-          dotnet-version: |
-            8.x
-            9.x
-            10.x
+          dotnet-version: 10.x
+          # Install the pinned SDK as well, including its exact prerelease version.
+          global-json-file: global.json
         env:
           DOTNET_INSTALL_DIR: ${{ env.DOTNET_ROOT }}
+
+      - name: Setup Deno
+        if: inputs.testShortName == 'Hosting.JavaScript'
+        uses: ./.github/actions/setup-deno
+
+      - name: Set up Java
+        if: ${{ fromJson(inputs.properties).requiresJava == true }}
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -441,7 +452,6 @@ jobs:
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           BUILT_NUGETS_PATH: ${{ github.workspace }}/artifacts/packages/Debug/Shipping
-          NUGET_PACKAGES: ${{ github.workspace }}/nuget-cache
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
@@ -538,6 +548,12 @@ jobs:
             --results-directory ${{ github.workspace }}/testresults \
             ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
 
+          # `--ignore-exit-code 8` only remaps the test module's exit code. Normalize the
+          # aggregated `dotnet test` result with the same helper exercised by Infrastructure.Tests.
+          NORMALIZED_TEST_EXIT_CODE=0
+          bash .github/workflows/normalize-mtp-exit-code.sh "$TEST_EXIT_CODE" || NORMALIZED_TEST_EXIT_CODE=$?
+          TEST_EXIT_CODE=$NORMALIZED_TEST_EXIT_CODE
+
           # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
           # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
           echo "$TEST_EXIT_CODE" > "${{ github.workspace }}/test-exit-code.txt"
@@ -563,7 +579,6 @@ jobs:
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
-          NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent the Roslyn compiler server (VBCSCompiler) from starting during tests.
@@ -600,6 +615,11 @@ jobs:
               --report-trx `
               --results-directory ${{ github.workspace }}/testresults `
               ${{ inputs.extraTestArgs }}
+            $testExitCode = $LASTEXITCODE
+
+            # `--ignore-exit-code 8` only remaps the test module's exit code. Normalize the
+            # aggregated `dotnet test` result with the same helper exercised by Infrastructure.Tests.
+            & .github/workflows/normalize-mtp-exit-code.ps1 -ExitCode $testExitCode
             $testExitCode = $LASTEXITCODE
           }
           finally {
@@ -643,8 +663,9 @@ jobs:
           #   10 = test adapter infrastructure failure (e.g. a fixture could not be created)
           #   11 = the test process exited because a dependent process exited
           #   12 = no supported protocol version
-          # (Exit code 8 "zero tests ran" is already mapped to 0 by --ignore-exit-code 8 in MtpBaseArgs, so a
-          # genuinely empty run is caught below by the .trx/artifact checks rather than by the exit code.)
+          # (Exit code 8 "zero tests ran" is mapped to 0 either by --ignore-exit-code 8 for direct assembly
+          # execution or explicitly by the dotnet test steps above, so a genuinely empty run is caught below
+          # by the .trx/artifact checks rather than by the exit code.)
           $exitCodeFile = "${{ github.workspace }}/test-exit-code.txt"
           if (Test-Path $exitCodeFile) {
             $mtpExitCode = [int]((Get-Content -Path $exitCodeFile -Raw).Trim())
@@ -754,13 +775,13 @@ jobs:
       - name: Upload logs, and test results
         id: upload-logs
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: logs-${{ inputs.testShortName }}-${{ inputs.os }}
           path: |
             **/*.binlog
             testresults/**
-            artifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**
+            artifacts/bin/Aspire.Templates.Tests/Debug/net10.0/logs/**
             artifacts/log/test-logs/**
 
       - name: Copy CLI E2E recordings for upload
@@ -779,7 +800,7 @@ jobs:
 
       - name: Upload CLI E2E recordings
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cli-e2e-recordings-${{ inputs.testShortName }}
           path: |

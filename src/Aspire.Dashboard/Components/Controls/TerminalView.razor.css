@@ -1,0 +1,255 @@
+.terminal-view {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 0 12px 12px;
+    box-sizing: border-box;
+    --colorNeutralForeground2: var(--colorNeutralForeground3);
+    --colorNeutralForeground1Hover: var(--colorNeutralForeground1);
+    --colorNeutralForeground1Pressed: var(--colorNeutralForeground3);
+    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
+    --colorNeutralBackground1Pressed: var(--colorNeutralBackground1);
+}
+
+.terminal-frame {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    background: var(--terminal-background, var(--colorNeutralBackground1));
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.terminal-chromeless {
+    padding: 0;
+}
+
+.terminal-chromeless .terminal-frame {
+    border: 0;
+    border-radius: 0;
+}
+
+.terminal-chromeless .terminal-body {
+    padding: 0;
+}
+
+.terminal-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    flex: 0 0 auto;
+    gap: 8px;
+    min-height: 34px;
+    padding: 4px 8px;
+    background: var(--colorNeutralBackground2);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+    line-height: var(--lineHeightBase200);
+    /* Fluent controls consume these tokens inside their shadow roots. */
+    --fontSizeBase300: var(--fontSizeBase200);
+    --lineHeightBase300: var(--lineHeightBase200);
+}
+
+.terminal-focus-hint kbd {
+    margin-inline-end: 2px;
+    padding: 1px 4px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: 2px;
+    background-color: color-mix(in srgb, var(--colorNeutralBackground3) 60%, var(--colorNeutralStroke2));
+    color: var(--colorNeutralForeground1);
+    font-size: 0.875em;
+}
+
+.terminal-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
+    margin-inline-start: auto;
+}
+
+.terminal-select-label {
+    white-space: nowrap;
+}
+
+.terminal-controls ::deep .toolbar-button {
+    width: var(--aspire-control-height);
+    min-width: var(--aspire-control-height);
+    padding: 0;
+}
+
+.terminal-controls ::deep .toolbar-button svg {
+    height: 16px;
+}
+
+/* The select's field wrapper has an empty grid row that otherwise offsets its visible border. */
+.terminal-controls ::deep .toolbar-button,
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
+    height: var(--aspire-control-height);
+    min-height: var(--aspire-control-height);
+}
+
+.terminal-controls ::deep .terminal-size-select,
+.terminal-controls ::deep .terminal-palette-select {
+    --aspire-dropdown-min-width: 110px;
+    width: 110px;
+    min-width: 0;
+}
+
+.terminal-font-size {
+    min-width: 32px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.terminal-focus-hint {
+    visibility: hidden;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.terminal-view:has(.terminal-container:focus-within) .terminal-focus-hint {
+    visibility: visible;
+}
+
+.terminal-titlebar {
+    --terminal-titlebar-border-color: var(--colorNeutralStroke1);
+    display: flex;
+    align-items: center;
+    flex: 0 0 30px;
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 12px;
+    padding-inline-end: 8px;
+    box-sizing: border-box;
+    background: var(--colorNeutralBackground2);
+    border-bottom: 1px solid var(--terminal-titlebar-border-color);
+    color: var(--colorNeutralForeground2);
+    font: var(--fontSizeBase200) var(--fontFamilyBase);
+}
+
+.terminal-titlebar ::deep .terminal-open-window {
+    color: inherit;
+}
+
+.terminal-titlebar ::deep .terminal-open-window svg {
+    fill: currentColor;
+}
+
+.terminal-dimensions {
+    flex: 0 0 auto;
+    margin-inline-start: 12px;
+    padding-inline-start: 12px;
+    border-inline-start: 1px solid var(--colorNeutralStroke1);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.terminal-body {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px;
+    box-sizing: border-box;
+}
+
+.terminal-container {
+    /* Tint a muted neutral base with brand purple without competing with terminal content. */
+    --terminal-focus-neutral-color: color-mix(in srgb, var(--colorNeutralForeground3) 60%, var(--colorNeutralStroke1));
+    --terminal-focus-color: color-mix(in srgb, #7455dd 25%, var(--terminal-focus-neutral-color));
+    position: relative;
+    isolation: isolate;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.terminal-container::after {
+    /* Paint focus above the composited canvas without resizing the terminal or intercepting input. */
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.terminal-container:focus-within::after {
+    outline: var(--strokeWidthThick) solid var(--terminal-focus-color);
+    outline-offset: calc(-1 * var(--strokeWidthThick));
+}
+
+.terminal-view ::deep .terminal-selection-actions {
+    position: absolute;
+    width: var(--aspire-control-height);
+    height: var(--aspire-control-height);
+    pointer-events: auto;
+}
+
+.terminal-view ::deep .terminal-selection-actions[hidden] {
+    display: none;
+}
+
+.terminal-view ::deep .terminal-selection-copy {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    border-radius: var(--borderRadiusMedium);
+    box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+}
+
+.terminal-view ::deep .terminal-selection-copy::part(control) {
+    padding: 0;
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    min-height: 0;
+    border-radius: inherit;
+}
+
+.terminal-view ::deep .terminal-selection-copy[aria-busy="true"]::part(control) {
+    opacity: 0.6;
+    cursor: progress;
+}
+
+@media (prefers-contrast: more) {
+    .terminal-container {
+        --terminal-focus-color: var(--colorStrokeFocus1);
+    }
+}
+
+@media (forced-colors: active) {
+    .terminal-container {
+        --terminal-focus-color: Highlight;
+    }
+}
+
+.terminal-error {
+    position: absolute;
+    inset-inline: 12px;
+    top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--border-radius);
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+}

@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -23,7 +21,7 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 #pragma warning disable CS0618 // Type or member is obsolete
 public class AzureContainerAppEnvironmentResource :
-    AzureProvisioningResource, IAzureComputeEnvironmentResource, IAzureContainerRegistry, IAzureDelegatedSubnetResource
+    AzureProvisioningResource, IAzureComputeEnvironmentResource, IComputeEnvironmentWithVolumeMounts, IAzureContainerRegistry, IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
     /// <inheritdoc />
@@ -247,9 +245,28 @@ public class AzureContainerAppEnvironmentResource :
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
-    /// Default is true.
+    /// Defaults to enabled for standard environments and disabled for Express environments.
     /// </summary>
-    internal bool EnableDashboard { get; set; } = true;
+    internal bool EnableDashboard
+    {
+        get => _enableDashboard ?? !IsExpress;
+        set => _enableDashboard = value;
+    }
+
+    private bool? _enableDashboard;
+
+    internal bool IsExpress { get; set; }
+
+    internal void ValidatePublicEndpointReference(EndpointReference endpointReference)
+    {
+        if (!endpointReference.EndpointAnnotation.IsExternal)
+        {
+            throw new InvalidOperationException(
+                $"Azure Container Apps Express environment '{Name}' cannot reference internal endpoint " +
+                $"'{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}'. " +
+                "Use WithExternalHttpEndpoints() to explicitly enable public HTTPS ingress, or use a standard Azure Container Apps environment.");
+        }
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether HTTP endpoints should be preserved as HTTP instead of being upgraded to HTTPS.
@@ -346,6 +363,14 @@ public class AzureContainerAppEnvironmentResource :
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
+        if (IsExpress)
+        {
+            // Express apps are reachable only over public ingress, so there is no ".internal"
+            // hostname to fall back to. Reject the reference instead of emitting a private
+            // hostname that would not resolve.
+            ValidatePublicEndpointReference(endpointReference);
+        }
+
         var resource = endpointReference.Resource;
 
         var builder = new ReferenceExpressionBuilder();

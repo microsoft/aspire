@@ -19,7 +19,13 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
 
     public DevTunnelStatus TunnelStatus { get; set; } = new("test-tunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: []);
 
+    public string? CreatedTunnelId { get; set; }
+
     public DevTunnelAccessStatus AccessStatus { get; set; } = new();
+
+    public Func<string, CancellationToken, Task<DevTunnelStatus>>? GetTunnelCallback { get; set; }
+
+    public Func<int?, CancellationToken, Task<DevTunnelAccessStatus>>? GetAccessCallback { get; set; }
 
     public Task<Version> GetVersionAsync(ILogger? logger = null, CancellationToken cancellationToken = default)
     {
@@ -42,7 +48,7 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
     public Task<DevTunnelStatus> CreateTunnelAsync(string tunnelId, DevTunnelOptions options, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(CreateTunnelAsync), tunnelId));
-        return Task.FromResult(new DevTunnelStatus(tunnelId, HostConnections: 1, ClientConnections: 0, Description: "", Labels: []));
+        return Task.FromResult(new DevTunnelStatus(CreatedTunnelId ?? tunnelId, HostConnections: 1, ClientConnections: 0, Description: "", Labels: []));
     }
 
     public Task<DevTunnelPortList> GetPortListAsync(string tunnelId, ILogger? logger = null, CancellationToken cancellationToken = default)
@@ -66,13 +72,13 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
     public Task<DevTunnelStatus> GetTunnelAsync(string tunnelId, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetTunnelAsync), tunnelId));
-        return Task.FromResult(TunnelStatus);
+        return GetTunnelCallback?.Invoke(tunnelId, cancellationToken) ?? Task.FromResult(TunnelStatus);
     }
 
     public Task<DevTunnelAccessStatus> GetAccessAsync(string tunnelId, int? portNumber = null, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetAccessAsync), tunnelId, portNumber));
-        return Task.FromResult(AccessStatus);
+        return GetAccessCallback?.Invoke(portNumber, cancellationToken) ?? Task.FromResult(AccessStatus);
     }
 }
 

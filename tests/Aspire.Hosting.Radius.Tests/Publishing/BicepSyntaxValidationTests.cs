@@ -159,7 +159,7 @@ public class BicepSyntaxValidationTests
         Assert.Contains("Radius.Core/environments", bicep);
         Assert.Contains("Radius.Core/applications", bicep);
         Assert.Contains("Radius.Core/recipePacks", bicep);
-        Assert.Contains("Applications.Datastores/redisCaches", bicep);
+        Assert.Contains("Radius.Data/redisCaches", bicep);
         Assert.Contains("Radius.Compute/containers", bicep);
     }
 }

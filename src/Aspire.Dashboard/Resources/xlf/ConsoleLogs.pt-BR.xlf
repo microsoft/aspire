@@ -47,6 +47,11 @@
         <target state="translated">Não empacotar linhas de log</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNotCapturedForRun">
+        <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
+        <target state="new">Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
         <source>{0} console logs</source>
         <target state="translated">{0} logs do console</target>
@@ -97,16 +102,6 @@
         <target state="translated">Estado desconhecido</target>
         <note />
       </trans-unit>
-      <trans-unit id="ConsoleLogsViewConsoleOption">
-        <source>Console logs</source>
-        <target state="new">Console logs</target>
-        <note>Option in the View dropdown that shows the resource's console logs.</note>
-      </trans-unit>
-      <trans-unit id="ConsoleLogsViewTerminalOption">
-        <source>Terminal</source>
-        <target state="new">Terminal</target>
-        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
-      </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
         <target state="translated">Observando logs...</target>
@@ -127,25 +122,10 @@
         <target state="translated">Status de log de serviço</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalToolbarDecreaseFontSize">
-        <source>Decrease font size</source>
-        <target state="new">Decrease font size</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarGridSize">
-        <source>Terminal dimensions</source>
-        <target state="new">Terminal dimensions</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit</source>
-        <target state="new">Fit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarIncreaseFontSize">
-        <source>Increase font size</source>
-        <target state="new">Increase font size</target>
-        <note />
+      <trans-unit id="PauseInProgressText">
+        <source>Console logs capture paused at {0}</source>
+        <target state="new">Console logs capture paused at {0}</target>
+        <note>{0} is a time</note>
       </trans-unit>
     </body>
   </file>

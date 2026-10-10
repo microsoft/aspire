@@ -14,6 +14,12 @@ The CI test infrastructure uses a unified matrix generation system that:
 
 For how MTP diagnostic arguments (hang dump, crash dump, etc.) flow through this pipeline, see [MTP Args Pipeline](mtp-args-pipeline.md).
 
+Windows GitHub Actions jobs that restore or consume NuGet packages should use
+`${{ github.workspace }}/.nuget/packages`. Multi-platform jobs should set
+`NUGET_PACKAGES` through `GITHUB_ENV` only on Windows so restore, build, and test
+steps share the same cache. When a step is the only NuGet consumer, set the
+variable at step scope. Linux and macOS should retain their existing cache behavior.
+
 ## Architecture
 
 ```text
@@ -134,7 +140,6 @@ Each CI platform has a thin script that transforms the canonical matrix:
 - Expands each entry for every OS in its `supportedOSes` array
 - Maps OS names to GitHub runners (`linux` → `ubuntu-latest`, etc.)
 - Preserves dependency metadata within the `properties` sub-object (including `requiresNugets`, `requiresCliArchive`, `requiresGitHubToken`), and custom runner overrides on each expanded entry
-- Applies overflow splitting for the `no_nugets` category (threshold: 250 entries) to stay under the GitHub Actions 256-job-per-matrix limit
 - Outputs a single `all_tests` matrix, which `.github/workflows/tests.yml` further splits by dependency type and OS using `eng/scripts/split-test-matrix-by-deps.ps1`
 
 **Azure DevOps** (future):
@@ -145,19 +150,19 @@ This separation keeps 90% of the logic platform-agnostic while allowing each CI 
 
 ### Phase 5: Test Execution
 
+Pull requests run `.github/actions/select-tests` before enumeration to select the affected .NET tests and non-.NET jobs. Non-PR events force an `ALL` selection, so rolling builds retain the complete test graph. Extension release metadata follows the same path: changes to `extension/package.json` and `extension/CHANGELOG.md` select extension unit and E2E validation without creating a .NET matrix.
+
 In `.github/workflows/tests.yml`, the workflow:
 
 1. Receives the OS-expanded `all_tests` matrix from the `enumerate-tests` action
-2. Splits that matrix with `eng/scripts/split-test-matrix-by-deps.ps1` into 6 buckets:
+2. Splits that matrix with `eng/scripts/split-test-matrix-by-deps.ps1` into 5 buckets:
    - `tests_matrix_no_nugets`
-   - `tests_matrix_no_nugets_overflow`
    - `tests_matrix_requires_nugets_linux`
    - `tests_matrix_requires_nugets_windows`
    - `tests_matrix_requires_nugets_macos`
    - `tests_matrix_requires_cli_archive`
 3. Runs the CI jobs so the critical path stays as short as possible:
     - `tests_no_nugets`: Runs immediately after enumeration
-    - `tests_no_nugets_overflow`: Runs immediately (handles entries beyond the 250-entry threshold)
     - `build_packages`: Produces the shared package feed used by all package-dependent jobs
     - `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`: Build native CLI archives and the matching RID-specific DCP/Dashboard packages in parallel with `build_packages`
     - `tests_requires_nugets_linux`, `tests_requires_nugets_windows`, `tests_requires_nugets_macos`: Wait for `build_packages` plus only the CLI archive job for their OS
@@ -180,7 +185,7 @@ The workflow intentionally favors shorter dependency chains over a smaller numbe
 
 #### GitHub Actions 256-Job Limit
 
-GitHub Actions enforces a maximum of 256 jobs per `strategy.matrix`. To stay within this limit, the `no_nugets` category (typically the largest) is split into primary and overflow buckets at a threshold of 250 entries. If the total entry count is below 250, the overflow matrix is empty and the overflow job is skipped.
+GitHub Actions enforces a maximum of 256 jobs per `strategy.matrix`. The matrix splitter fails explicitly if any dependency bucket exceeds that limit, so the workflow cannot silently omit test entries.
 
 ## Enabling Test Splitting for a Project
 

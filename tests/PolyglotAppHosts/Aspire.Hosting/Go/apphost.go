@@ -17,6 +17,20 @@ func main() {
 	// Factory methods on builder
 	// ===================================================================
 
+	aks := builder.AddAzureKubernetesEnvironment("aks")
+	aks.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		cluster := infrastructure.GetContainerServiceManagedCluster()
+		if err := cluster.SetIsRbacEnabled(true).Err(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+		if _, err := cluster.IsRbacEnabled(); err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+	})
+	if aks.Err() != nil {
+		log.Fatalf(aspire.FormatError(aks.Err()))
+	}
+
 	// AddContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
 	if err = container.Err(); err != nil {
@@ -134,8 +148,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	customInputParam := builder.AddParameter("custom-input")
 	customInputParam.WithCustomInput(&aspire.ParameterCustomInputOptions{
 		InputType:   &customInputType,
-		Label:       "Worker Count",
-		Placeholder: "Enter number (1-10)",
+		Label:       aspire.StringPtr("Worker Count"),
+		Placeholder: aspire.StringPtr("Enter number (1-10)"),
 		Options: map[string]string{
 			"one": "One",
 			"two": "Two",
@@ -651,12 +665,15 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	})
 
 	_ = container.WithContainerBuildOptions(func(buildCtx aspire.ContainerBuildOptionsCallbackContext) {
-		buildCtx.SetDestination(aspire.ContainerImageDestinationRegistry).
-			SetImageFormat(aspire.ContainerImageFormatOci).
-			SetTargetPlatform(aspire.ContainerTargetPlatformLinuxAmd64).
-			SetOutputPath("./artifacts/container-image").
-			SetLocalImageName("validation-image").
-			SetLocalImageTag("latest")
+		destination := aspire.ContainerImageDestinationRegistry
+		imageFormat := aspire.ContainerImageFormatOci
+		targetPlatform := aspire.ContainerTargetPlatformLinuxAmd64
+		buildCtx.SetDestination(&destination).
+			SetImageFormat(&imageFormat).
+			SetTargetPlatform(&targetPlatform).
+			SetOutputPath(aspire.StringPtr("./artifacts/container-image")).
+			SetLocalImageName(aspire.StringPtr("validation-image")).
+			SetLocalImageTag(aspire.StringPtr("latest"))
 		buildServices := buildCtx.Services()
 		buildLoggerFactory := buildServices.GetLoggerFactory()
 		buildLogger := buildLoggerFactory.CreateLogger("ValidationAppHost.ContainerBuildOptions")
@@ -827,8 +844,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		selectedColor, _ := multi.Inputs().Value("color")
 		soloValue := ""
-		if single.Input != nil {
-			soloValue = single.Input.Value
+		if single.Input != nil && single.Input.Value != nil {
+			soloValue = *single.Input.Value
 		}
 
 		multiCanceled, err := multi.Canceled()

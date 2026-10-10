@@ -16,13 +16,14 @@
     <ContentInButtonArea>
         @if (IsGenAILogCallback(LogEntry))
         {
-            <FluentButton Appearance="Appearance.Lightweight"
+            <FluentButton Appearance="ButtonAppearance.Transparent"
+                          IconOnly="true"
                           Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                           OnClick="OnLaunchGenAIVisualizerAsync">
                 <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                            Color="Color.Accent" />
+                            Color="Color.Primary" />
             </FluentButton>
         }
-        <ExceptionDetails ExceptionText="@_exceptionText" />
+        <ExceptionDetails ExceptionText="@LogEntry.ExceptionText" />
     </ContentInButtonArea>
 </GridValue>

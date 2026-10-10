@@ -13,6 +13,14 @@ const windowsForcedTaskkillCloseReserveMs = 250;
 const windowsForcedTaskkillTotalReserveMs = 1_250;
 const windowsTaskkillProcessNotFoundExitCode = 128;
 const managedPosixProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
+const cliProcessSpawned = new vscode.EventEmitter<CliProcessSpawnEvent>();
+
+export interface CliProcessSpawnEvent {
+    readonly childProcess: ChildProcessWithoutNullStreams;
+    readonly args: readonly string[];
+}
+
+export const onDidSpawnCliProcess = cliProcessSpawned.event;
 
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
@@ -115,14 +123,34 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
         options?.exitCallback?.(code);
     });
 
+    cliProcessSpawned.fire({ childProcess: child, args: args ?? [] });
     return child;
 }
 
 export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): Promise<void> {
-    if (process.platform === 'win32') {
-        return terminateWindowsCliProcess(childProcess, description, options);
+    const pendingSpawnClose = childProcess.pid === undefined && childProcess.exitCode === null && childProcess.signalCode === null
+        ? observeChildProcessClose(childProcess)
+        : undefined;
+    const spawnCloseDeadline = Date.now() + processShutdownGracePeriodMs;
+    const termination = process.platform === 'win32'
+        ? terminateWindowsCliProcess(childProcess, description, options)
+        : terminatePosixCliProcess(childProcess, description, options);
+    if (!pendingSpawnClose) {
+        return termination;
     }
 
+    // Failed spawns have no PID, but their error/close events arrive asynchronously.
+    // Confirm close before treating a raced termination rejection as a cleanup failure.
+    // https://nodejs.org/api/child_process.html#event-close
+    return termination.catch(async error => {
+        if (childProcess.pid !== undefined || !await pendingSpawnClose.wait(Math.max(0, spawnCloseDeadline - Date.now()))) {
+            throw error;
+        }
+        managedPosixProcessGroups.delete(childProcess);
+    }).finally(() => pendingSpawnClose.dispose());
+}
+
+function terminatePosixCliProcess(childProcess: ChildProcessWithoutNullStreams, description: string, options?: { suppressTimeoutWarning?: boolean; force?: boolean }): Promise<void> {
     return new Promise((resolve, reject) => {
         const processGroupPid = managedPosixProcessGroups.has(childProcess)
             ? childProcess.pid
@@ -167,10 +195,12 @@ export function terminateCliProcess(childProcess: ChildProcessWithoutNullStreams
                 clearTimeout(confirmationTimer);
                 confirmationTimer = undefined;
             }
-            managedPosixProcessGroups.delete(childProcess);
             if (error) {
+                // Keep group ownership on failure so a live-leader retry cannot degrade to
+                // leader-only termination and leave its descendants behind.
                 reject(error);
             } else {
+                managedPosixProcessGroups.delete(childProcess);
                 resolve();
             }
         };

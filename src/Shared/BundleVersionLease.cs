@@ -22,7 +22,7 @@ internal sealed class BundleVersionLease : IDisposable
     public const string LeasesDirectoryName = ".leases";
 
     private const string LeaseExtension = ".lease";
-    private readonly FileStream _stream;
+    private readonly HeldFileLease _heldLease;
 
     private BundleVersionLease(
         string? versionId,
@@ -33,7 +33,7 @@ internal sealed class BundleVersionLease : IDisposable
         string holderKind,
         string? commandName,
         DateTimeOffset acquiredUtc,
-        FileStream stream)
+        HeldFileLease heldLease)
     {
         VersionId = versionId;
         VersionDirectory = versionDirectory;
@@ -43,7 +43,7 @@ internal sealed class BundleVersionLease : IDisposable
         HolderKind = holderKind;
         CommandName = commandName;
         AcquiredUtc = acquiredUtc;
-        _stream = stream;
+        _heldLease = heldLease;
     }
 
     /// <summary>
@@ -104,14 +104,7 @@ internal sealed class BundleVersionLease : IDisposable
         var leasesDirectory = Path.Combine(fullVersionDirectory, LeasesDirectoryName);
         Directory.CreateDirectory(leasesDirectory);
 
-        var leasePath = Path.Combine(leasesDirectory, CreateLeaseFileName());
-        var stream = new FileStream(
-            leasePath,
-            FileMode.CreateNew,
-            FileAccess.ReadWrite,
-            FileShare.None,
-            bufferSize: 4096,
-            FileOptions.DeleteOnClose);
+        var heldLease = HeldFileLease.Acquire(leasesDirectory, CreateLeaseFileNamePrefix(), LeaseExtension);
 
         try
         {
@@ -119,22 +112,22 @@ internal sealed class BundleVersionLease : IDisposable
             var lease = new BundleVersionLease(
                 versionId,
                 fullVersionDirectory,
-                leasePath,
+                heldLease.LeasePath,
                 Environment.ProcessId,
                 GetCurrentProcessStartTimeTicks(),
                 holderKind,
                 commandName,
                 DateTimeOffset.UtcNow,
-                stream);
+                heldLease);
 
-            JsonSerializer.Serialize(stream, lease, BundleVersionLeaseJsonSerializerContext.Default.BundleVersionLease);
-            stream.Flush(flushToDisk: true);
+            JsonSerializer.Serialize(heldLease.Stream, lease, BundleVersionLeaseJsonSerializerContext.Default.BundleVersionLease);
+            heldLease.Stream.Flush(flushToDisk: true);
 
             return lease;
         }
         catch
         {
-            stream.Dispose();
+            heldLease.Dispose();
             throw;
         }
     }
@@ -171,72 +164,27 @@ internal sealed class BundleVersionLease : IDisposable
         => AddEnvironment(environmentVariables, VersionDirectory);
 
     /// <summary>
-    /// Returns <see langword="true"/> if <paramref name="versionDirectory"/> has any active leases.
-    /// Orphaned lease files are removed as they are discovered.
+    /// Returns <see langword="true"/> if <paramref name="versionDirectory"/> has any active leases
+    /// or the lease state cannot be determined. Orphaned lease files are removed as they are discovered.
     /// </summary>
     public static bool HasActiveLease(string versionDirectory)
     {
         var leasesDirectory = Path.Combine(versionDirectory, LeasesDirectoryName);
-        if (!Directory.Exists(leasesDirectory))
+        var result = HeldFileLease.Probe(leasesDirectory, LeaseExtension);
+        if (result is HeldFileLeaseProbeResult.None)
         {
-            return false;
+            TryDeleteEmptyLeaseDirectory(leasesDirectory);
         }
 
-        foreach (var leasePath in EnumerateLeaseFiles(leasesDirectory))
-        {
-            if (!TryDeleteOrphanedLease(leasePath))
-            {
-                return true;
-            }
-        }
-
-        TryDeleteEmptyLeaseDirectory(leasesDirectory);
-        return false;
+        // Unknown is deliberately treated as active so cleanup never deletes a version whose
+        // lease directory could not be enumerated or whose lease files could not be inspected.
+        return result is not HeldFileLeaseProbeResult.None;
     }
 
     /// <inheritdoc/>
     public void Dispose()
     {
-        _stream.Dispose();
-    }
-
-    private static IEnumerable<string> EnumerateLeaseFiles(string leasesDirectory)
-    {
-        try
-        {
-            return Directory.EnumerateFiles(leasesDirectory, $"*{LeaseExtension}").ToArray();
-        }
-        catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
-    }
-
-    private static bool TryDeleteOrphanedLease(string leasePath)
-    {
-        try
-        {
-            using var stream = new FileStream(
-                leasePath,
-                FileMode.Open,
-                FileAccess.ReadWrite,
-                FileShare.None,
-                bufferSize: 1,
-                FileOptions.DeleteOnClose);
-            return true;
-        }
-        catch (FileNotFoundException)
-        {
-            return true;
-        }
-        catch (DirectoryNotFoundException)
-        {
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
+        _heldLease.Dispose();
     }
 
     private static void TryDeleteEmptyLeaseDirectory(string leasesDirectory)
@@ -250,12 +198,12 @@ internal sealed class BundleVersionLease : IDisposable
         }
     }
 
-    private static string CreateLeaseFileName()
+    private static string CreateLeaseFileNamePrefix()
     {
         var startTicks = GetCurrentProcessStartTimeTicks();
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"{Environment.ProcessId}-{startTicks}-{Guid.NewGuid():N}{LeaseExtension}");
+            $"{Environment.ProcessId}-{startTicks}-");
     }
 
     private static long GetCurrentProcessStartTimeTicks()

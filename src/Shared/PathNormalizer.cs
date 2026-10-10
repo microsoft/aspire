@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+
 namespace Aspire.Hosting.Utils;
 
 internal static class PathNormalizer
@@ -28,61 +31,289 @@ internal static class PathNormalizer
     }
 
     /// <summary>
-    /// On Windows, resolves a path to its filesystem-canonical form by querying the OS for
-    /// the actual casing of each path component. On other platforms this is a no-op because
-    /// the file system is case-sensitive and there is no casing ambiguity.
+    /// Resolves a path to its filesystem-canonical form by resolving symbolic links and querying
+    /// the OS for the actual casing of each path component on Windows and macOS.
     /// </summary>
     /// <remarks>
-    /// Use this when the path needs to match what MSBuild reports for the same file.
-    /// MSBuild always uses the true filesystem casing; a user who types
+    /// Use this when aliases on a case-insensitive filesystem must produce the same identity while
+    /// preserving distinct paths on case-sensitive macOS volumes. A user who types
     /// <c>--apphost c:\FOO\bar.csproj</c> will get back <c>C:\foo\bar.csproj</c>
-    /// if that is the on-disk casing, making the hash agree with the AppHost side.
+    /// if that is the on-disk casing.
     /// </remarks>
-    /// <param name="path">An absolute path to a file that exists on disk.</param>
+    /// <param name="path">An absolute path to canonicalize.</param>
     /// <returns>
-    /// The path with OS-canonical casing, or <paramref name="path"/> unchanged if it
-    /// cannot be resolved (file does not exist, UNC path, etc.).
+    /// The filesystem-canonical path. If the path cannot be fully resolved, returns a best-effort
+    /// result containing any canonicalized prefix followed by the remaining unresolved segments.
     /// </returns>
     public static string ResolveToFilesystemPath(string path)
     {
-        if (!OperatingSystem.IsWindows())
+        return ResolvePathCasing(ResolveSymlinks(path));
+    }
+
+    /// <summary>
+    /// Resolves the casing and Unicode normalization of each path component without resolving symbolic links.
+    /// </summary>
+    /// <param name="path">An absolute path whose casing should be resolved.</param>
+    /// <returns>The path with filesystem casing, or <paramref name="path"/> if it cannot be resolved.</returns>
+    public static string ResolvePathCasing(string path)
+    {
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
         {
             return path;
         }
 
-        // Only handle standard drive-letter paths (e.g. C:\...).
-        // UNC paths (\\server\share\...) are not common for project files and are left unchanged.
-        if (path.Length < 3 || path[1] != ':' || path[2] != Path.DirectorySeparatorChar)
+        var root = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(root))
         {
             return path;
         }
 
-        // Uppercase the drive letter and use it as the starting root (e.g. "C:\").
-        var current = char.ToUpperInvariant(path[0]) + ":" + Path.DirectorySeparatorChar;
+        var segments = path[root.Length..].Split(
+            [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
 
-        // Walk each component after the root ("X:\") to resolve its real casing.
-        var parts = path[3..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-
-        for (var i = 0; i < parts.Length; i++)
+        // Windows APIs preserve the caller's drive-letter casing even while directory enumeration
+        // recovers every later component. Normalize the drive root so c:\foo and C:\foo produce
+        // the same canonical path and callers receive the conventional on-disk form.
+        var current = OperatingSystem.IsWindows() && root.Length >= 2 && root[1] == ':'
+            ? $"{char.ToUpperInvariant(root[0])}{root[1..]}"
+            : root;
+        foreach (var segment in segments)
         {
-            if (i == parts.Length - 1)
+            var candidate = Path.Combine(current, segment);
+            if (!File.Exists(candidate) && !Directory.Exists(candidate))
             {
-                // Final component: find the file with its real name.
-                var files = Directory.GetFiles(current, parts[i]);
-                return files.Length == 1 ? files[0] : Path.Combine(current, parts[i]);
+                return path;
             }
 
-            // Intermediate component: find the directory with its real name.
-            var dirs = Directory.GetDirectories(current, parts[i]);
-            current = dirs.Length == 1 ? dirs[0] : Path.Combine(current, parts[i]);
-
-            if (!current.EndsWith(Path.DirectorySeparatorChar))
+            try
             {
-                current += Path.DirectorySeparatorChar;
+                var normalizedSegment = segment.Normalize(NormalizationForm.FormC);
+                var normalizationVariant = segment.Equals(normalizedSegment, StringComparison.Ordinal)
+                    ? segment.Normalize(NormalizationForm.FormD)
+                    : normalizedSegment;
+                // Normalization-insensitive filesystems also alias caseless segments such as
+                // "\u1100\u1161" and "\uAC00". Probe that spelling independently of letter case.
+                var hasAlternateSpelling =
+                    (TryCreateCaseVariant(segment, out var caseVariant) &&
+                        Path.Exists(Path.Combine(current, caseVariant))) ||
+                    (!normalizationVariant.Equals(segment, StringComparison.Ordinal) &&
+                        Path.Exists(Path.Combine(current, normalizationVariant)));
+                if (!hasAlternateSpelling)
+                {
+                    // No alternate spelling resolves, so the existing candidate is authoritative.
+                    current = candidate;
+                    continue;
+                }
+
+                string? exactMatch = null;
+                string? caseInsensitiveMatch = null;
+                string? normalizationMatch = null;
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+                {
+                    var entryName = Path.GetFileName(entry);
+                    if (entryName.Equals(segment, StringComparison.Ordinal))
+                    {
+                        exactMatch = entry;
+                        break;
+                    }
+
+                    if (caseInsensitiveMatch is null &&
+                        entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
+                    {
+                        caseInsensitiveMatch = entry;
+                    }
+
+                    if (normalizationMatch is null &&
+                        entryName.Normalize(NormalizationForm.FormC).Equals(
+                            normalizedSegment,
+                            StringComparison.Ordinal))
+                    {
+                        normalizationMatch = entry;
+                    }
+                }
+
+                // Case and normalization aliases can name different entries on filesystems
+                // where only one of those transformations is insensitive. Do not guess.
+                if (exactMatch is null && caseInsensitiveMatch is not null &&
+                    normalizationMatch is not null &&
+                    !caseInsensitiveMatch.Equals(normalizationMatch, StringComparison.Ordinal))
+                {
+                    return path;
+                }
+
+                current = exactMatch ?? caseInsensitiveMatch ?? normalizationMatch ?? candidate;
+            }
+            catch (IOException)
+            {
+                return path;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return path;
+            }
+            catch (ArgumentException)
+            {
+                return path;
             }
         }
 
-        return path;
+        return current;
+    }
+
+    private static bool TryCreateCaseVariant(string segment, [NotNullWhen(true)] out string? caseVariant)
+    {
+        for (var index = 0; index < segment.Length; index++)
+        {
+            var character = segment[index];
+            var replacement = char.IsUpper(character)
+                ? char.ToLowerInvariant(character)
+                : char.ToUpperInvariant(character);
+            if (replacement != character)
+            {
+                var characters = segment.ToCharArray();
+                characters[index] = replacement;
+                caseVariant = new string(characters);
+                return true;
+            }
+        }
+
+        caseVariant = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to resolve an existing path to the spelling stored by the current filesystem.
+    /// </summary>
+    /// <param name="path">A path to a file or directory.</param>
+    /// <param name="resolvedPath">The filesystem-canonical path when the method returns <see langword="true"/>.</param>
+    /// <returns>
+    /// <see langword="true"/> when every segment exists and its stored spelling was found;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    public static bool TryResolveToFilesystemPath(string path, out string resolvedPath)
+    {
+        resolvedPath = path;
+
+        if (string.IsNullOrEmpty(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(root))
+            {
+                return false;
+            }
+
+            // Directory enumeration restores the spelling of child segments, but it cannot
+            // restore the drive root. Windows exposes drive letters in uppercase on disk.
+            if (OperatingSystem.IsWindows())
+            {
+                var driveLetterIndex = root.Length >= 3 &&
+                    root[1] == ':' &&
+                    char.IsAsciiLetter(root[0])
+                        ? 0
+                        : root.Length >= 7 &&
+                            root[0] is '\\' or '/' &&
+                            root[1] is '\\' or '/' &&
+                            root[2] is '?' or '.' &&
+                            root[3] is '\\' or '/' &&
+                            root[5] == ':' &&
+                            root[6] is '\\' or '/' &&
+                            char.IsAsciiLetter(root[4])
+                                ? 4
+                                : -1;
+
+                if (driveLetterIndex >= 0)
+                {
+                    root = $"{root[..driveLetterIndex]}{char.ToUpperInvariant(root[driveLetterIndex])}{root[(driveLetterIndex + 1)..]}";
+                }
+            }
+
+            var segments = fullPath[root.Length..].Split(
+                [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+            var current = root;
+            if (!Directory.Exists(current))
+            {
+                return false;
+            }
+
+            foreach (var segment in segments)
+            {
+                var candidate = Path.Combine(current, segment);
+                if (!File.Exists(candidate) && !Directory.Exists(candidate))
+                {
+                    return false;
+                }
+
+                string? exactMatch = null;
+                string? caseInsensitiveMatch = null;
+                string? normalizationMatch = null;
+                var normalizedSegment = segment.Normalize(NormalizationForm.FormC);
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+                {
+                    var entryName = Path.GetFileName(entry);
+                    if (entryName.Equals(segment, StringComparison.Ordinal))
+                    {
+                        exactMatch = entry;
+                        break;
+                    }
+
+                    if (caseInsensitiveMatch is null &&
+                        entryName.Equals(segment, StringComparison.OrdinalIgnoreCase))
+                    {
+                        caseInsensitiveMatch = entry;
+                    }
+
+                    // The existence probe above must succeed before normalization is considered.
+                    // That prevents normalization-equivalent but distinct entries on a
+                    // normalization-sensitive filesystem from being treated as one path.
+                    if (normalizationMatch is null &&
+                        entryName.Normalize(NormalizationForm.FormC).Equals(
+                            normalizedSegment,
+                            StringComparison.Ordinal))
+                    {
+                        normalizationMatch = entry;
+                    }
+                }
+
+                if (exactMatch is null && caseInsensitiveMatch is null && normalizationMatch is null)
+                {
+                    return false;
+                }
+
+                // Preserve the distinction between case aliases and normalization aliases.
+                // The existence probe cannot tell which of two conflicting entries is selected.
+                if (exactMatch is null && caseInsensitiveMatch is not null &&
+                    normalizationMatch is not null &&
+                    !caseInsensitiveMatch.Equals(normalizationMatch, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                current = exactMatch ?? caseInsensitiveMatch ?? normalizationMatch!;
+            }
+
+            resolvedPath = current;
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+        {
+            return false;
+        }
     }
 
     /// <summary>

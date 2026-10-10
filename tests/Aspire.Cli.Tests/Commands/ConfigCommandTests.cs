@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
@@ -29,6 +30,18 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     public void ConfigInfo_AdvertisesIsolatedLaunch()
     {
         Assert.Contains(KnownCapabilities.IsolatedLaunch, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesAgentMcp()
+    {
+        Assert.Contains(KnownCapabilities.AgentMcp, KnownCapabilities.GetAdvertisedCapabilities());
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesLaunchProfiles()
+    {
+        Assert.Contains(KnownCapabilities.LaunchProfile, KnownCapabilities.GetAdvertisedCapabilities());
     }
 
     [Fact]
@@ -157,6 +170,85 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("http://localhost:4321/llms-small.txt", DocsSourceConfiguration.GetLlmsTxtUrl(configuration));
         Assert.Equal("http://localhost:4321/sitemap-0.xml", ApiDocsSourceConfiguration.GetSitemapUrl(configuration));
+    }
+
+    [Fact]
+    public async Task NssDbPaths_CanBeConfiguredGloballyViaAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("config set certificates.nssDbPaths firefox=/profiles/firefox --global");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+
+        var configurationService = provider.GetRequiredService<IConfigurationService>();
+        var settingsPath = configurationService.GetSettingsFilePath(isGlobal: true);
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(settingsPath))?.AsObject();
+
+        Assert.NotNull(settings);
+        Assert.Equal("firefox=/profiles/firefox", settings["certificates"]?["nssDbPaths"]?.ToString());
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var configuration = reloadedProvider.GetRequiredService<IConfiguration>();
+
+        Assert.Equal("firefox=/profiles/firefox", configuration[CertificateConfiguration.NssDbPathsConfigPath]);
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesNssDbPaths()
+    {
+        var schema = Aspire.Cli.Commands.SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        var certificates = Assert.Single(schema.Properties, property => property.Name == "certificates");
+        var nssDbPaths = Assert.Single(certificates.SubProperties!, property => property.Name == "nssDbPaths");
+
+        Assert.Equal("string", nssDbPaths.Type);
+        Assert.Contains("NSS database paths", nssDbPaths.Description);
+    }
+
+    [Fact]
+    public async Task ContainerTunnelBaseImage_CanBeConfiguredViaAspireConfig()
+    {
+        const string image = "example.com/aspire-tunnel:configured";
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{}");
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {AspireConfigContainerTunnel.BaseImageConfigKey} {image}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(configPath))?.AsObject();
+        Assert.NotNull(settings);
+        Assert.Equal(image, settings["containerTunnel"]?["baseImage"]?.ToString());
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var configuration = reloadedProvider.GetRequiredService<IConfiguration>();
+
+        Assert.Equal(image, configuration[AspireConfigContainerTunnel.BaseImageConfigPath]);
+    }
+
+    [Fact]
+    public void ConfigInfo_AdvertisesContainerTunnelBaseImage()
+    {
+        var schema = Aspire.Cli.Commands.SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        var containerTunnel = Assert.Single(schema.Properties, property => property.Name == AspireConfigContainerTunnel.SectionName);
+        var baseImage = Assert.Single(containerTunnel.SubProperties!, property => property.Name == AspireConfigContainerTunnel.BaseImagePropertyName);
+
+        Assert.Equal("string", baseImage.Type);
+        Assert.Contains("Base image", baseImage.Description);
     }
 
     [Fact]
@@ -691,6 +783,55 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         Assert.True(settings["features"] is JsonObject);
         var featuresObject = settings["features"]!.AsObject();
         Assert.Equal("true", featuresObject["polyglotSupportEnabled"]?.ToString());
+    }
+
+    [Theory]
+    [InlineData("experimentalPolyglotJava")]
+    [InlineData("experimentalPolyglotGo")]
+    [InlineData("experimentalPolyglotPython")]
+    [InlineData("experimentalPolyglotRust")]
+    public async Task ConfigSetCommand_ExperimentalPolyglotFeature_CreatesLoadableLocalConfig(string featureName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{}");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var key = $"features.{featureName}";
+
+        var setResult = command.Parse($"config set {key} true");
+        Assert.Equal(0, await setResult.InvokeAsync().DefaultTimeout());
+
+        var json = JsonNode.Parse(await File.ReadAllTextAsync(configPath))?.AsObject();
+        Assert.NotNull(json);
+        var features = Assert.IsType<JsonObject>(json["features"]);
+        var feature = Assert.Single(features);
+        Assert.Equal(featureName, feature.Key);
+        Assert.Equal("true", feature.Value?.GetValue<string>());
+
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config?.Features);
+        Assert.True(config.Features[featureName]);
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        Assert.True(reloadedProvider.GetRequiredService<IFeatures>()
+            .IsFeatureEnabled(featureName, defaultValue: false));
+
+        var configurationService = reloadedProvider.GetRequiredService<IConfigurationService>();
+        var localConfiguration = await configurationService.GetLocalConfigurationAsync();
+        Assert.Equal("true", localConfiguration[key]);
+
+        var getResult = reloadedProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse($"config get {key}");
+        Assert.Equal(0, await getResult.InvokeAsync().DefaultTimeout());
+
+        var deleteResult = reloadedProvider.GetRequiredService<Aspire.Cli.Commands.RootCommand>()
+            .Parse($"config delete features:{featureName}");
+        Assert.Equal(0, await deleteResult.InvokeAsync().DefaultTimeout());
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse("{}"), JsonNode.Parse(await File.ReadAllTextAsync(configPath))));
     }
 
     [Fact]

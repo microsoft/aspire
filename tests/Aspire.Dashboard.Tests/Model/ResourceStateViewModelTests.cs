@@ -56,7 +56,7 @@ public class ResourceStateViewModelTests
         /* expected output */ "Running", "Warning", Color.Warning, "Running")]
     [InlineData(
         /* state */ "Container", KnownResourceState.Running, null, "Healthy", "NOT_A_VALID_STATE_STYLE",
-        /* expected output */ "Running", "Circle", Color.Neutral, "Running")]
+        /* expected output */ "Running", "Circle", Color.Default, "Running")]
     [InlineData(
         /* state */ "Container", KnownResourceState.Running, null, null, "info",
         /* expected output */ "Running", "Info", Color.Info, "Running")]

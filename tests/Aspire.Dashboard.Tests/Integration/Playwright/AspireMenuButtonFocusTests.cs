@@ -32,19 +32,16 @@ public class AspireMenuButtonFocusTests : PlaywrightTestsBase<DashboardServerFix
             // repository, so nothing else legitimately claims focus and the assertion stays meaningful.
             // Focus after a menu closes is a browser-only behavior that bUnit can't observe.
             //
-            // Keep the host for focus restoration and inspect the state FluentMenu writes to its anchor.
+            // Keep the host for focus restoration. Expanded-state behavior is covered by
+            // ResourcesTests.ViewOptionsMenu_ReportsExpandedState.
             var clearButton = page.Locator($"fluent-button[title='{ControlsStrings.ClearSignalsButtonTitle}'][aria-haspopup='menu']").First;
-            var initialExpandedState = await clearButton.GetAttributeAsync("aria-expanded");
-            Assert.Null(initialExpandedState);
-
             var clearButtonId = await clearButton.GetAttributeAsync("id");
             Assert.False(string.IsNullOrEmpty(clearButtonId));
 
             await clearButton.ClickAsync();
-            await Assertions.Expect(clearButton).ToHaveAttributeAsync("aria-expanded", "true");
-
-            await page.Locator("fluent-menu-item#clear-menu-all").ClickAsync();
-            await Assertions.Expect(clearButton).ToHaveAttributeAsync("aria-expanded", "false");
+            var clearAllItem = page.Locator("fluent-menu-item#clear-menu-all");
+            await Assertions.Expect(clearAllItem).ToBeVisibleAsync();
+            await clearAllItem.ClickAsync();
 
             await AsyncTestHelpers.AssertIsTrueRetryAsync(
                 async () => string.Equals(await page.EvaluateAsync<string?>("() => document.activeElement?.id"), clearButtonId, StringComparison.Ordinal),

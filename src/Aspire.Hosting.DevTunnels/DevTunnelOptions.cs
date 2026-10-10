@@ -8,6 +8,8 @@ namespace Aspire.Hosting.DevTunnels;
 /// </summary>
 public sealed class DevTunnelOptions
 {
+    private int? _expirationHours;
+
     /// <summary>
     /// Optional description for the tunnel.
     /// </summary>
@@ -32,6 +34,31 @@ public sealed class DevTunnelOptions
     /// </remarks>
     public DevTunnelRegion? Region { get; set; }
 
+    /// <summary>
+    /// Gets or sets how many hours the tunnel can remain unused or unmodified before it expires.
+    /// </summary>
+    /// <remarks>
+    /// Specify a whole number of hours from one hour through 30 days, inclusive.
+    /// The value applies when creating a tunnel and when updating an existing tunnel.
+    /// When <see langword="null"/>, no expiration override is sent: new tunnels use the service default
+    /// and existing tunnels retain their configured expiration period.
+    /// This is an idle expiration period, not a maximum hosting duration or an access-token lifetime.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The value is outside the supported range.</exception>
+    public int? ExpirationHours
+    {
+        get => _expirationHours;
+        set
+        {
+            if (value is < 1 or > 30 * 24)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "Tunnel expiration must be from 1 hour through 30 days.");
+            }
+
+            _expirationHours = value;
+        }
+    }
+
     internal string RegionCode =>
         Region switch
         {
@@ -52,7 +79,7 @@ public sealed class DevTunnelOptions
             _ => throw new ArgumentException("Invalid region specified", nameof(Region)),
         };
 
-    internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Labels=[{string.Join(", ", Labels ?? [])}], Region={Region} }}";
+    internal string ToLoggerString() => $"{{ Description={Description}, AllowAnonymous={AllowAnonymous}, Labels=[{string.Join(", ", Labels ?? [])}], Region={Region}, ExpirationHours={ExpirationHours} }}";
 }
 
 /// <summary>

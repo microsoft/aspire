@@ -17,7 +17,7 @@ func main() {
 	kafkaWithUI := kafka.WithKafkaUI(&aspire.WithKafkaUIOptions{
 		ContainerName: aspire.StringPtr("my-kafka-ui"),
 		ConfigureContainer: func(ui aspire.KafkaUIContainerResource) {
-			ui.WithHostPort(9000)
+			ui.WithHostPort(aspire.Float64Ptr(9000))
 		},
 	})
 	kafkaWithUI.WithDataVolume()

@@ -42,6 +42,11 @@ internal sealed class UpdatePackagesContext
     /// Enables non-interactive selection via CLI options (e.g. <c>--nuget-config-dir</c>).
     /// </summary>
     public required Interaction.PromptBinding<string?> NuGetConfigDirBinding { get; init; }
+
+    /// <summary>
+    /// Gets additional file edits to include in the project's confirmation and apply phase.
+    /// </summary>
+    public IReadOnlyList<UpdateStep> AdditionalUpdateSteps { get; init; } = [];
 }
 
 /// <summary>
@@ -167,6 +172,11 @@ internal interface IAppHostProject
     /// Gets the human-readable display name (e.g., "C# (.NET)", "TypeScript (Node.js)").
     /// </summary>
     string DisplayName { get; }
+
+    /// <summary>
+    /// Gets whether this project type supports selecting a launch profile explicitly.
+    /// </summary>
+    bool SupportsLaunchProfiles { get; }
 
     /// <summary>
     /// Gets the file patterns to search for when detecting apphosts.

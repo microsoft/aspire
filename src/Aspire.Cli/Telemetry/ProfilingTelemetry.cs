@@ -147,8 +147,6 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string BackchannelSocketFile = "aspire.cli.backchannel.socket_file";
         public const string BackchannelAutoReconnect = "aspire.cli.backchannel.auto_reconnect";
         public const string BackchannelRetryCount = "aspire.cli.backchannel.retry_count";
-        public const string BackchannelExpectedHash = "aspire.cli.backchannel.expected_hash";
-        public const string BackchannelHasLegacyHash = "aspire.cli.backchannel.has_legacy_hash";
         public const string BackchannelScanCount = "aspire.cli.backchannel.scan_count";
         public const string BackchannelCapabilityCount = "aspire.cli.backchannel.capability_count";
         public const string BackchannelHasBaselineCapability = "aspire.cli.backchannel.has_baseline_capability";
@@ -418,12 +416,10 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return activity;
     }
 
-    internal ActivityScope StartDetachedWaitForBackchannel(int childProcessId, string expectedHash, bool hasLegacyHash)
+    internal ActivityScope StartDetachedWaitForBackchannel(int childProcessId)
     {
         var activity = StartActivity(Activities.StartAppHostWaitForBackchannel);
         activity.SetProcessId(childProcessId);
-        activity.SetBackchannelExpectedHash(expectedHash);
-        activity.SetBackchannelHasLegacyHash(hasLegacyHash);
         return activity;
     }
 
@@ -1021,10 +1017,6 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
             SetTag(Tags.BackchannelCapabilityCount, capabilities.Length);
             SetTag(Tags.BackchannelHasBaselineCapability, capabilities.Any(capability => capability == baselineCapability));
         }
-
-        public void SetBackchannelExpectedHash(string expectedHash) => SetTag(Tags.BackchannelExpectedHash, expectedHash);
-
-        public void SetBackchannelHasLegacyHash(bool hasLegacyHash) => SetTag(Tags.BackchannelHasLegacyHash, hasLegacyHash);
 
         public void SetBackchannelRetryCount(int retryCount) => SetTag(Tags.BackchannelRetryCount, retryCount);
 

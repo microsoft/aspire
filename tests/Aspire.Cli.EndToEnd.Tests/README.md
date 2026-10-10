@@ -106,6 +106,22 @@ await sequence.ApplyAsync(Terminal);
 
 ## Running Tests Locally
 
+### npm test dependencies
+
+The project-level `package.json` pins npm tools used to scaffold test fixtures.
+`ViteTestHelpers.GetCreateCommand` reads the `create-vite` version from this manifest
+instead of using `vite@latest`. The manifest is embedded in the test assembly so
+local runs and CI test archives use the same version; no local `npm install` is
+needed for this manifest.
+
+Dependabot checks this directory weekly and waits seven days before proposing
+new versions. The cooldown avoids adopting freshly published Vite templates whose
+dependencies can be rejected by Deno's minimum dependency age policy. Keep tool
+versions exact in the manifest, and use the shared helper rather than embedding
+versions in individual tests.
+
+### Commands
+
 ```bash
 # Build the test project
 ./build.sh -restore -build -projects tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj

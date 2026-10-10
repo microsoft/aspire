@@ -33,6 +33,7 @@ When Aspire snaps a release branch (e.g., `release/13.3`), bug fixes that meet t
   ```
 
 - Shiproom requires the four headed sections (**Customer Impact**, **Testing**, **Risk**, **Regression?**) to be filled in before the backport can be approved/merged.
+- The target branch's `eng/Versions.props` must identify the next unshipped servicing release. After stable `X.Y.Z` is published, increment `PatchVersion` to `Z+1` in a dedicated PR before accepting more backports. Otherwise `X.Y.Z-pr.*` builds sort below stable `X.Y.Z` and can fail update-related CI.
 
 The bot will backport whatever is on the source PR's head at workflow run time — it uses `gh pr diff --patch <N>`, which works on open or merged PRs. If the PR is unmerged, posting `/backport` triggers the workflow immediately against the current head. Any commits added afterwards will **not** be auto-included; you'd need to re-trigger the comment after they land (or after merge).
 
@@ -86,6 +87,15 @@ Check:
   ```
 
   If the call fails with 404, surface a clear error: "The target branch `<target-branch>` doesn't exist. Common typo, or the branch hasn't been cut yet."
+- Confirm that the target branch is not still configured for an already-published stable version:
+
+  ```powershell
+  git fetch origin <target-branch>
+  git show "origin/<target-branch>:eng/Versions.props"
+  gh release list --repo microsoft/aspire --limit 20 --json tagName,isPrerelease,publishedAt
+  ```
+
+  Read `MajorVersion`, `MinorVersion`, and `PatchVersion` from `eng/Versions.props` and compare `X.Y.Z` with the newest published non-prerelease tag for the same `X.Y` line. If they are equal, stop before triggering the backport and explain that the release branch must first increment `PatchVersion` in a dedicated PR. Do not put the version bump in an individual backport PR.
 
 ### 2. Decide whether to trigger the backport
 

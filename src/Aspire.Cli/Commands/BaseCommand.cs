@@ -21,14 +21,18 @@ internal abstract class BaseCommand : Command
 
     protected virtual bool UpdateNotificationsEnabled { get; }
 
+    // Commands that only conditionally emit telemetry can defer provider creation and enrichment
+    // until they have work to report, rather than paying that startup cost on every invocation.
+    internal virtual bool InitializeTelemetryOnStartup => true;
+
     internal virtual bool PrefetchesTemplatePackageMetadata => false;
 
     internal bool PrefetchesTemplatePackageMetadataForInvocation
         => _prefetchesTemplatePackageMetadataForInvocation ?? PrefetchesTemplatePackageMetadata;
 
-    // JSON output cannot display update notifications, so apply this invocation-level gate outside
+    // Machine-readable output cannot display update notifications, so apply this invocation-level gate outside
     // the overridable command policy to prevent metadata-only consumers from bypassing it.
-    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isJsonFormatRequested;
+    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isMachineReadableFormatRequested;
 
     internal virtual bool RequiresCliPackageMetadata => false;
 
@@ -51,7 +55,7 @@ internal abstract class BaseCommand : Command
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
     private readonly CliExecutionContext _executionContext;
-    private bool _isJsonFormatRequested;
+    private bool _isMachineReadableFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
@@ -76,9 +80,9 @@ internal abstract class BaseCommand : Command
         {
             SelectForExecution(parseResult);
 
-            // Route human-readable output to stderr when JSON is requested so
+            // Route human-readable output to stderr when a machine-readable format is requested so
             // that only machine-readable data appears on stdout.
-            if (_isJsonFormatRequested)
+            if (_isMachineReadableFormatRequested)
             {
                 InteractionService.Console = ConsoleOutput.Error;
             }
@@ -96,7 +100,7 @@ internal abstract class BaseCommand : Command
 
     internal void SelectForExecution(ParseResult parseResult)
     {
-        _isJsonFormatRequested = IsJsonFormatRequested(parseResult);
+        _isMachineReadableFormatRequested = IsMachineReadableFormatRequested(parseResult);
         _prefetchesTemplatePackageMetadataForInvocation = PrefetchesTemplatePackageMetadata;
         PrepareForExecution(parseResult);
         _executionContext.Command = this;
@@ -196,8 +200,18 @@ internal abstract class BaseCommand : Command
         }
 
         var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
+        var shouldDisplayDiagnosticLogs = isErrorExitCode
+            && !result.ShouldDisplayHelp
+            && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode);
+        var displayedActionableFailure = shouldDisplayDiagnosticLogs
+            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
+            && await extensionInteractionService.TryDisplayCommandFailureAsync(
+                result.ErrorMessage,
+                _executionContext.LogFilePath,
+                ExecutionContext.AppHostCliLogFilePath,
+                CancellationToken.None).ConfigureAwait(false);
 
-        if (result.ErrorMessage is not null)
+        if (!displayedActionableFailure && result.ErrorMessage is not null)
         {
             InteractionService.DisplayError(result.ErrorMessage);
         }
@@ -216,7 +230,7 @@ internal abstract class BaseCommand : Command
         // Display the CLI log file path on non-zero exit codes so the user knows
         // where to find diagnostic details. Suppress for user-input errors where
         // the log wouldn't contain useful context (e.g., missing required arguments).
-        if (isErrorExitCode && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode))
+        if (!displayedActionableFailure && shouldDisplayDiagnosticLogs)
         {
             InteractionService.DisplayMessage(
                 KnownEmojis.PageFacingUp,
@@ -236,7 +250,7 @@ internal abstract class BaseCommand : Command
             }
         }
 
-        if (UpdateNotificationsEnabled && !_isJsonFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        if (UpdateNotificationsEnabled && !_isMachineReadableFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
         {
             try
             {
@@ -256,6 +270,11 @@ internal abstract class BaseCommand : Command
     }
 
     protected abstract Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Checks whether this command requests output that must not be mixed with human-readable messages.
+    /// </summary>
+    protected virtual bool IsMachineReadableFormatRequested(ParseResult parseResult) => IsJsonFormatRequested(parseResult);
 
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.

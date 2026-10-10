@@ -51,7 +51,39 @@ public static class OtlpConfigurationExtensions
         RegisterOtlpEnvironment(resource, configuration, environment);
     }
 
-    private static void RegisterOtlpEnvironment(IResource resource, IConfiguration configuration, IHostEnvironment environment)
+    /// <summary>
+    /// Configures OTLP export only when the required collector endpoint is available.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="protocol">The required OTLP protocol.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// The exporter annotation is retained when no endpoint is available, but OTLP environment variables are
+    /// omitted so workloads that can operate without telemetry remain runnable.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Optional OTLP exporter registration is currently used by C# hosting integrations only.")]
+    public static IResourceBuilder<T> WithOtlpExporterIfEndpointAvailable<T>(
+        this IResourceBuilder<T> builder,
+        OtlpProtocol protocol) where T : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.Annotations.Add(new OtlpExporterAnnotation { RequiredProtocol = protocol });
+        RegisterOtlpEnvironment(
+            builder.Resource,
+            builder.ApplicationBuilder.Configuration,
+            builder.ApplicationBuilder.Environment,
+            skipIfEndpointUnavailable: true);
+
+        return builder;
+    }
+
+    private static void RegisterOtlpEnvironment(
+        IResource resource,
+        IConfiguration configuration,
+        IHostEnvironment environment,
+        bool skipIfEndpointUnavailable = false)
     {
         // Configure OpenTelemetry in projects using environment variables.
         // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/configuration/sdk-environment-variables.md
@@ -64,7 +96,8 @@ public static class OtlpConfigurationExtensions
                 return;
             }
 
-            if (!resource.TryGetLastAnnotation<OtlpExporterAnnotation>(out var otlpExporterAnnotation))
+            var otlpExporterAnnotation = GetEffectiveOtlpExporterAnnotation(resource);
+            if (otlpExporterAnnotation is null)
             {
                 return;
             }
@@ -80,12 +113,23 @@ public static class OtlpConfigurationExtensions
             }
             else
             {
+                if (skipIfEndpointUnavailable &&
+                    !HasConfiguredOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol))
+                {
+                    return;
+                }
+
                 // Fall back to resolving from configuration. This is the case when the dashboard resource
                 // is not in the model (e.g. in tests or publish mode).
                 var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol);
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = new HostUrl(url);
                 context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
             }
+
+            // Runtime-specific exporters are activated in the same step that confirms an endpoint exists.
+            // This keeps activation independent of environment callback ordering and avoids enabling exporters
+            // for dashboard-free workloads.
+            ApplyActivationEnvironmentVariables(resource, context.EnvironmentVariables);
 
             // Set the service name and instance id to the resource name and UID. Values are injected by DCP.
             context.EnvironmentVariables[KnownOtelConfigNames.ResourceAttributes] = "service.instance.id={{- index .Annotations \"" + CustomResource.OtelServiceInstanceIdAnnotation + "\" -}}";
@@ -120,6 +164,41 @@ public static class OtlpConfigurationExtensions
             }
         }));
     }
+
+    private static bool HasConfiguredOtlpEndpoint(IConfiguration configuration, OtlpProtocol? requiredProtocol)
+    {
+        var grpcEndpoint = configuration.GetString(
+            KnownConfigNames.DashboardOtlpGrpcEndpointUrl,
+            KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var httpEndpoint = configuration.GetString(
+            KnownConfigNames.DashboardOtlpHttpEndpointUrl,
+            KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        return requiredProtocol switch
+        {
+            OtlpProtocol.Grpc => !string.IsNullOrWhiteSpace(grpcEndpoint),
+            OtlpProtocol.HttpProtobuf or OtlpProtocol.HttpJson => !string.IsNullOrWhiteSpace(httpEndpoint),
+            _ => !string.IsNullOrWhiteSpace(grpcEndpoint) || !string.IsNullOrWhiteSpace(httpEndpoint),
+        };
+    }
+
+    private static void ApplyActivationEnvironmentVariables(
+        IResource resource,
+        IDictionary<string, object> environmentVariables)
+    {
+        if (GetEffectiveOtlpExporterAnnotation(resource) is not IReadOnlyDictionary<string, string> activationEnvironmentVariables)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in activationEnvironmentVariables)
+        {
+            environmentVariables.TryAdd(name, value);
+        }
+    }
+
+    private static OtlpExporterAnnotation? GetEffectiveOtlpExporterAnnotation(IResource resource)
+        => resource.Annotations.OfType<OtlpExporterAnnotation>().LastOrDefault();
 
     /// <summary>
     /// Injects the appropriate environment variables to allow the resource to enable sending telemetry to the dashboard.

@@ -9,7 +9,7 @@ import { executeMauiCommandWithTimeout, useMauiDeviceListProviderForTests } from
 import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { runWithRunStartWrappers } from '../debugger/runStartRegistry';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration } from '../dcp/types';
-import { getEnvironmentWithoutE2EBridgeVariables } from '../utils/environment';
+import { getEnvironmentForChildProcess } from '../utils/environment';
 
 async function delay(ms: number): Promise<void> {
     await new Promise(resolve => setTimeout(resolve, ms));
@@ -650,16 +650,16 @@ suite('MAUI Debugger Extension Tests', () => {
                 debugConfig);
 
             assert.strictEqual(process.env.ASPIRE_MAUI_EQUALS_TEST, 'previous');
-            assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_EQUALS_TEST, 'previous');
+            assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_EQUALS_TEST, 'previous');
             assert.strictEqual(debugConfig.environmentVariables, undefined);
 
             await runWithRunStartWrappers('mac-env-overlay', async () => {
                 assert.strictEqual(process.env.ASPIRE_MAUI_EQUALS_TEST, 'service.instance.id=abc123');
-                assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_EQUALS_TEST, undefined);
+                assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_EQUALS_TEST, undefined);
             });
 
             assert.strictEqual(process.env.ASPIRE_MAUI_EQUALS_TEST, 'previous');
-            assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_EQUALS_TEST, 'previous');
+            assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_EQUALS_TEST, 'previous');
         } finally {
             cleanupRun('mac-env-overlay');
             if (previousValue === undefined) {
@@ -696,7 +696,7 @@ suite('MAUI Debugger Extension Tests', () => {
                 { debug: true, runId: 'mac-env-overlay-a', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession },
                 createDebugConfig('mac-env-overlay-a'));
             assert.strictEqual(process.env.ASPIRE_MAUI_OVERLAP_TEST, undefined);
-            assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_OVERLAP_TEST, undefined);
+            assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_OVERLAP_TEST, undefined);
 
             await debuggerExtension.createDebugSessionConfigurationCallback!(
                 launchConfig,
@@ -705,7 +705,7 @@ suite('MAUI Debugger Extension Tests', () => {
                 { debug: true, runId: 'mac-env-overlay-b', debugSessionId: '2', isApphost: false, debugSession: fakeAspireDebugSession },
                 createDebugConfig('mac-env-overlay-b'));
             assert.strictEqual(process.env.ASPIRE_MAUI_OVERLAP_TEST, undefined);
-            assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_OVERLAP_TEST, undefined);
+            assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_OVERLAP_TEST, undefined);
 
             let releaseFirstLaunch: () => void = () => { };
             let secondLaunchStarted = false;
@@ -713,7 +713,7 @@ suite('MAUI Debugger Extension Tests', () => {
             const firstLaunchEntered = new Promise<void>(resolve => {
                 firstLaunch = runWithRunStartWrappers('mac-env-overlay-a', async () => {
                     assert.strictEqual(process.env.ASPIRE_MAUI_OVERLAP_TEST, 'first=value');
-                    assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_OVERLAP_TEST, undefined);
+                    assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_OVERLAP_TEST, undefined);
                     resolve();
                     await new Promise<void>(release => {
                         releaseFirstLaunch = release;
@@ -725,7 +725,7 @@ suite('MAUI Debugger Extension Tests', () => {
             const secondLaunch = runWithRunStartWrappers('mac-env-overlay-b', async () => {
                 secondLaunchStarted = true;
                 assert.strictEqual(process.env.ASPIRE_MAUI_OVERLAP_TEST, 'second=value');
-                assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_OVERLAP_TEST, undefined);
+                assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_OVERLAP_TEST, undefined);
             });
             let nonOverlayLaunchStarted = false;
             const nonOverlayLaunch = runWithRunStartWrappers('non-overlay-run', async () => {
@@ -741,7 +741,7 @@ suite('MAUI Debugger Extension Tests', () => {
             await secondLaunch;
             await nonOverlayLaunch;
             assert.strictEqual(process.env.ASPIRE_MAUI_OVERLAP_TEST, undefined);
-            assert.strictEqual(getEnvironmentWithoutE2EBridgeVariables().ASPIRE_MAUI_OVERLAP_TEST, undefined);
+            assert.strictEqual(getEnvironmentForChildProcess().ASPIRE_MAUI_OVERLAP_TEST, undefined);
         } finally {
             cleanupRun('mac-env-overlay-a');
             cleanupRun('mac-env-overlay-b');

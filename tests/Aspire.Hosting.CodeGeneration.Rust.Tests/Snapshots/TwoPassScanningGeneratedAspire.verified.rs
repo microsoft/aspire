@@ -669,7 +669,7 @@ pub struct InteractionInput {
     #[serde(rename = "Options")]
     pub options: Vec<Value>,
     #[serde(rename = "Value")]
-    pub value: String,
+    pub value: Option<String>,
     #[serde(rename = "Placeholder", skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<String>,
     #[serde(rename = "AllowCustomChoice", skip_serializing_if = "Option::is_none")]
@@ -798,15 +798,15 @@ pub struct CreateBuilderOptions {
     #[serde(rename = "Args")]
     pub args: Vec<String>,
     #[serde(rename = "ProjectDirectory")]
-    pub project_directory: String,
+    pub project_directory: Option<String>,
     #[serde(rename = "AppHostFilePath")]
-    pub app_host_file_path: String,
+    pub app_host_file_path: Option<String>,
     #[serde(rename = "ContainerRegistryOverride")]
-    pub container_registry_override: String,
+    pub container_registry_override: Option<String>,
     #[serde(rename = "DisableDashboard")]
     pub disable_dashboard: bool,
     #[serde(rename = "DashboardApplicationName")]
-    pub dashboard_application_name: String,
+    pub dashboard_application_name: Option<String>,
     #[serde(rename = "AllowUnsecuredTransport")]
     pub allow_unsecured_transport: bool,
     #[serde(rename = "EnableResourceLogging")]
@@ -1301,17 +1301,17 @@ pub struct ParameterCustomInputOptions {
     #[serde(rename = "InputType", skip_serializing_if = "Option::is_none")]
     pub input_type: Option<InputType>,
     #[serde(rename = "Label")]
-    pub label: String,
+    pub label: Option<String>,
     #[serde(rename = "Description")]
-    pub description: String,
+    pub description: Option<String>,
     #[serde(rename = "EnableDescriptionMarkdown", skip_serializing_if = "Option::is_none")]
     pub enable_description_markdown: Option<bool>,
     #[serde(rename = "Options")]
     pub options: HashMap<String, String>,
     #[serde(rename = "Value")]
-    pub value: String,
+    pub value: Option<String>,
     #[serde(rename = "Placeholder")]
-    pub placeholder: String,
+    pub placeholder: Option<String>,
     #[serde(rename = "AllowCustomChoice", skip_serializing_if = "Option::is_none")]
     pub allow_custom_choice: Option<bool>,
     #[serde(rename = "Disabled", skip_serializing_if = "Option::is_none")]
@@ -1401,7 +1401,7 @@ impl CertificateTrustExecutionConfigurationContext {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommandOptions {
     #[serde(rename = "Description")]
-    pub description: String,
+    pub description: Option<String>,
     #[serde(rename = "Parameter")]
     pub parameter: Value,
     #[serde(rename = "Arguments")]
@@ -1411,9 +1411,9 @@ pub struct CommandOptions {
     #[serde(rename = "Visibility")]
     pub visibility: ResourceCommandVisibility,
     #[serde(rename = "ConfirmationMessage")]
-    pub confirmation_message: String,
+    pub confirmation_message: Option<String>,
     #[serde(rename = "IconName")]
-    pub icon_name: String,
+    pub icon_name: Option<String>,
     #[serde(rename = "IconVariant", skip_serializing_if = "Option::is_none")]
     pub icon_variant: Option<IconVariant>,
     #[serde(rename = "IsHighlighted")]
@@ -1448,9 +1448,9 @@ impl CommandOptions {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommandProgressOptions {
     #[serde(rename = "Message")]
-    pub message: String,
+    pub message: Option<String>,
     #[serde(rename = "Title")]
-    pub title: String,
+    pub title: Option<String>,
     #[serde(rename = "HideCancelButton")]
     pub hide_cancel_button: bool,
 }
@@ -1471,21 +1471,21 @@ pub struct HttpCommandExportOptions {
     #[serde(rename = "CommandOptions", skip_serializing_if = "Option::is_none")]
     pub command_options: Option<CommandOptions>,
     #[serde(rename = "Description")]
-    pub description: String,
+    pub description: Option<String>,
     #[serde(rename = "ConfirmationMessage")]
-    pub confirmation_message: String,
+    pub confirmation_message: Option<String>,
     #[serde(rename = "IconName")]
-    pub icon_name: String,
+    pub icon_name: Option<String>,
     #[serde(rename = "IconVariant", skip_serializing_if = "Option::is_none")]
     pub icon_variant: Option<IconVariant>,
     #[serde(rename = "IsHighlighted")]
     pub is_highlighted: bool,
     #[serde(rename = "CommandName")]
-    pub command_name: String,
+    pub command_name: Option<String>,
     #[serde(rename = "EndpointName")]
-    pub endpoint_name: String,
+    pub endpoint_name: Option<String>,
     #[serde(rename = "MethodName")]
-    pub method_name: String,
+    pub method_name: Option<String>,
     #[serde(rename = "PrepareRequest", skip_serializing_if = "Option::is_none")]
     pub prepare_request: Option<Value>,
     #[serde(rename = "ResultMode")]
@@ -1520,13 +1520,13 @@ impl HttpCommandExportOptions {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HttpCommandRequestExportData {
     #[serde(rename = "MethodName")]
-    pub method_name: String,
+    pub method_name: Option<String>,
     #[serde(rename = "Headers")]
     pub headers: HashMap<String, String>,
     #[serde(rename = "Content")]
-    pub content: String,
+    pub content: Option<String>,
     #[serde(rename = "ContentType")]
-    pub content_type: String,
+    pub content_type: Option<String>,
 }
 
 impl HttpCommandRequestExportData {
@@ -1607,17 +1607,17 @@ impl GenerateParameterDefault {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProcessCommandExportOptions {
     #[serde(rename = "ExecutablePath")]
-    pub executable_path: String,
+    pub executable_path: Option<String>,
     #[serde(rename = "Arguments")]
     pub arguments: Vec<String>,
     #[serde(rename = "WorkingDirectory")]
-    pub working_directory: String,
+    pub working_directory: Option<String>,
     #[serde(rename = "EnvironmentVariables")]
     pub environment_variables: HashMap<String, String>,
     #[serde(rename = "InheritEnvironmentVariables", skip_serializing_if = "Option::is_none")]
     pub inherit_environment_variables: Option<bool>,
     #[serde(rename = "StandardInputContent")]
-    pub standard_input_content: String,
+    pub standard_input_content: Option<String>,
     #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
     pub kill_entire_process_tree: Option<bool>,
     #[serde(rename = "CreateProcessSpec", skip_serializing_if = "Option::is_none")]
@@ -1665,17 +1665,17 @@ impl ProcessCommandExportOptions {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProcessCommandSpecExportData {
     #[serde(rename = "ExecutablePath")]
-    pub executable_path: String,
+    pub executable_path: Option<String>,
     #[serde(rename = "Arguments")]
     pub arguments: Vec<String>,
     #[serde(rename = "WorkingDirectory")]
-    pub working_directory: String,
+    pub working_directory: Option<String>,
     #[serde(rename = "EnvironmentVariables")]
     pub environment_variables: HashMap<String, String>,
     #[serde(rename = "InheritEnvironmentVariables", skip_serializing_if = "Option::is_none")]
     pub inherit_environment_variables: Option<bool>,
     #[serde(rename = "StandardInputContent")]
-    pub standard_input_content: String,
+    pub standard_input_content: Option<String>,
     #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
     pub kill_entire_process_tree: Option<bool>,
 }
@@ -1827,9 +1827,11 @@ pub struct ResourceUrlAnnotation {
     #[serde(rename = "Url")]
     pub url: String,
     #[serde(rename = "DisplayText")]
-    pub display_text: String,
+    pub display_text: Option<String>,
     #[serde(rename = "Endpoint", skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<Handle>,
+    #[serde(rename = "DisplayOrder", skip_serializing_if = "Option::is_none")]
+    pub display_order: Option<f64>,
     #[serde(rename = "DisplayLocation")]
     pub display_location: UrlDisplayLocation,
 }
@@ -1841,6 +1843,9 @@ impl ResourceUrlAnnotation {
         map.insert("DisplayText".to_string(), serde_json::to_value(&self.display_text).unwrap_or(Value::Null));
         if let Some(ref v) = self.endpoint {
             map.insert("Endpoint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.display_order {
+            map.insert("DisplayOrder".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("DisplayLocation".to_string(), serde_json::to_value(&self.display_location).unwrap_or(Value::Null));
         map
@@ -1857,7 +1862,7 @@ pub struct TestConfigDto {
     #[serde(rename = "Enabled")]
     pub enabled: bool,
     #[serde(rename = "OptionalField")]
-    pub optional_field: String,
+    pub optional_field: Option<String>,
 }
 
 impl TestConfigDto {
@@ -2476,6 +2481,45 @@ impl CSharpAppResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -2894,6 +2938,19 @@ impl CSharpAppResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3128,6 +3185,21 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withPipelineConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a volume to a project resource.
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
+        if let Some(ref v) = is_read_only {
+            args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProjectVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ProjectResource::new(handle, self.client.clone()))
     }
 
     /// Gets the name of the resource from a builder.
@@ -3584,6 +3656,14 @@ impl CommandLineArgsEditor {
         &self.client
     }
 
+    /// Clears all command-line arguments.
+    pub fn clear(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/clear", args)?;
+        Ok(())
+    }
+
     /// Adds a command-line argument.
     pub fn add(&self, value: Value) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3709,7 +3789,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Gets or sets the destination for the container image.
-    pub fn destination(&self) -> Result<ContainerImageDestination, Box<dyn std::error::Error>> {
+    pub fn destination(&self) -> Result<Option<ContainerImageDestination>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.destination", args)?;
@@ -3717,7 +3797,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Sets the Destination property
-    pub fn set_destination(&self, value: ContainerImageDestination) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_destination(&self, value: Option<ContainerImageDestination>) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -3727,7 +3807,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Gets or sets the output path for the container archive.
-    pub fn output_path(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn output_path(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.outputPath", args)?;
@@ -3735,7 +3815,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Sets the OutputPath property
-    pub fn set_output_path(&self, value: &str) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_output_path(&self, value: Option<&str>) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -3745,7 +3825,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Gets or sets the container image format.
-    pub fn image_format(&self) -> Result<ContainerImageFormat, Box<dyn std::error::Error>> {
+    pub fn image_format(&self) -> Result<Option<ContainerImageFormat>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.imageFormat", args)?;
@@ -3753,7 +3833,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Sets the ImageFormat property
-    pub fn set_image_format(&self, value: ContainerImageFormat) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_image_format(&self, value: Option<ContainerImageFormat>) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -3763,7 +3843,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Gets or sets the target platform for the container.
-    pub fn target_platform(&self) -> Result<ContainerTargetPlatform, Box<dyn std::error::Error>> {
+    pub fn target_platform(&self) -> Result<Option<ContainerTargetPlatform>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.targetPlatform", args)?;
@@ -3771,7 +3851,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Sets the TargetPlatform property
-    pub fn set_target_platform(&self, value: ContainerTargetPlatform) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_target_platform(&self, value: Option<ContainerTargetPlatform>) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -3781,7 +3861,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Gets or sets the local image name for the built container.
-    pub fn local_image_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn local_image_name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageName", args)?;
@@ -3789,7 +3869,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Sets the LocalImageName property
-    pub fn set_local_image_name(&self, value: &str) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_local_image_name(&self, value: Option<&str>) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -3799,7 +3879,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Gets or sets the local image tag for the built container.
-    pub fn local_image_tag(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn local_image_tag(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerBuildOptionsCallbackContext.localImageTag", args)?;
@@ -3807,7 +3887,7 @@ impl ContainerBuildOptionsCallbackContext {
     }
 
     /// Sets the LocalImageTag property
-    pub fn set_local_image_tag(&self, value: &str) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_local_image_tag(&self, value: Option<&str>) -> Result<ContainerBuildOptionsCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -3990,7 +4070,7 @@ impl ContainerImagePushOptions {
     }
 
     /// Gets or sets the remote image name (repository path without registry endpoint or tag).
-    pub fn remote_image_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn remote_image_name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName", args)?;
@@ -3998,7 +4078,7 @@ impl ContainerImagePushOptions {
     }
 
     /// Sets the RemoteImageName property
-    pub fn set_remote_image_name(&self, value: &str) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
+    pub fn set_remote_image_name(&self, value: Option<&str>) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -4008,7 +4088,7 @@ impl ContainerImagePushOptions {
     }
 
     /// Gets or sets the remote image tag.
-    pub fn remote_image_tag(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn remote_image_tag(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag", args)?;
@@ -4016,7 +4096,7 @@ impl ContainerImagePushOptions {
     }
 
     /// Sets the RemoteImageTag property
-    pub fn set_remote_image_tag(&self, value: &str) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
+    pub fn set_remote_image_tag(&self, value: Option<&str>) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -4148,7 +4228,7 @@ impl ContainerMountAnnotation {
     }
 
     /// Gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume.
-    pub fn source(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn source(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source", args)?;
@@ -4337,6 +4417,35 @@ impl ContainerRegistryResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withParentProcessLifetime", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 
     /// Registers a callback to customize the URLs displayed for the resource.
@@ -5329,6 +5438,45 @@ impl ContainerResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5734,6 +5882,19 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustScope", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
@@ -7208,6 +7369,45 @@ impl DotnetToolResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -7615,6 +7815,19 @@ impl DotnetToolResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -7710,6 +7923,23 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironment", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds VS Code-compatible debug metadata for an executable resource.
+    pub fn with_executable_debug_support(&self, launch_configuration_type: &str, script_path: &str, runtime_executable: Option<&str>, launch_method: Option<&str>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchConfigurationType".to_string(), serde_json::to_value(&launch_configuration_type).unwrap_or(Value::Null));
+        args.insert("scriptPath".to_string(), serde_json::to_value(&script_path).unwrap_or(Value::Null));
+        if let Some(ref v) = runtime_executable {
+            args.insert("runtimeExecutable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = launch_method {
+            args.insert("launchMethod".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withExecutableDebugSupport", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
     /// Adds an HTTP health probe to the resource
@@ -7849,6 +8079,21 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withPipelineConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a volume to an executable resource.
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
+        if let Some(ref v) = is_read_only {
+            args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withExecutableVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
     /// Gets the name of the resource from a builder.
@@ -8251,7 +8496,7 @@ impl EndpointReference {
     }
 
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
-    pub fn error_message(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn error_message(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage", args)?;
@@ -8323,7 +8568,7 @@ impl EndpointReference {
     }
 
     /// Gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`.
-    pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn target_port(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.targetPort", args)?;
@@ -8490,7 +8735,7 @@ impl EndpointUpdateContext {
     }
 
     /// Gets or sets the desired host port.
-    pub fn port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn port(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port", args)?;
@@ -8498,7 +8743,7 @@ impl EndpointUpdateContext {
     }
 
     /// Sets the Port property
-    pub fn set_port(&self, value: f64) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+    pub fn set_port(&self, value: Option<f64>) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -8508,7 +8753,7 @@ impl EndpointUpdateContext {
     }
 
     /// Gets or sets the target port.
-    pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn target_port(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort", args)?;
@@ -8516,7 +8761,7 @@ impl EndpointUpdateContext {
     }
 
     /// Sets the TargetPort property
-    pub fn set_target_port(&self, value: f64) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+    pub fn set_target_port(&self, value: Option<f64>) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -8598,7 +8843,7 @@ impl EndpointUpdateContext {
     }
 
     /// Gets or sets a value indicating whether the endpoint is proxied.
-    pub fn is_proxied(&self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub fn is_proxied(&self) -> Result<Option<bool>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied", args)?;
@@ -8606,7 +8851,7 @@ impl EndpointUpdateContext {
     }
 
     /// Sets the IsProxied property
-    pub fn set_is_proxied(&self, value: bool) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+    pub fn set_is_proxied(&self, value: Option<bool>) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -9044,6 +9289,45 @@ impl ExecutableResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9451,6 +9735,19 @@ impl ExecutableResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9546,6 +9843,23 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withComputeEnvironment", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds VS Code-compatible debug metadata for an executable resource.
+    pub fn with_executable_debug_support(&self, launch_configuration_type: &str, script_path: &str, runtime_executable: Option<&str>, launch_method: Option<&str>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("launchConfigurationType".to_string(), serde_json::to_value(&launch_configuration_type).unwrap_or(Value::Null));
+        args.insert("scriptPath".to_string(), serde_json::to_value(&script_path).unwrap_or(Value::Null));
+        if let Some(ref v) = runtime_executable {
+            args.insert("runtimeExecutable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = launch_method {
+            args.insert("launchMethod".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withExecutableDebugSupport", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
     /// Adds an HTTP health probe to the resource
@@ -9685,6 +9999,21 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withPipelineConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a volume to an executable resource.
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
+        if let Some(ref v) = is_read_only {
+            args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withExecutableVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
     /// Gets the name of the resource from a builder.
@@ -10246,6 +10575,35 @@ impl ExternalServiceResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withParentProcessLifetime", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 
     /// Registers a callback to customize the URLs displayed for the resource.
@@ -11249,7 +11607,7 @@ impl IConfigurationSection {
     }
 
     /// Gets the Value property
-    pub fn value(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn value(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Microsoft.Extensions.Configuration/IConfigurationSection.value", args)?;
@@ -11257,7 +11615,7 @@ impl IConfigurationSection {
     }
 
     /// Sets the Value property
-    pub fn set_value(&self, value: &str) -> Result<IConfigurationSection, Box<dyn std::error::Error>> {
+    pub fn set_value(&self, value: Option<&str>) -> Result<IConfigurationSection, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -11678,13 +12036,13 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds a test vault resource
-    pub fn add_test_vault(&self, name: &str) -> Result<TestVaultResource, Box<dyn std::error::Error>> {
+    pub fn add_test_vault(&self, name: &str) -> Result<ITestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/addTestVault", args)?;
         let handle: Handle = serde_json::from_value(result)?;
-        Ok(TestVaultResource::new(handle, self.client.clone()))
+        Ok(ITestVaultResource::new(handle, self.client.clone()))
     }
 }
 
@@ -11824,6 +12182,32 @@ impl HasHandle for IDistributedApplicationResourceEvent {
 }
 
 impl IDistributedApplicationResourceEvent {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IDotnetProgramResource
+pub struct IDotnetProgramResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for IDotnetProgramResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl IDotnetProgramResource {
     pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
         Self { handle, client }
     }
@@ -12955,6 +13339,128 @@ impl IServiceProvider {
     }
 }
 
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResource
+pub struct ITestMutablePromiseCollisionResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestMutablePromiseCollisionResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestMutablePromiseCollisionResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets or sets the test value.
+    pub fn value(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.value", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Value property
+    pub fn set_value(&self, value: &str) -> Result<ITestMutablePromiseCollisionResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/ITestMutablePromiseCollisionResource.setValue", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ITestMutablePromiseCollisionResource::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestMutablePromiseCollisionResourcePromise
+pub struct ITestMutablePromiseCollisionResourcePromise {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestMutablePromiseCollisionResourcePromise {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestMutablePromiseCollisionResourcePromise {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResource
+pub struct ITestPromiseCollisionResource {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestPromiseCollisionResource {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestPromiseCollisionResource {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestPromiseCollisionResourcePromise
+pub struct ITestPromiseCollisionResourcePromise {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ITestPromiseCollisionResourcePromise {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ITestPromiseCollisionResourcePromise {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
 /// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource
 pub struct ITestVaultResource {
     handle: Handle,
@@ -13640,6 +14146,35 @@ impl ParameterResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withParentProcessLifetime", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 
     /// Registers a callback to customize the URLs displayed for the resource.
@@ -14433,7 +14968,7 @@ impl PipelineStep {
     }
 
     /// Gets or initializes the description of the step.
-    pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn description(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/PipelineStep.description", args)?;
@@ -14911,6 +15446,45 @@ impl ProjectResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15329,6 +15903,19 @@ impl ProjectResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15563,6 +16150,21 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withPipelineConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a volume to a project resource.
+    pub fn with_volume(&self, target: &str, name: &str, env: &str, is_read_only: Option<bool>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("target".to_string(), serde_json::to_value(&target).unwrap_or(Value::Null));
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("env".to_string(), serde_json::to_value(&env).unwrap_or(Value::Null));
+        if let Some(ref v) = is_read_only {
+            args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProjectVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ProjectResource::new(handle, self.client.clone()))
     }
 
     /// Gets the name of the resource from a builder.
@@ -15958,7 +16560,7 @@ impl ProjectResourceOptions {
     }
 
     /// The launch profile to use. If `null` then the default launch profile will be used.
-    pub fn launch_profile_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn launch_profile_name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/ProjectResourceOptions.launchProfileName", args)?;
@@ -15966,7 +16568,7 @@ impl ProjectResourceOptions {
     }
 
     /// Sets the LaunchProfileName property
-    pub fn set_launch_profile_name(&self, value: &str) -> Result<ProjectResourceOptions, Box<dyn std::error::Error>> {
+    pub fn set_launch_profile_name(&self, value: Option<&str>) -> Result<ProjectResourceOptions, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -16192,7 +16794,7 @@ impl RequiredCommandValidationResult {
     }
 
     /// Gets an optional validation message describing why validation failed.
-    pub fn validation_message(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn validation_message(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/RequiredCommandValidationResult.validationMessage", args)?;
@@ -16667,7 +17269,7 @@ impl TestCallbackContext {
     }
 
     /// Gets the Name property
-    pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", args)?;
@@ -16675,7 +17277,7 @@ impl TestCallbackContext {
     }
 
     /// Sets the Name property
-    pub fn set_name(&self, value: &str) -> Result<TestCallbackContext, Box<dyn std::error::Error>> {
+    pub fn set_name(&self, value: Option<&str>) -> Result<TestCallbackContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -17186,6 +17788,45 @@ impl TestDatabaseResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17591,6 +18232,19 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustScope", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
@@ -18246,7 +18900,7 @@ impl TestEnvironmentContext {
     }
 
     /// Gets the Description property
-    pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn description(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", args)?;
@@ -18254,7 +18908,7 @@ impl TestEnvironmentContext {
     }
 
     /// Sets the Description property
-    pub fn set_description(&self, value: &str) -> Result<TestEnvironmentContext, Box<dyn std::error::Error>> {
+    pub fn set_description(&self, value: Option<&str>) -> Result<TestEnvironmentContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
@@ -18774,6 +19428,45 @@ impl TestRedisResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19190,6 +19883,19 @@ impl TestRedisResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19536,6 +20242,28 @@ impl TestRedisResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Configures a Redis resource with parameter-only resources whose generated names collide.
+    pub fn with_promise_collision_resources(&self, resource: &ITestPromiseCollisionResource, resource_promise: &ITestPromiseCollisionResourcePromise) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("resourcePromise".to_string(), resource_promise.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withPromiseCollisionResources", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide.
+    pub fn with_mutable_promise_collision_resources(&self, resource: &ITestMutablePromiseCollisionResource, resource_promise: &ITestMutablePromiseCollisionResourcePromise) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("resourcePromise".to_string(), resource_promise.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withMutablePromiseCollisionResources", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a child database to a test Redis resource
     pub fn add_test_child_database(&self, name: &str, database_name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -19825,6 +20553,16 @@ impl TestRedisResource {
             args.insert("isReadOnly".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withDataVolume", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestRedisResource::new(handle, self.client.clone()))
+    }
+
+    /// Configures a Redis resource with the concrete vault resource as a parameter.
+    pub fn with_concrete_vault_resource(&self, resource: &TestVaultResource) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/withConcreteVaultResource", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
@@ -20446,6 +21184,45 @@ impl TestVaultResource {
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
+    /// Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+    pub fn with_serialized_annotation(&self, annotation_id: &str, json: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        args.insert("json".to_string(), serde_json::to_value(&json).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withSerializedAnnotation", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets a serialized ATS annotation payload from a resource.
+    pub fn get_serialized_annotation(&self, annotation_id: &str) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/getSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Determines whether a resource has a serialized ATS annotation with the specified ID.
+    pub fn has_serialized_annotation(&self, annotation_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resource".to_string(), self.handle.to_json());
+        args.insert("annotationId".to_string(), serde_json::to_value(&annotation_id).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/hasSerializedAnnotation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Replaces the arguments to be passed to a resource that supports arguments when it is launched.
+    pub fn with_args_replace(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsReplace", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
     /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -20851,6 +21628,19 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustScope", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Configures environment variables that point to Aspire-managed certificate trust paths.
+    pub fn with_certificate_trust_environment(&self, certificate_bundle_environment_variable: &str, certificate_directories_environment_variable: Option<&str>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("certificateBundleEnvironmentVariable".to_string(), serde_json::to_value(&certificate_bundle_environment_variable).unwrap_or(Value::Null));
+        if let Some(ref v) = certificate_directories_environment_variable {
+            args.insert("certificateDirectoriesEnvironmentVariable".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withCertificateTrustEnvironment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
 
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.

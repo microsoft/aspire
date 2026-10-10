@@ -8,6 +8,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.ServiceClient;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -63,30 +64,45 @@ public class TelemetryRepositoryBenchmarks
     ];
 
     private RepeatedField<ResourceSpans> _resourceSpans = [];
-    private TelemetryRepository _queryRepository = null!;
+    private string _temporaryDirectory = null!;
+    private DashboardSqliteDatabase _queryDatabase = null!;
+    private SqliteTelemetryRepository _queryRepository = null!;
 
     [GlobalSetup]
-    public void Setup()
+    public async Task Setup()
     {
         _resourceSpans = CreateResourceSpans(TraceCount, SpansPerTrace);
-        _queryRepository = CreateRepository();
-        _queryRepository.AddTraces(new AddContext(), _resourceSpans);
+        _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-benchmark-").FullName;
+        _queryDatabase = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "query.db"));
+        _queryRepository = CreateRepository(_queryDatabase);
+        await _queryRepository.AddTracesAsync(new AddContext(), _resourceSpans);
     }
 
     [GlobalCleanup]
     public void Cleanup()
     {
         _queryRepository.Dispose();
+        _queryDatabase.ClearPool();
+        _queryDatabase.Dispose();
+        Directory.Delete(_temporaryDirectory, recursive: true);
     }
 
     [Benchmark(Description = "TelemetryRepository: add 10k spans")]
-    public int AddTracesLargeBatch()
+    public async Task<int> AddTracesLargeBatch()
     {
-        using var repository = CreateRepository();
-        var context = new AddContext();
-        repository.AddTraces(context, _resourceSpans);
+        var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-add-benchmark-");
+        using var database = new DashboardSqliteDatabase(Path.Combine(temporaryDirectory.FullName, "add.db"));
+        int successCount;
+        using (var repository = CreateRepository(database))
+        {
+            var context = new AddContext();
+            await repository.AddTracesAsync(context, _resourceSpans);
+            successCount = context.SuccessCount;
+        }
+        database.ClearPool();
+        Directory.Delete(temporaryDirectory.FullName, recursive: true);
 
-        return context.SuccessCount;
+        return successCount;
     }
 
     [Benchmark(Description = "TelemetryRepository: query no filters")]
@@ -94,8 +110,7 @@ public class TelemetryRepositoryBenchmarks
     {
         var result = _queryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
-            FilterText = string.Empty,
+            ResourceKeys = [],
             Filters = [],
             StartIndex = 0,
             Count = 100
@@ -109,8 +124,7 @@ public class TelemetryRepositoryBenchmarks
     {
         var result = _queryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
-            FilterText = string.Empty,
+            ResourceKeys = [],
             Filters = _durationFilters,
             StartIndex = 0,
             Count = 100
@@ -124,8 +138,7 @@ public class TelemetryRepositoryBenchmarks
     {
         var result = _queryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
-            FilterText = string.Empty,
+            ResourceKeys = [],
             Filters = _noMatchDurationFilters,
             StartIndex = 0,
             Count = 100
@@ -139,8 +152,7 @@ public class TelemetryRepositoryBenchmarks
     {
         var result = _queryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = null,
-            FilterText = string.Empty,
+            ResourceKeys = [],
             Filters = _noMatchAttributeFilters,
             StartIndex = 0,
             Count = 100
@@ -149,9 +161,10 @@ public class TelemetryRepositoryBenchmarks
         return result.PagedResult.Items.Count;
     }
 
-    private static TelemetryRepository CreateRepository()
+    private static SqliteTelemetryRepository CreateRepository(DashboardSqliteDatabase database)
     {
-        return new TelemetryRepository(
+        return new SqliteTelemetryRepository(
+            database,
             NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions
             {
@@ -161,6 +174,7 @@ public class TelemetryRepositoryBenchmarks
                 }
             }),
             new PauseManager(),
+            TimeProvider.System,
             []);
     }
 

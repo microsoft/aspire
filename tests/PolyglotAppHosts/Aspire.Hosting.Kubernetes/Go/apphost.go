@@ -38,7 +38,7 @@ func main() {
 	kubernetes.WithProperties(func(environment aspire.KubernetesEnvironmentResource) {
 		environment.SetDefaultStorageType("pvc")
 		_, _ = environment.DefaultStorageType()
-		environment.SetDefaultStorageClassName("fast-storage")
+		environment.SetDefaultStorageClassName(aspire.StringPtr("fast-storage"))
 		_, _ = environment.DefaultStorageClassName()
 		environment.SetDefaultStorageSize("5Gi")
 		_, _ = environment.DefaultStorageSize()

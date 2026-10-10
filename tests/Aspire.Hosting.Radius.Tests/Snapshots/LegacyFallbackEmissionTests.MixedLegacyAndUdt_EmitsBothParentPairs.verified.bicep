@@ -1,16 +1,19 @@
 ﻿extension radius
 
+@secure()
+param db_password string
+
 resource recipepack 'Radius.Core/recipePacks@2025-08-01-preview' = {
   name: 'default'
   properties: {
     recipes: {
       'Radius.Data/postgreSqlDatabases': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/recipes/local-dev/postgresqldatabases:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/postgresqldatabases:latest'
       }
       'Radius.Compute/containers': {
-        recipeKind: 'bicep'
-        recipeLocation: 'ghcr.io/radius-project/kube-recipes/containers:latest'
+        kind: 'bicep'
+        source: 'ghcr.io/radius-project/kube-recipes/containers:latest'
       }
     }
   }
@@ -45,10 +48,10 @@ resource myenv_legacy 'Applications.Core/environments@2023-10-01-preview' = {
       namespace: 'default'
     }
     recipes: {
-      'Applications.Datastores/redisCaches': {
+      'Applications.Datastores/mongoDatabases': {
         default: {
           templateKind: 'bicep'
-          templatePath: 'ghcr.io/radius-project/recipes/local-dev/rediscaches:latest'
+          templatePath: 'ghcr.io/radius-project/recipes/local-dev/mongodatabases:latest'
         }
       }
     }
@@ -62,8 +65,8 @@ resource app_legacy 'Applications.Core/applications@2023-10-01-preview' = {
   }
 }
 
-resource cache 'Applications.Datastores/redisCaches@2023-10-01-preview' = {
-  name: 'cache'
+resource mongo 'Applications.Datastores/mongoDatabases@2023-10-01-preview' = {
+  name: 'mongo'
   properties: {
     application: app_legacy.id
     environment: myenv_legacy.id
@@ -75,6 +78,9 @@ resource db 'Radius.Data/postgreSqlDatabases@2025-08-01-preview' = {
   properties: {
     application: app.id
     environment: myenv.id
+    username: 'postgres'
+    password: db_password
+    database: 'postgres'
   }
 }
 

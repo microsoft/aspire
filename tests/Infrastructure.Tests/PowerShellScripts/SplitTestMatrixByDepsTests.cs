@@ -123,38 +123,19 @@ public class SplitTestMatrixByDepsTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task OverflowsEntriesBeyondThreshold()
+    public async Task FailsWhenNoNugetsMatrixExceedsGitHubLimit()
     {
-        var entries = Enumerable.Range(1, 8).Select(i =>
+        var entries = Enumerable.Range(1, 257).Select(i =>
             (object)new { name = $"T{i}", shortname = $"t{i}", runs_on = "ubuntu-latest" }).ToArray();
 
         var matrixJson = BuildMatrixJson(entries);
 
-        var result = await RunScript(allTestsMatrix: matrixJson, overflowThreshold: 5);
+        var result = await RunScript(allTestsMatrix: matrixJson);
 
-        result.EnsureSuccessful();
-
-        var outputs = ParseGitHubOutputFile();
-        Assert.Equal(5, outputs["tests_matrix_no_nugets"].Include.Length);
-        Assert.Equal(3, outputs["tests_matrix_no_nugets_overflow"].Include.Length);
-    }
-
-    [Fact]
-    [RequiresTools(["pwsh"])]
-    public async Task NoOverflowWhenBelowThreshold()
-    {
-        var entries = Enumerable.Range(1, 5).Select(i =>
-            (object)new { name = $"T{i}", shortname = $"t{i}", runs_on = "ubuntu-latest" }).ToArray();
-
-        var matrixJson = BuildMatrixJson(entries);
-
-        var result = await RunScript(allTestsMatrix: matrixJson, overflowThreshold: 10);
-
-        result.EnsureSuccessful();
-
-        var outputs = ParseGitHubOutputFile();
-        Assert.Equal(5, outputs["tests_matrix_no_nugets"].Include.Length);
-        Assert.Empty(outputs["tests_matrix_no_nugets_overflow"].Include);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("tests_matrix_no_nugets", result.Output, StringComparison.Ordinal);
+        Assert.Contains("257 entries", result.Output, StringComparison.Ordinal);
+        Assert.Contains("limit of 256", result.Output, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -169,7 +150,6 @@ public class SplitTestMatrixByDepsTests : IDisposable
 
         var outputs = ParseGitHubOutputFile();
         Assert.Empty(outputs["tests_matrix_no_nugets"].Include);
-        Assert.Empty(outputs["tests_matrix_no_nugets_overflow"].Include);
         Assert.Empty(outputs["tests_matrix_requires_nugets_linux"].Include);
         Assert.Empty(outputs["tests_matrix_requires_nugets_windows"].Include);
         Assert.Empty(outputs["tests_matrix_requires_nugets_macos"].Include);
@@ -189,7 +169,6 @@ public class SplitTestMatrixByDepsTests : IDisposable
 
         var outputs = ParseGitHubOutputFile();
         Assert.True(outputs.ContainsKey("tests_matrix_no_nugets"));
-        Assert.True(outputs.ContainsKey("tests_matrix_no_nugets_overflow"));
         Assert.True(outputs.ContainsKey("tests_matrix_requires_nugets_linux"));
         Assert.True(outputs.ContainsKey("tests_matrix_requires_nugets_windows"));
         Assert.True(outputs.ContainsKey("tests_matrix_requires_nugets_macos"));
@@ -247,8 +226,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
 
     private async Task<CommandResult> RunScript(
         string? allTestsMatrix = null,
-        string? allTestsMatrixFile = null,
-        int? overflowThreshold = null)
+        string? allTestsMatrixFile = null)
     {
         using var cmd = new PowerShellCommand(_scriptPath, _output)
             .WithTimeout(TimeSpan.FromMinutes(2))
@@ -269,12 +247,6 @@ public class SplitTestMatrixByDepsTests : IDisposable
         {
             args.Add("-AllTestsMatrixFile");
             args.Add($"\"{allTestsMatrixFile}\"");
-        }
-
-        if (overflowThreshold.HasValue)
-        {
-            args.Add("-OverflowThreshold");
-            args.Add(overflowThreshold.Value.ToString());
         }
 
         args.Add("-OutputToGitHubEnv");

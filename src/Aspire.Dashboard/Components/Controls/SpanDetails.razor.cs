@@ -10,7 +10,6 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -34,7 +33,9 @@ public partial class SpanDetails : IDisposable
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -48,24 +49,24 @@ public partial class SpanDetails : IDisposable
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IQueryable<TelemetryPropertyViewModel> FilteredItems =>
-        ViewModel.Properties.Where(ApplyFilter).AsQueryable();
+    private IEnumerable<TelemetryPropertyViewModel> FilteredItems =>
+        ViewModel.Properties.Where(ApplyFilter);
 
-    private IQueryable<TelemetryPropertyViewModel> FilteredContextItems =>
-        _contextAttributes.Where(ApplyFilter).AsQueryable();
+    private IEnumerable<TelemetryPropertyViewModel> FilteredContextItems =>
+        _contextAttributes.Where(ApplyFilter);
 
-    private IQueryable<TelemetryPropertyViewModel> FilteredResourceItems =>
+    private IEnumerable<TelemetryPropertyViewModel> FilteredResourceItems =>
         ViewModel.Span.Source.AllProperties().Select(p => new TelemetryPropertyViewModel { Name = p.DisplayName, Key = p.Key, Value = p.Value })
-            .Where(ApplyFilter).AsQueryable();
+            .Where(ApplyFilter);
 
-    private IQueryable<OtlpSpanEvent> FilteredSpanEvents =>
-        ViewModel.Span.Events.Where(e => e.Name.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).OrderBy(e => e.Time).AsQueryable();
+    private IEnumerable<OtlpSpanEvent> FilteredSpanEvents =>
+        ViewModel.Span.Events.Where(e => e.Name.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).OrderBy(e => e.Time);
 
-    private IQueryable<SpanLinkViewModel> FilteredSpanLinks =>
-        ViewModel.Links.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).AsQueryable();
+    private IEnumerable<SpanLinkViewModel> FilteredSpanLinks =>
+        ViewModel.Links.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase));
 
-    private IQueryable<SpanLinkViewModel> FilteredSpanBacklinks =>
-        ViewModel.Backlinks.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).AsQueryable();
+    private IEnumerable<SpanLinkViewModel> FilteredSpanBacklinks =>
+        ViewModel.Backlinks.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase));
 
     private bool _isSpanEventsExpanded;
     private bool _isSpanLinksExpanded;
@@ -78,9 +79,6 @@ public partial class SpanDetails : IDisposable
     private SpanDetailsViewModel? _viewModel;
     private Dictionary<string, ComponentMetadata>? _valueComponents;
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
-
     private readonly CancellationTokenSource _cts = new();
 
     private bool ApplyFilter(TelemetryPropertyViewModel vm)
@@ -92,7 +90,6 @@ public partial class SpanDetails : IDisposable
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(Loc);
     }
 
     private void UpdateSpanActionsMenu()

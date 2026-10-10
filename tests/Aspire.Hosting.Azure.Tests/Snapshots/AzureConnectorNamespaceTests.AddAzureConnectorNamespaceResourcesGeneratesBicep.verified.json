@@ -1,0 +1,7 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "location.module.bicep",
+  "params": {
+    "worker_identity_outputs_principalid": "{worker-identity.outputs.principalId}"
+  }
+}

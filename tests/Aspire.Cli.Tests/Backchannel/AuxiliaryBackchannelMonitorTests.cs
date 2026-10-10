@@ -1,13 +1,479 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Hosting.Backchannel;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
-public class AuxiliaryBackchannelMonitorTests
+public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task DefaultWatchEmitsInitialConnectionOnlyOnce()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var cancellation = new CancellationTokenSource();
+            using var server = new TestAuxiliaryBackchannelServer(
+                CreateLiveOwnerSocketPath(homeDirectory), Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+            var accepted = server.AcceptAsync(cancellation.Token);
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            await accepted.DefaultTimeout();
+            Assert.Single(watch.Current);
+
+            var next = watch.MoveNextAsync().AsTask();
+            try
+            {
+                Assert.False(next.IsCompleted, "The initial scan's connection notification must not repeat the initial snapshot.");
+            }
+            finally
+            {
+                await cancellation.CancelAsync();
+            }
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DefaultWatchEmitsReplacementConnectionForSameAppHost()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var cancellation = new CancellationTokenSource();
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
+            var appHostPath = Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj");
+            using var first = new TestAuxiliaryBackchannelServer(socketPath, appHostPath);
+            var accepted = first.AcceptAsync(cancellation.Token);
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            await accepted.DefaultTimeout();
+            var firstConnection = Assert.Single(watch.Current);
+
+            // Leave the reader at its first yield until replacement completes, so the next
+            // snapshot has a new connection but the same AppHost path, PID, and count.
+            first.Dispose();
+            using var replacement = new TestAuxiliaryBackchannelServer(
+                socketPath.Replace("a1b2C3d4", "e5f6G7h8", StringComparison.Ordinal), appHostPath);
+            accepted = replacement.AcceptAsync(cancellation.Token);
+            await monitor.ScanAsync(cancellation.Token).DefaultTimeout();
+            await accepted.DefaultTimeout();
+
+            var next = watch.MoveNextAsync().AsTask();
+            try
+            {
+                Assert.True(await next.DefaultTimeout());
+            }
+            finally
+            {
+                if (!next.IsCompleted)
+                {
+                    await cancellation.CancelAsync();
+                    await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+                }
+            }
+
+            var replacementConnection = Assert.Single(watch.Current);
+            Assert.NotSame(firstConnection, replacementConnection);
+            Assert.Equal(firstConnection.AppHostInfo!.AppHostPath, replacementConnection.AppHostInfo!.AppHostPath);
+            Assert.Equal(firstConnection.AppHostInfo.ProcessId, replacementConnection.AppHostInfo.ProcessId);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FindConnectionByAppHostPath_WithCaseVariant_FollowsCurrentVolumeBehavior()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot.CreateSubdirectory("CaseSensitiveAppHost");
+        var actualPath = Path.Combine(directory.FullName, "CaseSensitive.AppHost.csproj");
+        File.WriteAllText(actualPath, "<Project />");
+        var caseVariant = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "casesensitiveapphost",
+            "casesensitive.apphost.csproj");
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = actualPath,
+                ProcessId = 1
+            }
+        };
+
+        var result = AppHostConnectionHelper.FindConnectionByAppHostPath(
+            [connection],
+            caseVariant);
+
+        Assert.Equal(File.Exists(caseVariant), result is not null);
+    }
+
+    [Fact]
+    public void AppHostPathComparer_WithDistinctCaseSensitivePaths_DoesNotUseCaseInsensitiveFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var lowercaseDirectory = workspace.WorkspaceRoot.CreateSubdirectory("case-sensitive-apphost");
+        var uppercaseDirectoryPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "CASE-SENSITIVE-APPHOST");
+
+        Assert.SkipWhen(
+            Directory.Exists(uppercaseDirectoryPath),
+            "The current temporary filesystem does not allow case-distinct directories.");
+
+        var uppercaseDirectory = Directory.CreateDirectory(uppercaseDirectoryPath);
+        var lowercaseAppHostPath = Path.Combine(lowercaseDirectory.FullName, "AppHost.csproj");
+        var uppercaseAppHostPath = Path.Combine(uppercaseDirectory.FullName, "AppHost.csproj");
+        File.WriteAllText(lowercaseAppHostPath, "<Project />");
+        File.WriteAllText(uppercaseAppHostPath, "<Project />");
+
+        Assert.False(AppHostPathComparer.PathsEqual(
+            lowercaseAppHostPath,
+            uppercaseAppHostPath,
+            StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void AppHostPathComparer_WithExactText_UsesFastPathBeforeFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var missingPath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "missing",
+            "AppHost.csproj");
+
+        Assert.True(AppHostPathComparer.PathsEqual(
+            missingPath,
+            missingPath,
+            NeverEqualStringComparer.Instance));
+    }
+
+    [Fact]
+    public void AppHostPathComparer_WhenOnlyOnePathCanonicalizes_DoesNotUseFallback()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var existingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Existing.AppHost.csproj");
+        var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Missing.AppHost.csproj");
+        File.WriteAllText(existingPath, "<Project />");
+
+        Assert.False(AppHostPathComparer.PathsEqual(
+            existingPath,
+            missingPath,
+            AlwaysEqualStringComparer.Instance));
+    }
+
+    [Fact]
+    public async Task FindConnectionByAppHostPath_WithWindowsCaseSensitiveDirectory_DoesNotMatchCaseVariant()
+    {
+        Assert.SkipUnless(
+            OperatingSystem.IsWindows(),
+            "Per-directory case sensitivity is only available on Windows.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var caseSensitiveDirectory = workspace.WorkspaceRoot.CreateSubdirectory("case-sensitive");
+        var (caseSensitivityEnabled, failureReason) = await TryEnableWindowsCaseSensitivityAsync(
+            caseSensitiveDirectory.FullName,
+            TestContext.Current.CancellationToken);
+
+        Assert.SkipUnless(
+            caseSensitivityEnabled,
+            $"The environment could not enable per-directory case sensitivity: {failureReason}");
+
+        var actualPath = Path.Combine(caseSensitiveDirectory.FullName, "CaseSensitive.AppHost.csproj");
+        var caseVariant = Path.Combine(caseSensitiveDirectory.FullName, "casesensitive.apphost.csproj");
+        File.WriteAllText(actualPath, "<Project />");
+
+        Assert.SkipWhen(
+            File.Exists(caseVariant),
+            "The environment did not create a case-sensitive directory.");
+
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = actualPath,
+                ProcessId = 1
+            }
+        };
+
+        var result = AppHostConnectionHelper.FindConnectionByAppHostPath(
+            [connection],
+            caseVariant);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void AppHostPathComparer_ObservesRetargetedSymlink()
+    {
+        Assert.SkipUnless(
+            OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink mutation test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var firstTarget = Path.Combine(workspace.WorkspaceRoot.FullName, "first.csproj");
+        var secondTarget = Path.Combine(workspace.WorkspaceRoot.FullName, "second.csproj");
+        File.WriteAllText(firstTarget, "<Project />");
+        File.WriteAllText(secondTarget, "<Project />");
+        var linkPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current.csproj");
+        File.CreateSymbolicLink(linkPath, firstTarget);
+
+        Assert.True(AppHostPathComparer.PathsEqual(linkPath, firstTarget));
+
+        File.Delete(linkPath);
+        File.CreateSymbolicLink(linkPath, secondTarget);
+
+        // Canonical path results cannot be memoized: the same lexical path can identify
+        // a different AppHost after an ordinary filesystem mutation.
+        Assert.False(AppHostPathComparer.PathsEqual(linkPath, firstTarget));
+        Assert.True(AppHostPathComparer.PathsEqual(linkPath, secondTarget));
+    }
+
+    [Fact]
+    public async Task ReadOnlyWatchEmitsOnlyConnectionReferenceChanges()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var time = new FakeTimeProvider();
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), time, profiling);
+            using var cancellation = new CancellationTokenSource();
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token, readOnly: true).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Empty(watch.Current);
+            var next = watch.MoveNextAsync().AsTask();
+            for (var tick = 0; tick < 3; tick++)
+            {
+                time.Advance(TimeSpan.FromSeconds(1));
+                Assert.False(next.IsCompleted);
+            }
+
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
+            var appHostPath = Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj");
+            using var first = new TestAuxiliaryBackchannelServer(socketPath, appHostPath);
+            var accepted = first.AcceptAsync(cancellation.Token);
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            await accepted.DefaultTimeout();
+            var firstConnection = Assert.Single(watch.Current);
+
+            next = watch.MoveNextAsync().AsTask();
+            for (var tick = 0; tick < 3; tick++)
+            {
+                time.Advance(TimeSpan.FromSeconds(1));
+                Assert.False(next.IsCompleted);
+            }
+
+            var secondSocketPath = socketPath.Replace("a1b2C3d4", "e5f6G7h8", StringComparison.Ordinal);
+            using var second = new TestAuxiliaryBackchannelServer(secondSocketPath, appHostPath);
+            accepted = second.AcceptAsync(cancellation.Token);
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            await accepted.DefaultTimeout();
+            Assert.Equal(2, watch.Current.Count);
+            Assert.Contains(firstConnection, watch.Current);
+            var secondConnection = Assert.Single(watch.Current, connection => !ReferenceEquals(connection, firstConnection));
+
+            next = watch.MoveNextAsync().AsTask();
+            first.RemoveSocketFile();
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            Assert.Same(secondConnection, Assert.Single(watch.Current));
+
+            // Replace the only connection between polls with another connection for the same
+            // AppHost identity. Comparing identities or connection counts would miss this.
+            next = watch.MoveNextAsync().AsTask();
+            second.RemoveSocketFile();
+            var replacementSocketPath = socketPath.Replace("a1b2C3d4", "i9j0K1l2", StringComparison.Ordinal);
+            using var replacement = new TestAuxiliaryBackchannelServer(replacementSocketPath, appHostPath);
+            accepted = replacement.AcceptAsync(cancellation.Token);
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            await accepted.DefaultTimeout();
+            var replacementConnection = Assert.Single(watch.Current);
+            Assert.NotSame(secondConnection, replacementConnection);
+            Assert.Equal(secondConnection.AppHostInfo!.AppHostPath, replacementConnection.AppHostInfo!.AppHostPath);
+            Assert.Equal(secondConnection.AppHostInfo.ProcessId, replacementConnection.AppHostInfo.ProcessId);
+
+            next = watch.MoveNextAsync().AsTask();
+            replacement.RemoveSocketFile();
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.True(await next.DefaultTimeout());
+            Assert.Empty(watch.Current);
+
+            next = watch.MoveNextAsync().AsTask();
+            time.Advance(TimeSpan.FromSeconds(1));
+            Assert.False(next.IsCompleted);
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next).DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ReadOnlyWatchEmitsInitialEmptyStateWithoutCreatingDirectories()
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-readonly-");
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            using var cancellation = new CancellationTokenSource();
+            await using var watch = monitor.WatchConnectionsAsync(cancellation.Token, readOnly: true).GetAsyncEnumerator();
+
+            Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+            Assert.Empty(watch.Current);
+            Assert.All(AppHostSocketManager.GetSocketDirectories(homeDirectory.FullName),
+                directory => Assert.False(Directory.Exists(directory.DirectoryPath)));
+
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watch.MoveNextAsync().AsTask()).DefaultTimeout();
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ScanAsyncPrunesDeadSocketsOnlyWhenRequested(bool prune)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-orphans-");
+        try
+        {
+            var compactDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
+            var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory.FullName);
+            Directory.CreateDirectory(compactDirectory);
+            Directory.CreateDirectory(legacyDirectory);
+            var compactPath = Path.Combine(compactDirectory, $"{BackchannelConstants.ComputeAppHostId("AppHost.cs")}a1b2C3d4.{int.MaxValue}");
+            var legacyPath = Path.Combine(legacyDirectory, $"auxi.sock.abc123def4567890.{int.MaxValue}");
+            File.WriteAllText(compactPath, "orphan");
+            File.WriteAllText(legacyPath, "orphan");
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+
+            await monitor.ScanAsync(pruneOrphanedSockets: prune, throwOnDiscoveryFailure: true).DefaultTimeout();
+
+            Assert.Empty(monitor.Connections);
+            Assert.Equal(!prune, File.Exists(compactPath));
+            Assert.Equal(!prune, File.Exists(legacyPath));
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadOnlyWatchPropagatesDirectoryFailuresBeforeOrAfterInitialState(bool afterInitial)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-discovery-");
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var time = new FakeTimeProvider();
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), time, profiling);
+            await using var watch = monitor.WatchConnectionsAsync(readOnly: true).GetAsyncEnumerator();
+            if (afterInitial)
+            {
+                Assert.True(await watch.MoveNextAsync().AsTask().DefaultTimeout());
+                Assert.Empty(watch.Current);
+            }
+
+            var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory.FullName);
+            Directory.CreateDirectory(Path.GetDirectoryName(legacyDirectory)!);
+            File.WriteAllText(legacyDirectory, "Not a directory.");
+            var next = watch.MoveNextAsync().AsTask();
+            time.Advance(TimeSpan.FromSeconds(1));
+
+            await Assert.ThrowsAnyAsync<IOException>(() => next).DefaultTimeout();
+            Assert.True(File.Exists(legacyDirectory));
+
+            // Preserve the legacy scanner's permissive handling of unavailable directories.
+            await monitor.ScanAsync().DefaultTimeout();
+            Assert.Empty(monitor.Connections);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task FailedConnectionCleanupHonorsReadOnlyForPidlessAndDeadSockets(bool pidQualified, bool prune)
+    {
+        var homeDirectory = Directory.CreateTempSubdirectory("tray-connect-");
+        try
+        {
+            var socketPath = Path.Combine(homeDirectory.FullName, "stale-socket");
+            File.WriteAllText(socketPath, "stale");
+            var socket = new TestAppHostSocket(socketPath)
+            {
+                ProcessId = pidQualified ? int.MaxValue : null,
+                ConnectAsyncCallback = _ => ValueTask.FromException<Socket>(new SocketException((int)SocketError.ConnectionRefused))
+            };
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            var time = new FakeTimeProvider(DateTimeOffset.UtcNow.AddSeconds(1));
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), time, profiling);
+
+            await PumpUntilCompletedAsync(monitor.TryConnectToSocketAsync(
+                socket, new ConcurrentBag<string>(), prune, CancellationToken.None), time).DefaultTimeout();
+
+            Assert.Equal(prune ? 1 : 0, socket.TryDeleteCallCount);
+            Assert.Equal(!prune, File.Exists(socketPath));
+            Assert.Empty(monitor.Connections);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void IsAppHostInScopeOfDirectory_WithSymlinkedPaths_IsInScope()
     {
@@ -131,5 +597,254 @@ public class AuxiliaryBackchannelMonitorTests
         {
             tempRoot.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task ScanAsync_UnreachableSocketWithLiveProcess_IsNotRetriedUntilBackoffExpires()
+    {
+        // A socket file whose PID is alive but that refuses connections is the PID-reuse shape:
+        // the AppHost is gone, yet its PID was recycled by an unrelated process, so the monitor is
+        // not allowed to delete the file (deleting a socket whose AppHost is actually alive makes
+        // that AppHost undiscoverable for the rest of its lifetime). Before the backoff was added,
+        // such a socket was pushed back onto the "new sockets" list on every scan, so every single
+        // scan paid the full connect retry budget. MCP tools scan frequently, so that was seconds
+        // of dead time per call, forever.
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
+
+            // Bound but never listening, so every connect attempt is refused while the file stays on disk.
+            using var unreachableSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            unreachableSocket.Bind(new UnixDomainSocketEndPoint(socketPath));
+
+            var logger = new CapturingLogger<AuxiliaryBackchannelMonitor>();
+            var timeProvider = new FakeTimeProvider();
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(logger, CreateExecutionContext(homeDirectory), timeProvider, profilingTelemetry);
+
+            // The socket is discovered and the connect retry budget is burned down once.
+            await PumpUntilCompletedAsync(monitor.ScanAsync(), timeProvider).DefaultTimeout();
+            Assert.Equal(1, CountConnectAttempts(logger, socketPath));
+
+            // The file must survive: its PID is alive, so the monitor cannot prove the socket is dead.
+            Assert.True(File.Exists(socketPath));
+
+            // The regression: a second scan inside the backoff window must not touch the socket at all.
+            // If it did, this await would hang because the retry loop's delays run on the fake clock.
+            await monitor.ScanAsync().DefaultTimeout();
+            Assert.Equal(1, CountConnectAttempts(logger, socketPath));
+
+            // Once the backoff expires the socket is reconsidered, so a genuinely restarted AppHost
+            // reusing the same socket path is still picked up.
+            timeProvider.Advance(TimeSpan.FromMinutes(1));
+            await PumpUntilCompletedAsync(monitor.ScanAsync(), timeProvider).DefaultTimeout();
+            Assert.Equal(2, CountConnectAttempts(logger, socketPath));
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ScanAsync_ConcurrentScansDoNotFanOutRetriesForTheSameSocket()
+    {
+        // Retry candidates are selected under _scanLock, but the connect attempts are awaited after the
+        // lock is released and the backoff is only escalated once the retry budget is exhausted. That
+        // leaves a window, as wide as the whole retry budget, in which another scan re-selects the same
+        // socket and starts its own connect loop. MCP tools scan frequently enough to overlap, so a
+        // single stale socket could still fan out concurrent retries and undo the backoff.
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            var socketPath = CreateLiveOwnerSocketPath(homeDirectory);
+
+            using var unreachableSocket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            unreachableSocket.Bind(new UnixDomainSocketEndPoint(socketPath));
+
+            var logger = new CapturingLogger<AuxiliaryBackchannelMonitor>();
+            var timeProvider = new FakeTimeProvider();
+            using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(logger, CreateExecutionContext(homeDirectory), timeProvider, profilingTelemetry);
+
+            await PumpUntilCompletedAsync(monitor.ScanAsync(), timeProvider).DefaultTimeout();
+            Assert.Equal(1, CountConnectAttempts(logger, socketPath));
+
+            timeProvider.Advance(TimeSpan.FromMinutes(1));
+
+            // The first scan claims the due retry and parks in its connect loop waiting on the fake clock.
+            // Deliberately left unpumped so the claim is still in flight for the whole of the second scan.
+            var claimingScan = monitor.ScanAsync();
+            await WaitForConnectAttemptsAsync(logger, socketPath, expectedAttempts: 2).DefaultTimeout();
+
+            // The overlapping scan must find nothing to do. Were it to re-select the claimed socket it
+            // would start a second connect loop and this await would hang, because those retry delays
+            // also run on the fake clock and nothing is advancing it.
+            await monitor.ScanAsync().DefaultTimeout();
+            Assert.Equal(2, CountConnectAttempts(logger, socketPath));
+
+            await PumpUntilCompletedAsync(claimingScan, timeProvider).DefaultTimeout();
+            Assert.Equal(2, CountConnectAttempts(logger, socketPath));
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Waits until <paramref name="expectedAttempts"/> connect attempts have been made against
+    /// <paramref name="socketPath"/>, failing with the captured log rather than hanging if they never arrive.
+    /// </summary>
+    private static async Task WaitForConnectAttemptsAsync(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath, int expectedAttempts)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (CountConnectAttempts(logger, socketPath) < expectedAttempts)
+        {
+            if (DateTime.UtcNow > deadline)
+            {
+                Assert.Fail(
+                    $"Timed out waiting for {expectedAttempts} connect attempt(s) on '{socketPath}'. " +
+                    $"Saw {CountConnectAttempts(logger, socketPath)}. Captured log:{Environment.NewLine}" +
+                    string.Join(Environment.NewLine, logger.Entries.Select(entry => $"  [{entry.Level}/{entry.EventId}] {entry.Message}")));
+            }
+
+            await Task.Delay(1).ConfigureAwait(false);
+        }
+    }
+
+    private static int CountConnectAttempts(CapturingLogger<AuxiliaryBackchannelMonitor> logger, string socketPath)
+        => logger.Entries.Count(entry =>
+            entry.EventId == AuxiliaryBackchannelMonitor.ConnectingToSocketEvent &&
+            entry.Message.Contains(socketPath, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Creates a stand-in home directory whose generated socket paths fit the platform's AF_UNIX byte limit.
+    /// </summary>
+    /// <remarks>
+    /// The path the monitor ends up binding against is <c>{home}/.aspire/cli/bch/{19 chars}.{pid}</c>,
+    /// which adds a fixed ~45 bytes on top of the home directory. macOS allows only 104 bytes for the
+    /// whole path and its per-user temp root (<c>/var/folders/&lt;2&gt;/&lt;30&gt;/T</c>) already spends 48,
+    /// so the prefix here is kept to a single character to stay inside the budget. Lengthening it puts
+    /// the generated path over the limit on macOS and silently skips every test that calls this.
+    /// </remarks>
+    private static DirectoryInfo CreateSocketSafeHomeDirectory() => Directory.CreateTempSubdirectory("a");
+
+    /// <summary>
+    /// Builds a socket path under <paramref name="homeDirectory"/> whose embedded PID belongs to a
+    /// process that is definitely alive, so the monitor is never permitted to delete the file.
+    /// </summary>
+    /// <remarks>
+    /// The name is composed by hand rather than through <c>ComputeSocketPathFromAppHostId</c> because
+    /// that helper throws on an over-long path, and whether the path fits is exactly what the skip below
+    /// needs to decide. Callers bind a real AF_UNIX socket here: connecting to a regular file fails with
+    /// ENOTSOCK rather than ECONNREFUSED and would take a different code path entirely.
+    /// </remarks>
+    private static string CreateLiveOwnerSocketPath(DirectoryInfo homeDirectory)
+    {
+        var backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(homeDirectory.FullName);
+        Directory.CreateDirectory(backchannelsDirectory);
+
+        var appHostId = BackchannelConstants.ComputeAppHostId(Path.Combine(homeDirectory.FullName, "MyApp.AppHost.csproj"));
+        var socketPath = Path.Combine(backchannelsDirectory, $"{appHostId}a1b2C3d4.{Environment.ProcessId}");
+        Assert.SkipWhen(
+            BackchannelConstants.GetSocketPathByteCountIncludingNull(socketPath) > BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+            $"The temp directory is too long to host an AF_UNIX socket on this platform: '{socketPath}'.");
+
+        return socketPath;
+    }
+
+    /// <summary>
+    /// Drives <paramref name="task"/> to completion while advancing <paramref name="timeProvider"/>,
+    /// which the monitor's connect retry loop uses for both its elapsed-time budget and its delays.
+    /// </summary>
+    private static async Task PumpUntilCompletedAsync(Task task, FakeTimeProvider timeProvider)
+    {
+        while (!task.IsCompleted)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(1));
+
+            // Yield on the real clock so the retry loop can observe the advance and register its next delay.
+            await Task.Delay(1).ConfigureAwait(false);
+        }
+
+        await task.ConfigureAwait(false);
+    }
+
+    private static CliExecutionContext CreateExecutionContext(DirectoryInfo homeDirectory)
+        => new(
+            workingDirectory: homeDirectory,
+            hivesDirectory: homeDirectory,
+            cacheDirectory: homeDirectory,
+            sdksDirectory: homeDirectory,
+            logsDirectory: homeDirectory,
+            logFilePath: Path.Combine(homeDirectory.FullName, "test.log"),
+            identityChannel: "local",
+            homeDirectory: homeDirectory);
+
+    private static async Task<(bool Success, string FailureReason)> TryEnableWindowsCaseSensitivityAsync(
+        string directoryPath,
+        CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "fsutil.exe",
+            CreateNoWindow = true,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("file");
+        startInfo.ArgumentList.Add("setCaseSensitiveInfo");
+        startInfo.ArgumentList.Add(directoryPath);
+        startInfo.ArgumentList.Add("enable");
+
+        try
+        {
+            using var process = Process.Start(startInfo);
+            if (process is null)
+            {
+                return (false, "fsutil.exe did not start.");
+            }
+
+            // Read both streams concurrently because fsutil output can otherwise fill one redirected
+            // pipe while the test is waiting for the process to exit.
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+            var standardOutput = await standardOutputTask;
+            var standardError = await standardErrorTask;
+
+            return process.ExitCode == 0
+                ? (true, string.Empty)
+                : (false, $"fsutil.exe exited with code {process.ExitCode}. {standardOutput} {standardError}".Trim());
+        }
+        catch (Exception ex) when (ex is Win32Exception or IOException or InvalidOperationException)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    private sealed class AlwaysEqualStringComparer : StringComparer
+    {
+        public static AlwaysEqualStringComparer Instance { get; } = new();
+
+        public override int Compare(string? x, string? y) => 0;
+
+        public override bool Equals(string? x, string? y) => true;
+
+        public override int GetHashCode(string obj) => 0;
+    }
+
+    private sealed class NeverEqualStringComparer : StringComparer
+    {
+        public static NeverEqualStringComparer Instance { get; } = new();
+
+        public override int Compare(string? x, string? y) => string.CompareOrdinal(x, y);
+
+        public override bool Equals(string? x, string? y) => false;
+
+        public override int GetHashCode(string obj) => 0;
     }
 }

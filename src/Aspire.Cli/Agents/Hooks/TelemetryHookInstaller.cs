@@ -13,8 +13,8 @@ namespace Aspire.Cli.Agents.Hooks;
 internal sealed class TelemetryHookInstaller : ITelemetryHookInstaller
 {
     // LogicalNames declared in Aspire.Cli.csproj.
-    private const string ShellResourceName = "track-telemetry.sh";
-    private const string PowerShellResourceName = "track-telemetry.ps1";
+    internal const string ShellResourceName = "track-telemetry.sh";
+    internal const string PowerShellResourceName = "track-telemetry.ps1";
 
     private const string HooksDirectoryName = "hooks";
 
