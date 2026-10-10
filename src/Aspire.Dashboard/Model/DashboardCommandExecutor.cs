@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
@@ -205,7 +206,8 @@ public sealed class DashboardCommandExecutor(
                 navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
                 return Task.CompletedTask;
             };
-            toastOptions.Message = response.Message;
+            // Fluent renders toast messages as HTML, but command output is plain text.
+            toastOptions.Message = WebUtility.HtmlEncode(response.Message);
 
             if (response.Result is not null)
             {
