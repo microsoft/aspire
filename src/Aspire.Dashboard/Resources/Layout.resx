@@ -147,6 +147,9 @@
   <data name="NavMenuResourcesTab" xml:space="preserve">
     <value>Resources</value>
   </data>
+  <data name="NavMenuTelemetrySourcesTab" xml:space="preserve">
+    <value>Telemetry sources</value>
+  </data>
   <data name="NavMenuConsoleLogsTab" xml:space="preserve">
     <value>Console logs</value>
   </data>
@@ -287,6 +290,24 @@
   </data>
   <data name="ResourceHeaderAllResources" xml:space="preserve">
     <value>All resources</value>
+  </data>
+  <data name="TelemetryHeaderAllSources" xml:space="preserve">
+    <value>All sources</value>
+  </data>
+  <data name="TelemetryHeaderAllSourcesDescription" xml:space="preserve">
+    <value>Data from every telemetry source is shown. Select sources in the list to filter it.</value>
+  </data>
+  <data name="TelemetryHeaderSelectedSources" xml:space="preserve">
+    <value>{0} sources selected</value>
+  </data>
+  <data name="TelemetryPaneCountSingular" xml:space="preserve">
+    <value>{0} source</value>
+  </data>
+  <data name="TelemetryPaneCountPlural" xml:space="preserve">
+    <value>{0} sources</value>
+  </data>
+  <data name="TelemetryPaneNoSources" xml:space="preserve">
+    <value>No telemetry sources</value>
   </data>
   <data name="ResourceHeaderAllResourcesDescription" xml:space="preserve">
     <value>No resource is selected, so data from every resource is shown. Select resources in the list to filter it.</value>

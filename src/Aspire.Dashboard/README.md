@@ -62,6 +62,13 @@ The AppHost automatically configures the dashboard, but you can override values 
 
 ### Standalone dashboard
 
+The **Telemetry sources** navigation icon opens a dedicated sidebar for services sending OpenTelemetry data
+that aren't part of the AppHost model. This view is available in both standalone and AppHost mode; these services
+are not listed under **Resources**. AppHost resources keep their own logs, traces, and metrics tabs.
+Select one or more telemetry sources to view their logs, traces, and metrics, or select **All sources**
+for logs and traces from every telemetry-only source. AppHost-only views and actions,
+such as resource configuration, console logs, parameters, and terminals, are not shown.
+
 There are many ways to provide configuration:
 
 - Command line arguments.
@@ -92,7 +99,7 @@ Example JSON configuration file:
 | `ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS`<br/>Default: `false` | Configures the dashboard to not use authentication and accept anonymous access. This is a shortcut to configuring `Dashboard:Frontend:AuthMode`, `Dashboard:Otlp:AuthMode`, and `Dashboard:Api:AuthMode` to `Unsecured`. See [Dashboard security considerations](https://aspire.dev/dashboard/security-considerations/#anonymous-access) for the security implications. |
 | `ASPIRE_DASHBOARD_CONFIG_FILE_PATH`<br/>Default: `null` | The path for an optional JSON configuration file. If the dashboard is run in a Docker container, this is the path to the configuration file in a mounted volume. |
 | `ASPIRE_DASHBOARD_FILE_CONFIG_DIRECTORY`<br/>Default: `null` | The directory where the dashboard looks for key-per-file configuration. This value is optional. |
-| `ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL`<br/>Default: `null` | The gRPC endpoint to which the dashboard connects for its data. If this value is unspecified, the dashboard shows telemetry data but no resource list or console logs. This is a shortcut to `Dashboard:ResourceServiceClient:Url`. |
+| `ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL`<br/>Default: `null` | The gRPC endpoint to which the dashboard connects for its app model data. If this value is unspecified, the resource list is populated from telemetry and console logs are unavailable. This is a shortcut to `Dashboard:ResourceServiceClient:Url`. |
 
 ### Frontend
 

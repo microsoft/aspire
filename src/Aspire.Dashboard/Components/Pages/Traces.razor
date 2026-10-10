@@ -64,7 +64,7 @@
                                     ShowHover="true"
                                     ItemKey="@(r => r.TraceId)"
                                     ItemComparer="@s_traceSummaryComparer"
-                                    OnRowClick="@(r => r.ExecuteOnDefault(d => NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(d.TraceId))))"
+                                    OnRowClick="@(r => r.ExecuteOnDefault(d => NavigationManager.NavigateTo(ResourcesLayout?.AddPaneToUrl(DashboardUrls.TraceDetailUrl(d.TraceId)) ?? DashboardUrls.TraceDetailUrl(d.TraceId))))"
                                     Class="main-grid enable-row-click aspire-scroll-border-grid">
                         <ChildContent>
                             <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.TimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.StartTime, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">

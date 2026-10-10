@@ -143,6 +143,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
+        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
         ViewModel.StartIndex = request.StartIndex;
         ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
 
@@ -275,7 +276,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTabUrl(ResourcesLayout.ResourceTab.StructuredLogs) ?? DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 
@@ -592,6 +593,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Task ClearStructureLogs(ResourceKey? key)
     {
         DataSource.EnsureWritable();
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        {
+            return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearStructuredLogsAsync(resourceKey)));
+        }
         return TelemetryRepositoryWriter.ClearStructuredLogsAsync(key);
     }
 

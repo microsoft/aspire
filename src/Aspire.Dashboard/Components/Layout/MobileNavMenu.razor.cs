@@ -4,6 +4,7 @@
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -60,6 +61,13 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required ResourcePaneState ResourcePaneState { get; init; }
+
+    private bool IsTelemetrySection => !DashboardClient.IsEnabled ||
+        ResourcePaneState.Mode == ResourcePaneMode.Telemetry ||
+        ResourcesLayout.ParsePaneMode(NavigationManager.ToBaseRelativePath(NavigationManager.Uri)) == ResourcePaneMode.Telemetry;
 
     private Task NavigateToAsync(string url)
     {
@@ -215,32 +223,13 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
             );
 
         }
-        else
-        {
-            yield return new MobileNavMenuEntry(
-                Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)],
-                () => NavigateToAsync(DashboardUrls.StructuredLogsUrl()),
-                DesktopNavMenu.StructuredLogsIcon(),
-                ActiveIcon: DesktopNavMenu.StructuredLogsIcon(active: true),
-                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.StructuredLogsUrl())
-            );
-
-            yield return new MobileNavMenuEntry(
-                Loc[nameof(Resources.Layout.NavMenuTracesTab)],
-                () => NavigateToAsync(DashboardUrls.TracesUrl()),
-                DesktopNavMenu.TracesIcon(),
-                ActiveIcon: DesktopNavMenu.TracesIcon(active: true),
-                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TracesUrl())
-            );
-
-            yield return new MobileNavMenuEntry(
-                Loc[nameof(Resources.Layout.NavMenuMetricsTab)],
-                () => NavigateToAsync(DashboardUrls.MetricsUrl()),
-                DesktopNavMenu.MetricsIcon(),
-                ActiveIcon: DesktopNavMenu.MetricsIcon(active: true),
-                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.MetricsUrl())
-            );
-        }
+        yield return new MobileNavMenuEntry(
+            Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
+            () => NavigateToAsync(DashboardUrls.TelemetrySourcesUrl()),
+            DesktopNavMenu.TelemetryIcon(),
+            ActiveIcon: DesktopNavMenu.TelemetryIcon(active: true),
+            LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.StructuredLogsUrl(), DashboardUrls.TracesUrl(), DashboardUrls.MetricsUrl())
+        );
 
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)],

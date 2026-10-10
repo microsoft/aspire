@@ -207,6 +207,11 @@
         <target state="needs-review-translation">Ustrukturyzowane</target>
         <note />
       </trans-unit>
+      <trans-unit id="NavMenuTelemetrySourcesTab">
+        <source>Telemetry sources</source>
+        <target state="new">Telemetry sources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NavMenuTerminalsTab">
         <source>Terminals</source>
         <target state="new">Terminals</target>
@@ -355,6 +360,36 @@
       <trans-unit id="ResourceTabsLandmark">
         <source>Resource views</source>
         <target state="new">Resource views</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderAllSources">
+        <source>All sources</source>
+        <target state="new">All sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderAllSourcesDescription">
+        <source>Data from every telemetry source is shown. Select sources in the list to filter it.</source>
+        <target state="new">Data from every telemetry source is shown. Select sources in the list to filter it.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderSelectedSources">
+        <source>{0} sources selected</source>
+        <target state="new">{0} sources selected</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneCountPlural">
+        <source>{0} sources</source>
+        <target state="new">{0} sources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneCountSingular">
+        <source>{0} source</source>
+        <target state="new">{0} source</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneNoSources">
+        <source>No telemetry sources</source>
+        <target state="new">No telemetry sources</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsPageDescription">

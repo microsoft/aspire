@@ -16,7 +16,12 @@ public enum ResourcePaneMode
     /// <summary>
     /// Resources grouped by the tags users assign to them.
     /// </summary>
-    Tags
+    Tags,
+
+    /// <summary>
+    /// Services sending telemetry that aren't part of the AppHost model.
+    /// </summary>
+    Telemetry
 }
 
 /// <summary>

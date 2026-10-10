@@ -15,11 +15,14 @@ namespace Aspire.Dashboard.Components.Layout;
 /// <summary>
 /// The top-level navigation displayed as a vertical icon rail on the left of the desktop layout. With a resource
 /// service the dashboard is organized around the app model (Home, Resources, Tags, Parameters, Graph, Terminals,
-/// Extensions) and telemetry is reached from a resource's tabs. Without a resource service there is no app model, so
-/// the telemetry pages are the top-level sections.
+/// Extensions) and telemetry is reached from a resource's tabs. Telemetry-only services have a separate section
+/// in both AppHost and standalone mode.
 /// </summary>
 public partial class DesktopNavMenu : ComponentBase, IDisposable
 {
+    internal static Icon TelemetryIcon(bool active = false) =>
+        active ? new Icons.Filled.Size24.DataUsage() : new Icons.Regular.Size24.DataUsage();
+
     internal static Icon HomeIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.Home()
                   : new Icons.Regular.Size24.Home();
@@ -98,8 +101,13 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     // Resource pages share one route whichever way the resource list next to them is organized, so the URL alone
     // cannot tell Resources and Tags apart. The resource list's mode decides which of the two is current.
     private NavSection GetDisplayedSection() =>
-        _activeSection == NavSection.Resources && ResourcePaneState.Mode == ResourcePaneMode.Tags
-            ? NavSection.Tags
+        _activeSection == NavSection.Resources
+            ? ResourcePaneState.Mode switch
+            {
+                ResourcePaneMode.Telemetry => NavSection.Telemetry,
+                ResourcePaneMode.Tags => NavSection.Tags,
+                _ => _activeSection
+            }
             : _activeSection;
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -130,12 +138,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
             }
             yield return new NavItem(NavSection.Extensions, DashboardUrls.ExtensionsUrl(), Loc[nameof(Resources.Layout.NavMenuExtensionsTab)], ExtensionsIcon(), ExtensionsIcon(active: true));
         }
-        else
-        {
-            yield return new NavItem(NavSection.StructuredLogs, DashboardUrls.StructuredLogsUrl(), Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)], StructuredLogsIcon(), StructuredLogsIcon(active: true));
-            yield return new NavItem(NavSection.Traces, DashboardUrls.TracesUrl(), Loc[nameof(Resources.Layout.NavMenuTracesTab)], TracesIcon(), TracesIcon(active: true));
-            yield return new NavItem(NavSection.Metrics, DashboardUrls.MetricsUrl(), Loc[nameof(Resources.Layout.NavMenuMetricsTab)], MetricsIcon(), MetricsIcon(active: true));
-        }
+        yield return new NavItem(NavSection.Telemetry, DashboardUrls.TelemetrySourcesUrl(), Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)], TelemetryIcon(), TelemetryIcon(active: true));
     }
 
     /// <summary>
@@ -143,6 +146,11 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
     /// </summary>
     internal static NavSection GetSection(string baseRelativePath, bool hasResourceService)
     {
+        if (ResourcesLayout.ParsePaneMode(baseRelativePath) == ResourcePaneMode.Telemetry)
+        {
+            return NavSection.Telemetry;
+        }
+
         var path = baseRelativePath;
         var queryIndex = path.IndexOfAny(['?', '#']);
         if (queryIndex >= 0)
@@ -156,9 +164,9 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         {
             return firstSegment switch
             {
-                DashboardUrls.StructuredLogsBasePath => NavSection.StructuredLogs,
-                DashboardUrls.TracesBasePath => NavSection.Traces,
-                DashboardUrls.MetricsBasePath => NavSection.Metrics,
+                DashboardUrls.StructuredLogsBasePath or
+                DashboardUrls.TracesBasePath or
+                DashboardUrls.MetricsBasePath => NavSection.Telemetry,
                 _ => NavSection.None
             };
         }
@@ -190,6 +198,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         None,
         Home,
         Resources,
+        Telemetry,
         Tags,
         Parameters,
         Graph,

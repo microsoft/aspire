@@ -17,12 +17,28 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 public class MobileNavMenuTests : DashboardTestContext
 {
     [Theory]
+    [InlineData("/structuredlogs?logLevel=error")]
+    [InlineData("/traces/detail/abc")]
+    [InlineData("/metrics/resource/api")]
+    public void Standalone_TelemetryPagesSelectTelemetryEntry(string path)
+    {
+        var cut = RenderMobileNavMenu(path, hasResourceService: false);
+
+        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuTelemetrySourcesTab);
+        Assert.Equal(
+            [Resources.Layout.NavMenuTelemetrySourcesTab, Resources.Layout.MainLayoutAspireRepoLink,
+                Resources.Layout.MainLayoutAspireDashboardHelpLink, Resources.Layout.MainLayoutLaunchNotifications,
+                Resources.Layout.MainLayoutLaunchSettings],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public void TerminalsNavigation_IsConditional(bool hasTerminals)
     {
         var cut = RenderMobileNavMenu("/terminals/resource/shell", hasResourceTerminals: hasTerminals);
-        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("data-tooltip")).Take(hasTerminals ? 8 : 7);
+        var titles = cut.FindAll("fluent-menu-item").Select(i => i.GetAttribute("data-tooltip")).Take(hasTerminals ? 9 : 8);
         var expected = new List<string>
         {
             Resources.Layout.NavMenuHomeTab,
@@ -36,12 +52,20 @@ public class MobileNavMenuTests : DashboardTestContext
             expected.Add(Resources.Layout.NavMenuTerminalsTab);
         }
         expected.Add(Resources.Layout.NavMenuExtensionsTab);
+        expected.Add(Resources.Layout.NavMenuTelemetrySourcesTab);
         expected.Add(Resources.Layout.MainLayoutAspireRepoLink);
         Assert.Equal(expected, titles);
         if (hasTerminals)
         {
             AssertMenuItemIsActive(cut, Resources.Layout.NavMenuTerminalsTab);
         }
+    }
+
+    [Fact]
+    public void AppHost_TelemetryPaneSelectsTelemetryEntry()
+    {
+        var cut = RenderMobileNavMenu(DashboardUrls.TelemetrySourcesUrl());
+        AssertMenuItemIsActive(cut, Resources.Layout.NavMenuTelemetrySourcesTab);
     }
 
     [Fact]
@@ -147,10 +171,10 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(MainLayout.NavigationButtonId, argument);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false)
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false, bool hasResourceService = true)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: hasResourceService));
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentDivider(this);

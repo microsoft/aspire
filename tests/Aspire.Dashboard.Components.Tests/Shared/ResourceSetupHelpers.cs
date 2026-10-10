@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Configuration;
@@ -22,6 +23,20 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 internal static class ResourceSetupHelpers
 {
+    public static void SetupResourcesLayout(BunitContext context, ViewportInformation viewport, IDashboardClient dashboardClient)
+    {
+        SetupResourcesPage(context, viewport, dashboardClient);
+        context.Services.AddLogging();
+        FluentUISetupHelpers.SetupFluentTextField(context);
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.Tabs.ObserveTabsChanged", _ => true).SetVoidResult();
+        FluentUISetupHelpers.SetupFluentButton(context);
+        var module = context.JSInterop.SetupModule(invocation => invocation.Arguments[0] is string path && path.Contains(nameof(ResourcesLayout), StringComparison.Ordinal));
+        module.SetupVoid("registerPaneResizer", _ => true).SetVoidResult();
+        module.SetupVoid("unregisterPaneResizer", _ => true).SetVoidResult();
+    }
+
     public static void SetupResourceDetails(BunitContext context)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);

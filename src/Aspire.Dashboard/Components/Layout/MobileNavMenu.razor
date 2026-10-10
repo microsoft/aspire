@@ -11,6 +11,14 @@
         firstItem = false;
 
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
+        if (item.Text == Loc[nameof(Aspire.Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)])
+        {
+            isActive &= IsTelemetrySection;
+        }
+        else if (item.Text == Loc[nameof(Aspire.Dashboard.Resources.Layout.NavMenuResourcesTab)])
+        {
+            isActive &= !IsTelemetrySection;
+        }
         var menuItemAttributes = new Dictionary<string, object>
         {
             ["data-tooltip"] = item.Text

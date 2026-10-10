@@ -8,16 +8,12 @@
 @using Microsoft.AspNetCore.Components.Rendering
 @using Microsoft.AspNetCore.Components.Sections
 
-@if (!IsResourcePaneEnabled)
-{
-    @Body
-}
-else
-{
-    var isTagsMode = PaneState.Mode == ResourcePaneMode.Tags;
+@{
+    var isTagsMode = !IsTelemetryPane && PaneState.Mode == ResourcePaneMode.Tags;
     var paneRows = isTagsMode ? new List<ResourceGridViewModel>() : GetPaneRows().ToList();
     var tagGroups = isTagsMode ? GetTagGroups() : new List<ResourceTagGroup>();
-    var paneResourceCount = isTagsMode ? tagGroups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count;
+    var telemetryRows = GetVisibleTelemetryResources().ToList();
+    var paneResourceCount = (isTagsMode ? tagGroups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).Count() : paneRows.Count) + telemetryRows.Count;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed;
 
@@ -29,7 +25,7 @@ else
             <div class="resource-pane-scrim" @onclick="CloseDrawer"></div>
         }
 
-        <aside class="resource-pane" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneLandmark)]" hidden="@(!isDesktop && !_isDrawerOpen)">
+        <aside class="resource-pane" aria-label="@Loc[IsTelemetryPane ? nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab) : nameof(Dashboard.Resources.Layout.ResourcePaneLandmark)]" hidden="@(!isDesktop && !_isDrawerOpen)">
             <div class="resource-pane-head">
                 @if (!showCollapsedPane)
                 {
@@ -47,16 +43,19 @@ else
                         </StartTemplate>
                     </FluentTextInput>
 
-                    var filterTitle = NoFiltersSet ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)];
-                    <AspireMenuButton MenuButtonId="@FilterButtonId"
-                                      ButtonClass="resource-pane-button"
-                                      ButtonAppearance="@(NoFiltersSet ? ButtonAppearance.Default : ButtonAppearance.Primary)"
-                                      Icon="@(new Icons.Regular.Size16.Filter())"
-                                      IconColor="Color.Custom"
-                                      IconCustomColor="currentColor"
-                                      ItemsProvider="@GetFilterMenuItems"
-                                      Title="@filterTitle"
-                                      aria-label="@filterTitle" />
+                    @if (!IsTelemetryPane)
+                    {
+                        var filterTitle = NoFiltersSet ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)];
+                        <AspireMenuButton MenuButtonId="@FilterButtonId"
+                                          ButtonClass="resource-pane-button"
+                                          ButtonAppearance="@(NoFiltersSet ? ButtonAppearance.Default : ButtonAppearance.Primary)"
+                                          Icon="@(new Icons.Regular.Size16.Filter())"
+                                          IconColor="Color.Custom"
+                                          IconCustomColor="currentColor"
+                                          ItemsProvider="@GetFilterMenuItems"
+                                          Title="@filterTitle"
+                                          aria-label="@filterTitle" />
+                    }
                 }
 
                 @if (isDesktop)
@@ -82,7 +81,7 @@ else
                 }
             </div>
 
-            @if (!showCollapsedPane)
+            @if (!IsTelemetryPane && !showCollapsedPane)
             {
                 var stateCounts = GetStateCounts();
                 @if (stateCounts.Count > 1)
@@ -105,23 +104,23 @@ else
                 }
             }
 
-            <nav class="resource-pane-list" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneLandmark)]">
+            <nav class="resource-pane-list" aria-label="@Loc[IsTelemetryPane ? nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab) : nameof(Dashboard.Resources.Layout.ResourcePaneLandmark)]">
                 @if (!_isLoaded)
                 {
                     <div class="resource-pane-message">
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
-                else if (paneResourceCount == 0 && _telemetryOnlyResources.Count == 0 && !(isTagsMode && TagStore.GetAllTags().Count == 0))
+                else if (paneResourceCount == 0 && !(isTagsMode && TagStore.GetAllTags().Count == 0))
                 {
-                    <div class="resource-pane-message">@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]</div>
+                    <div class="resource-pane-message">@(IsTelemetryPane ? Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)] : ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])</div>
                 }
 
                 @if (_isLoaded)
                 {
                     var isAllSelected = _selectedResourceNames.Count == 0;
                     var allResourceCount = GetAllResourceNames().Count;
-                    var allResourcesText = Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)].Value;
+                    var allResourcesText = Loc[IsTelemetryPane ? nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSources) : nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)].Value;
 
                     <div class="resource-row resource-row-all @(isAllSelected ? "selected" : string.Empty)">
                         <a class="resource-row-link"
@@ -137,7 +136,7 @@ else
                             {
                                 <span class="resource-row-text">
                                     <span class="resource-row-name">@allResourcesText</span>
-                                    <span class="resource-row-sub">@string.Format(CultureInfo.CurrentCulture, allResourceCount == 1 ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], allResourceCount)</span>
+                                    <span class="resource-row-sub">@GetPaneCountText(allResourceCount)</span>
                                 </span>
                             }
                         </a>
@@ -220,13 +219,9 @@ else
                     }
                 }
 
-                @if (_telemetryOnlyResources.Count > 0)
+                @if (telemetryRows.Count > 0)
                 {
-                    @if (!showCollapsedPane)
-                    {
-                        <div class="resource-pane-group">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnlyGroup)]</div>
-                    }
-                    @foreach (var telemetryResource in _telemetryOnlyResources)
+                    @foreach (var telemetryResource in telemetryRows)
                     {
                         var telemetryResourceName = telemetryResource.Name;
                         var isSelected = IsSelected(telemetryResourceName);
@@ -247,7 +242,6 @@ else
                                 {
                                     <span class="resource-row-text">
                                         <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
-                                        <span class="resource-row-sub">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)]</span>
                                     </span>
                                 }
                             </a>
@@ -259,11 +253,14 @@ else
             @if (!showCollapsedPane)
             {
                 <div class="resource-pane-foot">
-                    <span>@string.Format(CultureInfo.CurrentCulture, paneResourceCount == 1 ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], paneResourceCount)</span>
-                    <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
-                                      Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                      ItemsProvider="@(() => _paneMenuItems)"
-                                      Title="@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
+                    <span>@GetPaneCountText(paneResourceCount)</span>
+                    @if (!IsTelemetryPane)
+                    {
+                        <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
+                                          Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                                          ItemsProvider="@(() => _paneMenuItems)"
+                                          Title="@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
+                    }
                 </div>
             }
 
@@ -299,7 +296,9 @@ else
                     Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs,
                     and each tab maps to a page rendered in the body below.
                 *@
-                <div class="resource-tabs">
+                @* Keep the tabs alive when the resource header moves between desktop and mobile.
+                   Disposing FluentTab instances can otherwise trigger an unsolicited navigation. *@
+                <div class="resource-tabs" @key="typeof(ResourcesLayout)">
                     @{
                         // When the tab row no longer has room for every label (e.g. a wide resource pane leaves
                         // little space on a narrower window), the ".resource-tabs-nav" container query below swaps
@@ -352,7 +351,7 @@ else
             </header>
 
             <div class="resource-tab-body">
-                <CascadingValue Value="this" IsFixed="true">
+                <CascadingValue Value="this" IsFixed="true" @key="IsTelemetryPane">
                     @Body
                 </CascadingValue>
             </div>
@@ -460,7 +459,6 @@ else
                 <div class="resource-header-title">
                     <h1 class="resource-title">@telemetryOnly.Name</h1>
                 </div>
-                <div class="resource-header-meta">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)]</div>
             </div>
         }
         else if (IsMultiSelection)
@@ -470,7 +468,7 @@ else
             </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    <h1 class="resource-title">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedResources)], _selectedItems.Count)</h1>
+                    <h1 class="resource-title">@string.Format(CultureInfo.CurrentCulture, Loc[IsTelemetryPane ? nameof(Dashboard.Resources.Layout.TelemetryHeaderSelectedSources) : nameof(Dashboard.Resources.Layout.ResourceHeaderSelectedResources)], _selectedItems.Count)</h1>
                 </div>
                 <div class="resource-header-meta resource-header-selection">
                     @foreach (var item in _selectedItems)
@@ -509,9 +507,9 @@ else
             </span>
             <div class="resource-header-text">
                 <div class="resource-header-title">
-                    <h1 class="resource-title">@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)]</h1>
+                    <h1 class="resource-title">@Loc[IsTelemetryPane ? nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSources) : nameof(Dashboard.Resources.Layout.ResourceHeaderAllResources)]</h1>
                 </div>
-                <div class="resource-header-meta">@Loc[nameof(Dashboard.Resources.Layout.ResourceHeaderAllResourcesDescription)]</div>
+                <div class="resource-header-meta">@Loc[IsTelemetryPane ? nameof(Dashboard.Resources.Layout.TelemetryHeaderAllSourcesDescription) : nameof(Dashboard.Resources.Layout.ResourceHeaderAllResourcesDescription)]</div>
             </div>
         }
     </div>

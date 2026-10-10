@@ -367,6 +367,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Telemetry sources.
+        /// </summary>
+        public static string NavMenuTelemetrySourcesTab {
+            get {
+                return ResourceManager.GetString("NavMenuTelemetrySourcesTab", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Graph.
         /// </summary>
         public static string NavMenuGraphTab {
@@ -480,6 +489,60 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceHeaderAllResources {
             get {
                 return ResourceManager.GetString("ResourceHeaderAllResources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to All sources.
+        /// </summary>
+        public static string TelemetryHeaderAllSources {
+            get {
+                return ResourceManager.GetString("TelemetryHeaderAllSources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Data from every telemetry source is shown. Select sources in the list to filter it..
+        /// </summary>
+        public static string TelemetryHeaderAllSourcesDescription {
+            get {
+                return ResourceManager.GetString("TelemetryHeaderAllSourcesDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} sources selected.
+        /// </summary>
+        public static string TelemetryHeaderSelectedSources {
+            get {
+                return ResourceManager.GetString("TelemetryHeaderSelectedSources", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} source.
+        /// </summary>
+        public static string TelemetryPaneCountSingular {
+            get {
+                return ResourceManager.GetString("TelemetryPaneCountSingular", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} sources.
+        /// </summary>
+        public static string TelemetryPaneCountPlural {
+            get {
+                return ResourceManager.GetString("TelemetryPaneCountPlural", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No telemetry sources.
+        /// </summary>
+        public static string TelemetryPaneNoSources {
+            get {
+                return ResourceManager.GetString("TelemetryPaneNoSources", resourceCulture);
             }
         }
 

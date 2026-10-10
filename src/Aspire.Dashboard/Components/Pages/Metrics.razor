@@ -103,7 +103,7 @@
                                             TGridItem="OtlpInstrumentSummary">
                                             <ChildContent>
                                                 <AspireTemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
-                                                    <a class="aspire-link-button metrics-instrument-link" href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)">
+                                                    <a class="aspire-link-button metrics-instrument-link" href="@(ResourcesLayout?.AddPaneToUrl(DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)) ?? DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName))">
                                                         @context.Name
                                                     </a>
                                                 </AspireTemplateColumn>
@@ -167,7 +167,7 @@
 @code {
     private void RenderToolbar(RenderTreeBuilder __builder)
     {
-        @if (ResourcesLayout is null || _selectionResourceViewModels is not null)
+        @if (ResourcesLayout is null || ResourcesLayout.SelectedResourceNames.Count == 0 || _selectionResourceViewModels is not null)
         {
             <ResourceSelect Resources="@(_selectionResourceViewModels ?? _resourceViewModels)"
                             AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"

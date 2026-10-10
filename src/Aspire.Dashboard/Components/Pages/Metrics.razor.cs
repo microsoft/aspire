@@ -130,6 +130,10 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
         };
 
         UpdateResources();
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged += OnLayoutResourcesChanged;
+        }
         _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
         {
             UpdateResources();
@@ -263,7 +267,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     /// </summary>
     private void UpdateSelectionResources()
     {
-        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } selectionKeys)
+        if (SelectedResourceNames is not { Length: > 1 } || ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } selectionKeys)
         {
             _selectionResourceViewModels = null;
             return;
@@ -278,6 +282,11 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     private void UpdateResources()
     {
         _resources = TelemetryRepository.GetResources();
+        if (ResourcesLayout is { } layout)
+        {
+            var paneKeys = layout.GetPaneTelemetryKeys();
+            _resources = _resources.Where(resource => paneKeys.Contains(resource.ResourceKey)).ToList();
+        }
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
 
         if (_resourceViewModels.Count != 1)
@@ -292,6 +301,12 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
         UpdateSelectionResources();
 
         UpdateSubscription();
+    }
+
+    private void OnLayoutResourcesChanged()
+    {
+        UpdateResources();
+        StateHasChanged();
     }
 
     private async Task HandleSelectedResourceChangedAsync()
@@ -403,7 +418,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     {
         // In the resources layout, the resource list owns the selection, so a resource remembered in the session
         // doesn't replace it. With several selected resources, the page displays the resource the user picked.
-        var resourceName = ResourcesLayout is { IsMultiSelection: false } layout ? layout.SelectedResourceName : serializable.ResourceName;
+        var resourceName = ResourcesLayout is { IsMultiSelection: false, SelectedResourceName: { } selectedName } ? selectedName : serializable.ResourceName;
         var url = DashboardUrls.MetricsUrl(
             resource: resourceName,
             meter: serializable.MeterName,
@@ -450,6 +465,10 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     public void Dispose()
     {
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged -= OnLayoutResourcesChanged;
+        }
         _resourcesSubscription?.Dispose();
         _metricsSubscription?.Dispose();
         TelemetryContext.Dispose();

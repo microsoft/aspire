@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 
@@ -8,6 +9,9 @@ namespace Aspire.Dashboard.Components.Controls.PropertyValues;
 
 public partial class TraceIdButtonValue
 {
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
+
     [Parameter, EditorRequired]
     public required string Value { get; set; }
 
@@ -28,7 +32,7 @@ public partial class TraceIdButtonValue
         }
         else
         {
-            NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(Value));
+            NavigationManager.NavigateTo(ResourcesLayout?.AddPaneToUrl(DashboardUrls.TraceDetailUrl(Value)) ?? DashboardUrls.TraceDetailUrl(Value));
         }
     }
 }

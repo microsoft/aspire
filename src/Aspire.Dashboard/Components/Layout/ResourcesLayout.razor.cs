@@ -124,11 +124,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
-    /// <summary>
-    /// Gets a value indicating whether the layout shows the resource list. Without a resource service there is
-    /// no app model, so pages render on their own and keep their built-in resource selector.
-    /// </summary>
-    internal bool IsResourcePaneEnabled => DashboardClient.IsEnabled;
+    internal bool IsTelemetryPane => !DashboardClient.IsEnabled || PaneState.Mode == ResourcePaneMode.Telemetry;
 
     /// <summary>
     /// Gets a value indicating whether the initial resource snapshot has been received.
@@ -182,11 +178,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnInitializedAsync()
     {
-        if (!IsResourcePaneEnabled)
-        {
-            return;
-        }
-
         _lastLocation = NavigationManager.Uri;
         UpdateFromLocation(_lastLocation);
 
@@ -208,7 +199,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
         var paneModeResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
-        if (paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode))
+        if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode) && storedPaneMode != ResourcePaneMode.Telemetry)
         {
             PaneState.SetMode(storedPaneMode);
         }
@@ -221,15 +212,18 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _filter.ShowHiddenResources = showHiddenResources.Value;
         }
 
-        // The application name is only correct once the dashboard is connected, and it scopes persisted tree state.
-        await DashboardClient.WhenConnected;
-        _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-        var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
-        if (collapsedResult.Success)
+        if (DashboardClient.IsEnabled)
         {
-            foreach (var resourceName in collapsedResult.Value)
+            // The application name is only correct once the dashboard is connected, and it scopes persisted tree state.
+            await DashboardClient.WhenConnected;
+            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+            var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+            if (collapsedResult.Success)
             {
-                _collapsedResourceNames.Add(resourceName);
+                foreach (var resourceName in collapsedResult.Value)
+                {
+                    _collapsedResourceNames.Add(resourceName);
+                }
             }
         }
 
@@ -250,8 +244,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 UpdateTelemetryOnlyResources();
                 UpdateSelection();
                 StateHasChanged();
+                ResourcesChanged?.Invoke();
             });
         });
+
+        // Standalone resources come from OTLP. The disabled AppHost client cannot be awaited or subscribed to.
+        if (!DashboardClient.IsEnabled)
+        {
+            _isLoaded = true;
+            UpdateTelemetryOnlyResources();
+            UpdateSelection();
+            ResourcesChanged?.Invoke();
+            return;
+        }
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -314,7 +319,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The router sets a new body on every navigation. Selection is updated here, rather than in a
         // LocationChanged handler, so it's current before the page in the body renders.
         var location = NavigationManager.Uri;
-        if (!IsResourcePaneEnabled || string.Equals(location, _lastLocation, StringComparison.Ordinal))
+        if (string.Equals(location, _lastLocation, StringComparison.Ordinal))
         {
             return;
         }
@@ -337,7 +342,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var showResizer = IsResourcePaneEnabled && ViewportInformation.IsDesktop && !_isPaneCollapsed;
+        var showResizer = ViewportInformation.IsDesktop && !_isPaneCollapsed;
         if (showResizer == _isResizerRegistered)
         {
             return;
@@ -398,7 +403,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // The overview without a selection lists all resources. Entering the resources view that way, for example
         // from the navigation rail, restores the last selection instead. Switching to the overview tab while all
         // resources are already shown keeps them.
-        _pendingLandingRedirect = parsedLocation.Tab == ResourceTab.Overview && parsedLocation.SelectedResourceNames.Count == 0 && !wasAllResources;
+        _pendingLandingRedirect = DashboardClient.IsEnabled && parsedLocation.Tab == ResourceTab.Overview && parsedLocation.SelectedResourceNames.Count == 0 && !wasAllResources;
         UpdateSelection();
     }
 
@@ -411,19 +416,33 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// <summary>
     /// Gets the URL of the given tab for the resources currently selected in the resource list.
     /// </summary>
-    internal string GetTabUrl(ResourceTab tab) => GetTabUrl(tab, _selectedResourceNames, RouteResourceName);
+    internal string GetTabUrl(ResourceTab tab) => AddPaneToUrl(GetTabUrl(tab, _selectedResourceNames, RouteResourceName));
+
+    internal string AddPaneToUrl(string url) => DashboardClient.IsEnabled && IsTelemetryPane ? DashboardUrls.AddTelemetryPane(url) : url;
 
     private async Task ApplyPaneModeFromLocationAsync(string location)
     {
-        if (ParsePaneMode(NavigationManager.ToBaseRelativePath(location)) is not { } mode)
+        if (!DashboardClient.IsEnabled)
         {
+            PaneState.SetMode(ResourcePaneMode.Telemetry);
             return;
         }
 
-        PaneState.SetMode(mode);
+        var mode = ParsePaneMode(NavigationManager.ToBaseRelativePath(location));
+        if (mode is null)
+        {
+            // A direct telemetry resource link can select the telemetry pane without a query parameter.
+            mode = _selectedItems.Any(i => i.TelemetryOnly is not null) ? ResourcePaneMode.Telemetry
+                : PaneState.Mode == ResourcePaneMode.Telemetry ? ResourcePaneMode.Resources : PaneState.Mode;
+        }
+        PaneState.SetMode(mode.Value);
+        if (mode == ResourcePaneMode.Telemetry)
+        {
+            return;
+        }
         try
         {
-            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneMode, mode.ToString());
+            await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneMode, mode.Value.ToString());
         }
         catch (JSDisconnectedException)
         {
@@ -459,6 +478,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             DashboardUrls.ResourcePaneResourcesValue => ResourcePaneMode.Resources,
             DashboardUrls.ResourcePaneTagsValue => ResourcePaneMode.Tags,
+            DashboardUrls.ResourcePaneTelemetryValue => ResourcePaneMode.Telemetry,
             _ => null
         };
     }
@@ -554,6 +574,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         SelectedResource = _selectedItems is [{ Resource: { } selected }] ? selected : null;
 
+        if (DashboardClient.IsEnabled && _selectedItems.Any(i => i.TelemetryOnly is not null) &&
+            ParsePaneMode(NavigationManager.ToBaseRelativePath(NavigationManager.Uri)) is null)
+        {
+            PaneState.SetMode(ResourcePaneMode.Telemetry);
+        }
+
         UpdateResourceMenuItems();
     }
 
@@ -596,8 +622,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private bool IsKnownResourceName(string name) =>
-        ResourceViewModel.TryGetResourceByName(name, _resourceByName, out _) ||
-        _telemetryOnlyResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName));
+        ResourceViewModel.TryGetResourceByName(name, _resourceByName, out _);
 
     private async Task PersistSelectedResourcesAsync()
     {
@@ -613,6 +638,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private async Task SetStoredSelectionAsync(IReadOnlyList<string> resourceNames)
     {
+        if (IsTelemetryPane)
+        {
+            return;
+        }
+
         try
         {
             await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, resourceNames.ToList());
@@ -626,7 +656,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private void UpdateTelemetryOnlyResources()
     {
         // Resources that send telemetry but aren't part of the app model (for example a browser app) are listed
-        // separately so their logs, traces and metrics remain reachable from the resource list.
+        // in their own pane so they don't appear in Resources or Tags.
         var telemetryResources = TelemetryRepository.GetResources();
         var appModelKeys = new HashSet<ResourceKey>();
         foreach (var resource in _resourceByName.Values)
@@ -644,8 +674,16 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .ToList();
     }
 
+    private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>
+        IsTelemetryPane ? _telemetryOnlyResources.Where(r => r.Name.Contains(_filter.TextFilter, StringComparisons.UserTextSearch)) : [];
+
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
+        if (IsTelemetryPane)
+        {
+            return [];
+        }
+
         var filteredResources = _resourceByName.Values
             .Where(_filter.Filter)
             .Select(r => new ResourceGridViewModel { Resource = r })
@@ -955,15 +993,28 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _selectedItems is [{ TelemetryOnly: { } telemetryOnly }] ? telemetryOnly : null;
 
     /// <summary>
-    /// Gets the telemetry keys of a multi-resource selection so telemetry pages can filter to the selected resources.
-    /// Returns <c>null</c> unless the names describe several resources. The list is empty when none of the resources
-    /// have telemetry.
+    /// Gets the telemetry keys for a multi-resource selection, or all sources in the current pane when there is
+    /// no selection. A single resource is filtered by the page's resource key.
     /// </summary>
     internal IReadOnlyList<ResourceKey>? GetSelectionTelemetryKeys(IReadOnlyCollection<string>? resourceNames)
     {
-        if (resourceNames is null || resourceNames.Count < 2)
+        if (resourceNames is null || resourceNames.Count == 0)
         {
-            return null;
+            resourceNames = _selectedResourceNames;
+        }
+
+        if (resourceNames.Count == 0)
+        {
+            return GetPaneTelemetryKeys();
+        }
+
+        if (resourceNames.Count < 2)
+        {
+            var name = resourceNames.First();
+            var hasTelemetry = IsTelemetryPane
+                ? _telemetryOnlyResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName))
+                : ResourceViewModel.TryGetResourceByName(name, _resourceByName, out var resource) && GetTelemetryResource(resource) is not null;
+            return hasTelemetry ? null : [];
         }
 
         var keys = new List<ResourceKey>();
@@ -988,6 +1039,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return keys;
     }
 
+    internal IReadOnlyList<ResourceKey> GetPaneTelemetryKeys() => IsTelemetryPane
+        ? _telemetryOnlyResources.Select(r => r.Resource.ResourceKey).Distinct().ToList()
+        : _resourceByName.Values.Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey).Distinct().ToList();
+
+    private string GetPaneCountText(int count) => string.Format(CultureInfo.CurrentCulture,
+        Loc[IsTelemetryPane
+            ? count == 1 ? nameof(Resources.Layout.TelemetryPaneCountSingular) : nameof(Resources.Layout.TelemetryPaneCountPlural)
+            : count == 1 ? nameof(Resources.Layout.ResourcePaneCountSingular) : nameof(Resources.Layout.ResourcePaneCountPlural)], count);
+
     /// <summary>
     /// Gets a value indicating whether an app model resource is one of the named resources. Names are either the
     /// resource's unique name or, for resources without replicas, its display name.
@@ -1000,16 +1060,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// Adds the current multi-resource selection to a page URL, so changing page state such as filters keeps the
     /// selection. A single selected resource is already part of the page's URL path.
     /// </summary>
-    internal string AddSelectionToUrl(string url) => IsMultiSelection ? DashboardUrls.AddResourceSelection(url, _selectedResourceNames) : url;
+    internal string AddSelectionToUrl(string url) => AddPaneToUrl(IsMultiSelection ? DashboardUrls.AddResourceSelection(url, _selectedResourceNames) : url);
 
     internal bool IsTabAvailable(ResourceTab tab) => IsTabAvailable(tab, _selectedItems);
 
     private bool IsTabAvailable(ResourceTab tab, IReadOnlyList<SelectedResourceItem> selection)
     {
+        if (IsTelemetryPane && tab is ResourceTab.Overview or ResourceTab.Console)
+        {
+            return false;
+        }
+
         if (selection.Count == 0)
         {
-            // No selection shows data from every resource. Metrics are always about specific resources.
-            return tab is not ResourceTab.Metrics;
+            // Standalone keeps Metrics reachable without a selection so the page can prompt for a service.
+            // AppHost mode only offers Metrics once resources have been selected.
+            return tab is not ResourceTab.Metrics || IsTelemetryPane;
         }
 
         // With several selected resources, a tab is available when any of them supports it.
@@ -1090,7 +1156,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             tab = CurrentTab;
         }
-        else if (selection.Any(i => i.Resource is not null) || selection.Count == 0)
+        else if (!IsTelemetryPane && (selection.Any(i => i.Resource is not null) || selection.Count == 0))
         {
             tab = ResourceTab.Overview;
         }
@@ -1100,7 +1166,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             tab = ResourceTab.StructuredLogs;
         }
 
-        return GetTabUrl(tab, resourceNames, RouteResourceName);
+        return AddPaneToUrl(GetTabUrl(tab, resourceNames, RouteResourceName));
     }
 
     /// <summary>
@@ -1207,6 +1273,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     internal List<string> GetAllResourceNames()
     {
+        if (IsTelemetryPane)
+        {
+            return _telemetryOnlyResources.Select(r => r.Name).ToList();
+        }
+
         var names = _resourceByName.Values
             .Where(r => !r.IsParameter && !r.IsResourceHidden(_filter.ShowHiddenResources))
             .OrderBy(r => r.ResourceType)
@@ -1214,14 +1285,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .Select(GetResourceName)
             .ToList();
 
-        names.AddRange(_telemetryOnlyResources.Select(r => r.Name));
         return names;
     }
 
     private List<string> GetVisibleRowNames()
     {
         List<string> names;
-        if (PaneState.Mode == ResourcePaneMode.Tags)
+        if (!IsTelemetryPane && PaneState.Mode == ResourcePaneMode.Tags)
         {
             // A resource with several tags is listed several times. Ranges use its first position.
             var showAllGroups = ViewportInformation.IsDesktop && _isPaneCollapsed;
@@ -1237,7 +1307,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             names = GetPaneRows().Select(r => GetResourceName(r.Resource)).ToList();
         }
 
-        names.AddRange(_telemetryOnlyResources.Select(r => r.Name));
+        names.AddRange(GetVisibleTelemetryResources().Select(r => r.Name));
         return names;
     }
 
@@ -1278,20 +1348,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // activate its first tab, which would navigate away from the current page.
         var errorCount = _selectedItems.Sum(i => i.Resource is { } r ? GetUnviewedErrorCount(r) : 0);
         yield return CreateTab(ResourceTab.Overview, Loc[nameof(Resources.Layout.ResourceTabOverview)], new Icons.Regular.Size24.Board(),
-            isVisible: resource is not null || isMultiSelection || _selectedItems.Count == 0);
+            isVisible: !IsTelemetryPane && (resource is not null || isMultiSelection || _selectedItems.Count == 0));
         yield return CreateTab(ResourceTab.Console, Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)], new Icons.Regular.Size24.SlideText(),
-            isVisible: !isTelemetryOnly);
+            isVisible: !IsTelemetryPane && !isTelemetryOnly);
         yield return CreateTab(ResourceTab.StructuredLogs, StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)], new Icons.Regular.Size24.SlideTextSparkle(),
             isVisible: true, errorCount);
         yield return CreateTab(ResourceTab.Traces, Loc[nameof(Resources.Layout.NavMenuTracesTab)], new Icons.Regular.Size24.GanttChart(),
             isVisible: true);
         yield return CreateTab(ResourceTab.Metrics, Loc[nameof(Resources.Layout.NavMenuMetricsTab)], new Icons.Regular.Size24.ChartMultiple(),
-            isVisible: _selectedItems.Count > 0 || CurrentTab == ResourceTab.Metrics);
+            isVisible: IsTelemetryPane || _selectedItems.Count > 0 || CurrentTab == ResourceTab.Metrics);
 
         TabItem CreateTab(ResourceTab tab, string text, Icon icon, bool isVisible, int errorCount = 0)
         {
             var isAvailable = IsTabAvailable(tab);
-            return new TabItem(tab, text, icon, isVisible, isAvailable ? GetTabUrl(tab, _selectedResourceNames, RouteResourceName) : null, errorCount);
+            return new TabItem(tab, text, icon, isVisible, isAvailable ? GetTabUrl(tab) : null, errorCount);
         }
     }
 

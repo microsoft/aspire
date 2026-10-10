@@ -151,6 +151,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private async ValueTask<GridItemsProviderResult<TraceSummary>> GetData(GridItemsProviderRequest<TraceSummary> request)
     {
+        TracesViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
         TracesViewModel.StartIndex = request.StartIndex;
         TracesViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
         var traces = await TracesViewModel.GetTracesAsync(request.CancellationToken);
@@ -406,6 +407,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private Task ClearTraces(ResourceKey? key)
     {
         DataSource.EnsureWritable();
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        {
+            return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearTracesAsync(resourceKey)));
+        }
         return TelemetryRepositoryWriter.ClearTracesAsync(key);
     }
 

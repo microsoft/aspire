@@ -149,6 +149,33 @@ internal static class DashboardUrls
     /// </summary>
     public const string ResourcePaneTagsValue = "tags";
 
+    public const string ResourcePaneTelemetryValue = "telemetry";
+
+    public static string TelemetrySourcesUrl() => AddTelemetryPane(StructuredLogsUrl());
+
+    public static string AddTelemetryPane(string url)
+    {
+        var fragmentIndex = url.IndexOf('#');
+        var fragment = fragmentIndex >= 0 ? url[fragmentIndex..] : string.Empty;
+        var pathAndQuery = fragmentIndex >= 0 ? url[..fragmentIndex] : url;
+        var queryIndex = pathAndQuery.IndexOf('?');
+        if (queryIndex >= 0)
+        {
+            var query = HttpUtility.ParseQueryString(pathAndQuery[(queryIndex + 1)..]);
+            if (query[ResourcePaneQueryName] == ResourcePaneTelemetryValue)
+            {
+                return url;
+            }
+            if (query[ResourcePaneQueryName] is not null)
+            {
+                query[ResourcePaneQueryName] = ResourcePaneTelemetryValue;
+                return $"{pathAndQuery[..queryIndex]}?{query}{fragment}";
+            }
+        }
+
+        return AddQueryString(pathAndQuery, ResourcePaneQueryName, ResourcePaneTelemetryValue) + fragment;
+    }
+
     /// <summary>
     /// Adds the selected resources to a URL using <see cref="ResourceSelectionQueryName"/>.
     /// </summary>

@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
@@ -29,7 +30,11 @@ public class DesktopNavMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchor(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: enabled));
-        Services.GetRequiredService<NavigationManager>().NavigateTo("/terminals/resource/shell");
+        if (!enabled)
+        {
+            Services.GetRequiredService<ResourcePaneState>().SetMode(ResourcePaneMode.Tags);
+        }
+        Services.GetRequiredService<NavigationManager>().NavigateTo(enabled ? "/terminals/resource/shell" : "/traces/detail/abc");
         Render<FluentTooltipProvider>();
         var cut = Render<DesktopNavMenu>(builder => builder.Add(p => p.HasResourceTerminals, hasTerminals));
         var expected = new List<string>();
@@ -43,10 +48,7 @@ public class DesktopNavMenuTests : DashboardTestContext
             }
             expected.Add(DashboardUrls.ExtensionsUrl());
         }
-        else
-        {
-            expected.AddRange([DashboardUrls.StructuredLogsUrl(), DashboardUrls.TracesUrl(), DashboardUrls.MetricsUrl()]);
-        }
+        expected.Add(DashboardUrls.TelemetrySourcesUrl());
         var links = cut.FindAll("nav.main-rail > a");
         Assert.Equal(expected, links.Select(link => link.GetAttribute("href")));
         if (enabled && hasTerminals)
@@ -57,8 +59,9 @@ public class DesktopNavMenuTests : DashboardTestContext
         }
         else if (!enabled)
         {
-            var structuredLogsLink = Assert.Single(links, link => link.GetAttribute("href") == DashboardUrls.StructuredLogsUrl());
-            Assert.Equal(Resources.Layout.NavMenuStructuredLogsTab, structuredLogsLink.GetAttribute("aria-label"));
+            var structuredLogsLink = Assert.Single(links, link => link.GetAttribute("href") == DashboardUrls.TelemetrySourcesUrl());
+            Assert.Equal(Resources.Layout.NavMenuTelemetrySourcesTab, structuredLogsLink.GetAttribute("aria-label"));
+            Assert.Equal("page", structuredLogsLink.GetAttribute("aria-current"));
         }
     }
 }
