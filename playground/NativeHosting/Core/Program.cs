@@ -10,7 +10,9 @@ using NativeHosting;
 var resources = new ConcurrentDictionary<string, JsonObject>(StringComparer.OrdinalIgnoreCase);
 var owner = Guid.NewGuid().ToString("N");
 RpcPeer? peer = null;
+NativeModel? nativeModel = null;
 peer = new RpcPeer(InvokeAsync);
+await using var model = nativeModel = new NativeModel(owner, peer);
 using (peer)
 {
     await peer.RunAsync();
@@ -18,6 +20,11 @@ using (peer)
 
 async Task<JsonNode?> InvokeAsync(string method, JsonObject args, CancellationToken cancellationToken)
 {
+    if (method.StartsWith("model.", StringComparison.Ordinal))
+    {
+        return await nativeModel!.InvokeAsync(method[6..], args, cancellationToken);
+    }
+
     if (method == "stats")
     {
         using var process = Process.GetCurrentProcess();

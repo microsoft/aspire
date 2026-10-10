@@ -26,7 +26,7 @@ Native AOT still includes .NET GC and runtime support. This experiment establish
 
 Resource descriptors retain an owner identity and logical resource name. Native state retains an unresolved Redis URI reference; each resolution asks the managed owner for its current value or publish expression. Resolved credentials and local ports are never written back into the native model.
 
-The facade and managed consumer above exist only in the compatibility scenario; the original split scenario retains Redis alone in managed Hosting.
+The facade and managed consumer above exist only in the compatibility scenario; the original split scenario retains Redis alone in managed Hosting. A separate native-primitive scenario now drives real DCP directly from the AOT core, with no managed adapter, as described below.
 
 The original split scenario covers:
 
@@ -76,13 +76,98 @@ The two optional command-line arguments select the native executable and managed
 
 It launches processes through private stdio pipes using JSON-RPC 2.0 with existing `vscode-jsonrpc` framing. This establishes AOT-safe framing and static dispatch, not interoperability with the production ATS dispatcher or SDK. The small C# peer is deliberately a prototype, not a proposed replacement RPC library.
 
+## Native primitive ports
+
+`native-ports.mts` explores three different resource shapes rather than translating every helper in an existing integration:
+
+```text
+TS experiment AppHost / RPC relay
+    |
+    +-- Node integration process
+    |       +-- Redis defaults, authenticated RESP health, connection properties
+    |       +-- PostgreSQL defaults, authenticated health, child database creation
+    |       +-- Nuxt command/build conventions and HTTP readiness
+    |
+    +-- BCL-only Native AOT core
+            +-- Immutable generic resource/value/dependency graph
+            +-- Parameters, deferred properties, endpoint/network resolution
+            +-- Dependency-aware startup and reentrant integration callbacks
+            +-- HTTPS DCP client -> DCP
+                                   +-- Redis container + session volume
+                                   +-- PostgreSQL container + session volume
+                                   +-- Redis client container on the shared network
+                                   +-- Nuxt executable + allocated HTTP service
+```
+
+Neither the integration process nor the core loads `Aspire.Hosting`, a managed adapter, Npgsql, StackExchange.Redis, or KubernetesClient. DCP and Docker remain real workload dependencies. The core uses `kubectl` once to project DCP's generated kubeconfig into JSON, then talks to DCP through BCL `HttpClient`, validating the session certificate authority and hostname and using the generated bearer token. This startup dependency is a prototype convenience, not the proposed final acquisition/configuration contract.
+
+The ports retain selected behaviors of the existing integrations:
+
+| Integration shape | Real behavior exercised | Integration-local implementation |
+| --- | --- | --- |
+| Redis container service | Password authentication, rejection of bad credentials, URI/host/port/password properties, authenticated Nuxt read/write, AOF data surviving container replacement | Image/command defaults, Redis environment binding, RESP health and test commands |
+| PostgreSQL parent and database child | SCRAM authentication, rejection of bad credentials, creation after parent readiness, a logical `app-db` with physical database name `odd"db`, composed URI, table data surviving server replacement | Image/auth defaults, SQL identifier escaping, database creation and authenticated queries |
+| Nuxt executable | Actual DCP-owned process, dependency on healthy Redis, HTTP readiness, deferred Redis injection, replacement and environment rebinding | Development command, endpoint environment convention, HTTP probe, symbolic build metadata |
+
+The PostgreSQL integration uses `psql` inside the pinned PostgreSQL image as its protocol client. On macOS, it reaches the actual DCP-allocated host port through `host.docker.internal`; it does not rely on a trusted local socket or run a managed client. This demonstrates where the client belongs, not a recommendation to shell out for every production health check. PostgreSQL connection and statement timeouts are bounded, and its password is passed through environment rather than command-line arguments.
+
+The core contains no Redis, PostgreSQL, SQL, or Nuxt dispatch branches in `NativeModel` or `NativeDcp`. The original descriptor experiment's hardcoded `withReference` remains isolated in the legacy path. The new path binds a consumer-selected environment key to a generic resource-property expression; the integration decides that Nuxt expects `NUXT_REDIS_URI`.
+
+### What the ports imply for the core
+
+| Primitive | Why it is needed | What exists in this experiment |
+| --- | --- | --- |
+| Resource identity and immutable configuration | All integrations need names, owner validation, and a publishable source model | Owner/name handles, duplicate rejection, model sealing, separate runtime state |
+| Structured values | Connection properties compose secrets and endpoints, including a child's inherited server values | Literal, parameter, endpoint, property, concatenation, URI formatting, and existing owner-routed value requests |
+| Endpoint/network resolution | A host executable needs allocated ports; a container needs a network alias and target port | DCP service allocation, a session container network, host/container resolution |
+| Compute and storage | Redis/PostgreSQL are containers; Nuxt is an executable; replacement must retain data | Explicit DCP JSON for containers, executables, services, networks, and session-scoped volumes |
+| Dependency and readiness coordination | Database creation follows parent health; Nuxt follows Redis health | Parallel dependency graph startup, integration RPC health/initialization callbacks, bounded cancellation |
+| Targeted operations and containment | Restart must not race itself or retain an old endpoint allocation | Conflicting restart rejection, allocation invalidation, explicit dependency rebinding on consumer replacement, reverse-order DCP cleanup on EOF |
+| Publication | Runtime secret values and local ports must not overwrite source expressions | Canonical `native-model.v0` JSON and symbolic resolution, unchanged before/after execution |
+
+`portFor` and `portForServing` are not interchangeable: the former consumes a service port; the latter supplies the workload port associated with its producer annotation. The executable path uses `portForServing` plus a localhost service so DCP allocates and connects both sides. Treating service allocation as a random-port helper produced a real startup/endpoint failure during exploration.
+
+An additional Redis client container consumes deferred host/port/password properties and performs an authenticated write to `cache:6379` over the actual DCP network. This validates container-context injection with a real consumer, not just expression resolution.
+
+The graph checks also exercise dependency/value cycles, a canceled integration-readiness callback, dependent failure propagation, reentrant queries while startup is blocked, and continued RPC use after cancellation. Successful EOF cleanup removes all three current containers, the network, the session volumes, and the observed DCP-owned workload/helper processes without Docker cleanup in the native-only harness.
+
+A separate mixed scenario uses the new DCP-backed native Nuxt path with unchanged managed `AddRedis`. Generic owner-routed expressions resolve through the CLR provider, including five native/managed reentrant callbacks; the managed model contains only Redis and does not load the JavaScript integration. Closing that managed owner makes subsequent deferred resolution fail explicitly. Its existing detached-DCP shutdown and stopped-container retention policy is preserved; the harness separately supervises its helper processes and removes its exact observed stopped container. The older CLR-facade compatibility scenario also remains separate and still works with the extended core.
+
+### Reproduce the native ports
+
+Run the restore and AOT publish commands above first. Additional prerequisites are `kubectl`, Docker, and the repository-selected DCP executable. The default DCP path selects the tested macOS arm64 package; set `NATIVE_HOSTING_DCP` to the appropriate repository-restored DCP path on another machine.
+
+```bash
+node playground/NuxtApp/node_modules/typescript/bin/tsc \
+  --noEmit --module NodeNext --moduleResolution NodeNext --target ES2023 \
+  --strict --types node --typeRoots playground/NuxtApp/node_modules/@types \
+  playground/NativeHosting/integration-ports.mts playground/NativeHosting/native-ports.mts
+
+NATIVE_HOSTING_RESULTS=/absolute/path/native-ports-results.json \
+  node playground/NativeHosting/native-ports.mts
+```
+
+The harness creates a private temporary Nuxt workspace and reuses the existing sample dependencies without changing package manifests. The pinned Redis 8.6 and PostgreSQL 18.3 images are pulled by DCP if missing. Resource names and storage are isolated by session identity; volumes survive replacement within that session but are deliberately deleted on session shutdown. This is not cross-session persistence.
+
+### Remaining scope and footprint
+
+The additional core implementation is roughly 800 lines across `NativeModel.cs` and `NativeDcp.cs`, excluding the earlier RPC peer and descriptor experiment. The integration process is roughly 280 lines. These sizes describe a narrow experiment, not an estimate for a production rewrite.
+
+The extended AOT binary is approximately 5.8 MiB on disk and 23 MiB resident in the measured run. The complete native scenario's five post-readiness host-process samples had a median near 1.2 GiB, including the integration process, Nuxt, both DCP processes, and observed Docker helpers. Container memory in Docker's VM, precise shared-memory accounting, peaks, and the harness itself are excluded. The scenario includes PostgreSQL and an additional client container and has no equivalent managed baseline here; these figures establish a footprint, not a memory or startup improvement.
+
+This is not a full Redis/PostgreSQL/Nuxt port or a production native server. Missing behavior includes TLS/certificate trust, existing databases and custom creation scripts, Redis modules, admin companions, resource log/dashboard integration, continuous health/drift reconciliation, cross-session volume policy, automatic dependent restart, complete owner-death recovery, portable PostgreSQL probing, production ATS/schema validation, and CLI acquisition/launch integration. A parent's replacement does not automatically re-run its child's creation callback or restart its consumers; the harness explicitly replaces Nuxt to re-evaluate its environment.
+
+`native-model.v0` is an experimental source graph, not an Aspire deployment manifest. It retains structured expressions, callback identities, parent metadata, and Nuxt build metadata; there is no new deployment-target lowering or native build executor. The earlier compatibility experiment remains the evidence for running the actual managed manifest pipeline. Production publication still needs execution-mode policies, target-specific graph transforms, formatted-secret dependency discovery, build pipelines, and deployment output.
+
+The useful reuse boundary is DCP's existing workload controllers and wire protocol, plus an optional managed adapter for existing CLR integrations. Integration defaults can be re-expressed outside the core; existing DI health checks, Npgsql/client use, annotations, event subscriptions, and publisher extensions cannot simply be linked into this BCL-only AOT process. They must stay managed or be implemented against equivalent portable primitives. These ports identify those primitives without claiming transparent CLR compatibility.
+
 ## Feasibility findings
 
 **A bounded mixed-owner composition is feasible.** Native descriptors, owner-routed deferred values, managed CLR execution, and reentrant callbacks can compose a real workload without copying the entire hosting model or loading a managed runtime into the native process.
 
 **Unchanged C# integration execution remains managed.** The existing Redis implementation registers DI health checks and event subscriptions, constructs CLR resources and annotations, and evaluates its own expressions. Keeping those semantics requires managed execution and enough existing Hosting infrastructure to support them. A native router does not remove that cost.
 
-**A small core is not yet a session memory improvement.** The native executable is approximately 2.8 MiB on disk and approximately 9.4 MiB resident on the tested macOS arm64 machine. The reduced comparison still has roughly 1.2 GiB of host-process RSS in both modes once Nuxt, the managed adapter, Node hosts, and detached DCP processes are included. Differences between individual runs are not evidence of savings.
+**A small core is not yet a session memory improvement.** Before the DCP-backed primitive extension, the native executable was approximately 2.8 MiB on disk and approximately 9.4 MiB resident on the tested macOS arm64 machine. The original reduced comparison had roughly 1.2 GiB of host-process RSS in both modes once Nuxt, the managed adapter, Node hosts, and detached DCP processes were included. The larger current core's footprint is recorded above. Differences between individual or unequal runs are not evidence of savings.
 
 These figures are exploratory, not a benchmark:
 
@@ -155,7 +240,7 @@ Keep the existing in-process C# AppHost path unchanged. Bound the first mixed im
 
 1. Define resource-owner identity, generation/invalidation, cross-owner value requests, and source/consumer network context using production ATS contracts.
 2. Implement a capability-based managed facade projection with explicit graph synchronization phases. Preserve interface-based helpers and standard callback caching; classify concrete CLR operations as owner-local or requiring dedicated adapters.
-3. Integrate the smallest native executable/container execution path with DCP, existing process containment, and the CLI. Reuse standard readiness and port allocation rather than the harness's launch logic.
+3. Promote the experimental native DCP executable/container path into a supported execution contract with production process containment and CLI integration. The primitive ports now exercise DCP allocation and readiness, but their prototype JSON client and shutdown policy are not that contract.
 4. Extend lifecycle projections to owner invalidation, all network contexts, logs, and built-in commands. Add real deployment-target/native-build support using structured publisher values and dependency discovery; a facade or expression string alone is insufficient.
 5. Measure the actual current-server baseline and native-only, mixed, and managed-heavy applications with equivalent capabilities, complete session accounting, and repeatable startup trials.
 
