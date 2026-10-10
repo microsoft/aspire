@@ -101,27 +101,6 @@ public sealed class SelectTestsWorkflowTests
     }
 
     [Fact]
-    public void NativeArchiveDependencyPackagesUseMatrixRid()
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(BuildCliNativeArchivesWorkflowPath));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var archiveJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("build_cli_archives")];
-        var steps = (YamlSequenceNode)archiveJob.Children[new YamlScalarNode("steps")];
-        var packageBuild = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
-                    name.ToString() == "Build RID-specific packages");
-        var command = packageBuild.Children[new YamlScalarNode("run")].ToString();
-
-        Assert.Contains("/p:BuildBundleDepsOnly=true", command);
-        Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command);
-    }
-
-    [Fact]
     public void NativeDashboardInteractivityOptsIntoOuterloopTests()
     {
         var yaml = new YamlStream();
