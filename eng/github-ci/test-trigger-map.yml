@@ -362,6 +362,7 @@ path_rules:
       - src/Aspire.Hosting.JavaScript/**
       - src/Aspire.Hosting.Redis/**
       - src/Aspire.Hosting.RemoteHost/**
+      - src/Aspire.Hosting.Dotnet/**
       - src/Aspire.Managed/**
       - .github/workflows/tests.yml
       - .github/workflows/extension-unit-tests.yml
@@ -518,6 +519,10 @@ path_rules:
     targets: [job:cli-starter-validation]
     reason: package construction and template content consumed by the C# starter validation scenario
   - paths:
+      - src/Aspire.Hosting.Dotnet/**
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests, job:cli-starter-validation]
+    reason: runtime-only Dotnet dependency in generated C# AppHosts, including when project-graph analysis is unavailable
+  - paths:
       - playground/**
     targets: [test:Aspire.Playground.Tests]
     reason: Aspire.Playground.Tests builds/runs apps under playground/
@@ -596,10 +601,14 @@ affected_project_rules:
       - Aspire.AppHost.Sdk
       - Aspire.Hosting.AppHost
       - Aspire.Hosting.PostgreSQL
+      - Aspire.Hosting.Dotnet
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.JavaScript
     targets: [job:cli-starter-validation]
     reason: direct executables, SDK, and hosting/code-generation packages used by the C# and TypeScript starter scenarios
+  - projects: [Aspire.Hosting.Dotnet]
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests]
+    reason: generated C# AppHosts use AddDotnetProject through a runtime-only package reference
   - projects:
       - Aspire.TypeSystem
       - Aspire.Hosting.RemoteHost
@@ -690,6 +699,7 @@ affected_project_rules:
       - Aspire.Hosting.CodeGeneration.Java
       - Aspire.Hosting.CodeGeneration.TypeScript
       - Aspire.Hosting.Docker
+      - Aspire.Hosting.Dotnet
       - Aspire.Hosting.Java
       - Aspire.Hosting.JavaScript
       - Aspire.Hosting.Redis

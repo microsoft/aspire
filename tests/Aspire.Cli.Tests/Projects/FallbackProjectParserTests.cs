@@ -9,6 +9,41 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class FallbackProjectParserTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("// #:package Aspire.Hosting.AppHost@17.0.0", false)]
+    [InlineData("var example = \"#:package Aspire.Hosting.AppHost@17.0.0\";", false)]
+    [InlineData("#:package Aspire.Hosting.AppHost@17.0.0 unexpected", false)]
+    [InlineData("  #:package Aspire.Hosting.AppHost@17.0.0+build.1  \r\n", true)]
+    public void ParseProject_OnlyUsesCompletePackageDirectiveLines(string content, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(projectFile.FullName, content);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        using var result = parser.ParseProject(projectFile);
+
+        Assert.Equal(expected, FallbackProjectParser.HasAppHostPackageDirective(content));
+        Assert.Equal(expected ? 1 : 0, result.RootElement.GetProperty("Items").GetProperty("PackageReference").GetArrayLength());
+    }
+
+    [Theory]
+    [InlineData("// #:sdk Aspire.AppHost.Sdk@17.0.0", false)]
+    [InlineData("var example = \"#:sdk Aspire.AppHost.Sdk@17.0.0\";", false)]
+    [InlineData("#:sdk Aspire.AppHost.Sdk@17.0.0 unexpected", false)]
+    [InlineData("  #:sdk Aspire.AppHost.Sdk@17.0.0+build.1  \r\n", true)]
+    public void ParseProject_OnlyUsesCompleteSdkDirectiveLines(string content, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        File.WriteAllText(projectFile.FullName, content);
+        var parser = new FallbackProjectParser(NullLogger<FallbackProjectParser>.Instance);
+
+        using var result = parser.ParseProject(projectFile);
+
+        Assert.Equal(expected ? "true" : "false", result.RootElement.GetProperty("Properties").GetProperty("_UsingAspireAppHostSdk").GetString());
+    }
+
     private static readonly JsonSerializerOptions s_indentedOptions = new() { WriteIndented = true };
 
     private static string FormatJson(JsonDocument document)

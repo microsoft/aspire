@@ -18,11 +18,15 @@ internal sealed partial class FallbackProjectParser
 {
     private readonly ILogger<FallbackProjectParser> _logger;
 
-    [GeneratedRegex(@"#:sdk\s+Aspire\.AppHost\.Sdk@([\d\.\-a-zA-Z]+|\*)")]
+    [GeneratedRegex(@"^[\t ]*#:sdk[\t ]+Aspire\.AppHost\.Sdk@([\d\.\-+a-zA-Z]+|\*)[\t ]*\r?$", RegexOptions.Multiline)]
     private static partial Regex SdkDirectiveRegex();
 
-    [GeneratedRegex(@"#:package\s+([a-zA-Z0-9\._]+)@([\d\.\-a-zA-Z]+|\*)")]
+    [GeneratedRegex(@"^[\t ]*#:package[\t ]+([a-zA-Z0-9\._]+)@([\d\.\-+a-zA-Z]+|\*)[\t ]*\r?$", RegexOptions.Multiline)]
     private static partial Regex PackageDirectiveRegex();
+
+    internal static bool HasAppHostPackageDirective(string content)
+        => PackageDirectiveRegex().Matches(content).Any(match =>
+            string.Equals(match.Groups[1].Value, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
 
     public FallbackProjectParser(ILogger<FallbackProjectParser> logger)
     {
@@ -88,7 +92,14 @@ internal sealed partial class FallbackProjectParser
         // Extract project references
         var projectReferences = ExtractProjectReferences(root, projectFile);
 
-        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences);
+        var usesAppHostSdk = DotNetAppHostProject.ContainsAspireAppHostSdk(root.Attribute("Sdk")?.Value ?? string.Empty)
+            || root.Descendants().Any(e =>
+                (e.Name.LocalName.Equals("Sdk", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(e.Attribute("Name")?.Value, "Aspire.AppHost.Sdk", StringComparison.OrdinalIgnoreCase))
+                || (e.Name.LocalName.Equals("Import", StringComparison.OrdinalIgnoreCase)
+                    && DotNetAppHostProject.ContainsAspireAppHostSdk(e.Attribute("Sdk")?.Value ?? string.Empty)));
+
+        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences, usesAppHostSdk);
     }
 
     /// <summary>
@@ -107,7 +118,7 @@ internal sealed partial class FallbackProjectParser
         // Single-file apphost projects don't have project references
         var projectReferences = Array.Empty<ProjectReferenceInfo>();
 
-        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences);
+        return BuildJsonDocument(aspireHostingSdkVersion, packageReferences, projectReferences, SdkDirectiveRegex().IsMatch(fileContent));
     }
 
     /// <summary>
@@ -116,7 +127,8 @@ internal sealed partial class FallbackProjectParser
     private static JsonDocument BuildJsonDocument(
         string? aspireHostingSdkVersion,
         PackageReferenceInfo[] packageReferences,
-        ProjectReferenceInfo[] projectReferences)
+        ProjectReferenceInfo[] projectReferences,
+        bool usesAppHostSdk)
     {
         var rootObject = new JsonObject();
 
@@ -150,6 +162,7 @@ internal sealed partial class FallbackProjectParser
         // Properties section
         var propertiesObject = new JsonObject();
         propertiesObject["AspireHostingSDKVersion"] = JsonValue.Create(aspireHostingSdkVersion);
+        propertiesObject["_UsingAspireAppHostSdk"] = JsonValue.Create(usesAppHostSdk ? "true" : "false");
         rootObject["Properties"] = propertiesObject;
 
         // Fallback flag

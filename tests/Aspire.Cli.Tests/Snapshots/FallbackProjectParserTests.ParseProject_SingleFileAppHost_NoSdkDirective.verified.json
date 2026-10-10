@@ -4,7 +4,8 @@
     "ProjectReference": []
   },
   "Properties": {
-    "AspireHostingSDKVersion": null
+    "AspireHostingSDKVersion": null,
+    "_UsingAspireAppHostSdk": "false"
   },
   "Fallback": true
 }

@@ -994,6 +994,7 @@ public sealed class TestTriggerMapTests
     [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/TypeScriptApiProjector.cs", "Aspire.Hosting.CodeGeneration.TypeScript")]
     [InlineData("src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj", "Aspire.Hosting.AppHost")]
     [InlineData("src/Aspire.Hosting.PostgreSQL/PostgresBuilderExtensions.cs", "Aspire.Hosting.PostgreSQL")]
+    [InlineData("src/Aspire.Hosting.Dotnet/DotnetProjectResourceBuilderExtensions.cs", "Aspire.Hosting.Dotnet")]
     public void CliStarterValidationRunsWhenStarterRuntimeDependencyIsAffected(string path, string affectedProject)
     {
         var result = SelectWithRealMap(path, affectedProject);
@@ -1080,6 +1081,30 @@ public sealed class TestTriggerMapTests
         Assert.False(result.SelectsAll);
         Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
         Assert.Contains("job:native-dashboard-validation", result.Jobs);
+    }
+
+    [Fact]
+    public void DotnetProjectResourceChangesRunGeneratedAppHostConsumers()
+    {
+        var result = SelectWithRealMap("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj", "Aspire.Hosting.Dotnet");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
+    }
+
+    [Fact]
+    public void DotnetProjectResourceChangesRunGeneratedAppHostConsumersWithoutProjectGraph()
+    {
+        var result = SelectWithRealMap("src/Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.csproj");
+
+        Assert.False(result.SelectsAll);
+        Assert.Contains("Aspire.Templates.Tests", result.TestProjects);
+        Assert.Contains("Aspire.Cli.EndToEnd.Tests", result.TestProjects);
+        Assert.Contains("job:extension-e2e", result.Jobs);
+        Assert.Contains("job:cli-starter-validation", result.Jobs);
     }
 
     [Fact]

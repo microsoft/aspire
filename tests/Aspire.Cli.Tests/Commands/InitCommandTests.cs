@@ -818,7 +818,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsSdkVersion()
+    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsPackageVersions()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -834,12 +834,10 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
         var appHostContent = await File.ReadAllTextAsync(appHostPath);
 
-        // The single-file skeleton must pin the SDK version with @<version> so downstream
-        // CLI operations (ProjectUpdater / FallbackProjectParser) can locate and update
-        // the directive.
         var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
-        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", firstLine, StringComparison.Ordinal);
-        Assert.NotEqual("#:sdk Aspire.AppHost.Sdk@", firstLine);
+        var version = serviceProvider.GetRequiredService<CliExecutionContext>().IdentitySdkVersion;
+        Assert.Equal($"#:package Aspire.Hosting.AppHost@{version}", firstLine);
+        Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", appHostContent);
         Assert.Contains("#:property AspireUseCliBundle=true", appHostContent);
     }
 

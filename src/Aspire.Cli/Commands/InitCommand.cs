@@ -264,7 +264,7 @@ internal sealed class InitCommand : BaseCommand
         // early return so re-running `aspire init` against a workspace produced by a
         // previous broken CLI (which left apphost.cs without a workspace NuGet.config)
         // recovers cleanly. The config is also required so MSBuild can resolve
-        // `#:sdk Aspire.AppHost.Sdk@<version>` from the SDK directive — both for
+        // `#:package Aspire.Hosting.AppHost@<version>` from the package directive — both for
         // `aspire add` (`dotnet package add --file apphost.cs`) and for
         // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
         // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.) is
@@ -286,16 +286,11 @@ internal sealed class InitCommand : BaseCommand
             return CliExitCodes.Success;
         }
 
-        // Drop bare single-file apphost. Pin the SDK version so later operations
-        // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
-        // can locate and update the directive — they expect the @<version> form.
-        // Use IdentitySdkVersion (build-metadata stripped) rather than IdentityVersion:
-        // the directive references the published Aspire.AppHost.Sdk NuGet package, whose
-        // version never carries a +<sha> suffix. This also matches the empty-apphost
-        // template path (CliTemplateFactory.EmptyTemplate) so both emit the same form.
+        // NuGet package versions omit the CLI build-metadata suffix.
         var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
-            #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
+            #:package Aspire.Hosting.AppHost@{{aspireVersion}}
+            #:package Aspire.Hosting.Dotnet@{{aspireVersion}}
             #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
@@ -361,7 +356,7 @@ internal sealed class InitCommand : BaseCommand
         // `_runner.NewProjectAsync` so the aspire-apphost template's built-in `restore`
         // post-action (template.json post-action id "restore", conditioned on
         // !skipRestore which defaults to false) can resolve the
-        // `Aspire.AppHost.Sdk/<version>` reference from the channel-matched hive. The
+        // `Aspire.Hosting.AppHost` reference from the channel-matched hive. The
         // post-action currently runs with continueOnError=true so a missing nuget.config
         // wouldn't fail init, but its restore would still emit confusing errors and waste
         // work — and a future template change that drops continueOnError would break init

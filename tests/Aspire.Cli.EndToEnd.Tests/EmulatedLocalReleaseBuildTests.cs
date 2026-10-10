@@ -89,16 +89,14 @@ public sealed class EmulatedLocalReleaseBuildTests(ITestOutputHelper output)
         // surfaced through ASPIRE_CLI_PACKAGES, not a per-project feed pin.
         AssertNoNuGetConfig(projectDir);
 
-        // The local stable version exists only in the hive, so an exact match pins the AppHost SDK to
+        // The local stable version exists only in the hive, so an exact match pins the AppHost to
         // it — proving `aspire new` resolved the template from the local build rather than nuget.org.
         var appHostCsproj = Path.Combine(projectDir.FullName, $"{projectName}.AppHost", $"{projectName}.AppHost.csproj");
-        var sdkVersion = GetAppHostSdkVersionFromCsproj(appHostCsproj);
-        output.WriteLine($"Generated AppHost SDK version: {sdkVersion}");
-        Assert.Equal(localStableVersion, sdkVersion);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostCsproj));
+        output.WriteLine($"Generated AppHost version: {appHostVersion}");
+        Assert.Equal(localStableVersion, appHostVersion);
 
-        // Register the local hive as an ambient NuGet source so the apphost's `Aspire.AppHost.Sdk`
-        // (resolved by MSBuild's NuGet-based project-SDK resolver, which only reads nuget.config
-        // sources — never ASPIRE_CLI_PACKAGES) can restore during `aspire add`.
+        // MSBuild restore reads NuGet sources, not ASPIRE_CLI_PACKAGES.
         await RegisterLocalHiveAsAmbientNuGetSourceAsync(auto, counter);
 
         await auto.RunCommandAsync($"cd {projectName}/{projectName}.AppHost", counter);
@@ -305,21 +303,6 @@ public sealed class EmulatedLocalReleaseBuildTests(ITestOutputHelper output)
         Assert.True(
             nuGetConfigs.Count == 0,
             $"Emulating an all-local stable build, 'aspire new' must not drop a NuGet.config (the hive is surfaced via ASPIRE_CLI_PACKAGES, not a per-project feed pin). Found: {string.Join(", ", nuGetConfigs)}");
-    }
-
-    private static string GetAppHostSdkVersionFromCsproj(string csprojPath)
-    {
-        if (!File.Exists(csprojPath))
-        {
-            throw new FileNotFoundException($"Expected AppHost project to exist: {csprojPath}", csprojPath);
-        }
-
-        // The generated AppHost csproj opens with: <Project Sdk="Aspire.AppHost.Sdk/13.5.0">
-        var content = File.ReadAllText(csprojPath);
-        var match = Regex.Match(content, "Sdk=\"Aspire\\.AppHost\\.Sdk/(?<version>[^\"]+)\"");
-        return match.Success
-            ? match.Groups["version"].Value
-            : throw new InvalidOperationException($"Could not find an Aspire.AppHost.Sdk reference in {csprojPath}.");
     }
 
     private static (string Package, string Version) GetAddedAspireRedisPackageReferenceFromCsproj(string csprojPath)

@@ -707,79 +707,17 @@ internal sealed class DotNetCliRunner(
 
         if (exitCode == 0 && jsonDocument != null)
         {
-            var rootElement = jsonDocument.RootElement;
-
-            if (!rootElement.TryGetProperty("Properties", out var properties))
+            using (jsonDocument)
             {
-                return (exitCode, false, null);
-            }
-
-            if (!properties.TryGetProperty("IsAspireHost", out var isAspireHostElement))
-            {
-                return (exitCode, false, null);
-            }
-
-            if (isAspireHostElement.GetString() == "true")
-            {
-                // Try to get Aspire.Hosting version from PackageReference items
-                string? aspireHostingVersion = null;
-
-                if (rootElement.TryGetProperty("Items", out var items))
-                {
-                    // Check PackageReference items first
-                    if (items.TryGetProperty("PackageReference", out var packageReferences))
-                    {
-                        aspireHostingVersion = GetPackageVersion(packageReferences, "Aspire.Hosting") ??
-                            GetPackageVersion(packageReferences, "Aspire.Hosting.AppHost");
-                    }
-
-                    // Fallback to AspireProjectOrPackageReference items if not found
-                    if (aspireHostingVersion == null && items.TryGetProperty("AspireProjectOrPackageReference", out var aspireProjectOrPackageReferences))
-                    {
-                        aspireHostingVersion = GetPackageVersion(aspireProjectOrPackageReferences, "Aspire.Hosting") ??
-                            GetPackageVersion(aspireProjectOrPackageReferences, "Aspire.Hosting.AppHost");
-                    }
-
-                    // Fallback to PackageVersion items for Central Package Management if not found
-                    if (aspireHostingVersion == null && items.TryGetProperty("PackageVersion", out var packageVersions))
-                    {
-                        aspireHostingVersion = GetPackageVersion(packageVersions, "Aspire.Hosting") ??
-                            GetPackageVersion(packageVersions, "Aspire.Hosting.AppHost");
-                    }
-                }
-
-                // If no package version found, fallback to SDK version
-                if (aspireHostingVersion == null && properties.TryGetProperty("AspireHostingSDKVersion", out var aspireHostingSdkVersionElement))
-                {
-                    aspireHostingVersion = aspireHostingSdkVersionElement.GetString();
-                }
-
-                return (exitCode, true, aspireHostingVersion);
-            }
-            else
-            {
-                return (exitCode, false, null);
+                var output = JsonSerializer.Deserialize(jsonDocument.RootElement, JsonSourceGenerationContext.Default.AppHostProjectInspectionOutput);
+                var info = Projects.AppHostInfoResolver.ParseAppHostInfo(output, exitCode);
+                return (exitCode, info.IsAspireHost, info.AspireHostingVersion);
             }
         }
         else
         {
             return (exitCode, false, null);
         }
-    }
-
-    private static string? GetPackageVersion(JsonElement items, string packageId)
-    {
-        foreach (var item in items.EnumerateArray())
-        {
-            if (item.TryGetProperty("Identity", out var identity) &&
-                identity.GetString() == packageId &&
-                item.TryGetProperty("Version", out var version))
-            {
-                return version.GetString();
-            }
-        }
-
-        return null;
     }
 
     public async Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)

@@ -124,7 +124,8 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             while ((line = reader.ReadLine()) is not null)
             {
                 var trimmedLine = line.TrimStart();
-                if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal))
+                if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal)
+                    || FallbackProjectParser.HasAppHostPackageDirective(trimmedLine))
                 {
                     return true;
                 }
@@ -262,7 +263,8 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
                 while ((line = reader.ReadLine()) is not null)
                 {
                     var trimmedLine = line.TrimStart();
-                    if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal))
+                    if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal)
+                        || FallbackProjectParser.HasAppHostPackageDirective(trimmedLine))
                     {
                         return true;
                     }

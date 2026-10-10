@@ -412,7 +412,24 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     {
         logger.LogDebug("Analyzing App Host SDK for: {AppHostFile}", context.AppHostProjectFile.FullName);
 
+        // Evaluation sets AspireHostingSDKVersion for package-only AppHosts too. Inspect source
+        // references before deciding to add/update an SDK or remove an explicit AppHost package.
+        using var sourceDocument = fallbackParser.ParseProject(context.AppHostProjectFile);
+        var sourceRoot = sourceDocument.RootElement;
+        var usesSdk = sourceRoot.GetProperty("Properties").GetProperty("_UsingAspireAppHostSdk").GetString() == "true";
         var itemsAndPropertiesDocument = await GetItemsAndPropertiesWithFallbackAsync(context.AppHostProjectFile, context, cancellationToken);
+        var items = itemsAndPropertiesDocument.RootElement.GetProperty("Items");
+        var hasAppHostPackage = items.TryGetProperty("PackageReference", out var packages)
+            && packages.EnumerateArray().Any(package => string.Equals(package.GetProperty("Identity").GetString(),
+                "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
+        if (!usesSdk && hasAppHostPackage)
+        {
+            context.UsesAppHostSdk = false;
+            context.TargetSdkVersion = (await GetLatestVersionOfPackageAsync(context,
+                "Aspire.Hosting.AppHost", cancellationToken: cancellationToken))?.Version;
+            return;
+        }
+
         var propertiesElement = itemsAndPropertiesDocument.RootElement.GetProperty("Properties");
         var sdkVersionElement = propertiesElement.GetProperty("AspireHostingSDKVersion");
         var sdkVersion = sdkVersionElement.GetString();
@@ -991,7 +1008,9 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
 
-                if (!IsUpdatablePackage(packageId))
+                if (!IsUpdatablePackage(packageId)
+                    && !(string.Equals(packageId, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase)
+                        && IsAppHostProject(projectFile, context.AppHostProjectFile) && !context.UsesAppHostSdk))
                 {
                     continue;
                 }
@@ -1494,6 +1513,7 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
     public bool FallbackParsing { get; set; }
+    public bool UsesAppHostSdk { get; set; } = true;
     public string? TargetSdkVersion { get; set; }
 }
 

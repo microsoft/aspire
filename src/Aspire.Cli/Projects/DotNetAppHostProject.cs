@@ -183,7 +183,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             while ((line = reader.ReadLine()) is not null)
             {
                 var trimmedLine = line.TrimStart();
-                if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal))
+                if (trimmedLine.StartsWith("#:sdk Aspire.AppHost.Sdk", StringComparison.Ordinal)
+                    || FallbackProjectParser.HasAppHostPackageDirective(trimmedLine))
                 {
                     return true;
                 }
@@ -1300,6 +1301,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             return true;
         }
 
+        if (root.Descendants().Any(e => e.Name.LocalName.Equals("PackageReference", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(e.Attribute("Include")?.Value,
+                "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
         // 4) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
         //    during evaluation, but it can also appear literally in a project or build file. Matching on the
         //    element (rather than a substring) means a consumer condition such as
@@ -1338,7 +1346,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 .Any(file => file.Name.Equals(ProjectAppHostSourceFileName, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool ContainsAspireAppHostSdk(string sdkAttribute)
+    internal static bool ContainsAspireAppHostSdk(string sdkAttribute)
     {
         // SDK references resolve through NuGet, whose package IDs are case-insensitive, so a project could
         // legitimately write the SDK name in any casing (e.g. "aspire.apphost.sdk") and still build as an
@@ -1800,7 +1808,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         if (isSingleFileAppHost)
         {
             // A single-file apphost pins its Aspire.Hosting version via the
-            // `#:sdk Aspire.AppHost.Sdk@<version>` directive, which uses IdentitySdkVersion (the
+            // `#:package Aspire.Hosting.AppHost@<version>` directive, which uses IdentitySdkVersion (the
             // identity version with build metadata stripped, matching the published NuGet package
             // version). Report that same value here so the compatibility check reflects what the
             // apphost actually pins, honoring ASPIRE_CLI_VERSION / sidecar overrides rather than
