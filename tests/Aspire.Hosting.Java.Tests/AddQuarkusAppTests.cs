@@ -85,6 +85,23 @@ public class AddQuarkusAppTests
     }
 
     [Fact]
+    public async Task AddQuarkusApp_WithAnEmptyPassword_FailsInsteadOfServingATlsListenerNoClientCanReach()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RunHttpsCertificateCallbackAsync(app.Resource, application.Services, ReferenceExpression.Create($""), "/certs"));
+
+        Assert.Contains("'inventory'", ex.Message);
+        Assert.Contains("empty", ex.Message);
+    }
+
+    [Fact]
     public async Task AddQuarkusApp_SwitchesTheEndpointToHttpsWhenOptedIn()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);

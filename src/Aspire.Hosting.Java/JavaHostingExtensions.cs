@@ -437,7 +437,7 @@ public static partial class JavaHostingExtensions
         // silently break existing applications that read the http one.
         resourceBuilder.WithoutHttpsCertificate();
 
-        resourceBuilder.WithHttpsCertificateConfiguration(ctx =>
+        resourceBuilder.WithHttpsCertificateConfiguration(async ctx =>
         {
             // Quarkus listens for HTTP on quarkus.http.port and for HTTPS on a separate quarkus.http.ssl-port,
             // so serving TLS on the one endpoint Aspire allocated means moving the HTTPS listener to that port
@@ -456,6 +456,17 @@ public static partial class JavaHostingExtensions
             }
             else
             {
+                // An empty password cannot be passed through an environment variable, which SmallRye Config
+                // treats as unset, and the key is encrypted with it in both the PEM and the PKCS#12 form. Quarkus
+                // would start, then fail every TLS handshake, so refuse up front.
+                var password = await ctx.Password.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrEmpty(password))
+                {
+                    throw new InvalidOperationException(
+                        $"The HTTPS certificate password for Quarkus resource '{name}' resolved to an empty value. " +
+                        "Quarkus cannot read a key store opened with an empty password from an environment variable; use a non-empty password or no password.");
+                }
+
                 // With a password the PEM key is encrypted, which Quarkus cannot read, so hand it the PKCS#12
                 // key store instead. An unencrypted PKCS#12 file does not work the other way round: the JVM
                 // finds no usable key without a password and every handshake fails.
@@ -463,8 +474,6 @@ public static partial class JavaHostingExtensions
                 ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"] = "PKCS12";
                 ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_PASSWORD"] = ctx.Password;
             }
-
-            return Task.CompletedTask;
         });
 
         if (builder.ExecutionContext.IsRunMode)
