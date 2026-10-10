@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
@@ -23,6 +24,8 @@ public sealed class DashboardCommandExecutor(
     DashboardTelemetryService telemetryService,
     INotificationService notificationService)
 {
+    private const int MaxToastMessageLength = 250;
+
     private readonly HashSet<(string ResourceName, string CommandName)> _executingCommands = [];
     private readonly object _lock = new object();
 
@@ -205,7 +208,10 @@ public sealed class DashboardCommandExecutor(
                 navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
                 return Task.CompletedTask;
             };
-            toastOptions.Message = response.Message;
+            // Truncate plain-text command output before encoding it for Fluent's HTML-rendering toast,
+            // so the limit applies to displayed text rather than HTML entities.
+            var toastMessage = response.Message is null ? null : FormatHelpers.TruncateText(response.Message, MaxToastMessageLength);
+            toastOptions.Message = WebUtility.HtmlEncode(toastMessage);
 
             if (response.Result is not null)
             {
