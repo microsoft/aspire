@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard's top-right Terminals button and mobile Terminal menu entry are removed to reduce navigation clutter. The backtick (`) shortcut remains the entry point for opening the terminal dock on both desktop and mobile layouts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83e\uddf9",
+  "firstMergedAt": "2026-09-28T20:23:21Z",
+  "lastMergedAt": "2026-09-28T20:23:21Z",
+  "name": "Simplified dashboard terminal navigation",
+  "owner": "mitchdenny",
+  "prs": [
+    20528
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Updates test-only Testcontainers dependency chain to resolve SSH.NET vulnerabilities; production packages unaffected",
+  "mergedAt": "2026-10-01T04:37:58Z",
+  "number": 20603,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "Update Testcontainers to resolve SSH.NET vulnerabilities"
+}

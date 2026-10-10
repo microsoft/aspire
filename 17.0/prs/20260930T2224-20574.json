@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal CI/build infrastructure change (template CG manifest generation), no user-visible impact",
+  "mergedAt": "2026-09-30T22:24:56Z",
+  "number": 20574,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "Generate template dependency manifest instead of internal basic tests"
+}

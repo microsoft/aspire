@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Simplified dashboard terminal navigation",
+  "mergedAt": "2026-09-28T20:23:21Z",
+  "number": 20528,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "included",
+  "title": "Remove dashboard terminal navigation entry points"
+}

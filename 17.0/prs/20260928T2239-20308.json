@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI workflow fix for Deployment E2E test exit codes, not user-facing",
+  "mergedAt": "2026-09-28T22:39:34Z",
+  "number": 20308,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "[ci] Fix Deployment E2E tests"
+}

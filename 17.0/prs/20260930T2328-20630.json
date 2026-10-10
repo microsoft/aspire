@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Follow-up fix to internal template manifest generation (#20574), no user-visible impact",
+  "mergedAt": "2026-09-30T23:28:57Z",
+  "number": 20630,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "Preserve ItemGroup evaluation order in template manifest normalization"
+}

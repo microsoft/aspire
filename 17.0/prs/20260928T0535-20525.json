@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Terminal commands available by default",
+  "mergedAt": "2026-09-28T05:35:00Z",
+  "number": 20525,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "included",
+  "title": "Remove terminal commands feature flag"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI security scanning tooling (Zizmor), engineering-only",
+  "mergedAt": "2026-09-30T21:30:44Z",
+  "number": 15987,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "ci: add Zizmor security analysis for GitHub Actions"
+}

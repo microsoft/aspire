@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only fix for outerloop test selectors, not user-facing",
+  "mergedAt": "2026-09-28T21:29:08Z",
+  "number": 20411,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "[outerloop-tests] Fix Radius MongoDB outerloop test selectors"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Temporary official-build pipeline mitigation, not user-facing",
+  "mergedAt": "2026-09-30T22:33:44Z",
+  "number": 20622,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "Temporarily disable source indexing in official builds"
+}

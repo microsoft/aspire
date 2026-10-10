@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire terminal` commands (`ps`, `attach`, `tape play`) are now available by default without enabling the `features.terminalCommandsEnabled` experimental flag. The experimental `WithTerminal()` AppHost API is unchanged.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔓",
+  "firstMergedAt": "2026-09-28T05:35:00Z",
+  "lastMergedAt": "2026-09-28T05:35:00Z",
+  "name": "Terminal commands available by default",
+  "owner": "mitchdenny",
+  "prs": [
+    20525
+  ]
+}

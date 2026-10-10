@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Internal maintainability refactor of generated MSBuild file models, no user-visible behavior change",
+  "mergedAt": "2026-09-30T21:03:38Z",
+  "number": 19915,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "Add serialization models for generated MSBuild files"
+}

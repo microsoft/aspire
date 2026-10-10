@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "MongoDB integrations now consistently use MongoDB.Driver 3.12.0 across target frameworks, updated MongoDB EF Core provider versions, and ship a new net10.0 asset for `Aspire.MongoDB.EntityFrameworkCore`. The upstream driver now requires MongoDB Server 4.4 or later.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-09-30T16:18:42Z",
+  "lastMergedAt": "2026-09-30T16:18:42Z",
+  "name": "Updated and consolidated MongoDB dependencies",
+  "owner": "eerhardt",
+  "prs": [
+    20607
+  ]
+}

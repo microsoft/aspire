@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The legacy `Aspire.RabbitMQ.Client.v6` and `Aspire.MongoDB.Driver.v2` integration packages are removed from the repository and will no longer be published. Consumers should migrate to `Aspire.RabbitMQ.Client` (RabbitMQ.Client 7.x) and `Aspire.MongoDB.Driver` (MongoDB.Driver 3.x); previously published versions remain available on NuGet.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\uddd1\ufe0f",
+  "firstMergedAt": "2026-09-30T18:14:46Z",
+  "lastMergedAt": "2026-09-30T18:14:46Z",
+  "name": "Removed legacy RabbitMQ.Client v6 and MongoDB.Driver v2 packages",
+  "owner": "eerhardt",
+  "prs": [
+    20608
+  ]
+}

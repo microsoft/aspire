@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI maintenance only, no user-facing impact",
+  "mergedAt": "2026-09-28T20:53:45Z",
+  "number": 20559,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "ci(extension): Keep browser debugger E2E running as advisory"
+}

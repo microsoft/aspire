@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Removed legacy RabbitMQ.Client v6 and MongoDB.Driver v2 packages",
+  "mergedAt": "2026-09-30T18:14:46Z",
+  "number": 20608,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "included",
+  "title": "Remove Aspire.RabbitMQ.Client.v6 and Aspire.MongoDB.Driver.v2"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire config set` for experimental polyglot AppHost languages (Java, Go, Python, Rust) now uses flat feature keys (e.g., `experimentalPolyglotJava`) instead of colon-separated names, which previously produced an invalid nested `features` object. Existing settings using the old `experimentalPolyglot:java`-style keys must be renamed to the new flat key names.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd27",
+  "firstMergedAt": "2026-09-28T13:21:19Z",
+  "lastMergedAt": "2026-09-28T13:21:19Z",
+  "name": "Fix experimental polyglot AppHost feature key names",
+  "owner": "sebastienros",
+  "prs": [
+    20481
+  ]
+}

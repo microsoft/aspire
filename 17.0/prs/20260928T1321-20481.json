@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Breaking fix for experimental polyglot AppHost feature key names",
+  "mergedAt": "2026-09-28T13:21:19Z",
+  "number": 20481,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "included",
+  "title": "Unify experimental polyglot AppHost feature keys"
+}

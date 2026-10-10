@@ -1,0 +1,9 @@
+{
+  "author": "app/dotnet-maestro",
+  "comment": "Automated dependency bump for microsoft/dcp, routine maintenance",
+  "mergedAt": "2026-09-30T23:46:55Z",
+  "number": 20623,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "excluded",
+  "title": "[main] Update dependencies from microsoft/dcp"
+}

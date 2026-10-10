@@ -1,0 +1,9 @@
+{
+  "author": "spboyer",
+  "comment": "Fix CLI/SDK version-skew warning false positives",
+  "mergedAt": "2026-09-28T21:36:01Z",
+  "number": 20477,
+  "runDate": "2026-10-10T06:08:15Z",
+  "status": "included",
+  "title": "Only warn about CLI/SDK skew when the CLI is older"
+}
