@@ -79,8 +79,11 @@ jobs:
       # can remain visible while verification rejects any additional IL2026 warnings.
       - name: Build RID-specific packages
         shell: pwsh
+        env:
+          VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $versionOverrideArgs = @($env:VERSION_OVERRIDE_ARG -split '\s+' | Where-Object { $_ })
           $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
           # Repository cleanup can remove artifacts/log while the build is streaming output.
           $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
@@ -95,7 +98,7 @@ jobs:
             /p:BuildBundleDepsOnly=true `
             /p:TargetRids=${{ matrix.targets.rids }} `
             /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
-            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $temporaryLog
+            @versionOverrideArgs 2>&1 | Tee-Object -FilePath $temporaryLog
           $buildExitCode = $LASTEXITCODE
           New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
           Copy-Item -LiteralPath $temporaryLog -Destination $buildLog
@@ -110,18 +113,23 @@ jobs:
       - name: Build bundle payload archive
         # SkipNativeBuild skips only the outer CLI. Bundle.proj still publishes
         # native tray payloads on Windows/macOS and verifies the actual archive.
-        run: >
-          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
-          msbuild
-          eng/Bundle.proj
-          /restore
-          /p:Configuration=${{ inputs.configuration }}
-          /p:TargetRid=${{ matrix.targets.rids }}
-          /p:BundleVersion=ci-bundlepayload
-          /p:SkipNativeBuild=true
-          /p:ContinuousIntegrationBuild=true
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
-          ${{ inputs.versionOverrideArg }}
+        shell: pwsh
+        env:
+          VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
+        run: |
+          $versionOverrideArgs = @($env:VERSION_OVERRIDE_ARG -split '\s+' | Where-Object { $_ })
+          $dotnetCommand = if ('${{ runner.os }}' -eq 'Windows') { './dotnet.cmd' } else { './dotnet.sh' }
+          & $dotnetCommand `
+            msbuild `
+            eng/Bundle.proj `
+            /restore `
+            /p:Configuration=${{ inputs.configuration }} `
+            /p:TargetRid=${{ matrix.targets.rids }} `
+            /p:BundleVersion=ci-bundlepayload `
+            /p:SkipNativeBuild=true `
+            /p:ContinuousIntegrationBuild=true `
+            /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog `
+            @versionOverrideArgs
 
       - name: Smoke test bundled Native AOT TerminalHost
         if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
@@ -131,20 +139,25 @@ jobs:
           -TerminalHostPath "${{ github.workspace }}/artifacts/bundle/${{ matrix.targets.rids }}/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
 
       - name: Build CLI packages
-        run: >
-          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
-          -ci
-          -build
-          -pack
-          -restore
-          -configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
-          /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
-          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
-          ${{ inputs.versionOverrideArg }}
+        shell: pwsh
+        env:
+          VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
+        run: |
+          $versionOverrideArgs = @($env:VERSION_OVERRIDE_ARG -split '\s+' | Where-Object { $_ })
+          $buildCommand = if ('${{ runner.os }}' -eq 'Windows') { './build.cmd' } else { './build.sh' }
+          & $buildCommand `
+            -ci `
+            -build `
+            -pack `
+            -restore `
+            -configuration ${{ inputs.configuration }} `
+            /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog `
+            /p:ContinuousIntegrationBuild=true `
+            /p:SkipManagedBuild=true `
+            /p:TargetRids=${{ matrix.targets.rids }} `
+            /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz `
+            /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
+            @versionOverrideArgs
 
       - name: Verify CLI tool nupkg
         shell: pwsh
