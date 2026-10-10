@@ -264,7 +264,7 @@ internal sealed class LayoutBuilder : IDisposable
 
     internal void CopyTerminalHost()
     {
-        var publishPath = FindPublishPath("Aspire.TerminalHost", "net10.0", requireRidSpecific: true)
+        var publishPath = FindPublishPath("Aspire.TerminalHost", "net11.0", requireRidSpecific: true)
             ?? throw new InvalidOperationException("Aspire.TerminalHost RID-specific publish output not found.");
         foreach (var file in TerminalHostPayload.GetRequiredFiles(_rid))
         {
@@ -279,8 +279,8 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Existing Hosting versions discover DCP's ConPTY provider beside the configured terminal
         // executable. Compatibility launches point at managed/aspire-managed.exe, so retain the
-        // provider there as well; otherwise DCP falls back to inbox ConPTY and loses Kitty graphics.
-        foreach (var file in TerminalHostPayload.GetConPtyFiles(_rid))
+        // Windows PTY sidecars there as well; otherwise DCP falls back to inbox ConPTY and loses Kitty graphics.
+        foreach (var file in TerminalHostPayload.GetWindowsPtyFiles(_rid))
         {
             var destination = Path.Combine(_outputPath, "managed", file);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);

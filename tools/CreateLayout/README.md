@@ -1,12 +1,13 @@
 # CreateLayout Tool
 
-This tool creates the Aspire bundle layout for distribution. It assembles Aspire.Managed, the Native AOT Dashboard, DCP, and (on macOS and Windows) the native tray companion into a payload that the build embeds in the Native AOT Aspire CLI. The payload does not require a globally-installed .NET SDK or a separate shared runtime.
+This tool creates the Aspire bundle layout for distribution. It assembles Aspire.Managed, the Native AOT Dashboard and TerminalHost, DCP, and (on macOS and Windows) the native tray companion into a payload that the build embeds in the Native AOT Aspire CLI. The payload does not require a globally-installed .NET SDK or a separate shared runtime.
 
 ## Purpose
 
 The bundle layout enables polyglot app hosts (TypeScript, Python, Go, etc.) to use Aspire without needing a .NET SDK installed. The bundle includes:
 
-- **Aspire.Managed** - Self-contained executable containing the AppHost server and terminal host
+- **Aspire.Managed** - Self-contained executable containing the AppHost server and compatibility forwarders
+- **TerminalHost** - Native AOT terminal relay and native dependencies; Windows PTY sidecars are also copied beside Aspire.Managed for older Hosting
 - **Dashboard** - Native AOT compiled Blazor-based monitoring UI, native dependencies, and static assets
 - **DCP** - Developer Control Plane (orchestrator)
 - **Tray** - Experimental native macOS or Windows companion
@@ -16,10 +17,11 @@ The bundle layout enables polyglot app hosts (TypeScript, Python, Go, etc.) to u
 Before running CreateLayout, you must:
 
 1. Restore the repository with `./restore.sh` (Linux/macOS) or `.\restore.cmd` (Windows) to set up the local SDK.
-2. Publish `Aspire.Managed` as self-contained and `Aspire.Dashboard` with Native AOT for the RID and configuration passed to CreateLayout. Building Native AOT output requires the native toolchain for the target platform.
+2. Publish `Aspire.Managed` as self-contained and `Aspire.Dashboard` and `Aspire.TerminalHost` with Native AOT for the RID and configuration passed to CreateLayout. Building Native AOT output requires the native toolchain for the target platform.
 3. Have the publish outputs available in the artifacts directory:
   - `Aspire.Managed`: `artifacts/bin/Aspire.Managed/{config}/net10.0/{rid}/publish/`
   - `Aspire.Dashboard`: `artifacts/bin/Aspire.Dashboard/{config}/net11.0/{rid}/publish/`
+  - `Aspire.TerminalHost`: `artifacts/bin/Aspire.TerminalHost/{config}/net11.0/{rid}/publish/`
   - When publishing with `PlatformName={rid}`, the path includes an additional `{rid}/` immediately after the project name. The bundle build uses this layout for the Dashboard.
 4. Restore the DCP NuGet package for the target RID. CreateLayout searches `NUGET_PACKAGES`, or the default NuGet package cache when that variable is not set.
 5. For macOS and Windows, publish and sign the matching native tray payload before assembling the layout. The app or executable is copied as-is; CreateLayout does not sign it.

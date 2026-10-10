@@ -269,7 +269,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             _logger.LogDebug("  {Dir}/{Dcp}/{Exe}: {Exists}", BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName, Path.GetFileName(bundleDcpExe), File.Exists(bundleDcpExe) ? "exists" : "MISSING");
 
             if (File.Exists(bundleManagedExe) && File.Exists(bundleDashboardExe) && File.Exists(bundleDcpExe) &&
-                TerminalHostPayload.IsValid(Path.Combine(bundlePath, BundleDiscovery.TerminalHostDirectoryName), System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+                TerminalHostPayload.IsValid(Path.Combine(bundlePath, BundleDiscovery.TerminalHostDirectoryName)))
             {
                 _logger.LogDebug("TryInferLayout: New bundle/ layout is valid");
                 return new LayoutConfiguration
@@ -311,7 +311,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         _logger.LogDebug("  dcp/{DcpExe}: {Exists}", Path.GetFileName(dcpExePath), File.Exists(dcpExePath) ? "exists" : "MISSING");
 
         if (!File.Exists(managedExePath) || !File.Exists(dashboardExePath) || !File.Exists(dcpExePath) ||
-            !TerminalHostPayload.IsValid(Path.Combine(layoutPath, BundleDiscovery.TerminalHostDirectoryName), System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+            !TerminalHostPayload.IsValid(Path.Combine(layoutPath, BundleDiscovery.TerminalHostDirectoryName)))
         {
             _logger.LogDebug("TryInferLayout: Layout rejected - required executable not found");
             return null;
@@ -375,8 +375,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
         }
 
         var terminalHostPath = layout.GetTerminalHostPath();
-        if (terminalHostPath is null || !TerminalHostPayload.IsValid(Path.GetDirectoryName(terminalHostPath)!,
-            System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier))
+        if (terminalHostPath is null || !TerminalHostPayload.IsValid(Path.GetDirectoryName(terminalHostPath)!))
         {
             _logger.LogDebug("Layout validation failed: TerminalHost not found at {Path}", terminalHostPath);
             return false;

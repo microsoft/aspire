@@ -41,6 +41,8 @@ This does **not** mean every application can run without other prerequisites. .N
 
 The managed helper contains its own runtime. The CLI, Dashboard, and terminal host are Native AOT executables; there is no separate `runtime/` directory or `ASPIRE_RUNTIME_PATH` contract for the current bundle.
 
+On Windows, `hex1bpty.exe`, `conpty.dll`, and the architecture-specific `OpenConsole.exe` files are also copied into `managed/`. Older Hosting versions discover PTY sidecars beside `aspire-managed.exe` when using the compatibility launch path.
+
 ## Architecture
 
 ```text
@@ -219,6 +221,8 @@ At a candidate root, discovery recognizes `bundle/{managed,dashboard,dcp}` or th
 
 The resolver handles install roots, component roots, versioned layouts, and compatible older bundle shapes. An explicitly supplied invalid path is reported when warnings are enabled rather than silently replaced by another installation.
 
+When `terminalhost/` is absent, the SDK resolver tries the older `aspire-managed terminalhost` command as a best-effort fallback, not a guarantee of compatibility with every older CLI. If the directory exists but its executable is missing, the bundle is rejected as incomplete.
+
 ### Hosting Runtime Resolution
 
 [DcpOptions](../../src/Aspire.Hosting/Dcp/DcpOptions.cs) resolves DCP and Dashboard using:
@@ -327,7 +331,7 @@ dotnet msbuild eng/Bundle.proj /t:Build /p:TargetRid=osx-arm64 /p:Configuration=
 The build sequence is:
 
 1. Publish `Aspire.Managed` as a self-contained single-file executable.
-2. Publish `Aspire.Dashboard` with Native AOT for the same RID and configuration.
+2. Publish `Aspire.Dashboard` and `Aspire.TerminalHost` with Native AOT for the same RID and configuration.
 3. Publish the native tray payload on macOS or Windows, before signing bundle components.
 4. Restore the matching DCP package, using the target OS/architecture rather than the build machine's defaults.
 5. Run `CreateLayout` to assemble the payload and create its `.tar.gz` archive.
@@ -335,7 +339,7 @@ The build sequence is:
 
 The assembled directories are under `artifacts/bundle/{rid}/`; the payload archive is `artifacts/bundle/aspire-{version}-{rid}.tar.gz`. The self-extracting CLI is in the CLI project's publish output, not in the payload directory.
 
-`Configuration` defaults to Release, as does the GitHub Actions native-archive workflow. Ordinary managed development and test builds still use Debug. `SkipManagedBuild=true` reuses existing Managed, Dashboard, and TerminalHost publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
+`Configuration` defaults to Debug for local bundle builds. The GitHub Actions native-archive workflow defaults to Release and passes it explicitly; CI bundle creation rejects non-Release configurations so distributed payloads use Native AOT optimizations. `SkipManagedBuild=true` reuses existing Managed, Dashboard, and TerminalHost publishes; `SkipNativeBuild=true` skips the final CLI publish. They do not make missing payload components optional.
 
 ### CreateLayout
 

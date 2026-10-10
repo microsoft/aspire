@@ -19,7 +19,7 @@
     <!-- Don't generate web.config or include IIS hosting -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
 
-    <!-- The managed server remains self-contained; native terminal assets ship separately. -->
+    <!-- Embed the native .NET runtime libraries. Windows PTY sidecars remain external in the bundle. -->
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 

@@ -1029,6 +1029,7 @@ public sealed class TestTriggerMapTests
     }
 
     [Theory]
+    [InlineData("Aspire.Cli", "Aspire.Cli.EndToEnd.Tests")]
     [InlineData("Aspire.TerminalHost", "Aspire.Cli.EndToEnd.Tests")]
     [InlineData("Aspire.Dashboard", "Aspire.Templates.Tests")]
     public void TerminalPipelinePublishSettingsRunTheirInfrastructureCoverage(string projectName, string consumerProject)

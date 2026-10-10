@@ -2642,7 +2642,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 env[BundleDiscovery.DcpPathEnvVar] = layoutDcpPath;
             }
 
-            if (!IsUsableDashboardPath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)))
+            if (!IsUsableExecutablePath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)))
             {
                 SemVersion.TryParse(aspireHostingVersion, out var hostingVersion);
                 var supportsNativeDashboard = DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
@@ -2663,7 +2663,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             var launch = repoPath is not null
                 ? (Path: repoPath, InvocationArgs: string.Empty)
                 : layout is not null ? TerminalHostLaunchHelper.GetLaunch(layout, TerminalHostLaunchHelper.SupportsDirectLaunch(hostingVersion)) : null;
-            if (launch is { } terminalHost && IsUsableDashboardPath(terminalHost.Path))
+            if (launch is { } terminalHost && IsUsableExecutablePath(terminalHost.Path))
             {
                 env[BundleDiscovery.TerminalHostPathEnvVar] = terminalHost.Path;
                 if (GetEffectiveEnvironmentValue(env, BundleDiscovery.TerminalHostInvocationArgsEnvVar) is null)
@@ -2685,7 +2685,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             Directory.Exists(path) &&
             File.Exists(BundleDiscovery.GetDcpExecutablePath(path));
 
-    private static bool IsUsableDashboardPath(string? path)
+    private static bool IsUsableExecutablePath(string? path)
         => !string.IsNullOrWhiteSpace(path) && File.Exists(path);
 
     /// <summary>

@@ -19,7 +19,7 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
     public void CopyTerminalHostRequiresNativeDependenciesAndExcludesSymbols(string rid)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        var publish = Path.Combine(workspace.Path, "bin", "Aspire.TerminalHost", "Debug", "net10.0", rid, "publish");
+        var publish = Path.Combine(workspace.Path, "bin", "Aspire.TerminalHost", "Debug", "net11.0", rid, "publish");
         var files = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
         foreach (var file in files)
         {
@@ -36,6 +36,30 @@ public class CreateLayoutTests(ITestOutputHelper testOutputHelper)
 
         File.Delete(Path.Combine(publish, files[^1]));
         Assert.Throws<InvalidOperationException>(builder.CopyTerminalHost);
+    }
+
+    [Fact]
+    public void TerminalHostPayloadValidationUsesCurrentRidAndRequiresNonEmptyFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var rid = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier;
+        var files = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
+
+        Assert.False(Aspire.Shared.TerminalHostPayload.IsValid(workspace.Path));
+        foreach (var file in files)
+        {
+            var path = Path.Combine(workspace.Path, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, file);
+        }
+
+        Assert.True(Aspire.Shared.TerminalHostPayload.IsValid(workspace.Path));
+        Assert.True(Aspire.Shared.TerminalHostPayload.IsValid(workspace.Path, rid));
+
+        File.WriteAllText(Path.Combine(workspace.Path, files[^1]), string.Empty);
+
+        Assert.False(Aspire.Shared.TerminalHostPayload.IsValid(workspace.Path));
+        Assert.False(Aspire.Shared.TerminalHostPayload.IsValid(workspace.Path, rid));
     }
 
     [Theory]

@@ -279,7 +279,7 @@ internal static class BundleDiscovery
     /// Returns <c>null</c> when <paramref name="repoRoot"/> is empty or the artifact is missing.
     /// </summary>
     /// <remarks>
-    /// Hardcoded to Debug/net10.0 to keep behavior predictable — Release configurations are
+    /// Hardcoded to Debug/net11.0 to keep behavior predictable — Release configurations are
     /// rarely used during inner-loop dev, and probing every TFM/config combination makes the
     /// outcome depend on stale build outputs from earlier sessions.
     /// </remarks>
@@ -296,7 +296,7 @@ internal static class BundleDiscovery
             "bin",
             "Aspire.TerminalHost",
             "Debug",
-            "net10.0",
+            "net11.0",
             GetExecutableFileName(TerminalHostExecutableName));
         return File.Exists(terminalHostPath) ? terminalHostPath : null;
     }

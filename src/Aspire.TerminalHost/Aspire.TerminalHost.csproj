@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
     <!-- Match the supported CLI bundle RIDs. -->
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,7 +11,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RollForward>Major</RollForward>
     <PublishAot>true</PublishAot>
-    <ServerGarbageCollection>true</ServerGarbageCollection>
     <TrimmerSingleWarn>false</TrimmerSingleWarn>
     <!--
       CS1591: Missing XML comment for publicly visible type or member - this assembly is
@@ -35,7 +34,6 @@
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="StreamJsonRpc" />

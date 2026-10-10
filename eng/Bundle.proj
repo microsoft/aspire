@@ -26,7 +26,7 @@
 
   <PropertyGroup>
     <!-- Configuration -->
-    <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
 
     <!-- Runtime ID for the bundle -->
     <TargetRid Condition="'$(TargetRid)' == '' and '$(TargetRids)' != ''">$(TargetRids)</TargetRid>
@@ -81,6 +81,9 @@
   </Target>
 
   <Target Name="_ShowBanner">
+    <!-- CI archives must exercise the optimized payload that we ship, not Debug Native AOT output. -->
+    <Error Condition="'$(ContinuousIntegrationBuild)' == 'true' and '$(Configuration)' != 'Release'"
+           Text="CI native bundles must use Configuration=Release." />
     <MakeDir Directories="$(ArtifactsLogDir)" Condition="'$(ContinuousIntegrationBuild)' == 'true'" />
 
     <Message Importance="high" Text="" />

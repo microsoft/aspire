@@ -709,7 +709,7 @@ the inner-loop build. After `./restore.sh`, rebuild just the relay with:
 ```
 
 Repository CLI launches with `ASPIRE_REPO_ROOT` set select
-`artifacts/bin/Aspire.TerminalHost/Debug/net10.0/Aspire.TerminalHost[.exe]`
+`artifacts/bin/Aspire.TerminalHost/Debug/net11.0/Aspire.TerminalHost[.exe]`
 and no dispatcher arguments. Run `playground/Terminals/Terminals.AppHost` to
 exercise resource terminals in the dashboard. For a custom configuration, supply
 `ASPIRE_TERMINAL_HOST_PATH` and an empty `ASPIRE_TERMINAL_HOST_INVOCATION_ARGS`

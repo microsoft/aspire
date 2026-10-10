@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.IO.Hashing;
-using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Layout;
@@ -622,8 +621,7 @@ internal sealed class BundleService(
             return false;
         }
 
-        if (!TerminalHostPayload.IsValid(Path.Combine(versionDir, BundleDiscovery.TerminalHostDirectoryName),
-            RuntimeInformation.RuntimeIdentifier))
+        if (!TerminalHostPayload.IsValid(Path.Combine(versionDir, BundleDiscovery.TerminalHostDirectoryName)))
         {
             return false;
         }

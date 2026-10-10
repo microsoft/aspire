@@ -262,6 +262,8 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return false;
         }
 
+        // Older CLI bundles omit terminalhost/ entirely. Try their legacy dispatcher as a
+        // best-effort fallback; an existing but incomplete component was rejected above.
         var hasStandaloneTerminalHost = File.Exists(terminalHostPath);
         resolution = new BundleResolution(
             dcpDir,

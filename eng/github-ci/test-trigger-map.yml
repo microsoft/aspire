@@ -536,6 +536,7 @@ path_rules:
     targets: [CLI_BUNDLE, test:Infrastructure.Tests]
     reason: assembles and validates native CLI bundle payloads
   - paths:
+      - src/Aspire.Cli/Aspire.Cli.csproj
       - src/Aspire.TerminalHost/Aspire.TerminalHost.csproj
       - src/Aspire.Dashboard/Aspire.Dashboard.csproj
     targets: [test:Infrastructure.Tests]
