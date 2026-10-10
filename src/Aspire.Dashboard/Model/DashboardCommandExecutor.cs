@@ -24,6 +24,8 @@ public sealed class DashboardCommandExecutor(
     DashboardTelemetryService telemetryService,
     INotificationService notificationService)
 {
+    private const int MaxToastMessageLength = 250;
+
     private readonly HashSet<(string ResourceName, string CommandName)> _executingCommands = [];
     private readonly object _lock = new object();
 
@@ -206,8 +208,10 @@ public sealed class DashboardCommandExecutor(
                 navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource)));
                 return Task.CompletedTask;
             };
-            // Fluent renders toast messages as HTML, but command output is plain text.
-            toastOptions.Message = WebUtility.HtmlEncode(response.Message);
+            // Truncate plain-text command output before encoding it for Fluent's HTML-rendering toast,
+            // so the limit applies to displayed text rather than HTML entities.
+            var toastMessage = response.Message is null ? null : FormatHelpers.TruncateText(response.Message, MaxToastMessageLength);
+            toastOptions.Message = WebUtility.HtmlEncode(toastMessage);
 
             if (response.Result is not null)
             {

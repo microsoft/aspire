@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,28 @@ public class DashboardCommandExecutorTests : DashboardTestContext
     [InlineData("")]
     [InlineData(null)]
     public async Task ExecuteAsyncCore_FailedCommand_RendersMessageAsPlainText(string? message)
+    {
+        await AssertFailureMessageAsync(message, message);
+    }
+
+    [Theory]
+    [InlineData('&', 249)]
+    [InlineData('&', 250)]
+    [InlineData('&', 251)]
+    [InlineData('&', 10000)]
+    [InlineData('<', 249)]
+    [InlineData('<', 250)]
+    [InlineData('<', 251)]
+    [InlineData('<', 10000)]
+    public async Task ExecuteAsyncCore_FailedCommand_TruncatesPlainTextBeforeEncoding(char character, int messageLength)
+    {
+        var message = new string(character, messageLength);
+        var expectedMessage = messageLength <= 250 ? message : message[..249] + FormatHelpers.Ellipsis;
+
+        await AssertFailureMessageAsync(message, expectedMessage);
+    }
+
+    private async Task AssertFailureMessageAsync(string? message, string? expectedMessage)
     {
         var response = new ResourceCommandResponseViewModel
         {
@@ -57,14 +80,14 @@ public class DashboardCommandExecutorTests : DashboardTestContext
 
         var toast = Assert.Single(toasts.FindComponents<FluentToast>());
         Assert.Equal(ToastIntent.Error, toast.Instance.Intent);
-        if (string.IsNullOrEmpty(message))
+        if (string.IsNullOrEmpty(expectedMessage))
         {
             Assert.Null(toast.Instance.ChildContent);
         }
         else
         {
             var body = toast.Find($"[id=\"{toast.Instance.Id}-body\"]");
-            Assert.Equal(message, body.TextContent);
+            Assert.Equal(expectedMessage, body.TextContent);
             Assert.Empty(body.Children);
         }
 
