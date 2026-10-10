@@ -1,0 +1,16 @@
+{
+  "id": "aspire-cli-tests-agentinitcommandtests-installsprojectv2migrationskill-macos",
+  "type": "flaky-test",
+  "title": "Flaky: AgentInitCommandTests.AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences times out after 30s on macOS under CPU contention",
+  "test_name": "Aspire.Cli.Tests.Commands.AgentInitCommandTests.AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences(selectByName: True)",
+  "error_pattern": "System.TimeoutException : The operation at /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AgentInitCommandTests.cs:426 timed out after reaching the limit of 30000ms.\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber)",
+  "occurrences": [
+    {
+      "run_id": 38053277189,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/38053277189",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-10T13:29:19Z"
+    }
+  ]
+}

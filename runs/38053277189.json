@@ -1,0 +1,319 @@
+{
+  "run_id": 38053277189,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/38053277189",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-10T13:29:19Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20846,
+    "title": "Add dashboard startup telemetry",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "feature/dashboard-startup-telemetry",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20846",
+    "merged_at": "2026-10-10T12:47:43Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "844cba8559878f6511b76880c9d54045df0ce0ae",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      },
+      {
+        "sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "message": "[WIP] Fix Go AppHost start timeout error (#20086) - [x] Identify the Go AppHost startup failure from logs and code. - [x] Implement a focused fix with regression coverage. - [x] Run targeted validation and review the final changes. <!-- START COPILOT CODING AGENT SUFFIX --> - Fixes #20056 --------- Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: David Pine <7679720+IEvangelist",
+        "html_url": "https://github.com/microsoft/aspire/commit/c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "pull_request": {
+          "number": 20086,
+          "title": "[WIP] Fix Go AppHost start timeout error",
+          "url": "https://github.com/microsoft/aspire/pull/20086",
+          "merged_at": "2026-10-09T20:10:35Z"
+        }
+      },
+      {
+        "sha": "ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "message": "Remove ASPIREAZURE003 from Azure role-assignment APIs (#20857) ## Description `AzureRoleAssignmentResource` is going stable: it is no longer experimental. Consumers can use this API without suppressing `ASPIREAZURE003`. Azure role assignments are not an Azure Networking feature, so the networking experimental diagnostic should not apply to this type. Remove its `Experimental` attribute and clean up obsolete suppressions in `RoleAssignmentResourceAnnotation`, the shared ACR pull identity helper, ",
+        "html_url": "https://github.com/microsoft/aspire/commit/ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "pull_request": {
+          "number": 20857,
+          "title": "Remove ASPIREAZURE003 from Azure role-assignment APIs",
+          "url": "https://github.com/microsoft/aspire/pull/20857",
+          "merged_at": "2026-10-09T20:42:47Z"
+        }
+      },
+      {
+        "sha": "517d566279e2c1ceded7788930197e5f6667bbb0",
+        "message": "Add polyglot hosting integrations through ATS projection (#16110) ## Description Part of #16220. Adds support for hosting integrations authored outside .NET through Aspire's ATS metadata, SDK generation, and runtime dispatch pipeline. A consuming AppHost gets normal generated builder methods, while the integration executes in its own runtime and configures the same .NET resource model as a managed integration. Integration-host ownership belongs to the AppHost server rather than the CLI. The CLI ",
+        "html_url": "https://github.com/microsoft/aspire/commit/517d566279e2c1ceded7788930197e5f6667bbb0",
+        "pull_request": {
+          "number": 16110,
+          "title": "Add polyglot hosting integrations through ATS projection",
+          "url": "https://github.com/microsoft/aspire/pull/16110",
+          "merged_at": "2026-10-09T21:41:12Z"
+        }
+      },
+      {
+        "sha": "ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "message": "fix(java): update Log4j in Spring Boot samples and starter (#20830) ## Description The Spring Boot catalog and orders playground services, and the CLI's Java starter API, resolve Log4j API 2.24.3. That version is affected by [CVE-2026-49844](https://logging.apache.org/security.html#CVE-2026-49844): `MapMessage` can serialize non-finite floating-point values as invalid JSON, disrupting downstream log parsing when the affected logging path is used. Spring Boot's dependency management still imports",
+        "html_url": "https://github.com/microsoft/aspire/commit/ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "pull_request": {
+          "number": 20830,
+          "title": "fix(java): update Log4j in Spring Boot samples and starter",
+          "url": "https://github.com/microsoft/aspire/pull/20830",
+          "merged_at": "2026-10-09T22:06:46Z"
+        }
+      },
+      {
+        "sha": "213aa53159663c6f3e4a29bf7df907179ae6e1c4",
+        "message": "Remove obsolete ASP.NET policy links from issue templates (#20782) ## Description Remove inherited ASP.NET issue-policy links from Aspire’s issue templates while retaining issue guidance and existing-issue checks. - **Templates:** Remove the policy contact link and references from the bug and feature request forms. ## Checklist - Is this feature complete?   - [x] Yes. Ready to ship.   - [ ] No. Follow-up changes expected. - Are you including unit tests for the changes and scenario tests if relev",
+        "html_url": "https://github.com/microsoft/aspire/commit/213aa53159663c6f3e4a29bf7df907179ae6e1c4",
+        "pull_request": {
+          "number": 20782,
+          "title": "Remove obsolete ASP.NET policy links from issue templates",
+          "url": "https://github.com/microsoft/aspire/pull/20782",
+          "merged_at": "2026-10-10T00:14:12Z"
+        }
+      },
+      {
+        "sha": "ccc9d55a69991612581e841a5c664432af1c9332",
+        "message": "Recover ambiguous DCP creates with configurable timeouts (#20752) ## Description A single timed-out or HTTP 504 DCP create currently puts a resource into `FailedToStart`, even though the server may have committed the object. The 20-second steady-state client budget can also expire before DCP's own create timeout, and users cannot configure those limits for slower environments. Recover ambiguous creates by checking whether the same kind/namespace/name exists before retrying the POST. Creation has",
+        "html_url": "https://github.com/microsoft/aspire/commit/ccc9d55a69991612581e841a5c664432af1c9332",
+        "pull_request": {
+          "number": 20752,
+          "title": "Recover ambiguous DCP creates with configurable timeouts",
+          "url": "https://github.com/microsoft/aspire/pull/20752",
+          "merged_at": "2026-10-10T00:49:21Z"
+        }
+      },
+      {
+        "sha": "a011c879e2294c0f103ef09000fe1450dc1189bf",
+        "message": "Add Markdown descriptions to dashboard text visualizer dialogs (#20819) ## Description Mermaid graph exports currently show diagram source without explaining the format. This change adds an optional Markdown description above text visualizer content and uses it to explain Mermaid with a link to Aspire's documentation. - Display descriptions above text/code or rendered Markdown, using the existing Markdown renderer and safe URL schemes. - Keep the description behind the existing secret-warning co",
+        "html_url": "https://github.com/microsoft/aspire/commit/a011c879e2294c0f103ef09000fe1450dc1189bf",
+        "pull_request": {
+          "number": 20819,
+          "title": "Add Markdown descriptions to dashboard text visualizer dialogs",
+          "url": "https://github.com/microsoft/aspire/pull/20819",
+          "merged_at": "2026-10-10T01:12:23Z"
+        }
+      },
+      {
+        "sha": "c5ca439d81eee3e703718108cd93179689da71f4",
+        "message": "Fix dashboard graph initialization and circuit teardown errors (#20811)",
+        "html_url": "https://github.com/microsoft/aspire/commit/c5ca439d81eee3e703718108cd93179689da71f4",
+        "pull_request": {
+          "number": 20811,
+          "title": "Fix dashboard graph initialization and circuit teardown errors",
+          "url": "https://github.com/microsoft/aspire/pull/20811",
+          "merged_at": "2026-10-10T05:14:55Z"
+        }
+      },
+      {
+        "sha": "2e06172e2fba4953e4b6d5e69a7d13b4c70ab86b",
+        "message": "Update milestone changelog for 17.0 (#20849)",
+        "html_url": "https://github.com/microsoft/aspire/commit/2e06172e2fba4953e4b6d5e69a7d13b4c70ab86b",
+        "pull_request": {
+          "number": 20849,
+          "title": "Update milestone changelog for 17.0",
+          "url": "https://github.com/microsoft/aspire/pull/20849",
+          "merged_at": "2026-10-10T05:46:43Z"
+        }
+      },
+      {
+        "sha": "776f81c6601141981b30e0b5901fad9bf6e6e2b7",
+        "message": "Consolidate RESX generator metadata and align resource visibility (#20843)",
+        "html_url": "https://github.com/microsoft/aspire/commit/776f81c6601141981b30e0b5901fad9bf6e6e2b7",
+        "pull_request": {
+          "number": 20843,
+          "title": "Consolidate RESX generator metadata and align resource visibility",
+          "url": "https://github.com/microsoft/aspire/pull/20843",
+          "merged_at": "2026-10-10T05:49:13Z"
+        }
+      },
+      {
+        "sha": "ce70b037a9a2bdc95bd5c9415f19df1565782f65",
+        "message": "Improve CLI and Dashboard product telemetry shutdown durability (#20851)",
+        "html_url": "https://github.com/microsoft/aspire/commit/ce70b037a9a2bdc95bd5c9415f19df1565782f65",
+        "pull_request": {
+          "number": 20851,
+          "title": "Improve CLI and Dashboard product telemetry shutdown durability",
+          "url": "https://github.com/microsoft/aspire/pull/20851",
+          "merged_at": "2026-10-10T06:02:24Z"
+        }
+      },
+      {
+        "sha": "320ce8e2ed318266607a1d1b7d3f3bda629d3a20",
+        "message": "Update Microsoft Developer Control Plane to 0.27.0 (#20874)",
+        "html_url": "https://github.com/microsoft/aspire/commit/320ce8e2ed318266607a1d1b7d3f3bda629d3a20",
+        "pull_request": {
+          "number": 20874,
+          "title": "Update Microsoft Developer Control Plane to 0.27.0",
+          "url": "https://github.com/microsoft/aspire/pull/20874",
+          "merged_at": "2026-10-10T06:46:07Z"
+        }
+      },
+      {
+        "sha": "62a7dbcc98a06c1b85705f262032e2081e88ca31",
+        "message": "Fix dashboard histogram temporality, resets, and bucket aggregation (#20755) ## Description Histogram charts can silently show incorrect counts or percentiles when receiving delta data, cumulative resets, or different bucket layouts across dimensions. This fixes those cases and removes avoidable allocations from ingestion and chart aggregation. ### User-facing behavior - Delta histogram intervals contribute their observations directly instead of being treated as cumulative snapshots. - Cumulativ",
+        "html_url": "https://github.com/microsoft/aspire/commit/62a7dbcc98a06c1b85705f262032e2081e88ca31",
+        "pull_request": {
+          "number": 20755,
+          "title": "Fix dashboard histogram temporality, resets, and bucket aggregation",
+          "url": "https://github.com/microsoft/aspire/pull/20755",
+          "merged_at": "2026-10-10T07:02:26Z"
+        }
+      },
+      {
+        "sha": "c18bc24d9a6e124581e11767e63195871165c35a",
+        "message": "Ship TerminalHost as a standalone Native AOT bundle executable (#20775) ## Description Move terminal hosting out of `aspire-managed` so the CLI bundle can ship it as a standalone Native AOT executable, while retaining fast framework-dependent builds for repository development. - Publish and bundle `terminalhost/Aspire.TerminalHost[.exe]` with its RID-specific Hex1b native dependencies for all seven existing CLI bundle RIDs. - Current Hosting launches the standalone executable directly. Older/unk",
+        "html_url": "https://github.com/microsoft/aspire/commit/c18bc24d9a6e124581e11767e63195871165c35a",
+        "pull_request": {
+          "number": 20775,
+          "title": "Ship TerminalHost as a standalone Native AOT bundle executable",
+          "url": "https://github.com/microsoft/aspire/pull/20775",
+          "merged_at": "2026-10-10T08:22:00Z"
+        }
+      },
+      {
+        "sha": "844cba8559878f6511b76880c9d54045df0ce0ae",
+        "message": "Add dashboard startup telemetry (#20846)",
+        "html_url": "https://github.com/microsoft/aspire/commit/844cba8559878f6511b76880c9d54045df0ce0ae",
+        "pull_request": {
+          "number": 20846,
+          "title": "Add dashboard startup telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20846",
+          "merged_at": "2026-10-10T12:47:43Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "id": 114216874221,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38053277189/job/114216874221",
+      "classification": "flaky-test",
+      "reason": "Two unrelated tests failed with timeouts under heavy macOS runner contention (RemoteExecutor 60s timeout and a 30s async timeout); 5618/5664 tests passed, consistent with resource-contention flakiness rather than a deterministic code defect.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 114216874809,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38053277189/job/114216874809",
+      "classification": "flaky-test",
+      "reason": "Single test failure (ChildProcessTests Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees) throwing InvalidOperationException reading ExitCode on a process not started by this object - a known process-lifecycle race matching a prior recurring flaky cause.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "id": 114216876103,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38053277189/job/114216876103",
+      "classification": "flaky-test",
+      "reason": "Single test failure (TrayWatchStreamTests.RemovedHostCancelsItsResourceWatchAndReplacementDoesNotReuseHealth) asserting exit code 0 but got 7 - a reconciliation-count race matching a prior recurring flaky cause for this exact test.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x)",
+      "id": 114218614726,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38053277189/job/114218614726",
+      "classification": "main-repository-breakage",
+      "reason": "After all 59 TypeScript validation AppHosts passed, the Nuxt integration's generated 'web' Docker image build deterministically fails at 'RUN npm ci' with exit code 1 - a known recurring repository-level breakage (6+ prior occurrences) unrelated to this run's specific merges.",
+      "failed_steps": [
+        "Run TypeScript SDK validation"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 114220579689,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38053277189/job/114220579689",
+      "classification": "main-repository-breakage",
+      "reason": "Gate job that aggregates polyglot SDK validation results and fails because the TypeScript SDK Validation job failed (npm ci Docker build break); Python, Go, Java, and Rust validations all succeeded.",
+      "failed_steps": [
+        "Check validation results"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Telemetry.TelemetryShutdownTests.Shutdown_HandlesBlockedDeliveryAndStorage(scenario: \"Dashboard\")",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "Microsoft.DotNet.RemoteExecutor.RemoteExecutionException : Half-way through waiting for remote process.\nTimed out at 10/10/2026 12:53:20 PM after 60000ms waiting for remote process.\n\tProcess ID: 10893\n\tName: dotnet\n\tMainModule: /Users/runner/work/aspire/aspire/.dotnet/dotnet\n\tStartTime: 10/10/2026 12:52:20 PM\n\tTotalProcessorTime: 00:00:00.3904583",
+      "stack_trace": "at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose(Boolean disposing) in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 157\n   at Microsoft.DotNet.RemoteExecutor.RemoteInvokeHandle.Dispose() in /_/src/Microsoft.DotNet.RemoteExecutor/src/RemoteInvokeHandle.cs:line 58\n   at Aspire.Cli.Tests.Telemetry.TelemetryShutdownTests.Shutdown_HandlesBlockedDeliveryAndStorage(String scenario) in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Telemetry/TelemetryShutdownTests.cs:line 262\n   at Aspire.Cli.Tests.Telemetry.TelemetryShutdownTests.Shutdown_HandlesBlockedDeliveryAndStorage(String scenario) in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Telemetry/TelemetryShutdownTests.cs:line 113\n   at InvokeStub_TelemetryShutdownTests.Shutdown_HandlesBlockedDeliveryAndStorage(Object, Span`1)\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)",
+      "standard_output": "Temporary workspace created at: /var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/Aspire.Cli.Tests/Workspace/5eaf40au.jhm\nDisposing temporary workspace at: /var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/Aspire.Cli.Tests/Workspace/5eaf40au.jhm",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "RemoteExecutor process timeout on macOS arm64 runner under heavy CPU/memory contention (90.6% CPU, 66% mem per heartbeat log); unrelated to the dashboard telemetry merge and to any code changed in candidate merges."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Commands.AgentInitCommandTests.AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences(selectByName: True)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (macos-latest)",
+      "error": "System.TimeoutException : The operation at /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AgentInitCommandTests.cs:426 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in /Users/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 159\n   at Aspire.Cli.Tests.Commands.AgentInitCommandTests.AgentInitCommand_NonInteractive_InstallsProjectV2MigrationSkillWithReferences(Boolean selectByName) in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AgentInitCommandTests.cs:line 426\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: /var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/Aspire.Cli.Tests/Workspace/hawdctuq.czw\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: stagingChannelEnabled, ConfigKey: features:stagingChannelEnabled, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature stagingChannelEnabled using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: showAllTemplates, ConfigKey: features:showAllTemplates, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature showAllTemplates using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotPython, ConfigKey: features:experimentalPolyglotPython, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotPython using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotGo, ConfigKey: features:experimentalPolyglotGo, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotGo using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotJava, ConfigKey: features:experimentalPolyglotJava, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotJava using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotRust, ConfigKey: features:experimentalPolyglotRust, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotRust using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotPython, ConfigKey: features:experimentalPolyglotPython, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotPython using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotJava, ConfigKey: features:experimentalPolyglotJava, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotJava using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotGo, ConfigKey: features:experimentalPolyglotGo, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotGo using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotRust, ConfigKey: features:experimentalPolyglotRust, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotRust using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotGo, ConfigKey: features:experimentalPolyglotGo, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotGo using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: experimentalPolyglotJava, ConfigKey: features:experimentalPolyglotJava, Value: '(null)', DefaultValue: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature experimentalPolyglotJava using default value: False\n| [2026-10-10T12:53:51] Aspire.Cli.Configuration.Features Trace: Feature check: stagingChannelEnabled, ConfigKey: features:stagingChannelEnabled, Valu",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "30s async timeout on the same macOS runner suffering heavy CPU/memory contention as the adjacent RemoteExecutor timeout; no code change in candidate merges touches this skill-install path."
+    },
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(dispose: True, ownedTree: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.InvalidOperationException : Process was not started by this object, so requested information cannot be determined.",
+      "stack_trace": "at System.Diagnostics.Process.get_ExitCode()\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 382\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 394\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 394\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches a known recurring flaky cause for this exact test parameterization: a race where the process exit-code is queried on a process object that was adopted rather than started directly."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.RemovedHostCancelsItsResourceWatchAndReplacementDoesNotReuseHealth",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (ubuntu-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   7",
+      "stack_trace": "at Aspire.Cli.Tests.Backchannel.TrayWatchStreamTests.RemovedHostCancelsItsResourceWatchAndReplacementDoesNotReuseHealth() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Backchannel/TrayWatchStreamTests.cs:line 839\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches a known recurring flaky cause for this exact test: an intermittent reconciliation-count race in the tray watch stream reconciliation loop."
+    }
+  ],
+  "causes": [
+    "aspire-cli-tests-telemetryshutdowntests-shutdown-handlesblockeddeliveryandstorage-macos",
+    "aspire-cli-tests-agentinitcommandtests-installsprojectv2migrationskill-macos",
+    "aspire-shared-tests-childprocesstests-windows-gracefultimeout-exitcode-race",
+    "aspire-cli-tests-traywatchstream-removedhostcancels-flaky",
+    "typescript-sdk-nuxt-integration-npm-ci-docker-build-failure"
+  ]
+}
