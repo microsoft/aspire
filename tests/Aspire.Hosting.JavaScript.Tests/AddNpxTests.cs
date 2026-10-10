@@ -13,11 +13,11 @@ namespace Aspire.Hosting.JavaScript.Tests;
 public class AddNpxTests
 {
     [Fact]
-    public void AddNpxAddsResourceAndRequiredCommands()
+    public void AddNpxAppAddsResourceAndRequiredCommands()
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("lint", "eslint");
+        var resource = builder.AddNpxApp("lint", "eslint");
 
         Assert.Equal("lint", resource.Resource.Name);
         Assert.Equal("npx", resource.Resource.Command);
@@ -30,7 +30,7 @@ public class AddNpxTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("lint", "eslint")
+        var resource = builder.AddNpxApp("lint", "eslint")
             .WithNpxVersion("9.25.1")
             .WithNpxRegistry("https://registry.example.com/")
             .WithNpxPreferOffline()
@@ -51,7 +51,7 @@ public class AddNpxTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("generator", "@example/generator")
+        var resource = builder.AddNpxApp("generator", "@example/generator")
             .WithNpxVersion("next")
             .WithNpxExecutable("create-example")
             .WithArgs("--help");
@@ -70,7 +70,7 @@ public class AddNpxTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("lint", "eslint")
+        var resource = builder.AddNpxApp("lint", "eslint")
             .WithNpxOffline()
             .WithNpxPreferOnline();
 
@@ -86,7 +86,7 @@ public class AddNpxTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("tool", "foo@123")
+        var resource = builder.AddNpxApp("tool", "foo@123")
             .WithNpxVersion("456");
 
         using var app = builder.Build();
@@ -101,7 +101,7 @@ public class AddNpxTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("mcp", "@azure/mcp@1.2.3")
+        var resource = builder.AddNpxApp("mcp", "@azure/mcp@1.2.3")
             .WithNpxExecutable("mcp");
 
         using var app = builder.Build();
@@ -116,7 +116,7 @@ public class AddNpxTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resource = builder.AddNpx("lint", "eslint")
+        var resource = builder.AddNpxApp("lint", "eslint")
             .WithNpxVersion("9.25.1")
             .WithNpxRegistry("https://registry.example.com/")
             .WithArgs(".", "--fix");

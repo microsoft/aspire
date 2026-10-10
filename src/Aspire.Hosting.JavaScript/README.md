@@ -56,10 +56,10 @@ to select another mode or configure permissions and runtime flags.
 
 ### Running an npm package as a tool
 
-Use `AddNpx` to run a package executable without adding it to the app's dependencies:
+Use `AddNpxApp` to run a package executable without adding it to the app's dependencies:
 
 ```csharp
-builder.AddNpx("lint", "eslint")
+builder.AddNpxApp("lint", "eslint")
     .WithNpxVersion("9.25.1")
     .WithArgs(".", "--fix");
 ```

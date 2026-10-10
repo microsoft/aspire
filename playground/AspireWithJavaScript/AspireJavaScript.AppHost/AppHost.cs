@@ -63,7 +63,7 @@ builder.AddNodeApp("node", "../AspireJavaScript.NodeApp", "app.js")
     .WithExternalHttpEndpoints()
     .PublishAsDockerFile();
 
-builder.AddNpx("cowsay", "cowsay")
+builder.AddNpxApp("cowsay", "cowsay")
     .WithNpxVersion("1.6.0")
     .WithNpxExecutable("cowsay")
     .WithArgs("Hello from Aspire");

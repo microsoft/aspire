@@ -20,7 +20,7 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>The resource builder.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    public static IResourceBuilder<NpxResource> AddNpx(
+    public static IResourceBuilder<NpxResource> AddNpxApp(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string packageName)
