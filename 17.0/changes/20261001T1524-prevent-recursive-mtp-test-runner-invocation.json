@@ -1,0 +1,19 @@
+{
+  "area": "Testing",
+  "areaEmoji": "🧪",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "DistributedApplicationTestingBuilder.CreateAsync now detects when the target type belongs to a Microsoft.Testing.Platform test project rather than an AppHost executable, and fails fast with a clear diagnostic instead of recursively relaunching the test runner and leaving stray AppHost/DCP processes behind.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔁",
+  "firstMergedAt": "2026-10-01T15:24:10Z",
+  "lastMergedAt": "2026-10-01T15:24:10Z",
+  "name": "Prevent recursive test runner invocation",
+  "owner": "danegsta",
+  "prs": [
+    20573
+  ]
+}

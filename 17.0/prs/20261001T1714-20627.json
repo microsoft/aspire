@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI workflow security hardening; no user-facing product effect",
+  "mergedAt": "2026-10-01T17:14:35Z",
+  "number": 20627,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "fix(ci): prevent command injection in privileged workflows"
+}

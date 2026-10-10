@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Resource terminals now have a dedicated Terminals page in the dashboard navigation instead of sharing the Console logs page, making terminals easier to discover and keeping log viewing focused. The page defaults to no selection and only lists terminal-capable resources.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🖳",
+  "firstMergedAt": "2026-10-02T06:58:38Z",
+  "lastMergedAt": "2026-10-02T06:58:38Z",
+  "name": "Dedicated dashboard Terminals page",
+  "owner": "JamesNK",
+  "prs": [
+    20650
+  ]
+}

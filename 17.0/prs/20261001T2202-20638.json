@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Engineering-only change moving source indexing to an internal pipeline",
+  "mergedAt": "2026-10-01T22:02:02Z",
+  "number": 20638,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Move source indexing to a daily internal pipeline"
+}

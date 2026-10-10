@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Website UI change showing version/date info in the Install CLI dialog on aspire.dev; not matched to a milestone changelog entry",
+  "mergedAt": "2026-10-01T21:29:05Z",
+  "number": 1795,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Show stable version, release date, and release notes link in Install CLI dialog"
+}

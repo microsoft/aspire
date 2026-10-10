@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "AppHost diagnostic logs are quieter during normal operation: expected CLI backchannel connects/disconnects and already-healthy resource readiness checks no longer emit routine Debug noise, and the CLI backchannel filters noisy HttpClientFactory Debug logs. Errors and unexpected failures are still reported.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔇",
+  "firstMergedAt": "2026-10-03T01:24:27Z",
+  "lastMergedAt": "2026-10-03T01:24:27Z",
+  "name": "Quieter AppHost logs for CLI connections and readiness checks",
+  "owner": "JamesNK",
+  "prs": [
+    20542
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Fixes a YouTube Picture-in-Picture playback bug on the aspire.dev website; not documentation of an Aspire product feature",
+  "mergedAt": "2026-10-01T18:34:36Z",
+  "number": 1758,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Fix YouTube live Picture-in-Picture Error 153"
+}

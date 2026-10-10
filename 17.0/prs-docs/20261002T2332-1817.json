@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Prose clarification of .NET SDK prerequisites; does not document a specific changelog entry in this batch",
+  "mergedAt": "2026-10-02T23:32:50Z",
+  "number": 1817,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Clarify .NET SDK requirements in CLI and deployment docs"
+}

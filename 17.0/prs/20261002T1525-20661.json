@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI workflow permission scoping; no user-facing product effect",
+  "mergedAt": "2026-10-02T15:25:04Z",
+  "number": 20661,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "fix(ci): scope automatic workflow token permissions"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Aspire now exposes configuration for the base image used by DCP's container network tunnel, via `aspire config set containerTunnel.baseImage`, the `DcpPublisher:ContainerTunnelBaseImage` setting, or the `--dcp-container-tunnel-base-image` argument. This lets environments that require a customized or mirrored image configure the tunnel without modifying DCP directly.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🚇",
+  "firstMergedAt": "2026-10-02T05:21:32Z",
+  "lastMergedAt": "2026-10-02T05:21:32Z",
+  "name": "Configurable container tunnel base image",
+  "owner": "danegsta",
+  "prs": [
+    20667
+  ]
+}

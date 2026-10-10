@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New experimental native tray companion for managing AppHosts",
+  "mergedAt": "2026-10-01T21:21:14Z",
+  "number": 20096,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Add experimental native tray companion for macOS and Windows"
+}

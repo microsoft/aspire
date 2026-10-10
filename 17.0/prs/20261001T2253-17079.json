@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal CLI process-handling refactor onto .NET 11 Process APIs; no new user-facing capability",
+  "mergedAt": "2026-10-01T22:53:00Z",
+  "number": 17079,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Simplify Aspire.Cli process code using .NET 11 Process APIs"
+}

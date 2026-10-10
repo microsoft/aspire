@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard notification badge resized to be more compact",
+  "mergedAt": "2026-10-02T12:43:41Z",
+  "number": 20647,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Size dashboard header notification badge to 18px"
+}

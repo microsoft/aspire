@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Reduces routine AppHost diagnostic log noise for CLI connections and readiness checks",
+  "mergedAt": "2026-10-03T01:24:27Z",
+  "number": 20542,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Reduce AppHost log noise for CLI connections and readiness checks"
+}

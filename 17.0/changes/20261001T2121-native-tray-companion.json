@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "An experimental native tray companion (macOS menu bar / Windows notification area) lets users manage running AppHosts — view health, open the dashboard, stop instances, and pin favorites — without repeatedly running `aspire ps`. Start it with `aspire tray start`; the CLI supplies a versioned discovery/health stream backing the native frontend.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🖥️",
+  "firstMergedAt": "2026-10-01T21:21:14Z",
+  "lastMergedAt": "2026-10-01T21:21:14Z",
+  "name": "Experimental tray companion for AppHost management",
+  "owner": "davidfowl",
+  "prs": [
+    20096
+  ]
+}

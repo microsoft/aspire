@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "New user-facing configuration for the container tunnel base image",
+  "mergedAt": "2026-10-02T05:21:32Z",
+  "number": 20667,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Add container tunnel base image configuration"
+}

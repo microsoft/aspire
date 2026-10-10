@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only change quarantining a flaky test",
+  "mergedAt": "2026-10-02T02:07:55Z",
+  "number": 20676,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "test(cli): quarantine flaky RPC cancellation test"
+}

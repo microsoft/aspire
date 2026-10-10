@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes intermittent HTTP 500 errors in dashboard telemetry views caused by eviction races",
+  "mergedAt": "2026-10-02T13:54:20Z",
+  "number": 20597,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Keep dashboard SQLite telemetry reads consistent during eviction"
+}

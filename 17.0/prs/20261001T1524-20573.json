@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Fixes a recursive test-runner invocation bug with a clear diagnostic",
+  "mergedAt": "2026-10-01T15:24:10Z",
+  "number": 20573,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Prevent recursive MTP test runner invocation"
+}

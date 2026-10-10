@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Makes DisplayOrder a non-obsolete property; binary compatibility breaking change",
+  "mergedAt": "2026-10-01T18:28:04Z",
+  "number": 20637,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Make ResourceUrlAnnotation.DisplayOrder a non-obsolete property"
+}

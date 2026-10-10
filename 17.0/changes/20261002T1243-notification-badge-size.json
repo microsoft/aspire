@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard header notification badge is more compact: 18x18px for single-digit counts and 22x18px for the \"9+\" overflow indicator, down from roughly 26x20px.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔔",
+  "firstMergedAt": "2026-10-02T12:43:41Z",
+  "lastMergedAt": "2026-10-02T12:43:41Z",
+  "name": "Smaller dashboard notification badge",
+  "owner": "JamesNK",
+  "prs": [
+    20647
+  ]
+}

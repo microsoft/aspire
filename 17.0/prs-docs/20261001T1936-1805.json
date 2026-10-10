@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal fix to the aspire.dev livestream SSE infrastructure and telemetry; not documentation of a product change",
+  "mergedAt": "2026-10-01T19:36:50Z",
+  "number": 1805,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Cap live SSE stream lifetime and fix response-time telemetry"
+}

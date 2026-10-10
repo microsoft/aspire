@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI workflow token permission scoping; no user-facing product effect",
+  "mergedAt": "2026-10-02T15:28:22Z",
+  "number": 20659,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "fix(ci): restrict GitHub App tokens to required permissions"
+}

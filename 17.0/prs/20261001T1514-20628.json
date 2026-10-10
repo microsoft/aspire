@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Internal RPC serialization switch to source-generated JSON; wire format and user-facing behavior unchanged",
+  "mergedAt": "2026-10-01T15:14:33Z",
+  "number": 20628,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Use source-generated JSON for terminal host control RPC"
+}

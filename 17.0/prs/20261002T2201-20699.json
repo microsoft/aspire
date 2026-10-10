@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Engineering CI fix for App-authenticated generator workflow pushes; no user-facing product effect",
+  "mergedAt": "2026-10-02T22:01:07Z",
+  "number": 20699,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Fix App authentication for generator workflow pushes"
+}

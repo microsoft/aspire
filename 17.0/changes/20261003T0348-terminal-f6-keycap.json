@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The terminal footer's F6 shortcut is now rendered as a theme-aware keyboard key (kbd) instead of plain text, making it easier to recognize as a focus-the-controls shortcut.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-10-03T03:48:15Z",
+  "lastMergedAt": "2026-10-03T03:48:15Z",
+  "name": "Keycap styling for terminal F6 shortcut",
+  "owner": "JamesNK",
+  "prs": [
+    20694
+  ]
+}

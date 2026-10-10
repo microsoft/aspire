@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Renders the terminal footer F6 shortcut as a styled keyboard key",
+  "mergedAt": "2026-10-03T03:48:15Z",
+  "number": 20694,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Render terminal footer F6 shortcut as a keyboard key"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "ResourceUrlAnnotation.DisplayOrder is now a non-obsolete, nullable read/write property instead of an obsolete field, so consumers can set WithUrlForEndpoint ordering without obsolete warnings. Replacing a field with a property is a binary compatibility break for consumers compiled against the old field; rebuild against the updated package.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔢",
+  "firstMergedAt": "2026-10-01T18:28:04Z",
+  "lastMergedAt": "2026-10-01T18:28:04Z",
+  "name": "DisplayOrder property for resource URLs",
+  "owner": "JamesNK",
+  "prs": [
+    20637
+  ]
+}

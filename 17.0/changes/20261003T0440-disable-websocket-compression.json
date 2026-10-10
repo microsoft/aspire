@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A new `Dashboard:Frontend:DisableWebSocketCompression` setting lets users disable Blazor WebSocket compression through configuration or an environment variable, fixing standalone Dashboard initialization failures behind IIS ARR without needing to strip headers at the reverse proxy.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-10-03T04:40:04Z",
+  "lastMergedAt": "2026-10-03T04:40:04Z",
+  "name": "Setting to disable Dashboard WebSocket compression",
+  "owner": "JamesNK",
+  "prs": [
+    20633
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The Traces, Spans, Structured Logs, and Metrics views now read dependent SQLite telemetry rows from a consistent snapshot, fixing intermittent HTTP 500 errors and incomplete details when telemetry eviction removed rows between a selection and its related queries.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧵",
+  "firstMergedAt": "2026-10-02T13:54:20Z",
+  "lastMergedAt": "2026-10-02T13:54:20Z",
+  "name": "Fix intermittent telemetry read errors during eviction",
+  "owner": "JamesNK",
+  "prs": [
+    20597
+  ]
+}

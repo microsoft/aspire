@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New Dashboard setting to disable Blazor WebSocket compression, fixing IIS ARR initialization failures",
+  "mergedAt": "2026-10-03T04:40:04Z",
+  "number": 20633,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "included",
+  "title": "Add Dashboard setting to disable Blazor WebSocket compression"
+}

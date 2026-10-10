@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal analytics addition (install-source telemetry property); no observable product behavior change",
+  "mergedAt": "2026-10-01T19:19:32Z",
+  "number": 20590,
+  "runDate": "2026-10-10T12:06:40Z",
+  "status": "excluded",
+  "title": "Add CLI installation source to main telemetry"
+}
