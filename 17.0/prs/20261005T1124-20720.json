@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Terminal clipboard/selection errors now console-only",
+  "mergedAt": "2026-10-05T11:24:50Z",
+  "number": 20720,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Keep connected terminal clipboard and selection errors console-only"
+}

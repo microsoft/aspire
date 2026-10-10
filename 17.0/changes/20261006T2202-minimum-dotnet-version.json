@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Aspire's minimum supported .NET version is raised to .NET 10: shipping libraries and C# templates now target `net10.0`/`net11.0` and no longer support .NET 8 or .NET 9. `dotnet new aspire-starter --framework` now only accepts `net10.0` or `net11.0`, defaulting to `net10.0`. Applications targeting .NET 8 or .NET 9 must upgrade before adopting this major version's library packages.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⬆️",
+  "firstMergedAt": "2026-10-06T22:02:25Z",
+  "lastMergedAt": "2026-10-06T22:02:25Z",
+  "name": "Raise Aspire's minimum supported .NET version to .NET 10",
+  "owner": "DamianEdwards",
+  "prs": [
+    20614
+  ]
+}

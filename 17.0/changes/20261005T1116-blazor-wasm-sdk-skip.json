@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@maraf"
+  ],
+  "description": "Hosted Blazor WebAssembly client discovery no longer crashes the entire AppHost with an MSB4057 error when the active .NET SDK doesn't support the required MSBuild target. Aspire now probes the SDK version first and logs a warning and skips discovery instead of throwing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧯",
+  "firstMergedAt": "2026-10-05T11:16:13Z",
+  "lastMergedAt": "2026-10-05T11:16:13Z",
+  "name": "Skip Blazor WASM client discovery on unsupported SDKs instead of crashing",
+  "owner": "JamesNK",
+  "prs": [
+    20575
+  ]
+}

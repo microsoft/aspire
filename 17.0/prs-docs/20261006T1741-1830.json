@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Fixes CLI docs command examples against Aspire CLI 13.6.0; no matching 17.0 changelog entry",
+  "mergedAt": "2026-10-06T17:41:56Z",
+  "number": 1830,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "Fix and showcase Aspire CLI docs commands"
+}

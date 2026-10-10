@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@Benziza"
+  ],
+  "description": "Publishing Docker Compose output no longer drops continuation lines and the closing quote from multiline quoted `.env` values, preserving original line endings, escaped quotes, blank lines, and embedded `#`/`=` characters. Unterminated quoted values now fail fast with a clear error.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📄",
+  "firstMergedAt": "2026-10-05T01:09:44Z",
+  "lastMergedAt": "2026-10-05T01:09:44Z",
+  "name": "Preserve multiline quoted values in Docker Compose env files",
+  "owner": "mitchdenny",
+  "prs": [
+    20620
+  ]
+}

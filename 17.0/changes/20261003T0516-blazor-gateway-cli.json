@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@javiercn"
+  ],
+  "description": "Standalone Blazor WebAssembly apps added via `AddBlazorWasmApp`/`AddBlazorGateway` now use the official Blazor Gateway CLI during local development instead of Aspire's generated file-based gateway, keeping development aligned with the ASP.NET Core gateway implementation while preserving the existing API, endpoints, and dashboard experience.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌉",
+  "firstMergedAt": "2026-10-03T05:16:32Z",
+  "lastMergedAt": "2026-10-03T05:16:32Z",
+  "name": "Use Blazor gateway CLI during development",
+  "owner": "JamesNK",
+  "prs": [
+    19432
+  ]
+}

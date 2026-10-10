@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "Internal doc-writer skill reorganization; no matching 17.0 changelog entry",
+  "mergedAt": "2026-10-06T01:29:38Z",
+  "number": 1816,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "Split four sections of the doc-writer skill into reference files"
+}

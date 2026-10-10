@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Preserve child exception stacks in dashboard aggregate-error telemetry",
+  "mergedAt": "2026-10-05T19:08:21Z",
+  "number": 20732,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Preserve child exception stacks in dashboard aggregate-error telemetry"
+}

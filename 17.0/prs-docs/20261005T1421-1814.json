@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Syncs CLI config schema docs through 13.6.0; documents prior milestone, not 17.0",
+  "mergedAt": "2026-10-05T14:21:51Z",
+  "number": 1814,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "Sync Aspire CLI config schemas through 13.6.0 and fix config docs"
+}

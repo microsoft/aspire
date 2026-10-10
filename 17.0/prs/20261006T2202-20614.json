@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Raise minimum supported .NET version to .NET 10 (breaking change)",
+  "mergedAt": "2026-10-06T22:02:25Z",
+  "number": 20614,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Raise Aspire's minimum supported .NET version to .NET 10"
+}

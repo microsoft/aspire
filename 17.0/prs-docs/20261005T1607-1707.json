@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Azure AI Foundry docs guidance change unrelated to any 17.0 changelog entry",
+  "mergedAt": "2026-10-05T16:07:43Z",
+  "number": 1707,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "Recommend Aspire.OpenAI for Foundry Local"
+}

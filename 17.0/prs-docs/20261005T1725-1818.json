@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Refreshes samples data for the prior Aspire 13.6 release; no matching 17.0 changelog entry",
+  "mergedAt": "2026-10-05T17:25:30Z",
+  "number": 1818,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "Update samples data for Aspire 13.6"
+}

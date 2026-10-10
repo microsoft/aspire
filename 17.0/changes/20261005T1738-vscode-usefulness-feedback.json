@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds a draft, one-time VS Code notification that asks whether Aspire improves the user's development experience (Yes/No/Don't ask again), to measure perceived benefit without a full survey. The campaign is currently disabled pending classification/privacy approval before it can be enabled.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-10-05T17:38:27Z",
+  "lastMergedAt": "2026-10-05T17:38:27Z",
+  "name": "One-time Aspire usefulness feedback prompt in VS Code",
+  "owner": "maddymontaquila",
+  "prs": [
+    20399
+  ]
+}

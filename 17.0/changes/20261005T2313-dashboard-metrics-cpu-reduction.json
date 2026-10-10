@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard CPU usage no longer steadily increases under sustained metric ingestion. Metric retention previously re-ranked every retained point on each insertion even when below the retention limit; it now caches the retained point count and only trims the oldest surplus points when capacity is exceeded, giving roughly 45x faster exports in benchmarks.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-10-05T23:13:54Z",
+  "lastMergedAt": "2026-10-05T23:13:54Z",
+  "name": "Reduce dashboard CPU under sustained metric ingestion",
+  "owner": "JamesNK",
+  "prs": [
+    20736
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Add Mermaid resource graph export to dashboard and CLI",
+  "mergedAt": "2026-10-06T07:00:38Z",
+  "number": 20746,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Add Mermaid resource graph export to the dashboard and CLI"
+}

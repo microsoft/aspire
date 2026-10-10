@@ -1,0 +1,9 @@
+{
+  "author": "maraf",
+  "comment": "Skip Blazor WASM discovery on unsupported SDKs instead of crashing AppHost",
+  "mergedAt": "2026-10-05T11:16:13Z",
+  "number": 20575,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Skip Blazor WASM client discovery on unsupported SDKs instead of crashing"
+}

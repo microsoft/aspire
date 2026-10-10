@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard telemetry for Blazor circuit errors now records the child exception types, messages, and stack traces from aggregate disposal exceptions instead of an empty aggregate stack trace, so disposal failures can be traced back to the affected components.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧵",
+  "firstMergedAt": "2026-10-05T19:08:21Z",
+  "lastMergedAt": "2026-10-05T19:08:21Z",
+  "name": "Preserve child exception stacks in dashboard error telemetry",
+  "owner": "JamesNK",
+  "prs": [
+    20732
+  ]
+}

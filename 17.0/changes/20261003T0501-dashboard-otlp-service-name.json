@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard traces exported through OTLP now use `aspire-dashboard` as the default `service.name` instead of the OpenTelemetry SDK's generic default, making dashboard telemetry identifiable. Deployments can still override the name with `OTEL_SERVICE_NAME`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-10-03T05:01:50Z",
+  "lastMergedAt": "2026-10-03T05:01:50Z",
+  "name": "Configure dashboard OTLP service name",
+  "owner": "JamesNK",
+  "prs": [
+    20600
+  ]
+}

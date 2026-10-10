@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@heyysiri"
+  ],
+  "description": "The Metrics page's left-hand meter/instrument tree can now be scrolled with the mouse wheel when it's taller than the window. This regressed when the dashboard moved to Fluent UI Blazor v5, which removed the tree pane's scroll container.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-10-06T14:53:59Z",
+  "lastMergedAt": "2026-10-06T14:53:59Z",
+  "name": "Fix metrics tree scrolling",
+  "owner": "JamesNK",
+  "prs": [
+    20758
+  ]
+}

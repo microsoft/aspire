@@ -1,0 +1,9 @@
+{
+  "author": "Benziza",
+  "comment": "Preserve multiline quoted .env values in Docker Compose publish",
+  "mergedAt": "2026-10-05T01:09:44Z",
+  "number": 20620,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Preserve multiline quoted values in Docker Compose env files"
+}

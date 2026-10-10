@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Default to Terminal shortcut for terminal-enabled resources",
+  "mergedAt": "2026-10-05T11:23:59Z",
+  "number": 20719,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Prefer Terminal shortcuts for terminal-enabled resources"
+}

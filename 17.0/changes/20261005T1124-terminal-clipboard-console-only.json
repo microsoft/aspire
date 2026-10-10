@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "A connected terminal no longer shows a misleading clipboard-permission or selection banner while still connected; these status errors are now logged to the console instead. Fatal disconnections still show the connection-failure banner and retry.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-10-05T11:24:50Z",
+  "lastMergedAt": "2026-10-05T11:24:50Z",
+  "name": "Keep connected terminal clipboard and selection errors console-only",
+  "owner": "mitchdenny",
+  "prs": [
+    20720
+  ]
+}

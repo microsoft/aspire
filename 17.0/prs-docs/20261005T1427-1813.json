@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs-site tooling fix for Integration Data Updater; no matching 17.0 changelog entry",
+  "mergedAt": "2026-10-05T14:27:49Z",
+  "number": 1813,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "Unblock Integration Data Updater and parallelize API regeneration"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Adds a TypeScript example to the Aspire 13.6 what's-new page; documents prior milestone",
+  "mergedAt": "2026-10-05T18:59:54Z",
+  "number": 1798,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "docs: add TypeScript Front Door origin naming example"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Fix SQL Server REPL launch on Windows (breaking change for older images)",
+  "mergedAt": "2026-10-03T08:13:21Z",
+  "number": 20704,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Fix SQL Server REPL launch on Windows"
+}

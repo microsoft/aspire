@@ -1,19 +1,20 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "\ud83d\udcca",
+  "areaEmoji": "📊",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "The dashboard terminal integration is upgraded to Hex1b 0.171.0, adding a canvas overlay scrollbar with retained command marks, a header showing workload title/working directory/progress with copy support, reorderable dock tabs with keyboard and drag/drop support, and an explicit Dark/Light terminal palette selector independent of the dashboard theme.",
+  "description": "The dashboard terminal integration is upgraded to Hex1b 0.171.0, adding a canvas overlay scrollbar with retained command marks, a header showing workload title/working directory/progress with copy support, reorderable dock tabs with keyboard and drag/drop support, and an explicit Dark/Light terminal palette selector independent of the dashboard theme. A follow-up upgrade to Hex1b 0.172.0 further refines the scrollbar with circular command markers, improved marker hit-testing, rounded track geometry, and palette-derived colors.",
   "docsPrs": [],
   "docsRequired": true,
-  "emoji": "\ud83d\udda5\ufe0f",
+  "emoji": "🖥️",
   "firstMergedAt": "2026-10-01T06:03:59Z",
-  "lastMergedAt": "2026-10-01T06:03:59Z",
+  "lastMergedAt": "2026-10-04T23:31:19Z",
   "name": "Upgraded terminal engine with new navigation and metadata",
   "owner": "mitchdenny",
   "prs": [
-    20255
+    20255,
+    20721
   ]
 }

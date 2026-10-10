@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Resource graphs can now be exported as Mermaid diagrams from both the dashboard (Export as Mermaid, with copy/download as `resources.mmd`) and the CLI via `aspire resources --format mermaid` / `aspire describe --format mermaid`, reflecting current filters and hidden-resource visibility.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-10-06T07:00:38Z",
+  "lastMergedAt": "2026-10-06T07:00:38Z",
+  "name": "Add Mermaid resource graph export to the dashboard and CLI",
+  "owner": "mitchdenny",
+  "prs": [
+    20746
+  ]
+}

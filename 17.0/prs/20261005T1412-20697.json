@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/engineering-only perf fix for source-index build timeout; no user-facing impact",
+  "mergedAt": "2026-10-05T14:12:11Z",
+  "number": 20697,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "excluded",
+  "title": "perf(ci): Fix timeout in source-index build by making it faster"
+}

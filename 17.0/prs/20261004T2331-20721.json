@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Hex1b 0.172.0 terminal upgrade, grouped with existing terminal engine upgrade entry",
+  "mergedAt": "2026-10-04T23:31:19Z",
+  "number": 20721,
+  "runDate": "2026-10-10T18:07:16Z",
+  "status": "included",
+  "title": "Upgrade Hex1b packages and web terminal to 0.172.0"
+}
