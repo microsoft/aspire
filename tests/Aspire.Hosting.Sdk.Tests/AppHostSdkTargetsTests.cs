@@ -82,6 +82,20 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AppHostSdkObsoleteWarningDoesNotFireWithoutUsingAspireAppHostSdkMarker()
+    {
+        // This repo's own test harness (tests/Shared/RepoTesting/Aspire.RepoTesting.targets) imports
+        // Sdk.in.targets directly for in-repo IsAspireHost=true test projects, without going through
+        // Sdk.in.props (which real Aspire.AppHost.Sdk consumers get via Sdk="Aspire.AppHost.Sdk/x.y.z").
+        // ASPIRE012 must not fire in that case, or every in-repo Aspire test AppHost would get an
+        // (incorrect) obsolete-SDK warning/error. Regression test for that scenario.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = await RunWriteDashboardAndDcpTargetAsync(workspace, extraProjectXml: null, setUsingAspireAppHostSdkMarker: false);
+
+        Assert.DoesNotContain("ASPIRE012", output);
+    }
+
+    [Fact]
     public async Task AppHostTargetsDefaultAspireHostingSDKVersionWhenSdkIsNotUsed()
     {
         // Simulates a Project Resource v2 / AddDotnetProject AppHost that uses the plain
@@ -165,7 +179,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Contains("ASPIRE007", result.Output);
     }
 
-    private static async Task<string> RunWriteDashboardAndDcpTargetAsync(TemporaryWorkspace workspace, string? extraProjectXml)
+    private static async Task<string> RunWriteDashboardAndDcpTargetAsync(TemporaryWorkspace workspace, string? extraProjectXml, bool setUsingAspireAppHostSdkMarker = true)
     {
         var repoRoot = GetRepoRoot();
 
@@ -173,6 +187,19 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(projectDirectory);
 
         var sdkTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.AppHost.Sdk", "SDK", "Sdk.in.targets"));
+
+        // This test imports Sdk.in.targets directly (bypassing Sdk.in.props, which is what real
+        // Aspire.AppHost.Sdk consumers get via their Sdk="Aspire.AppHost.Sdk/x.y.z" attribute). Set
+        // the marker Sdk.in.props would normally set, so this project is evaluated the same way a
+        // genuine Aspire.AppHost.Sdk project would be - unless the test explicitly wants to simulate
+        // the in-repo test-harness scenario where that marker is absent.
+        var markerPropertyGroup = setUsingAspireAppHostSdkMarker
+            ? """
+              <PropertyGroup>
+                <_UsingAspireAppHostSdk>true</_UsingAspireAppHostSdk>
+              </PropertyGroup>
+            """
+            : string.Empty;
 
         await File.WriteAllTextAsync(Path.Combine(projectDirectory, "AppHost.csproj"),
             $$"""
@@ -185,6 +212,8 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                      doesn't depend on the implicit Aspire.Hosting.AppHost package reference. -->
                 <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
               </PropertyGroup>
+
+            {{markerPropertyGroup}}
 
               <Import Project="{{sdkTargetsPath}}" />
 
