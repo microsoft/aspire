@@ -412,7 +412,32 @@ public class AddJavaAppTests
         var (command, leadingArgs) = JavaHostingExtensions.WrapperInvocationFor(wrapperPath, workingDirectory, isWindows: true);
 
         Assert.Equal(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", command);
-        Assert.Equal(["/c", "call", Path.Combine(".", "..", "..", "build tools", wrapperName)], leadingArgs);
+        Assert.Equal(["/c", "call", Path.Combine("..", "..", "build tools", wrapperName)], leadingArgs);
+    }
+
+    [Fact]
+    public void WrapperInvocationForWindowsPrefixesASiblingWrapperWithCurrentDirectory()
+    {
+        // A bare "mvnw.cmd" is resolved by name, which fails when NoDefaultCurrentDirectoryInExePath=1.
+        var workingDirectory = Path.Combine(Path.GetTempPath(), "repo");
+        var wrapperPath = Path.Combine(workingDirectory, "mvnw.cmd");
+
+        var (_, leadingArgs) = JavaHostingExtensions.WrapperInvocationFor(wrapperPath, workingDirectory, isWindows: true);
+
+        Assert.Equal(["/c", "call", $".{Path.DirectorySeparatorChar}mvnw.cmd"], leadingArgs);
+    }
+
+    [Fact]
+    public void WrapperInvocationForWindowsKeepsAWrapperOnAnotherDriveAbsolute()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var (_, leadingArgs) = JavaHostingExtensions.WrapperInvocationFor(@"Z:\tools\mvnw.cmd", @"C:\repo", isWindows: true);
+
+        Assert.Equal(["/c", "call", @"Z:\tools\mvnw.cmd"], leadingArgs);
     }
 
     [Fact]
