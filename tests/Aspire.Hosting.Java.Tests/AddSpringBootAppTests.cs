@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -24,6 +26,51 @@ public class AddSpringBootAppTests
 
         Assert.Equal(ExpectedWrapperInvocation.Command(), app.Resource.Command);
         Assert.Equal(ExpectedWrapperInvocation.Args(Path.Combine(tempDir.Path, JavaHostingExtensions.s_defaultMavenWrapper), tempDir.Path, "spring-boot:run"), await ArgumentEvaluator.GetArgumentListAsync(app.Resource));
+    }
+
+    [Fact]
+    public async Task AddSpringBootApp_ConfiguresTheKeyStoreFromTheHttpsCertificate()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddSpringBootApp("catalog", tempDir.Path);
+        using var application = builder.Build();
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>());
+
+        var envVars = new Dictionary<string, object>();
+        await annotation.Callback(new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(
+                new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                {
+                    Services = application.Services
+                }),
+            Resource = app.Resource,
+            Arguments = [],
+            EnvironmentVariables = envVars,
+            CertificatePath = ReferenceExpression.Create($"/certs/cert.pem"),
+            KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"/certs/combined.pem"),
+            PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
+            Password = null,
+            CancellationToken = default
+        });
+
+        Assert.Collection(
+            envVars.OrderBy(kvp => kvp.Key),
+            kvp =>
+            {
+                Assert.Equal("SERVER_SSL_KEY_STORE", kvp.Key);
+                Assert.Equal("/certs/cert.pfx", ((ReferenceExpression)kvp.Value).ValueExpression);
+            },
+            kvp =>
+            {
+                Assert.Equal("SERVER_SSL_KEY_STORE_TYPE", kvp.Key);
+                Assert.Equal("PKCS12", kvp.Value);
+            });
     }
 
     [Fact]

@@ -298,6 +298,12 @@ public static partial class JavaHostingExtensions
     /// loaded until a build has written it.
     /// </para>
     /// <para>
+    /// When a server certificate is available (the developer certificate by default, or one supplied with
+    /// <c>WithHttpsCertificate</c>), the application is configured to serve HTTPS through
+    /// <c>SERVER_SSL_KEY_STORE</c> and the related variables, and its endpoint is switched to <c>https</c> in run
+    /// mode. Call <c>WithoutHttpsCertificate()</c> to keep serving plain HTTP.
+    /// </para>
+    /// <para>
     /// No health check is added. <c>/actuator/health</c> only exists when the application depends on
     /// <c>spring-boot-starter-actuator</c>, and adding it unconditionally would leave applications without that
     /// dependency permanently unhealthy and silently stall every <c>WaitFor</c> on them. Add
@@ -342,7 +348,37 @@ public static partial class JavaHostingExtensions
         // application without any code in the application. No targetPort is pinned: these are host
         // processes rather than containers, so a fixed target port is a real port on the machine and two
         // Spring Boot services both asking for 8080 would collide.
-        return resourceBuilder.WithHttpEndpoint(env: "SERVER_PORT");
+        resourceBuilder = resourceBuilder
+            .WithHttpEndpoint(env: "SERVER_PORT")
+            .WithHttpsCertificateConfiguration(ctx =>
+            {
+                // Spring Boot's relaxed binding maps these variables onto server.ssl.key-store,
+                // server.ssl.key-store-type and server.ssl.key-store-password, so no application code or
+                // application.properties change is needed. Only applied when a certificate is available
+                // (the developer certificate by default, or one set with WithHttpsCertificate).
+                ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE"] = ctx.PfxPath;
+                ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE_TYPE"] = "PKCS12";
+
+                if (ctx.Password is not null)
+                {
+                    ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE_PASSWORD"] = ctx.Password;
+                }
+
+                return Task.CompletedTask;
+            });
+
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            // Spring Boot serves a single protocol on server.port: once server.ssl.* is set, the same port
+            // speaks TLS only. Flip the existing endpoint to https rather than adding a second one so the
+            // dashboard link, WithReference and service discovery all point at a scheme that works.
+            resourceBuilder.SubscribeHttpsEndpointsUpdate(_ =>
+            {
+                resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
+            });
+        }
+
+        return resourceBuilder;
     }
 
     /// <summary>
