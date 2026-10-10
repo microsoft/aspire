@@ -22,6 +22,18 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
     private volatile bool _sealed;
     private Task? _initialStart;
     private bool _networkCreated;
+    private NativeCustomResources? _custom;
+    private readonly object _customGate = new();
+    private NativeCustomResources Custom
+    {
+        get
+        {
+            lock (_customGate)
+            {
+                return _custom ??= new(peer, _runtime);
+            }
+        }
+    }
 
     public async Task<JsonNode?> InvokeAsync(string method, JsonObject args, CancellationToken cancellationToken)
     {
@@ -43,7 +55,7 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
             }
 
             var kind = RpcPeer.RequiredString(definition, "kind");
-            if (kind is not ("parameter" or "container" or "executable" or "value"))
+            if (kind is not ("parameter" or "container" or "executable" or "value" or "custom"))
             {
                 throw new ArgumentException("Unsupported primitive resource kind.");
             }
@@ -57,6 +69,16 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
                 }
 
                 definition["owner"] = owner;
+                if (_resources.ContainsKey(name))
+                {
+                    throw new InvalidOperationException($"Native resource '{name}' already exists.");
+                }
+
+                if (kind == "custom")
+                {
+                    Custom.Register(definition);
+                }
+
                 if (!_resources.TryAdd(name, definition))
                 {
                     throw new InvalidOperationException($"Native resource '{name}' already exists.");
@@ -87,7 +109,7 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
             return new JsonObject
             {
                 ["format"] = "native-model.v0",
-                ["resources"] = new JsonArray(_resources.OrderBy(entry => entry.Key, StringComparer.Ordinal)
+                ["resources"] = new JsonArray(_resources.Where(entry => entry.Value["runOnly"]?.GetValue<bool>() != true).OrderBy(entry => entry.Key, StringComparer.Ordinal)
                     .Select(entry => (JsonNode)entry.Value.DeepClone()).ToArray())
             };
         }
@@ -96,6 +118,24 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
         {
             var starting = await SealAsync(cancellationToken);
             await starting;
+            return null;
+        }
+
+        if (method == "ownerDisconnected")
+        {
+            var controller = RpcPeer.RequiredString(args, "controllerOwner");
+            Custom.Disconnect(controller);
+            foreach (var resource in _resources.Values.Where(resource =>
+                resource["controllerOwner"]?.GetValue<string>() == controller &&
+                RpcPeer.RequiredString(resource, "kind") == "executable"))
+            {
+                var name = RpcPeer.RequiredString(resource, "name");
+                // Fence the provider first, then remove the controller's DCP process.
+                // Direct transport ownership is still supplied by the prototype relay.
+                _runtime[name] = new JsonObject { ["state"] = "OwnerDisconnected" };
+                await _dcp.DeleteAsync("executables", PhysicalName(name), cancellationToken);
+            }
+
             return null;
         }
 
@@ -131,12 +171,50 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
                 new JsonObject { ["state"] = "NotStarted" };
         }
 
-        if (method == "restart")
+        if (RpcPeer.RequiredString(target, "kind") == "custom" && method is "updateCustom" or "command")
+        {
+            if (method == "updateCustom")
+            {
+                return Custom.Update(target, args);
+            }
+
+            if (!_sealed || (_starts.TryGetValue(targetName, out var startingCustom) && !startingCustom.Value.IsCompleted))
+            {
+                throw new InvalidOperationException("Custom resource has not completed initial startup.");
+            }
+
+            await Custom.ControlAsync(target, RpcPeer.RequiredString(args, "command"), cancellationToken);
+            return null;
+        }
+
+        if (method is "computeStatus" or "readLogs")
+        {
+            if (RpcPeer.RequiredString(target, "kind") != "executable")
+            {
+                throw new ArgumentException("Executable observation requires an executable resource.");
+            }
+
+            var observed = await _dcp.GetAsync("executables", PhysicalName(targetName), cancellationToken);
+            var status = observed?["status"] as JsonObject ?? throw new InvalidOperationException("Executable is not running in DCP.");
+            if (method == "computeStatus")
+            {
+                return new JsonObject { ["state"] = status["state"]?.DeepClone(), ["pid"] = status["pid"]?.DeepClone(), ["executionId"] = status["executionID"]?.DeepClone() };
+            }
+
+            return new JsonObject
+            {
+                ["stdout"] = await _dcp.ReadLogsAsync(PhysicalName(targetName), "stdout", args["stdoutOffset"]?.GetValue<long>() ?? 0, cancellationToken),
+                ["stderr"] = await _dcp.ReadLogsAsync(PhysicalName(targetName), "stderr", args["stderrOffset"]?.GetValue<long>() ?? 0, cancellationToken),
+                ["executionId"] = status["executionID"]?.DeepClone()
+            };
+        }
+
+        if (method is "restart" or "stop")
         {
             var kind = RpcPeer.RequiredString(target, "kind");
             if (kind is not ("container" or "executable"))
             {
-                throw new ArgumentException("Only compute resources can restart.");
+                throw new ArgumentException("Only compute resources can stop or restart.");
             }
 
             var gate = _operations.GetOrAdd(targetName, _ => new SemaphoreSlim(1));
@@ -165,7 +243,14 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
                     }
                 }
 
-                await StartAsync(target, cancellationToken);
+                if (method == "restart")
+                {
+                    await StartAsync(target, cancellationToken);
+                }
+                else
+                {
+                    _runtime[targetName] = new JsonObject { ["state"] = "Stopped" };
+                }
             }
             finally
             {
@@ -253,7 +338,17 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
             }
             else if (kind is "container" or "executable")
             {
+                if (resource["beforeStart"] is JsonValue beforeStart)
+                {
+                    await CallbackAsync(beforeStart.GetValue<string>(), name, ct);
+                }
+
                 await StartComputeAsync(resource, kind, ct);
+            }
+            else if (kind == "custom")
+            {
+                await Custom.ControlAsync(resource, "start", ct);
+                return;
             }
 
             if (resource["initialize"] is JsonValue initialize)
@@ -285,7 +380,10 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
         }
         catch (Exception)
         {
-            _runtime[name] = new JsonObject { ["state"] = "FailedToStart" };
+            if (RpcPeer.RequiredString(resource, "kind") != "custom")
+            {
+                _runtime[name] = new JsonObject { ["state"] = "FailedToStart" };
+            }
             Console.Error.WriteLine($"Native resource '{name}' failed to become ready.");
             throw;
         }
@@ -334,7 +432,16 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
             }
         }
 
-        var spec = new JsonObject { ["env"] = environment, ["args"] = resource["arguments"]?.DeepClone() ?? new JsonArray() };
+        var arguments = new JsonArray();
+        if (resource["arguments"] is JsonArray sourceArguments)
+        {
+            foreach (var argument in sourceArguments)
+            {
+                arguments.Add((JsonNode)JsonValue.Create(await ResolveAsync(argument!, "run", kind == "container" ? "container" : "host", Handle(name), [], cancellationToken))!);
+            }
+        }
+
+        var spec = new JsonObject { ["env"] = environment, ["args"] = arguments };
         if (kind == "container")
         {
             await EnsureNetworkAsync(cancellationToken);
@@ -460,6 +567,10 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
 
         var resource = Get(RpcPeer.RequiredObject(node, "resource"));
         var name = RpcPeer.RequiredString(resource, "name");
+        if (mode == "publish" && resource["runOnly"]?.GetValue<bool>() == true)
+        {
+            throw new InvalidOperationException("Run-only resource values cannot be consumed in publication.");
+        }
         if (kind == "parameter")
         {
             if (mode == "publish")
@@ -500,6 +611,11 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
 
             value = property switch
             {
+                "url" or "scheme" or "host" or "port" when RpcPeer.RequiredString(resource, "kind") == "custom" =>
+                    _runtime.TryGetValue(name, out var customState) && customState["state"]?.GetValue<string>() == "Healthy" &&
+                    customState["endpoints"]?[endpointName]?[property] is { } customValue
+                        ? await ResolveAsync(customValue, mode, network, consumer, path, cancellationToken)
+                        : throw new InvalidOperationException($"Custom endpoint '{name}.{endpointName}' is unavailable."),
                 "scheme" => RpcPeer.RequiredString(endpoint, "scheme"),
                 "host" when network == "container" => name,
                 "port" or "targetPort" when network == "container" => endpoint["targetPort"]!.GetValue<int>().ToString(CultureInfo.InvariantCulture),
@@ -553,6 +669,7 @@ internal sealed class NativeModel(string owner, RpcPeer peer) : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await _dcp.DisposeAsync();
+        _custom?.Dispose();
         foreach (var operation in _operations.Values)
         {
             operation.Dispose();

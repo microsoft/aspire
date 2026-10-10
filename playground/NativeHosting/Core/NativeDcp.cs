@@ -144,6 +144,57 @@ internal sealed class NativeDcp : IAsyncDisposable
     public Task<JsonObject?> GetAsync(string collection, string name, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, Api + collection + "/" + name, null, cancellationToken);
 
+    public async Task<JsonObject> ReadLogsAsync(string name, string source, long offset, CancellationToken cancellationToken)
+    {
+        // HttpClient's timeout ends at response headers in streaming mode. Bound
+        // the body read too, including a stalled DCP log subresource.
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        cancellationToken = timeout.Token;
+        if (_client is null || offset < 0)
+        {
+            throw new InvalidOperationException("DCP log reader requires a configured client and nonnegative cursor.");
+        }
+
+        // DCP's log subresource uses line cursors, not file offsets:
+        // /executables/<name>/log?source=stdout&follow=false&limit=128&skip=3
+        // Read through the API; newer DCP builds need not expose stdOutFile paths.
+        var path = Api + "executables/" + name + "/log?source=" + source + "&follow=false&timestamps=false&line_numbers=false&limit=128";
+        if (offset > 0)
+        {
+            path += "&skip=" + offset.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        using var response = await _client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"DCP log observation failed ({(int)response.StatusCode}).");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var buffer = new MemoryStream();
+        var bytes = new byte[8192];
+        int length;
+        while ((length = await stream.ReadAsync(bytes, cancellationToken)) > 0)
+        {
+            if (buffer.Length + length > 65536)
+            {
+                throw new InvalidOperationException("DCP log batch exceeds the bounded observation limit.");
+            }
+
+            buffer.Write(bytes, 0, length);
+        }
+
+        var data = buffer.ToArray();
+        // DCP can return the current incomplete line, e.g. "Connect via browser: "
+        // before the process finishes writing its URL. A line cursor re-reads that
+        // entire line next time, so forwarding the partial tail twice corrupts it.
+        // Advance and forward only complete lines; the tail remains at this cursor.
+        var completeLength = Array.LastIndexOf(data, (byte)'\n') + 1;
+        var lines = data.AsSpan(0, completeLength).Count((byte)'\n');
+        return new JsonObject { ["offset"] = offset + lines, ["data"] = Convert.ToBase64String(data, 0, completeLength) };
+    }
+
     public async Task DeleteAsync(string collection, string name, CancellationToken cancellationToken)
     {
         await SendAsync(HttpMethod.Delete, Api + collection + "/" + name, null, cancellationToken);

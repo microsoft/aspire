@@ -151,15 +151,85 @@ The harness creates a private temporary Nuxt workspace and reuses the existing s
 
 ### Remaining scope and footprint
 
-The additional core implementation is roughly 800 lines across `NativeModel.cs` and `NativeDcp.cs`, excluding the earlier RPC peer and descriptor experiment. The integration process is roughly 280 lines. These sizes describe a narrow experiment, not an estimate for a production rewrite.
+Before the custom tunnel extension below, the additional core implementation was roughly 800 lines across `NativeModel.cs` and `NativeDcp.cs`, excluding the earlier RPC peer and descriptor experiment. The Redis/PostgreSQL/Nuxt integration process is roughly 280 lines. These sizes describe a narrow experiment, not an estimate for a production rewrite.
 
-The extended AOT binary is approximately 5.8 MiB on disk and 23 MiB resident in the measured run. The complete native scenario's five post-readiness host-process samples had a median near 1.2 GiB, including the integration process, Nuxt, both DCP processes, and observed Docker helpers. Container memory in Docker's VM, precise shared-memory accounting, peaks, and the harness itself are excluded. The scenario includes PostgreSQL and an additional client container and has no equivalent managed baseline here; these figures establish a footprint, not a memory or startup improvement.
+Before the custom tunnel extension, the extended AOT binary was approximately 5.8 MiB on disk and 23 MiB resident in the measured run. The complete native scenario's five post-readiness host-process samples had a median near 1.2 GiB, including the integration process, Nuxt, both DCP processes, and observed Docker helpers. Container memory in Docker's VM, precise shared-memory accounting, peaks, and the harness itself are excluded. The scenario includes PostgreSQL and an additional client container and has no equivalent managed baseline here; these figures establish a footprint, not a memory or startup improvement.
 
 This is not a full Redis/PostgreSQL/Nuxt port or a production native server. Missing behavior includes TLS/certificate trust, existing databases and custom creation scripts, Redis modules, admin companions, resource log/dashboard integration, continuous health/drift reconciliation, cross-session volume policy, automatic dependent restart, complete owner-death recovery, portable PostgreSQL probing, production ATS/schema validation, and CLI acquisition/launch integration. A parent's replacement does not automatically re-run its child's creation callback or restart its consumers; the harness explicitly replaces Nuxt to re-evaluate its environment.
 
 `native-model.v0` is an experimental source graph, not an Aspire deployment manifest. It retains structured expressions, callback identities, parent metadata, and Nuxt build metadata; there is no new deployment-target lowering or native build executor. The earlier compatibility experiment remains the evidence for running the actual managed manifest pipeline. Production publication still needs execution-mode policies, target-specific graph transforms, formatted-secret dependency discovery, build pipelines, and deployment output.
 
 The useful reuse boundary is DCP's existing workload controllers and wire protocol, plus an optional managed adapter for existing CLR integrations. Integration defaults can be re-expressed outside the core; existing DI health checks, Npgsql/client use, annotations, event subscriptions, and publisher extensions cannot simply be linked into this BCL-only AOT process. They must stay managed or be implemented against equivalent portable primitives. These ports identify those primitives without claiming transparent CLR compatibility.
+
+## Dev Tunnels custom-resource port
+
+`devtunnel-integration.mts` is a bounded experimental port of the existing Dev Tunnels shape: a run-only executable hosts a tunnel, and a custom port resource exposes its public endpoint. It does not modify `Aspire.Hosting.DevTunnels`, replace its monitor, or adopt existing customer tunnels.
+
+```text
+Native Nuxt HTTP endpoint
+    ^
+    | forwarding
+DCP-owned devtunnel executable <-- external Node tunnel integration
+                                      |
+                                      +-- CLI auth/provisioning and port reconciliation
+                                      +-- DCP log observation and tunnel-output parsing
+                                      +-- custom port state / endpoint updates over RPC
+                                                    |
+BCL-only AOT core <----------------------------------+
+    +-- run-only custom port: generation, revision, state, public URL
+    +-- dependent DCP executable consumes deferred TUNNEL_URL
+```
+
+The core adds a generic `custom` primitive and controller operations in `NativeCustomResources.cs`. It does not know about tunnel IDs, Dev Tunnels URL formats, authentication, or CLI commands. The external integration discovers and validates the URL, then reports the allocated endpoint and readiness. The custom port has no DCP executable/container of its own.
+
+The experiment covers:
+
+- Run-only owner, port, and consumer resources excluded from publication. A publish request for a run-only URL fails explicitly; this prototype does not implement the shipped helper's publish-mode no-op reference injection.
+- A real DCP-owned Nuxt process and dependent executable consuming the custom resource's deferred URL, with an actual forwarded HTTP health response.
+- Stop/restart commands, revoked endpoint values during unavailability, target-port reconciliation after replacing Nuxt, and consumer replacement to re-evaluate its inherited environment.
+- Monotonic controller generations and state revisions. Concurrent duplicate updates accept exactly one; foreign owners, stale generations, invalid URLs, conflicting commands, and post-cancellation updates are rejected.
+- Cancellation and controller disconnection during an outstanding command. The port becomes terminal and no longer resolves its old endpoint.
+- Tunnel-host process exit observed through DCP, failed custom-port state, and endpoint invalidation. The integration uses DCP's log subresource rather than assuming DCP exposes stdout files.
+- Explicit relay-reported integration EOF, endpoint invalidation, and removal of that controller's DCP executable. Owner identity is a prototype routing identifier, not an authenticated capability.
+
+**Local forwarding is validated; the live Dev Tunnels relay is not.** The local run substitutes `devtunnel-fixture.mts` for the CLI. This fixture implements the narrow provisioning/output contract and a real loopback HTTP forwarder to DCP-owned Nuxt. It never contacts the Dev Tunnels service. Production parsing accepts validated HTTPS `*.devtunnels.ms` endpoints; loopback HTTP acceptance is enabled only for this explicit fixture mode.
+
+A live run was attempted with the installed CLI and stopped at authentication preflight because its login had expired. That check runs before DCP/Nuxt launch and before any remote tunnel creation. The experiment does not automatically log in, copy credentials from another tool, or quietly substitute the fixture after live authentication fails.
+
+### Run the custom-resource experiment
+
+Use the restore/AOT publish prerequisites above, then:
+
+```bash
+node playground/NuxtApp/node_modules/typescript/bin/tsc \
+  --noEmit --allowImportingTsExtensions \
+  --module NodeNext --moduleResolution NodeNext --target ES2023 \
+  --strict --types node --typeRoots playground/NuxtApp/node_modules/@types \
+  playground/NativeHosting/devtunnel-output.mts \
+  playground/NativeHosting/devtunnel-integration.mts \
+  playground/NativeHosting/devtunnel-fixture.mts \
+  playground/NativeHosting/tunnel-consumer.mts \
+  playground/NativeHosting/native-tunnels.mts
+
+# Local CLI/output fixture, real DCP and real HTTP forwarding:
+NATIVE_HOSTING_RESULTS=/absolute/path/native-tunnel-results.json \
+  node playground/NativeHosting/native-tunnels.mts
+
+# Explicit authentication prerequisite for the actual service:
+devtunnel user login
+
+# Actual Dev Tunnels service. Creates a fresh, short-lived tunnel and explicitly
+# enables anonymous access to the disposable health-only Nuxt experiment.
+NATIVE_HOSTING_LIVE_TUNNEL=1 \
+  NATIVE_HOSTING_RESULTS=/absolute/path/native-tunnel-live-results.json \
+  node playground/NativeHosting/native-tunnels.mts
+```
+
+`NATIVE_HOSTING_DEVTUNNEL` selects the live CLI executable; `NATIVE_HOSTING_DCP` selects DCP as above. The health-only Nuxt fixture does not run Redis or exercise its credential-bearing route. Results label the transport and whether a live relay was actually validated. The live preflight failure is persisted as a failure result, not a successful local test.
+
+The port intentionally creates a fresh random tunnel ID and explicitly deletes that experiment-owned tunnel during orderly cleanup. This is not the shipped integration's persistent remote-resource policy. Unexpected integration EOF invalidates the local resource and removes its DCP executable, but cannot guarantee deletion of remote state without working service access; the experiment sets a one-hour expiration and never adopts a user's existing tunnel.
+
+The remaining production scope includes authenticated transport ownership, automatic EOF dispatch rather than the prototype relay's explicit call, startup/disconnect races, login coalescing/interaction, complete CLI output/version coverage, access-policy reconciliation, existing persistent tunnels, dashboard command/log/URL integration, and supported run/publish reference semantics. The custom monitor is integration-local and narrower than the shipped `DevTunnelMonitor`; its local fixture is not evidence of service compatibility.
 
 ## Feasibility findings
 
