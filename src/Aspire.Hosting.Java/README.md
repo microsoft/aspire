@@ -107,6 +107,22 @@ No health check is added: `/actuator/health` only responds when the application 
 `spring-boot-starter-actuator`, so adding one unconditionally would leave every other application
 permanently unhealthy. Add `.WithHttpHealthCheck("/actuator/health")` when the actuator is present.
 
+The application serves plain HTTP by default. Call `WithHttpsDeveloperCertificate()` (or `WithHttpsCertificate`
+for a specific certificate) to serve HTTPS instead:
+
+```csharp
+#pragma warning disable ASPIRECERTIFICATES001
+
+var catalog = builder.AddSpringBootApp("catalog", "../catalog")
+    .WithHttpsDeveloperCertificate();
+```
+
+Aspire configures Spring Boot through the `SERVER_SSL_KEY_STORE` variables, so the application needs no
+change. Spring Boot serves a single protocol on its port, so the port speaks TLS only and the endpoint
+switches to `https` in run mode. A resource that references the application then receives its address as
+`services__catalog__https__0` rather than `services__catalog__http__0`, which is why HTTPS is opt-in:
+switching the scheme would otherwise break applications that read the `http` variable.
+
 Use `AddJavaApp` directly for anything else: a different Spring Boot plugin goal, a project laid out so
 the build file is not in the app directory, or a framework that is not Spring Boot.
 
