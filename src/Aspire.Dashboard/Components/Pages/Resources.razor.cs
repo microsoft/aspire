@@ -122,6 +122,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly List<MenuButtonItem> _resourcesMenuItems = new();
     private DotNetObjectReference<ResourcesInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
+    private bool _graphInitializing;
     private bool _graphInitialized;
     private AspirePageContentLayout? _contentLayout;
     private TotalItemsFooter _totalItemsFooter = default!;
@@ -303,9 +304,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     }
 
                     UpdateMaxHighlightedCount();
-                    await UpdateResourceGraphResourcesAsync();
                     await InvokeAsync(async () =>
                     {
+                        await UpdateResourceGraphResourcesAsync();
                         await _dataGrid.SafeRefreshDataAsync();
                         if (selectedResourceHasChanged)
                         {
@@ -362,47 +363,91 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (_isDisposing)
         {
-            var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
-            await JS.InvokeVoidAsync("focusElement", initialFocusElementId, true);
+            return;
         }
 
-        if (_pendingFocusElementId is { } pendingFocusElementId)
+        try
         {
-            _pendingFocusElementId = null;
-            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
+            if (firstRender)
+            {
+                var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
+                await JS.InvokeVoidAsync("focusElement", initialFocusElementId, true);
+            }
+
+            if (_pendingFocusElementId is { } pendingFocusElementId)
+            {
+                _pendingFocusElementId = null;
+                await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
+            }
+
+            if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized && !_graphInitializing)
+            {
+                // Prevent reentrant renders from initializing the graph again while import is pending.
+                _graphInitializing = true;
+                try
+                {
+                    _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-resourcegraph.js"]}");
+
+                    _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
+
+                    // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
+                    // SVG path data here (the same way resource/state icons are) so the JS can render them.
+                    var graphIcons = new GraphIconsDto(new GraphMenuIconDto(
+                        Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
+                        LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value));
+
+                    await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+                    _graphInitialized = true;
+                    await UpdateResourceGraphResourcesAsync();
+                    await UpdateResourceGraphSelectedAsync();
+                }
+                finally
+                {
+                    _graphInitializing = false;
+                }
+            }
         }
-
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
+        catch (JSDisconnectedException ex)
         {
-            // Before any awaits, set a flag to indicate the graph is initialized. This prevents the graph being initialized multiple times.
-            _graphInitialized = true;
-
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-resourcegraph.js"]}");
-
-            _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
-
-            // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
-            // SVG path data here (the same way resource/state icons are) so the JS can render them.
-            var graphIcons = new GraphIconsDto(new GraphMenuIconDto(
-                Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value));
-
-            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
-            await UpdateResourceGraphResourcesAsync();
-            await UpdateResourceGraphSelectedAsync();
+            Logger.LogDebug(ex, "Resources page rendering stopped because the circuit disconnected.");
+        }
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Resources page rendering stopped because the page was disposed.");
         }
     }
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (PageViewModel.SelectedViewKind != ResourceViewKind.Graph || _jsModule == null)
+        if (PageViewModel.SelectedViewKind != ResourceViewKind.Graph)
         {
             return;
         }
 
-        await _jsModule.InvokeVoidAsync("updateResourcesGraph", GetResourceGraphResources());
+        await InvokeResourceGraphAsync("updateResourcesGraph", GetResourceGraphResources());
+    }
+
+    private async Task InvokeResourceGraphAsync(string identifier, params object?[] args)
+    {
+        if (!_graphInitialized || _jsModule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _jsModule.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Resource graph call '{Identifier}' stopped because the circuit disconnected.", identifier);
+        }
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Resource graph call '{Identifier}' stopped because the page was disposed.", identifier);
+        }
     }
 
     private List<ResourceDto> GetResourceGraphResources()
@@ -417,6 +462,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             DialogService = DialogService,
             ValueDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)],
+            MarkdownDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription)],
             // Map the current model even while the graph's asynchronous initialization is pending.
             Value = ResourceGraphMermaidExporter.Export(GetResourceGraphResources()),
             DownloadFileName = "resources.mmd",
@@ -911,12 +957,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             : requestedViewKind;
     }
 
-    private async Task UpdateResourceGraphSelectedAsync()
+    private Task UpdateResourceGraphSelectedAsync()
     {
-        if (_jsModule != null)
-        {
-            await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
-        }
+        return InvokeResourceGraphAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
     }
 
     public sealed class ResourcesViewModel
@@ -1021,10 +1064,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task ContextMenuOpenChangedAsync(bool open)
     {
         _contextMenuOpen = open;
-        if (_jsModule is not null)
-        {
-            await _jsModule.InvokeVoidAsync("updateResourcesGraphContextMenu", open);
-        }
+        await InvokeResourceGraphAsync("updateResourcesGraphContextMenu", open);
         await InvokeAsync(StateHasChanged);
     }
 

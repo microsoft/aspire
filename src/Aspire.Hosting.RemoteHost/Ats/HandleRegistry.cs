@@ -2,47 +2,40 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 
 namespace Aspire.Hosting.RemoteHost.Ats;
 
 /// <summary>
 /// Manages registration and lookup of ATS handles for capability dispatch.
-/// Handles are opaque typed references with IDs in the format: {typeId}:{instanceId}
+/// Handles are opaque references with unguessable IDs and separately recorded ATS types.
 /// </summary>
 internal sealed class HandleRegistry : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<string, HandleEntry> _handles = new();
-    private long _idCounter;
-
-    /// <summary>
-    /// Represents a registered handle entry.
-    /// </summary>
-    private sealed class HandleEntry
-    {
-        public required object Object { get; init; }
-        public required string TypeId { get; init; }
-        public required long InstanceId { get; init; }
-    }
 
     /// <summary>
     /// Registers an object as a handle with the specified ATS type ID.
     /// </summary>
     /// <param name="obj">The object to register.</param>
     /// <param name="typeId">The ATS type ID (e.g., "aspire.redis/RedisBuilder").</param>
-    /// <returns>The handle ID (just the instance number).</returns>
+    /// <returns>The opaque handle ID.</returns>
     public string Register(object obj, string typeId)
     {
-        var instanceId = Interlocked.Increment(ref _idCounter);
-        var handleId = instanceId.ToString(CultureInfo.InvariantCulture);
-
-        _handles[handleId] = new HandleEntry
+        var entry = new HandleEntry
         {
             Object = obj,
-            TypeId = typeId,
-            InstanceId = instanceId
+            TypeId = typeId
         };
+        string handleId;
+        do
+        {
+            // Handles can be relayed across connections. Possession delegates access,
+            // so use 128 bits of cryptographic randomness instead of enumerable IDs.
+            handleId = RandomNumberGenerator.GetHexString(32, lowercase: true);
+        }
+        while (!_handles.TryAdd(handleId, entry));
 
         return handleId;
     }
@@ -177,11 +170,17 @@ internal sealed class HandleRegistry : IAsyncDisposable
             }
         }
     }
+
+    private sealed class HandleEntry
+    {
+        public required object Object { get; init; }
+        public required string TypeId { get; init; }
+    }
 }
 
 /// <summary>
 /// Reference to an ATS handle. Used when passing handles as arguments.
-/// JSON shape: { "$handle": "42", "$type": "Aspire.Hosting.Redis/..." }
+/// JSON shape: { "$handle": "e69a6f159467fe4c9c2c8a2f170d6860", "$type": "Aspire.Hosting.Redis/..." }
 /// </summary>
 internal sealed class HandleRef
 {

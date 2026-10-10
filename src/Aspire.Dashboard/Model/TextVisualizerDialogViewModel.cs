@@ -12,4 +12,10 @@ namespace Aspire.Dashboard.Model;
 /// <param name="DownloadFileName">Optional file name for downloading the content. If null, download is disabled.</param>
 /// <param name="FixedFormat">If set, the dialog will use this format and hide the format dropdown.</param>
 /// <param name="InitialFormat">The initial format, overriding automatic format detection. Users can still change the format.</param>
-public record TextVisualizerDialogViewModel(string Text, string Description, bool ContainsSecret, string? DownloadFileName = null, string? FixedFormat = null, string? InitialFormat = null);
+public record TextVisualizerDialogViewModel(string Text, string Description, bool ContainsSecret, string? DownloadFileName = null, string? FixedFormat = null, string? InitialFormat = null)
+{
+    /// <summary>
+    /// Optional Markdown description displayed above the text content.
+    /// </summary>
+    public string? MarkdownDescription { get; init; }
+}

@@ -268,7 +268,16 @@
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)IChildProcess.cs" Link="Processes\IChildProcess.cs" />
+    <Compile Include="$(SharedDir)ChildProcess.cs" Link="Processes\ChildProcess.cs" />
+    <Compile Include="$(SharedDir)ChildProcessOptions.cs" Link="Processes\ChildProcessOptions.cs" />
+    <Compile Include="$(SharedDir)ProcessScope.cs" Link="Processes\ProcessScope.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisor.cs" Link="Processes\ProcessSupervisor.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisorLogger.cs" Link="Processes\ProcessSupervisorLogger.cs" />
+    <Compile Include="$(SharedDir)ProcessSupervisor.Windows.cs" Link="Processes\ProcessSupervisor.Windows.cs" />
     <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
+    <Compile Include="$(SharedDir)ProcessStartInfoHelper.cs" Link="Utils\ProcessStartInfoHelper.cs" />
+    <Compile Include="$(SharedDir)CommandPathResolver.cs" Link="Utils\CommandPathResolver.cs" />
     <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Utils\ParentProcessLivenessMonitor.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
   </ItemGroup>

@@ -1550,7 +1550,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             Debug = context.Debug,
             KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(_environment.IsWindows()),
             // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
-            // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
+            // same graceful-then-escalate semantics as TypeScript AppHosts (which already
             // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,
             // package add, layout, and other short-lived invocations leave these unset so
             // they continue to use the shared ladder's force-kill mode.
@@ -1559,6 +1559,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // from escaping the CLI job to finish resource cleanup. Direct launches have no
             // intervening job and opt back into the CLI job below.
             KillOnParentExit = false,
+            Lifetime = ChildProcessLifetime.AppHost,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
             // The bundled AppHost run hook delegates dotnet run to aspire run. The SDK passes

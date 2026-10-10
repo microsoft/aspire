@@ -30,6 +30,8 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
@@ -454,6 +456,76 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equivalent(resources, serializedResources.Deserialize(resources.GetType(), DashboardJsonSerializerContext.Default.Options), strict: true);
     }
 
+    [Fact]
+    public async Task ResourceGraph_UpdatesWaitForInitializationAndHandleCircuitDisconnect()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var testSink = new TestSink();
+        Services.AddSingleton<ILogger<Components.Pages.Resources>>(new TestLogger<Components.Pages.Resources>(new TestLoggerFactory(testSink, enabled: true)));
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport);
+        var initializeGraph = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var disconnected = false;
+        Exception exception = new JSDisconnectedException("The circuit disconnected.");
+        Func<Task>? disposeOnInvoke = null;
+        var module = new TestJSObjectReference
+        {
+            BeforeInvokeAsync = async identifier =>
+            {
+                if (identifier == "initializeResourcesGraph")
+                {
+                    await initializeGraph.Task;
+                    return;
+                }
+
+                if (disposeOnInvoke is { } dispose)
+                {
+                    await dispose();
+                }
+
+                if (disconnected)
+                {
+                    throw exception;
+                }
+            }
+        };
+        var import = TestJSObjectReference.SetupImport(this, "/js/app-resourcegraph.js");
+        import.SetResult(module);
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        var tabs = cut.FindComponent<FluentTabs>().Instance;
+        var tableTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Table").Instance;
+        var graphTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Graph").Instance;
+        try
+        {
+            await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(tableTab));
+            await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(graphTab));
+
+            Assert.Equal(["initializeResourcesGraph"], module.Invocations.Select(i => i.Identifier));
+        }
+        finally
+        {
+            initializeGraph.TrySetResult();
+        }
+        cut.WaitForAssertion(() => Assert.Equal(
+            ["initializeResourcesGraph", "updateResourcesGraph", "updateResourcesGraphSelected"],
+            module.Invocations.Select(i => i.Identifier)));
+
+        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(tableTab));
+        disconnected = true;
+        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(graphTab));
+
+        Assert.Equal(2, testSink.Writes.Count(record => record.LogLevel == LogLevel.Debug && ReferenceEquals(record.Exception, exception)));
+
+        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(tableTab));
+        exception = new ObjectDisposedException(nameof(Components.Pages.Resources));
+        disposeOnInvoke = () => cut.Instance.DisposeAsync().AsTask();
+        await cut.InvokeAsync(() => tabs.ActiveTabChanged.InvokeAsync(graphTab));
+
+        Assert.Single(testSink.Writes, record => record.LogLevel == LogLevel.Debug && ReferenceEquals(record.Exception, exception));
+        Assert.False(Renderer.UnhandledException.IsCompleted);
+    }
+
     [Theory]
     [InlineData(true, false, 0)]
     [InlineData(true, true, 0)]
@@ -534,6 +606,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         var dialog = Assert.Single(dialogs);
         Assert.Equal("resources.mmd", dialog.DownloadFileName);
+        Assert.Equal(Aspire.Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription, dialog.MarkdownDescription);
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.FixedFormat);
         Assert.False(dialog.ContainsSecret);
         Assert.Empty(JSInterop.Invocations["downloadStreamAsFile"]);
@@ -589,10 +662,11 @@ public partial class ResourcesTests : DashboardTestContext
             viewport,
             dashboardClient);
 
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
-        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
-        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
-        resourceGraphModule.SetupVoid("selectResource", _ => true);
+        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true).SetVoidResult();
+        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true).SetVoidResult();
+        resourceGraphModule.SetupVoid("updateResourcesGraphSelected", _ => true).SetVoidResult();
         var menuStateHandler = resourceGraphModule.SetupVoid("updateResourcesGraphContextMenu", _ => true);
         menuStateHandler.SetVoidResult();
 

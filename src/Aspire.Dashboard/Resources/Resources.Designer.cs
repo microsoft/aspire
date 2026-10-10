@@ -475,6 +475,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).
+        /// </summary>
+        public static string ResourcesGraphExportMermaidDescription {
+            get {
+                return ResourceManager.GetString("ResourcesGraphExportMermaidDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Reset.
         /// </summary>
         public static string ResourcesGraphResetButton {

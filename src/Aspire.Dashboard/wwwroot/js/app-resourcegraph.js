@@ -140,6 +140,9 @@ class ResourceGraph {
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
         this.nodeElementsG = this.baseGroup.append("g").attr("class", "nodes");
+        // Selection updates can arrive before the first resource snapshot.
+        this.linkElements = this.linkElementsG.selectAll(".resource-link");
+        this.nodeElements = this.nodeElementsG.selectAll(".resource-group");
 
         this.initializeButtons();
     }

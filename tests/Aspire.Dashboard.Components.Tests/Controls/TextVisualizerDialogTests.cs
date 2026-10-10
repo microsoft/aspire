@@ -28,6 +28,43 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class TextVisualizerDialogTests : DashboardTestContext
 {
     [Fact]
+    public async Task Render_TextVisualizerDialog_MarkdownDescription_IsOptionalAndDisplayedAboveContentAsync()
+    {
+        const string text = "flowchart LR";
+        var getCut = SetUpDialog(out var dialogService);
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = dialogService,
+            ValueDescription = "Export as Mermaid",
+            Value = text,
+            FixedFormat = DashboardUIHelpers.PlaintextFormat
+        });
+        var cut = getCut();
+        var dialog = cut.FindComponent<TextVisualizerDialog>();
+        Assert.Empty(cut.FindAll(".text-visualizer-description"));
+
+        var content = dialog.Instance.Content with { MarkdownDescription = string.Empty };
+        dialog.Render(parameters => parameters.Add(p => p.Content, content));
+        Assert.Empty(cut.FindAll(".text-visualizer-description"));
+
+        content = content with { MarkdownDescription = "Mermaid defines **diagrams**. [Learn more](https://aka.ms/aspire/about-mermaid)." };
+        dialog.Render(parameters => parameters.Add(p => p.Content, content));
+
+        Assert.Equal("diagrams", cut.Find(".text-visualizer-description strong").TextContent);
+        Assert.Equal("https://aka.ms/aspire/about-mermaid", cut.Find(".text-visualizer-description a").GetAttribute("href"));
+        Assert.Equal("text-visualizer-description", cut.Find(".text-visualizer-container").FirstElementChild?.ClassName);
+        Assert.Equal(text, cut.FindComponent<TextVisualizer>().Instance.ViewModel.FormattedText);
+        Assert.Equal(text, cut.Find("[data-copybutton='true']").GetAttribute("data-text"));
+
+        content = content with { Text = "**Content**", FixedFormat = DashboardUIHelpers.MarkdownFormat };
+        dialog.Render(parameters => parameters.Add(p => p.Content, content));
+
+        Assert.Equal("diagrams", cut.Find(".text-visualizer-description strong").TextContent);
+        Assert.Equal("Content", cut.Find(".markdown-content strong").TextContent);
+        Assert.Equal("text-visualizer-description", cut.Find(".text-visualizer-container").FirstElementChild?.ClassName);
+    }
+
+    [Fact]
     public async Task Render_TextVisualizerDialog_WithValidJson_FormatsJsonAsync()
     {
         var rawJson = """
@@ -545,6 +582,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var module = JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js");
         module.SetupVoid();
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js")
+            .SetupVoid("highlightCodeBlocks", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
