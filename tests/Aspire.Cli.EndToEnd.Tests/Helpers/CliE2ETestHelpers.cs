@@ -29,6 +29,34 @@ internal static class CliE2ETestHelpers
     internal const string ContainerCliVersionOutputDir = "/tmp/aspire-cli-versions";
     private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
+    internal static string GetAppHostVersion(string content)
+    {
+        string? version;
+        if (content.TrimStart().StartsWith('<'))
+        {
+            var project = XDocument.Parse(content);
+            version = project.Descendants("PackageReference")
+                .Where(reference => string.Equals(reference.Attribute("Include")?.Value, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
+                .Select(reference => reference.Attribute("Version")?.Value)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                var sdk = project.Root?.Attribute("Sdk")?.Value;
+                const string prefix = "Aspire.AppHost.Sdk/";
+                version = sdk?.StartsWith(prefix, StringComparison.Ordinal) == true ? sdk[prefix.Length..] : null;
+            }
+        }
+        else
+        {
+            var match = Regex.Match(content, @"(?m)^[ \t]*#:[ \t]*(?:package[ \t]+Aspire\.Hosting\.AppHost|sdk[ \t]+Aspire\.AppHost\.Sdk)@(?<version>[^ \t\r\n]+)[ \t]*\r?$");
+            version = match.Success ? match.Groups["version"].Value : null;
+        }
+
+        return !string.IsNullOrWhiteSpace(version)
+            ? version
+            : throw new InvalidOperationException("Could not find an explicit AppHost package or retained SDK version.");
+    }
+
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
     /// When running locally, some commands are replaced with echo stubs.

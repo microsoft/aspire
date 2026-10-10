@@ -69,7 +69,11 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
 
         Assert.True(File.Exists(appHostCs), $"Expected apphost.cs to exist at: {appHostCs}");
         Assert.True(File.Exists(aspireConfigJson), $"Expected aspire.config.json to exist at: {aspireConfigJson}");
-        Assert.Contains("#:property AspireUseCliBundle=true", File.ReadAllText(appHostCs));
+        var appHostSource = File.ReadAllText(appHostCs);
+        Assert.StartsWith("#:package Aspire.Hosting.AppHost@", appHostSource);
+        Assert.Contains("#:package Aspire.Hosting.Dotnet@", appHostSource);
+        Assert.DoesNotContain("#:sdk Aspire.AppHost.Sdk@", appHostSource);
+        Assert.DoesNotContain("#:property AspireUseCliBundle=", appHostSource);
         Assert.True(
             File.Exists(appHostRunJson),
             $"Expected apphost.run.json to exist at: {appHostRunJson}. "
@@ -91,7 +95,7 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // The generated AppHost opts into the CLI bundle, so `dotnet run` delegates to the
+        // The generated AppHost uses the CLI bundle by default, so `dotnet run` delegates to the
         // CLI and displays its startup message instead of the direct AppHost log message.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();

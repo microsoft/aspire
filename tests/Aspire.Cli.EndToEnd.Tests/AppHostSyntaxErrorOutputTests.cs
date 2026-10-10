@@ -254,16 +254,19 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
     private static void WriteBrokenDotNetAppHost(string projectDirectory)
     {
         var appHostPath = Path.Combine(projectDirectory, "apphost.cs");
-        var aspireSdkVersion = GetAspireSdkVersion(appHostPath);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(File.ReadAllText(appHostPath));
 
         File.WriteAllText(Path.Combine(projectDirectory, "BrokenDotNetApp.csproj"), $$"""
-            <Project Sdk="Aspire.AppHost.Sdk/{{aspireSdkVersion}}">
+            <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
                 <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
               </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" Version="{{appHostVersion}}" />
+              </ItemGroup>
             </Project>
             """);
 
@@ -287,16 +290,6 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
               </PropertyGroup>
             </Project>
             """);
-    }
-
-    private static string GetAspireSdkVersion(string appHostPath)
-    {
-        var firstLine = File.ReadLines(appHostPath).First();
-        const string versionMarker = "Aspire.AppHost.Sdk@";
-        var markerIndex = firstLine.IndexOf(versionMarker, StringComparison.Ordinal);
-        Assert.True(markerIndex >= 0, $"Expected {appHostPath} to start with an Aspire.AppHost.Sdk directive.");
-
-        return firstLine[(markerIndex + versionMarker.Length)..].Trim();
     }
 
     private static void WriteBrokenTypeScriptAppHost(string projectDirectory)
