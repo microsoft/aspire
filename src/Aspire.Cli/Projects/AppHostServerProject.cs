@@ -40,6 +40,12 @@ internal sealed class AppHostServerProjectFactory(
 
     public async Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
     {
+        if (environment.GetEnvironmentVariable(NativeAppHostServerProject.ExecutableEnvironmentVariable) is { Length: > 0 } nativeExecutable)
+        {
+            return new NativeAppHostServerProject(appPath, nativeExecutable, processExecutionFactory,
+                loggerFactory.CreateLogger<NativeAppHostServerProject>());
+        }
+
         var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
         // Priority 1: Check for dev mode (ASPIRE_REPO_ROOT or running from Aspire source repo)

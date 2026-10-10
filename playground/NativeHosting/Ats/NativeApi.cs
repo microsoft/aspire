@@ -300,6 +300,46 @@ public sealed class NativeResource
 [AspireExport]
 public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
 {
+    private volatile bool _ready;
+    internal bool Ready => _ready;
+
+    internal async Task<JsonArray> ObserveResourcesAsync(CancellationToken cancellationToken)
+    {
+        var result = new JsonArray();
+        if (!_ready)
+        {
+            return result;
+        }
+
+        foreach (var resource in _resources.Values)
+        {
+            var state = (await InvokeAsync("status", new JsonObject { ["resource"] = resource.Identity }, cancellationToken))!.AsObject();
+            // Parameters and synthetic children have no allocation dictionary.
+            // Project only observable state and URLs, never definition values.
+            var urls = new JsonArray();
+            if (state["endpoints"] is JsonObject endpoints)
+            {
+                foreach (var endpoint in endpoints)
+                {
+                    if (endpoint.Value?["url"] is { } url)
+                    {
+                        urls.Add(url.DeepClone());
+                    }
+                }
+            }
+
+            result.Add((JsonNode)new JsonObject
+            {
+                ["name"] = resource.Name,
+                ["kind"] = resource.Definition["kind"]!.DeepClone(),
+                ["state"] = RpcPeer.RequiredString(state, "state"),
+                ["urls"] = urls
+            });
+        }
+
+        return result;
+    }
+
     private readonly NativeModel _model;
     private readonly Dictionary<string, NativeResource> _resources = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Func<ControlRequest, CancellationToken, Task<bool>>> _callbacks = new(StringComparer.Ordinal);
@@ -382,6 +422,7 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
 
         await _model.InvokeAsync("configure", new JsonObject { ["dcp"] = _dcp }, cancellationToken);
         await _model.InvokeAsync("startAll", new JsonObject(), cancellationToken);
+        _ready = true;
         return true;
     }
 

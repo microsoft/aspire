@@ -1,6 +1,104 @@
 # Lean native hosting feasibility spike
 
-This is an isolated experiment for [#20873](https://github.com/microsoft/aspire/issues/20873), not a new supported AppHost runtime. It changes no shipped hosting implementation, CLI behavior, Nuxt package, dependency version, or generated API baseline. The original handwritten-RPC experiments remain available; the ATS-native server checkpoint below uses generated ATS APIs instead.
+This is an isolated experiment for [#20873](https://github.com/microsoft/aspire/issues/20873), not a new supported AppHost runtime. C# hosting remains managed and the default guest server selection stays unchanged. An explicit development-only CLI override now exercises the native server and extends the command's cleanup window. No Nuxt package, dependency version, or generated API baseline is changed. The original handwritten-RPC experiments remain available; the ATS-native server below uses generated ATS APIs instead.
+
+## Actual `aspire run` with the AOT core
+
+`ASPIRE_CLI_NATIVE_APPHOST_SERVER` selects the native executable before the usual repository/bundle guest-server selection. The CLI retains its standard process factory, AppHost server session, authentication, SDK writing, language runtime execution, and graceful-shutdown infrastructure. Native server selection applies only to guest AppHosts; C# hosting remains managed.
+
+```text
+aspire run
+  +-- NativeAppHostServerProject -> standard supervised AppHostServerSession
+  |     +-- authenticated NativeAOT server
+  |           +-- static ATS dispatch + embedded offline-generated TypeScript SDK
+  |           +-- minimal graph, readiness, handles and controller lifetime
+  |           +-- BCL kubeconfig reader + HTTPS/JSON -> actual DCP workloads
+  |           +-- explicitly configured Node ATS integration host
+  |                 Redis / PostgreSQL / Nuxt / Dev Tunnels behavior
+  +-- ordinary TypeScript guest launch, using the server-generated .aspire/modules
+  +-- CLI-side native headless adapter: actual readiness/control RPC + captured logs
+```
+
+DCP is part of the core's execution boundary, not a managed integration adapter. `Core/NativeDcp.cs` starts the API server, reads its generated connection material directly, validates TLS against its CA and host name, and performs authenticated BCL HTTP requests with source-generated JSON. It does not use `kubectl`, KubernetesClient, a YAML runtime, or `Aspire.Hosting`. The compact scalar reader is shared with the CLI's existing AOT-safe DCP doctor implementation.
+
+For example, `NativeModel` creates services through the native DCP client:
+
+```csharp
+await _dcp.StartAsync(RpcPeer.RequiredString(args, "dcp"), startup.Token);
+
+await _dcp.CreateAsync("services", service,
+    new JsonObject
+    {
+        ["protocol"] = "TCP",
+        ["addressAllocationMode"] = kind == "container" ? "Proxyless" : "Localhost"
+    },
+    null, cancellationToken);
+```
+
+The kernel commits primitive resource definitions, resolves deferred values and dependencies, creates DCP containers/executables/networks/volumes, and invokes integration-owned readiness/controller callbacks. Integration-specific defaults, Redis/SQL clients, database creation, and tunnel reconciliation remain outside it.
+
+`CliAppHost/apphost.mts` uses the actual SDK supplied by this server:
+
+```typescript
+import { connect, createNativeBuilder } from './.aspire/modules/aspire.mjs';
+import { CancellationToken } from './.aspire/modules/transport.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
+
+const builder = await createNativeBuilder(await connect());
+const cache = await builder.addRedis('cache');
+const postgres = await builder.addPostgres('postgres');
+const database = await postgres.addDatabase('app-db', 'native_app');
+const web = await builder.addNuxt('web', webDirectory, cache);
+const tunnel = await builder.addDevTunnel('tunnel', web, dataDirectory, true);
+await builder.run(new CancellationToken());
+
+// This prototype's run returns after readiness. Keep the guest alive until
+// the CLI shuts it down; an unresolved Promise alone does not keep Node alive.
+while (true) await delay(60000);
+```
+
+The CLI consumes genuine graph readiness, not merely an existing socket. The server keeps its integration host connected while custom resources are stopped, then closes sockets and terminates the host. Runtime-state snapshots serialize with graph teardown so reload cannot query an already-disposed builder. Ctrl+C uses the normal CLI shutdown ladder. The explicit native override gives that ladder an 80-second cooperative window, covering the integration's 30-second disposal hook and DCP's 45-second cleanup deadline. The normal five-second CLI window could kill this in-tree DCP while PostgreSQL was still stopping; managed Hosting instead detaches its DCP. Without the override, the existing CLI budget stays unchanged.
+
+Whole-graph disposal uses DCP's `admin/execution` merge-patch protocol: request `CleaningResources` with `shutdownResourceCleanup: Full`, observe `CleanupComplete`, then request `Stopping` and await DCP exit. DCP owns dependency-aware resource and runtime cleanup; the core must not equate deleted Kubernetes objects with completed Docker removal. Administrative PATCH content types omit the charset parameter, matching the production client's wire format.
+
+### Reproduce the real CLI path
+
+First run the restore, offline SDK generation/compilation, and NativeAOT publish commands in the ATS section below. The native server embeds the generated `.mts` and compiled `.mjs` assets at build time; SDK changes require regenerating, compiling, and republishing, not a runtime generator.
+
+From the repository root:
+
+```bash
+dotnet build src/Aspire.Cli/Aspire.Cli.csproj /p:SkipNativeBuild=true
+
+NATIVE_HOSTING_CLI_RESULTS=/absolute/path/native-cli-results.json \
+  node playground/NativeHosting/cli-e2e.mts
+
+NATIVE_HOSTING_EXPECT_CLI_FAILURE=1 \
+  node playground/NativeHosting/cli-e2e.mts
+```
+
+The harness prepares a private workspace, copies the sample and existing Nuxt inputs, reuses installed Node dependencies, and invokes **the built Aspire CLI's `run` command**, not an imitation of its protocol. Its subprocess command is equivalent to:
+
+```bash
+ASPIRE_CLI_NATIVE_APPHOST_SERVER="$PWD/artifacts/native-hosting/ats-server/NativeHosting.AtsServer" \
+NATIVE_HOSTING_INTEGRATION_HOST="$PWD/playground/NativeHosting/ats-integration-host.mts" \
+NATIVE_HOSTING_DCP=/absolute/path/to/dcp \
+NATIVE_HOSTING_GUEST_DIRECTORY=/absolute/path/to/prepared/workspace \
+NATIVE_HOSTING_PORT_DATA_DIRECTORY=/absolute/path/to/prepared/workspace \
+NATIVE_HOSTING_TUNNEL_FIXTURE=/absolute/path/to/prepared/workspace/fixture \
+DOTNET_ROOT="$PWD/.dotnet" \
+  ./.dotnet/dotnet artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll \
+  run --apphost /absolute/path/to/prepared/workspace/apphost.mts \
+  --non-interactive --nologo
+```
+
+Set `NATIVE_HOSTING_ATS_BINARY`, `NATIVE_HOSTING_CLI_DLL`, or `NATIVE_HOSTING_DCP` to override the harness defaults; `NATIVE_HOSTING_NODE` selects the server's Node executable. The default DCP path is the previously tested macOS arm64 package. Node must support the sample's type-stripped `.mts` files. The prepared workspace needs the existing Nuxt dependencies and generated SDK's Node dependencies, which the harness arranges without editing package manifests.
+
+For isolated Docker validation, set `DOCKER_CONTEXT` explicitly without changing the default context. Colima must be able to mount the workspace; the CLI harness creates it under `artifacts/native-hosting`. The older ATS socket harness uses the system temporary directory, so set its `TMPDIR` to a private repository-mounted directory when required.
+
+The actual CLI path exercised real Redis `PING`, PostgreSQL `SELECT 1`, Nuxt HTTP, and local tunnel forwarding. It reported `dynamicCodeSupported: false`, observed CLI readiness notification, exited with code 0 on Ctrl+C, and verified owned containers were removed on repeated runs. The deliberate failing guest exited with CLI code 2 rather than leaving the session hanging; the harness bounds process exit by the native cleanup window plus final drain. The published server is approximately 7 MiB, with an observed core working set around 28-31 MiB; these are not whole-session or comparative performance measurements. The stdio mock and both socket guest generations also passed after the CLI/DCP changes.
+
+**Boundaries:** this is a headless Unix/TypeScript exploration. There is no Dashboard or managed streaming-backchannel endpoint; logs come from the standard captured server output. CLI watch, publishing/deployment, separate-command discovery/stop, arbitrary package loading, and other languages are not implemented. Managed/npm integration declarations are rejected; implicit Hosting and TypeScript codegen references are accepted only as CLI metadata, not restored or loaded. The integration host is explicitly configured. DCP acquisition still uses a supplied executable. Dev Tunnels uses the local fixture, not the live relay. Explicit guest reexecution remains full graph replacement, not warm reconciliation.
 
 ## ATS-native AppHost server
 
@@ -60,7 +158,7 @@ Integration exports also come from scanned contracts. `IntegrationContracts.cs` 
 
 ### Reproduce
 
-Use repository restore and the Node/Docker/DCP/`kubectl` prerequisites described below. The harness reuses the existing Nuxt sample's installed modules; it does not change package manifests. From the repository root:
+Use repository restore and the Node/Docker/DCP prerequisites described below. The harness reuses the existing Nuxt sample's installed modules; it does not change package manifests. From the repository root:
 
 ```bash
 dotnet run --project playground/NativeHosting/AtsCodegen/NativeHosting.AtsCodegen.csproj \
@@ -103,13 +201,13 @@ The second guest rejects a captured old handle, rebuilds the graph, and supplies
 
 ### Dependency findings and remaining work
 
-The scanned contract currently has 33 capabilities, four ATS handle entries including cancellation, and 11 DTOs. The published macOS arm64 server is approximately 6.5 MiB. Its managed dependency manifest contains only the two experiment assemblies and the .NET runtime pack. Native AOT still includes .NET GC/runtime support. Neither Hosting, TypeSystem, scanner/codegen, reflection-based capability dispatch, client libraries, nor integration assemblies load into the running native core.
+The scanned contract currently has 33 capabilities, four ATS handle entries including cancellation, and 11 DTOs. The published macOS arm64 server is approximately 7 MiB including its embedded offline SDK. Its managed dependency manifest contains only the two experiment assemblies and the .NET runtime pack. Native AOT still includes .NET GC/runtime support. Neither Hosting, TypeSystem, scanner/codegen, reflection-based capability dispatch, client libraries, nor integration assemblies load into the running native core.
 
 Generation, strict SDK/integration TypeScript compilation, Native AOT publication, the mock, and both real socket-server guest generations passed. All three reported `dynamicCodeSupported: false`; query cancellation completed in 302-305 ms and subsequent queries succeeded. The native core's three post-readiness working-set observations were approximately 28-32 MiB, not whole-session measurements or a repeatable performance comparison. The original named-RPC tunnel scenario and native ports, including unchanged managed Redis, also passed after the shared-core changes.
 
 Final container runs used an isolated disposable Colima Docker VM selected through `DOCKER_CONTEXT`, with `TMPDIR` inside its repository mount. The shared Docker Desktop VM had exhausted its filesystem; no unrelated containers, volumes, images, or cache were pruned, and the active Docker context was not changed. The isolated VM was removed after validation.
 
-Build-time dependencies are the real TypeSystem/scanner/TypeScript generator, linked export attributes, integration analyzer, SDK, and AOT toolchain. Runtime dependencies outside the core remain Node plus the generated ATS runtime's packages, DCP and `kubectl`, Docker/images, Nuxt, image-local `psql`, and the Dev Tunnels CLI or explicit fixture. This is a dependency boundary, not proof of whole-session memory or startup savings.
+Build-time dependencies are the real TypeSystem/scanner/TypeScript generator, linked export attributes, integration analyzer, SDK, and AOT toolchain. Runtime dependencies outside the core remain Node plus the generated ATS runtime's packages, DCP, Docker/images, Nuxt, image-local `psql`, and the Dev Tunnels CLI or explicit fixture. This is a dependency boundary, not proof of whole-session memory or startup savings.
 
 The generated DTO properties currently include optional TypeScript fields even for required C# members; the integration validates observations before using them. Structured value parameters require awaiting the value-producing capability before passing its handle.
 
@@ -118,7 +216,7 @@ Two production seams are exposed explicitly:
 - The current generator always emits a managed `createBuilder` helper referencing Hosting-specific types, even when those contracts are absent. The offline tool removes only that helper, retains the actual generated capabilities/transport, and fails if the helper's shape changes. A kernel-neutral bootstrap should become a supported generator feature.
 - Remote callback cancellation tokens currently reach local protocol/CLI operations through a bounded generated status poll. A push-based local cancellation adapter should be extracted from the production transport instead.
 
-This server speaks the exercised ATS subset; it is **not a drop-in `aspire run` server**. CLI selection/acquisition, SDK/package loading, language management, dashboard/backchannels, full ATS schema/collection/union support, reconnection policy, managed compatibility adapters, deployment lowering, Windows transport, production process containment, and warm graph reconciliation remain work. The original managed facade experiments below establish only their explicitly tested compatibility edges; this ATS port does not expand that promise.
+This server speaks the exercised ATS subset and supports the **explicit headless `aspire run` override above**, not general AppHost server replacement. Production acquisition, arbitrary SDK/package loading, other language runtimes, Dashboard and managed streaming backchannels, full ATS schema/collection/union support, reconnection policy, managed compatibility adapters, deployment lowering, Windows transport, and warm graph reconciliation remain work. The original managed facade experiments below establish only their explicitly tested compatibility edges; this ATS port does not expand that promise.
 
 ## What it exercises
 
@@ -217,7 +315,7 @@ TS experiment AppHost / RPC relay
                                    +-- Nuxt executable + allocated HTTP service
 ```
 
-Neither the integration process nor the core loads `Aspire.Hosting`, a managed adapter, Npgsql, StackExchange.Redis, or KubernetesClient. DCP and Docker remain real workload dependencies. The core uses `kubectl` once to project DCP's generated kubeconfig into JSON, then talks to DCP through BCL `HttpClient`, validating the session certificate authority and hostname and using the generated bearer token. This startup dependency is a prototype convenience, not the proposed final acquisition/configuration contract.
+Neither the integration process nor the core loads `Aspire.Hosting`, a managed adapter, Npgsql, StackExchange.Redis, or KubernetesClient. DCP and Docker remain real workload dependencies. The core reads DCP's generated scalar kubeconfig directly and talks to DCP through BCL `HttpClient`, validating the session certificate authority and hostname and using its generated credentials. DCP acquisition remains a supplied executable path, not a production acquisition contract.
 
 The ports retain selected behaviors of the existing integrations:
 
@@ -240,7 +338,7 @@ The core contains no Redis, PostgreSQL, SQL, or Nuxt dispatch branches in `Nativ
 | Endpoint/network resolution | A host executable needs allocated ports; a container needs a network alias and target port | DCP service allocation, a session container network, host/container resolution |
 | Compute and storage | Redis/PostgreSQL are containers; Nuxt is an executable; replacement must retain data | Explicit DCP JSON for containers, executables, services, networks, and session-scoped volumes |
 | Dependency and readiness coordination | Database creation follows parent health; Nuxt follows Redis health | Parallel dependency graph startup, integration RPC health/initialization callbacks, bounded cancellation |
-| Targeted operations and containment | Restart must not race itself or retain an old endpoint allocation | Conflicting restart rejection, allocation invalidation, explicit dependency rebinding on consumer replacement, reverse-order DCP cleanup on EOF |
+| Targeted operations and containment | Restart must not race itself or retain an old endpoint allocation | Conflicting restart rejection, allocation invalidation, explicit dependency rebinding on consumer replacement, DCP execution-document cleanup on EOF |
 | Publication | Runtime secret values and local ports must not overwrite source expressions | Canonical `native-model.v0` JSON and symbolic resolution, unchanged before/after execution |
 
 `portFor` and `portForServing` are not interchangeable: the former consumes a service port; the latter supplies the workload port associated with its producer annotation. The executable path uses `portForServing` plus a localhost service so DCP allocates and connects both sides. Treating service allocation as a random-port helper produced a real startup/endpoint failure during exploration.
@@ -253,7 +351,7 @@ A separate mixed scenario uses the new DCP-backed native Nuxt path with unchange
 
 ### Reproduce the native ports
 
-Run the restore and AOT publish commands above first. Additional prerequisites are `kubectl`, Docker, and the repository-selected DCP executable. The default DCP path selects the tested macOS arm64 package; set `NATIVE_HOSTING_DCP` to the appropriate repository-restored DCP path on another machine.
+Run the restore and AOT publish commands above first. Additional prerequisites are Docker and the repository-selected DCP executable. The default DCP path selects the tested macOS arm64 package; set `NATIVE_HOSTING_DCP` to the appropriate repository-restored DCP path on another machine.
 
 ```bash
 node playground/NuxtApp/node_modules/typescript/bin/tsc \
@@ -413,7 +511,7 @@ The reproduction assertions and negative cases live in `apphost.mts`; the manage
 | Full ATS integration | The legacy compatibility experiments use private handwritten RPC. The ATS-native checkpoint above adds real offline discovery/generated SDKs, authenticated sockets, structured errors, and graph-scoped handles for a bounded contract. Full dynamic discovery, protocol coverage, and reconnection remain unimplemented. |
 | One application graph | Explicit facade import makes this bounded graph visible locally. There is still no global name registry, general graph query/mutation protocol, automatic import, or distributed cycle detection. |
 | Existing callbacks over native resources | Standard-interface enumeration/environment mutation is demonstrated. Concrete CLR assumptions, arbitrary annotations, captured object identity, late collection mutations, certificates, and custom DI/lifecycle interactions remain unvalidated. |
-| Native orchestration | The original facade experiment launches Nuxt from the harness. The native-primitive and ATS scenarios use actual DCP service allocation and workload controllers from the core; production CLI launch, containment, and complete execution semantics remain unimplemented. |
+| Native orchestration | The native-primitive and ATS scenarios use actual DCP allocation and workload controllers from the core. The explicit CLI override uses standard supervised launch and graceful shutdown; general CLI replacement and complete production execution semantics remain unimplemented. |
 | Unified dashboard | The compatibility model contains a native Nuxt facade with managed readiness, relationships, and custom command dispatch. Actual dashboard UI, unified logs, built-in controls, containment, and automatic owner-death reconciliation still require the control plane. |
 | General run references | Run URI resolution uses the existing host/executable context. Network-aware `ValueProviderContext`, custom expressions, secret policies, conditional/TLS values, and custom property annotations need broader contracts. |
 | Actual Aspire publishing/deployment | The real Hosting manifest pipeline is now exercised, including its default failure and an explicit bridge. CLI `aspire publish`/`deploy`, shipping deployment targets, and infrastructure provisioning are not. The separate Docker recipe remains a limited token-lowering experiment. |

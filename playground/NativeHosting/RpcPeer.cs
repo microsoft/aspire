@@ -151,7 +151,7 @@ internal sealed class RpcPeer : IDisposable, IRequestPeer
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"{method} failed: {ex.GetType().Name}");
+            Console.Error.WriteLine($"{method} failed: {ex.GetType().Name}{Environment.NewLine}{ex.StackTrace}");
             response = new JsonObject
             {
                 ["jsonrpc"] = "2.0", ["id"] = id,
@@ -168,6 +168,10 @@ internal sealed class RpcPeer : IDisposable, IRequestPeer
             if (!_shutdown.IsCancellationRequested)
             {
                 await WriteAsync(response, _shutdown.Token);
+                if (response.ContainsKey("result"))
+                {
+                    ResponseWritten?.Invoke(method);
+                }
             }
         }
         finally
@@ -181,6 +185,8 @@ internal sealed class RpcPeer : IDisposable, IRequestPeer
             }
         }
     }
+
+    public Action<string>? ResponseWritten { get; set; }
 
     private async Task<JsonObject?> ReadAsync(CancellationToken cancellationToken)
     {

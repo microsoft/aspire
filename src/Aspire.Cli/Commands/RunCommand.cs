@@ -20,6 +20,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -108,7 +109,13 @@ internal sealed class RunCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
-    protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
+    // Unlike managed Hosting's detached DCP, the native experiment owns an
+    // in-tree DCP process and must finish controller disposal and runtime cleanup
+    // before the CLI escalates to a tree kill.
+    protected override TimeSpan GracefulShutdownBudget =>
+        _serviceProvider.GetRequiredService<IEnvironment>().GetEnvironmentVariable(NativeAppHostServerProject.ExecutableEnvironmentVariable) is { Length: > 0 }
+            ? TimeSpan.FromSeconds(80)
+            : s_gracefulShutdownBudget;
 
     internal override void PrepareForExecution(ParseResult parseResult)
     {
@@ -476,7 +483,7 @@ internal sealed class RunCommand : BaseCommand
                 var dashboardUrls = startup.DashboardUrls;
                 pendingLogCapture = startup.PendingLogCapture;
 
-                if (dashboardUrls.DashboardHealthy is false)
+                if (dashboardUrls.DashboardHealthy is false && backchannel is not NativeAppHostCliBackchannel)
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
                 }

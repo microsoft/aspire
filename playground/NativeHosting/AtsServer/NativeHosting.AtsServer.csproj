@@ -10,5 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Ats/NativeHosting.Ats.csproj" />
+    <EmbeddedResource Include="../generated/*.mts;../generated/*.mjs" LogicalName="NativeSdk.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

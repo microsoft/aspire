@@ -17,6 +17,7 @@
     <Compile Include="../Core/NativeCustomResources.cs" Link="NativeCustomResources.cs" />
     <Compile Include="../Core/NativeDcp.cs" Link="NativeDcp.cs" />
     <Compile Include="../RpcPeer.cs" Link="RpcPeer.cs" />
+    <Compile Include="../../../src/Shared/DcpKubeconfigData.cs" Link="DcpKubeconfigData.cs" />
     <ProjectReference Include="../../../src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
   </ItemGroup>
 </Project>

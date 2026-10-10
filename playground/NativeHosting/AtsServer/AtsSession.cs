@@ -30,6 +30,29 @@ internal sealed class AtsRegistry : IAsyncDisposable
     private bool _resetting;
     public bool Idle => _builder is null && !_resetting;
     public int HandleCount => _handles.Count;
+    public Action? StopRequested { get; set; }
+    public bool IntegrationHostRegistered => !_hosts.IsEmpty;
+    public bool Ready => !_resetting && _builder?.Ready == true;
+
+    public async Task<JsonObject> ObserveAsync(CancellationToken token)
+    {
+        // A reload can dispose the builder between reading its ready flag and
+        // observing its resources. Serialize snapshots with graph teardown.
+        await _graphGate.WaitAsync(token);
+        try
+        {
+            return new JsonObject
+            {
+                ["idle"] = Idle, ["handles"] = HandleCount, ["ready"] = Ready,
+                ["integrationHostRegistered"] = IntegrationHostRegistered,
+                ["resources"] = _builder is { } builder ? await builder.ObserveResourcesAsync(token) : new JsonArray()
+            };
+        }
+        finally
+        {
+            _graphGate.Release();
+        }
+    }
 
     public void ClaimController(NativeResource resource, AtsSession session)
     {
@@ -361,7 +384,59 @@ internal sealed class AtsSession(AtsRegistry registry, string authToken)
 
         if (method == "getRuntimeState")
         {
-            return new JsonObject { ["idle"] = registry.Idle, ["handles"] = registry.HandleCount };
+            return await registry.ObserveAsync(token);
+        }
+
+        if (method == "getRuntimeSpec")
+        {
+            // CLI launches the integration host before the guest. Do not expose
+            // an executable runtime until its exported capabilities are routed.
+            if (Environment.GetEnvironmentVariable("NATIVE_HOSTING_CLI") == "1")
+            {
+                using var registrationTimeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                registrationTimeout.CancelAfter(TimeSpan.FromSeconds(30));
+                while (!registry.IntegrationHostRegistered)
+                {
+                    await Task.Delay(50, registrationTimeout.Token);
+                }
+            }
+
+            return NativeCliBootstrap.RuntimeSpec(String(args[0], "language"));
+        }
+
+        if (method == "generateCode")
+        {
+            if (args.Count > 1 && args[1] is not null)
+            {
+                throw new NotSupportedException("The native exploration serves a fixed offline SDK, not filtered assembly code generation.");
+            }
+
+            return NativeCliBootstrap.GeneratedSdk(String(args[0], "language"));
+        }
+
+        if (method == "requestStop")
+        {
+            var stop = registry.StopRequested ?? throw new NotSupportedException("This session has no server shutdown control.");
+            // Shutdown begins only after the successful stop response is flushed.
+            Peer.ResponseWritten = sentMethod =>
+            {
+                if (sentMethod == "requestStop")
+                {
+                    stop();
+                }
+            };
+            return JsonValue.Create(true);
+        }
+
+        if (method == "notifyCliReady")
+        {
+            if (!registry.Ready)
+            {
+                throw new InvalidOperationException("The native graph is not ready.");
+            }
+
+            Console.Error.WriteLine("Native graph reported ready to Aspire CLI.");
+            return JsonValue.Create(true);
         }
 
         if (method == "registerAsIntegrationHost")

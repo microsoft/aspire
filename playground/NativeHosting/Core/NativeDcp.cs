@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Shared;
 
 namespace NativeHosting;
 
@@ -19,11 +20,10 @@ internal sealed class NativeDcp : IAsyncDisposable
 {
     private const string Api = "/apis/usvc-dev.developer.microsoft.com/v1/";
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("native-dcp-");
-    private readonly List<(string Collection, string Name)> _objects = [];
-    private readonly SemaphoreSlim _objectsGate = new(1);
     private Process? _process;
     private HttpClient? _client;
     private X509Certificate2? _ca;
+    private X509Certificate2? _clientCertificate;
 
     public async Task StartAsync(string executable, CancellationToken cancellationToken)
     {
@@ -60,14 +60,32 @@ internal sealed class NativeDcp : IAsyncDisposable
             await Task.Delay(100, cancellationToken);
         }
 
-        // Read kubeconfig through kubectl's supported JSON projection, e.g.:
-        // clusters[0].cluster = { server: "https://127.0.0.1:<port>",
-        //   "certificate-authority-data": "<base64>" }; users[0].user.token = "...".
-        // Never log this credential-bearing output or bypass TLS verification.
-        var configuration = JsonNode.Parse(await CaptureAsync("kubectl",
-            ["--kubeconfig", kubeconfig, "config", "view", "--raw", "--flatten", "-o", "json"], cancellationToken))!.AsObject();
-        var cluster = configuration["clusters"]![0]!["cluster"]!;
-        _ca = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(cluster["certificate-authority-data"]!.GetValue<string>()));
+        // DCP creates the path before flushing all connection material. Read its
+        // generated scalar contract directly, with no kubectl/YAML runtime.
+        DcpKubeconfigData configuration;
+        for (var attempt = 0; ; attempt++)
+        {
+            configuration = DcpKubeconfigData.Parse(await File.ReadAllTextAsync(kubeconfig, cancellationToken));
+            if (configuration.Server is not null && configuration.CertificateAuthorityData is not null &&
+                (configuration.Token is not null || (configuration.ClientCertificateData is not null && configuration.ClientKeyData is not null)))
+            {
+                break;
+            }
+
+            if (attempt >= 49 || _process.HasExited)
+            {
+                throw new InvalidOperationException("DCP did not write complete connection material.");
+            }
+
+            await Task.Delay(100, cancellationToken);
+        }
+
+        if (!Uri.TryCreate(configuration.Server, UriKind.Absolute, out var server) || server.Scheme != Uri.UriSchemeHttps || !server.IsLoopback)
+        {
+            throw new InvalidOperationException("DCP must advertise a loopback HTTPS API.");
+        }
+
+        _ca = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(configuration.CertificateAuthorityData));
         var handler = new HttpClientHandler
         {
             ServerCertificateCustomValidationCallback = (_, certificate, chain, errors) =>
@@ -83,9 +101,19 @@ internal sealed class NativeDcp : IAsyncDisposable
                 return chain.Build(certificate);
             }
         };
-        _client = new HttpClient(handler) { BaseAddress = new Uri(cluster["server"]!.GetValue<string>()), Timeout = TimeSpan.FromSeconds(20) };
-        var user = configuration["users"]![0]!["user"]!;
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", user["token"]!.GetValue<string>());
+        if (configuration.ClientCertificateData is not null && configuration.ClientKeyData is not null)
+        {
+            _clientCertificate = X509Certificate2.CreateFromPem(
+                Encoding.UTF8.GetString(Convert.FromBase64String(configuration.ClientCertificateData)),
+                Encoding.UTF8.GetString(Convert.FromBase64String(configuration.ClientKeyData)));
+            handler.ClientCertificates.Add(_clientCertificate);
+        }
+
+        _client = new HttpClient(handler) { BaseAddress = server, Timeout = TimeSpan.FromSeconds(20) };
+        if (configuration.Token is not null)
+        {
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", configuration.Token);
+        }
         // The kubeconfig is written before the API listener is necessarily ready.
         while (true)
         {
@@ -126,18 +154,6 @@ internal sealed class NativeDcp : IAsyncDisposable
             ["metadata"] = new JsonObject { ["name"] = name, ["annotations"] = annotations?.DeepClone() },
             ["spec"] = spec.DeepClone()
         };
-        await _objectsGate.WaitAsync(cancellationToken);
-        try
-        {
-            // Record intent before sending: cancellation can occur after DCP creates
-            // the object but before its HTTP response reaches us.
-            _objects.Add((collection, name));
-        }
-        finally
-        {
-            _objectsGate.Release();
-        }
-
         return (await SendAsync(HttpMethod.Post, Api + collection, document, cancellationToken))!;
     }
 
@@ -214,10 +230,13 @@ internal sealed class NativeDcp : IAsyncDisposable
         using var request = new HttpRequestMessage(method, path);
         if (body is not null)
         {
-            request.Content = new StringContent(JsonSerializer.Serialize(body, PrototypeJsonContext.Default.JsonObject), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(JsonSerializer.Serialize(body, PrototypeJsonContext.Default.JsonObject), Encoding.UTF8);
+            // DCP's administrative PATCH endpoint rejects a charset parameter.
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(
+                method == HttpMethod.Patch ? "application/merge-patch+json" : "application/json");
         }
 
-        using var response = await _client.SendAsync(request, cancellationToken);
+        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound && method != HttpMethod.Post)
         {
             return null;
@@ -230,38 +249,13 @@ internal sealed class NativeDcp : IAsyncDisposable
             throw new InvalidOperationException($"DCP {method} {path} failed ({(int)response.StatusCode}).");
         }
 
+        if (response.StatusCode == HttpStatusCode.NoContent ||
+            (path == "admin/execution" && body?["status"]?.GetValue<string>() == "Stopping"))
+        {
+            return null;
+        }
+
         return (await JsonNode.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken))!.AsObject();
-    }
-
-    private static async Task<string> CaptureAsync(string executable, string[] arguments, CancellationToken cancellationToken)
-    {
-        var start = new ProcessStartInfo(executable) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var argument in arguments)
-        {
-            start.ArgumentList.Add(argument);
-        }
-
-        using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not launch {executable}.");
-        // Drain both pipes concurrently so a full stderr pipe cannot block stdout.
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
-        try
-        {
-            await process.WaitForExitAsync(cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            process.Kill(entireProcessTree: true);
-            throw;
-        }
-
-        await stderr;
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException($"{executable} exited with code {process.ExitCode}.");
-        }
-
-        return await stdout;
     }
 
     public async ValueTask DisposeAsync()
@@ -271,12 +265,21 @@ internal sealed class NativeDcp : IAsyncDisposable
         {
             if (_client is not null && _process is { HasExited: false })
             {
-                // Reverse creation order removes workloads before services, volumes,
-                // and their shared network. Only this DCP session's objects are touched.
-                foreach (var (collection, name) in _objects.AsEnumerable().Reverse())
+                // Keep resource objects available to DCP's dependency-aware cleanup:
+                // API disappearance does not prove Docker removal has completed.
+                // Use Hosting's KubernetesService.CleanupResourcesAsync protocol:
+                // PATCH /admin/execution {status:"CleaningResources",
+                // shutdownResourceCleanup:"Full"}, then GET until CleanupComplete.
+                await SendAsync(HttpMethod.Patch, "admin/execution",
+                    new JsonObject { ["status"] = "CleaningResources", ["shutdownResourceCleanup"] = "Full" }, cancellation.Token);
+                while ((await SendAsync(HttpMethod.Get, "admin/execution", null, cancellation.Token))?["status"]?.GetValue<string>() != "CleanupComplete")
                 {
-                    await DeleteAsync(collection, name, cancellation.Token);
+                    await Task.Delay(100, cancellation.Token);
                 }
+
+                await SendAsync(HttpMethod.Patch, "admin/execution",
+                    new JsonObject { ["status"] = "Stopping", ["shutdownResourceCleanup"] = "Full" }, cancellation.Token);
+                await _process.WaitForExitAsync(cancellation.Token);
             }
         }
         finally
@@ -290,7 +293,7 @@ internal sealed class NativeDcp : IAsyncDisposable
             _process?.Dispose();
             _client?.Dispose();
             _ca?.Dispose();
-            _objectsGate.Dispose();
+            _clientCertificate?.Dispose();
             if (_directory.Exists)
             {
                 _directory.Delete(recursive: true);

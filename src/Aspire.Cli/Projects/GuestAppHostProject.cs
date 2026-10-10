@@ -574,6 +574,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Check if hot reload (watch mode) is enabled
             var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
+            if (appHostServerProject is NativeAppHostServerProject && enableHotReload)
+            {
+                throw new NotSupportedException("The native exploration does not implement CLI watch. Disable defaultWatchEnabled and use explicit graph replacement.");
+            }
 
             var environmentVariables = CreateGuestEnvironmentVariables(
                 context.EnvironmentVariables,
@@ -802,7 +806,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // promptly.
                     guestAppHostLaunched = true;
                     context.BuildCompletionSource?.TrySetResult(true);
-                    _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
+                    var backchannel = appHostServerProject is NativeAppHostServerProject
+                        ? new NativeAppHostCliBackchannel(serverSession, AppHostStartupTimeout.GetBackchannelConnectionTimeout(_configuration))
+                        : _backchannel;
+                    _ = StartBackchannelConnectionAsync(serverSession, backchannel, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
                     return Task.CompletedTask;
                 }
 
@@ -1335,6 +1342,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
             // Prepare the AppHost server (build for dev mode, restore for prebuilt)
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                throw new NotSupportedException("The native exploration supports aspire run, not CLI publishing or deployment.");
+            }
+
             var (prepareSuccess, prepareOutput, _, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, cancellationToken: cancellationToken);
             if (!prepareSuccess)
             {
@@ -1505,7 +1517,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 {
                     if (context.BackchannelCompletionSource is not null)
                     {
-                        _ = StartBackchannelConnectionAsync(serverSession, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
+                        _ = StartBackchannelConnectionAsync(serverSession, _backchannel, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
                     }
 
                     return Task.CompletedTask;
@@ -1601,6 +1613,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// </summary>
     private async Task StartBackchannelConnectionAsync(
         IAppHostServerSession serverSession,
+        IAppHostCliBackchannel backchannel,
         string socketPath,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
         bool enableHotReload,
@@ -1625,10 +1638,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     activity.AddBackchannelConnectAttemptEvent(connectionAttempts);
                 }
                 // Pass enableHotReload as autoReconnect - the backchannel will handle reconnection internally
-                await _backchannel.ConnectAsync(socketPath, autoReconnect: enableHotReload, retryCount: connectionAttempts, cancellationToken).ConfigureAwait(false);
+                await backchannel.ConnectAsync(socketPath, autoReconnect: enableHotReload, retryCount: connectionAttempts, cancellationToken).ConfigureAwait(false);
                 activity.SetBackchannelRetryCount(connectionAttempts);
                 activity.AddBackchannelConnectedEvent();
-                backchannelCompletionSource.TrySetResult(_backchannel);
+                backchannelCompletionSource.TrySetResult(backchannel);
                 _logger.LogDebug("Connected to AppHost server backchannel at {SocketPath}", socketPath);
                 return;
             }
