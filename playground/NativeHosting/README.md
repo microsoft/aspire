@@ -142,6 +142,51 @@ The actual CLI path exercised real Redis `PING`, PostgreSQL `SELECT 1`, Nuxt HTT
 
 The latest experiment replaces handwritten guest model calls with the repository's actual ATS scanner, TypeScript generator, generated handle proxies, callback marshalling, transport, and external integration-host runtime. Redis, PostgreSQL, and Dev Tunnels are bounded TypeScript ports over the same generated primitive API. Nuxt supplies the real executable and HTTP consumer used to exercise them.
 
+### Portable model annotations
+
+`Ats/NativeAnnotations.cs` adds graph-scoped singleton schemas through ATS,
+without reflection or integration-defined CLR objects in the core. Register
+1-32 named scalar fields (`string`, `number`, `boolean`), then attach a JSON
+payload using generated resource APIs. The core rejects schema conflicts,
+missing/unknown fields, duplicate properties, wrong types, null values,
+non-finite numbers, and payloads above 64 KiB of UTF-8. Invalid writes preserve
+the previous payload. Identical schema registrations are idempotent.
+
+`annotations.mts` supplies typed authoring helpers over those generated APIs.
+The external Redis port stores `native.redis/persistence` and consumes it to
+configure snapshot intervals and thresholds:
+
+```typescript
+const cache = await builder.addRedis('cache');
+await cache.withRedisPersistence(30000, 5);
+const settings = await getAnnotation(cache, redisPersistence);
+```
+
+The core validates shape; Redis-specific ranges remain integration code.
+Symbolic publication retains both schemas and payloads. Reads work after
+startup, but composition writes are sealed. Schemas and handles retire with the
+graph generation. This contract is for non-secret scalar configuration, not
+credentials, callback objects, references, repeatable collections, or general
+resource-type schemas.
+
+After generating/compiling the primitive SDK and publishing the native server:
+
+```bash
+node playground/NativeHosting/annotations-e2e.mts
+```
+
+This harness uses independent authenticated connections and real generated
+proxies, checks exact UTF-8 boundaries and rejected-write atomicity, inspects
+published schemas/payloads, and replaces the guest graph. It does not start
+Docker workloads, but still requires `NATIVE_HOSTING_DCP` to identify an existing
+DCP executable when the default tested macOS arm64 package is unavailable.
+`NATIVE_HOSTING_ANNOTATION_RESULTS` selects an optional result artifact.
+
+The full `ats-e2e.mts` scenario applies the annotation to Redis and verifies
+`CONFIG GET save` returns `30 5`, along with sealed writes and retained reads in
+the stdio mock and two socket guest generations. Live Dev Tunnels remains
+unvalidated; its forwarding fixture is still explicit.
+
 ```text
 Build time only:
   minimal C# [AspireExport] contracts -> real ATS scanner
@@ -201,6 +246,8 @@ Use repository restore and the Node/Docker/DCP prerequisites described below. Th
 ```bash
 dotnet run --project playground/NativeHosting/AtsCodegen/NativeHosting.AtsCodegen.csproj \
   -- playground/NativeHosting
+dotnet run --project playground/NativeHosting/AtsCodegen/NativeHosting.AtsCodegen.csproj \
+  -- playground/NativeHosting --compatible
 ln -sfn ../../NuxtApp/node_modules playground/NativeHosting/generated/node_modules
 
 node playground/NuxtApp/node_modules/typescript/bin/tsc \
@@ -239,7 +286,13 @@ The second guest rejects a captured old handle, rebuilds the graph, and supplies
 
 ### Dependency findings and remaining work
 
-The scanned contract currently has 33 capabilities, four ATS handle entries including cancellation, and 11 DTOs. The published macOS arm64 server is approximately 7 MiB including its embedded offline SDK. Its managed dependency manifest contains only the two experiment assemblies and the .NET runtime pack. Native AOT still includes .NET GC/runtime support. Neither Hosting, TypeSystem, scanner/codegen, reflection-based capability dispatch, client libraries, nor integration assemblies load into the running native core.
+The scanned primitive contract currently has 38 capabilities, four ATS handle entries including cancellation, and 12 DTOs. The annotation-enabled macOS arm64 server measured 7,510,984 bytes, 82,800 bytes above the bounded compatibility milestone's 7,428,184 bytes. Its managed dependency manifest still contains only the two experiment assemblies and the .NET runtime pack. Native AOT still includes .NET GC/runtime support. Neither Hosting, TypeSystem, scanner/codegen, reflection-based capability dispatch, client libraries, nor integration assemblies load into the running native core.
+
+The final annotation workload harness reported core working sets of 31,424,512 bytes
+for the mock and 30,310,400 / 32,079,872 bytes for the two socket generations.
+The actual CLI compatibility scenario sampled 34,324,480 bytes three times
+after readiness. These are different scenarios, not a controlled memory-cost
+comparison. CLI, codegen, integration-host, DCP, and workload costs are excluded.
 
 Generation, strict SDK/integration TypeScript compilation, Native AOT publication, the mock, and both real socket-server guest generations passed. All three reported `dynamicCodeSupported: false`; query cancellation completed in 302-305 ms and subsequent queries succeeded. The native core's three post-readiness working-set observations were approximately 28-32 MiB, not whole-session measurements or a repeatable performance comparison. The original named-RPC tunnel scenario and native ports, including unchanged managed Redis, also passed after the shared-core changes.
 

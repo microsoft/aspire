@@ -13,6 +13,10 @@ public static class IntegrationContracts
     [AspireExport]
     public static NativeResource AddRedis(this NativeBuilder builder, string name) => throw new NotSupportedException();
 
+    /// <summary>Configures Redis snapshot persistence using portable model data.</summary>
+    [AspireExport]
+    public static NativeResource WithRedisPersistence(this NativeResource resource, long intervalMs, long keysChangedThreshold) => throw new NotSupportedException();
+
     /// <summary>Adds an authenticated PostgreSQL server with a session data volume.</summary>
     [AspireExport]
     public static NativeResource AddPostgres(this NativeBuilder builder, string name) => throw new NotSupportedException();

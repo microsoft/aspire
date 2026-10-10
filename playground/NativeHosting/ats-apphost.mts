@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { readFile, writeFile, rm } from 'node:fs/promises';
 import type { NativeBuilder } from './generated/aspire.mjs';
 import { CancellationToken } from './generated/transport.mjs';
+import { getAnnotation, redisPersistence } from './annotations.mts';
 
 const none = () => new CancellationToken();
 
@@ -23,6 +25,10 @@ async function consumerResult(directory: string, endpoint: string) {
 
 export async function buildAppHost(builder: NativeBuilder, directory: string, generation: string) {
     const cache = await builder.addRedis('cache');
+    await cache.withRedisPersistence(30000, 5);
+    assert.deepEqual(await getAnnotation(cache, redisPersistence), { intervalMs: 30000, keysChangedThreshold: 5 });
+    await assert.rejects(async () => await cache.withRedisPersistence(500, 5), /whole seconds/);
+    assert.deepEqual(await getAnnotation(cache, redisPersistence), { intervalMs: 30000, keysChangedThreshold: 5 });
     const server = await builder.addPostgres('postgres');
     const database = await server.addDatabase('app-db', 'odd"db');
     const web = await builder.addNuxt('web', join(directory, 'web'), cache);
@@ -43,6 +49,13 @@ export async function exerciseAppHost(graph: Awaited<ReturnType<typeof buildAppH
     assert.deepEqual(JSON.parse(before).resources.map((resource: { name: string }) => resource.name),
         ['app-db', 'cache', 'cache-password', 'postgres', 'postgres-password', 'web']);
     await builder.run(none());
+    assert.deepEqual(await getAnnotation(cache, redisPersistence), { intervalMs: 30000, keysChangedThreshold: 5 });
+    await assert.rejects(async () => await cache.withAnnotation(redisPersistence.id, '{"intervalMs":60000,"keysChangedThreshold":1}'), /sealed/);
+    assert.deepEqual(await getAnnotation(cache, redisPersistence), { intervalMs: 30000, keysChangedThreshold: 5 });
+    const cacheId = (await cache.status(none())).containerId;
+    if (!cacheId) throw new Error('Redis has no container allocation.');
+    assert.equal(execFileSync('docker', ['exec', cacheId, 'sh', '-c',
+        'redis-cli --raw --no-auth-warning -a "$REDIS_PASSWORD" CONFIG GET save'], { encoding: 'utf8' }).trim(), 'save\n30 5');
     assert.equal(await cache.redisCommand('PING', '', '', false, none()), 'PONG');
     await assert.rejects(cache.redisCommand('PING', '', '', true, none()), /authentication/);
     await assert.rejects(database.query('SELECT 1', true, none()), /protocol operation failed/);
@@ -91,6 +104,7 @@ export async function exerciseAppHost(graph: Awaited<ReturnType<typeof buildAppH
     await writeFile(join(directory, 'ats-handles.json'), JSON.stringify(handles));
     return {
         generatedAtsApis: true, realDcp: true, redisAuthenticated: true, postgresAuthenticated: true,
+        portableRedisAnnotation: true, invalidPersistencePreservesData: true, annotationWritesSealedAfterRun: true,
         quotedDatabaseChild: true, persistenceAcrossReplacement: true, deferredTunnelUrlConsumer: true,
         tunnelStopRestart: true, symbolicGraphUnchanged: true, cancellationMs,
         tunnelTransport: 'explicit-local-cli-fixture', liveRelayValidated: false,

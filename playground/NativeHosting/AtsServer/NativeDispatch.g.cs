@@ -39,6 +39,18 @@ internal static class NativeDispatch
                 var result = target.Concat(args["values"]!.AsArray().Select(item => session.Get<NativeValue>(item)).ToArray());
                 return session.Marshal(result, "NativeHosting.Ats/NativeHosting.NativeValue");
             }
+            case "NativeHosting/defineAnnotation":
+            {
+                var target = session.Get<NativeBuilder>(args["context"]);
+                var result = target.DefineAnnotation(AtsSession.String(args["annotationId"], "annotationId"), args["fields"]!.AsArray().Select(item => item!.Deserialize(DispatchJsonContext.Default.AnnotationFieldOptions)!).ToArray());
+                return JsonValue.Create(result);
+            }
+            case "NativeHosting/getAnnotation":
+            {
+                var target = session.Get<NativeResource>(args["context"]);
+                var result = target.GetAnnotation(AtsSession.String(args["annotationId"], "annotationId"));
+                return JsonValue.Create(result);
+            }
             case "NativeHosting/getEndpoint":
             {
                 var target = session.Get<NativeResource>(args["context"]);
@@ -56,6 +68,12 @@ internal static class NativeDispatch
                 var target = session.Get<NativeResource>(args["context"]);
                 var result = target.GetProperty(AtsSession.String(args["name"], "name"));
                 return session.Marshal(result, "NativeHosting.Ats/NativeHosting.NativeValue");
+            }
+            case "NativeHosting/hasAnnotation":
+            {
+                var target = session.Get<NativeResource>(args["context"]);
+                var result = target.HasAnnotation(AtsSession.String(args["annotationId"], "annotationId"));
+                return JsonValue.Create(result);
             }
             case "NativeHosting/literal":
             {
@@ -110,6 +128,12 @@ internal static class NativeDispatch
             {
                 var target = session.Get<NativeResource>(args["context"]);
                 var result = target.WaitFor(session.Get<NativeResource>(args["dependency"]));
+                return session.Marshal(result, "NativeHosting.Ats/NativeHosting.NativeResource");
+            }
+            case "NativeHosting/withAnnotation":
+            {
+                var target = session.Get<NativeResource>(args["context"]);
+                var result = target.WithAnnotation(AtsSession.String(args["annotationId"], "annotationId"), AtsSession.String(args["json"], "json"));
                 return session.Marshal(result, "NativeHosting.Ats/NativeHosting.NativeResource");
             }
             case "NativeHosting/withArgument":
@@ -171,8 +195,9 @@ internal static class NativeDispatch
 }
 internal static class ExternalDispatch
 {
-    public static bool Contains(string capability) => capability is "NativeHosting.Ats/addRedis" or "NativeHosting.Ats/addPostgres" or "NativeHosting.Ats/addDatabase" or "NativeHosting.Ats/addNuxt" or "NativeHosting.Ats/addDevTunnel" or "NativeHosting.Ats/redisCommand" or "NativeHosting.Ats/query" or "NativeHosting.Ats/releaseGraph";
+    public static bool Contains(string capability) => capability is "NativeHosting.Ats/addRedis" or "NativeHosting.Ats/withRedisPersistence" or "NativeHosting.Ats/addPostgres" or "NativeHosting.Ats/addDatabase" or "NativeHosting.Ats/addNuxt" or "NativeHosting.Ats/addDevTunnel" or "NativeHosting.Ats/redisCommand" or "NativeHosting.Ats/query" or "NativeHosting.Ats/releaseGraph";
 }
+[JsonSerializable(typeof(AnnotationFieldOptions))]
 [JsonSerializable(typeof(ControlRequest))]
 [JsonSerializable(typeof(CoreStats))]
 [JsonSerializable(typeof(CustomUpdate))]

@@ -153,6 +153,37 @@ public sealed class NativeResource
     [AspireExport]
     public NativeResource WithProperty(string name, [AspireUnion(typeof(string), typeof(NativeValue))] object value) => Set("properties", name, value);
 
+    /// <summary>Stores or replaces a singleton payload after validating its registered schema.</summary>
+    [AspireExport]
+    public NativeResource WithAnnotation(string annotationId, string json)
+    {
+        Builder.EnsureMutable();
+        var payload = Builder.Annotations.Validate(annotationId, json);
+        if (Definition["annotations"] is not JsonObject annotations)
+        {
+            Definition["annotations"] = annotations = new JsonObject();
+        }
+        annotations[annotationId] = payload;
+        return this;
+    }
+
+    /// <summary>Reads portable annotation data; missing payloads fail explicitly.</summary>
+    [AspireExport]
+    public string GetAnnotation(string annotationId)
+    {
+        Builder.Annotations.RequireDefined(annotationId);
+        return Definition["annotations"]?[annotationId]?.ToJsonString()
+            ?? throw new ArgumentException($"Resource '{Name}' has no annotation '{annotationId}'.");
+    }
+
+    /// <summary>Checks whether this resource has a payload for a registered annotation.</summary>
+    [AspireExport]
+    public bool HasAnnotation(string annotationId)
+    {
+        Builder.Annotations.RequireDefined(annotationId);
+        return Definition["annotations"]?[annotationId] is not null;
+    }
+
     /// <summary>Adds a literal or deferred process argument.</summary>
     [AspireExport]
     public NativeResource WithArgument([AspireUnion(typeof(string), typeof(NativeValue))] object value)
@@ -354,6 +385,7 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     private bool _built;
     private bool _disposed;
     private readonly string _dcp;
+    internal NativeAnnotations Annotations { get; } = new();
 
     internal NativeBuilder(string dcp)
     {
@@ -364,6 +396,14 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     internal string Owner { get; } = Guid.NewGuid().ToString("N");
     internal string ControllerOwner { get; } = Guid.NewGuid().ToString("N");
     internal string ProjectDirectory { get; set; } = Environment.CurrentDirectory;
+
+    /// <summary>Registers a graph-scoped singleton schema; identical repeated declarations are permitted.</summary>
+    [AspireExport]
+    public bool DefineAnnotation(string annotationId, AnnotationFieldOptions[] fields)
+    {
+        EnsureMutable();
+        return Annotations.Define(annotationId, fields);
+    }
 
     internal void Build()
     {
@@ -453,6 +493,7 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
         return new JsonObject
         {
             ["format"] = "native-model.v0",
+            ["annotationSchemas"] = Annotations.Describe(),
             ["resources"] = new JsonArray(_resources.Values.Where(resource => resource.Definition["runOnly"]?.GetValue<bool>() != true)
                 .OrderBy(resource => resource.Name, StringComparer.Ordinal).Select(resource => (JsonNode)resource.Definition.DeepClone()).ToArray())
         }.ToJsonString();

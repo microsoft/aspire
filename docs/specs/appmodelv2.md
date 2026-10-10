@@ -297,6 +297,60 @@ An integration may retain opaque local objects in its own host. Those objects
 are not portable annotations and cannot be inspected by another integration or
 publisher. Portable data must use the shared contract.
 
+### Implemented PoC: scalar singleton annotations
+
+The primitive ATS contract now includes:
+
+| Capability | Behavior |
+|---|---|
+| `builder.defineAnnotation(id, fields)` | Register a graph-scoped scalar schema; identical declarations are idempotent |
+| `resource.withAnnotation(id, json)` | Validate and replace one payload during composition |
+| `resource.getAnnotation(id)` | Read the payload; absence is an explicit error |
+| `resource.hasAnnotation(id)` | Check payload presence for a registered schema |
+
+Fields have `string`, `number`, or `boolean` kinds and a required flag. Payloads
+are JSON objects with no undeclared fields, duplicate properties, null values,
+or non-finite numbers. A schema has 1-32 fields; a payload is at most 64 KiB of
+UTF-8. Conflicting declarations and invalid writes fail without replacing the
+prior payload. Declaration order does not affect schema identity.
+
+The TypeScript helper provides typed declarations over the generated primitive
+APIs:
+
+```typescript
+const persistence = defineAnnotation<{
+    intervalMs: number;
+    keysChangedThreshold: number;
+}>('native.redis/persistence', {
+    intervalMs: { type: 'number', required: true },
+    keysChangedThreshold: { type: 'number', required: true },
+});
+
+await registerAnnotation(builder, persistence);
+await setAnnotation(cache, persistence, {
+    intervalMs: 30000,
+    keysChangedThreshold: 5,
+});
+const settings = await getAnnotation(cache, persistence);
+```
+
+The executable Redis integration exposes `withRedisPersistence(30000, 5)`,
+validates Redis-specific constraints, writes this annotation, then reads it
+through ATS to configure process environment values. The native core validates
+scalar shape, not Redis domain rules. The real workload is checked with Redis
+`CONFIG GET save`, rather than only inspecting the stored annotation.
+
+Schemas and payloads are included in symbolic model publication. Writes and
+schema registration are rejected after graph sealing, while lifecycle callbacks
+can still read the data. Guest disposal revokes handles and discards schemas;
+the next generation can declare a different schema under the same ID.
+
+This is a non-secret configuration-data contract. It does not yet support
+nested structures, repeatable annotations, removal, references, secret fields,
+or runtime mutation. Do not put credentials or resolved secrets into annotation
+strings. Portable C# typed annotation helpers and the generated external C#
+projection remain future work.
+
 ## Structured values, references, and secrets
 
 The core owns an expression graph, not just strings or JSON DTOs.
@@ -472,6 +526,7 @@ for executable samples and reproduction commands.
 |---|---|---|
 | Native core | NativeAOT primitive graph, static dispatch, BCL DCP access | Generalized ATS model contracts |
 | TypeScript authoring | Generated primitive APIs, external Redis/PostgreSQL/Dev Tunnels ports | Stable authoring surface and metadata tooling |
+| Annotations | Graph-scoped scalar singleton schemas, typed TS helpers, cross-connection reads, real Redis configuration | Nested/repeatable data, removal, reference/secret fields, external C# projection |
 | C# authoring | Offline C# declarations drive ATS scanning | Generated core projection and external C# execution host |
 | Resources | Fixed primitive handles and bounded production-type views | Integration-defined schemas and validated capability catalogs |
 | Values | Deferred parameters, endpoint properties, concatenation | Typed extensible providers and complete sensitivity semantics |
@@ -496,6 +551,14 @@ Use the original guide's patterns as acceptance cases:
 For each expansion, update this document with the selected contract, executable
 evidence, and remaining limitations. Keep proposed samples labeled until they
 can run against generated projections.
+
+The scalar annotation expansion is covered by
+`playground/NativeHosting/annotations-e2e.mts`, which needs no running Docker
+workloads, and by the Redis scenario in `ats-e2e.mts`. The first harness exercises
+the real native socket and generated proxies from independent connections,
+invalid-write atomicity, the exact UTF-8 size boundary, symbolic publication, and
+generation fencing. The workload harness verifies configuration, sealed writes,
+controller cleanup, and two guest generations with the integration host retained.
 
 Measure the actual native binary size, runtime dependency graph, and repeated
 post-readiness core working-set samples. Report integration-host and codegen

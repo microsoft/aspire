@@ -11,6 +11,7 @@ import { projections } from './generated/ports-projection.mjs';
 import { compatibleProjections } from './compatible-projection.mjs';
 import { TunnelOutputParser } from './devtunnel-output.mts';
 import { redis, postgresQuery } from './integration-ports.mts';
+import { getAnnotation, redisPersistence, registerAnnotation, setAnnotation } from './annotations.mts';
 
 type Tool = { executable: string; prefix: string[]; environment: Record<string, string>; localFixture: boolean };
 type NativeValueHandle = Awaited<ReturnType<NativeBuilder['literal']>>;
@@ -58,12 +59,15 @@ async function concat(builder: NativeBuilder, ...items: (string | NativeValueHan
 }
 
 const addRedis = AspireExport(projections.addRedis, async ({ builder, name }: { builder: NativeBuilder; name: string }) => {
+    await registerAnnotation(builder, redisPersistence);
     const password = await builder.addResource(`${name}-password`, 'parameter', { secret: true });
     const cache = await builder.addResource(name, 'container', {
         image: 'docker.io/library/redis:8.6', command: '/bin/sh',
         endpoints: { tcp: { scheme: 'redis', targetPort: 6379 } }, volumes: [{ name: `${name}-data`, target: '/data' }],
     });
-    await cache.withArgument('-c').withArgument('exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"');
+    await cache.withArgument('-c').withArgument('exec redis-server --appendonly yes --save "$REDIS_SAVE_SECONDS" "$REDIS_SAVE_THRESHOLD" --requirepass "$REDIS_PASSWORD"');
+    await setAnnotation(cache, redisPersistence, { intervalMs: 60000, keysChangedThreshold: 100 });
+    await applyRedisPersistence(cache);
     await cache.withEnvironment('REDIS_PASSWORD', await password.getParameter(false));
     await cache.withProperty('password', await password.getParameter(false));
     await cache.withProperty('host', await cache.getEndpoint('tcp', 'host'));
@@ -84,6 +88,30 @@ const addRedis = AspireExport(projections.addRedis, async ({ builder, name }: { 
     });
     return cache;
 });
+
+function validateRedisPersistence(settings: { intervalMs: number; keysChangedThreshold: number }): void {
+    if (!Number.isSafeInteger(settings.intervalMs) || settings.intervalMs < 1000 ||
+        settings.intervalMs > 86400000 || settings.intervalMs % 1000 !== 0)
+        throw new Error('Redis persistence interval must be whole seconds between 1 second and 1 day.');
+    if (!Number.isSafeInteger(settings.keysChangedThreshold) || settings.keysChangedThreshold <= 0)
+        throw new Error('Redis persistence threshold must be a positive safe integer.');
+}
+async function applyRedisPersistence(resource: NativeResource): Promise<void> {
+    const settings = await getAnnotation(resource, redisPersistence);
+    validateRedisPersistence(settings);
+    await resource.withEnvironment('REDIS_SAVE_SECONDS', String(settings.intervalMs / 1000))
+        .withEnvironment('REDIS_SAVE_THRESHOLD', String(settings.keysChangedThreshold));
+}
+const withRedisPersistence = AspireExport(projections.withRedisPersistence,
+    async ({ resource, intervalMs, keysChangedThreshold }: { resource: NativeResource; intervalMs: number; keysChangedThreshold: number }) => {
+        // Validate domain constraints before replacing the prior annotation.
+        validateRedisPersistence({ intervalMs, keysChangedThreshold });
+        if (!await resource.hasAnnotation(redisPersistence.id))
+            throw new Error('Redis persistence requires a Redis resource configured by this integration.');
+        await setAnnotation(resource, redisPersistence, { intervalMs, keysChangedThreshold });
+        await applyRedisPersistence(resource);
+        return resource;
+    });
 
 const addPostgres = AspireExport(projections.addPostgres, async ({ builder, name, defaultUserName = 'aspire' }: {
     builder: NativeBuilder; name: string; defaultUserName?: string;
@@ -326,7 +354,7 @@ const releaseGraph = AspireExport(projections.releaseGraph, async ({ callbackIds
 
 export const nativePorts = defineIntegration({
     name: 'NativePorts',
-    capabilities: [addRedis, addPostgresTracked, addDatabase, addNuxt, addDevTunnel, redisCommand, query, releaseGraph],
+    capabilities: [addRedis, withRedisPersistence, addPostgresTracked, addDatabase, addNuxt, addDevTunnel, redisCommand, query, releaseGraph],
 });
 
 const compatibleTunnels = new Map<string, { builder: NativeBuilder; name: string; directory: string; linked: boolean }>();
