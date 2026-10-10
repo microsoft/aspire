@@ -40,7 +40,7 @@ public class TerminalViewTests : DashboardTestContext
 
         var button = cut.Find("div[hidden] .terminal-selection-copy");
         Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)].Value, button.GetAttribute("aria-label"));
-        Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)].Value, button.GetAttribute("title"));
+        Assert.Equal(controlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)].Value, button.GetAttribute("data-tooltip"));
         Assert.Single(button.QuerySelectorAll("svg"));
         var invocation = Assert.Single(initialization.Invocations);
         Assert.IsType<DotNetObjectReference<TerminalView>>(invocation.Arguments[2]);
@@ -87,7 +87,7 @@ public class TerminalViewTests : DashboardTestContext
         {
             Assert.Single(button.QuerySelectorAll("svg"));
             Assert.False(string.IsNullOrEmpty(button.GetAttribute("aria-label")));
-            Assert.Equal(button.GetAttribute("aria-label"), button.GetAttribute("title"));
+            Assert.Equal(button.GetAttribute("aria-label"), button.GetAttribute("data-tooltip"));
         }
     }
 
@@ -141,17 +141,17 @@ public class TerminalViewTests : DashboardTestContext
         Assert.Collection(cut.FindAll(".terminal-controls fluent-button"),
             button =>
             {
-                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)].Value, button.GetAttribute("title"));
+                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)].Value, button.GetAttribute("data-tooltip"));
                 Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)].Value, button.GetAttribute("aria-label"));
             },
             button =>
             {
-                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)].Value, button.GetAttribute("title"));
+                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)].Value, button.GetAttribute("data-tooltip"));
                 Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)].Value, button.GetAttribute("aria-label"));
             },
             button =>
             {
-                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)].Value, button.GetAttribute("title"));
+                Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)].Value, button.GetAttribute("data-tooltip"));
                 Assert.Equal(loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)].Value, button.GetAttribute("aria-label"));
             });
         var dimensionsSelect = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>();
@@ -285,7 +285,7 @@ public class TerminalViewTests : DashboardTestContext
             Cols = 97, Rows = 38, SizeKey = "97x38", SizeSelectEnabled = true
         }));
         Assert.False(cut.Find(".terminal-fit").HasAttribute("disabled"));
-        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").GetAttribute("title"));
+        Assert.Equal(Resources.TerminalStrings.TerminalToolbarGridSizeAuto, cut.Find(".terminal-fit").GetAttribute("data-tooltip"));
         var items = cut.FindComponent<FluentSelect<TerminalSizePreset, string>>().Instance.Items;
         Assert.NotNull(items);
         Assert.Equal([new("97x38", "97\u00d738", 97, 38), new TerminalSizePreset("80x24", "80\u00d724", 80, 24)], items);

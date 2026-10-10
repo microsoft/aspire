@@ -11,7 +11,7 @@
         <FluentTreeItem @key="@PageViewModel.Span"
                         Id="genai-span"
                         Data="@PageViewModel.Span"
-                        title="@PageViewModel.Span.Name">
+                        data-tooltip="@PageViewModel.Span.Name">
             <span class="llm-badge">@Loc[nameof(Dialogs.GenAILLMBadgeText)]</span> @PageViewModel.Span.Name
         </FluentTreeItem>
 
@@ -20,7 +20,7 @@
             <FluentTreeItem @key="itemVM"
                             Id="@GetItemTreeItemId(itemVM.Index)"
                             Data="@itemVM.Index"
-                            title="@itemVM.GetTitleBadge(Loc).Text">
+                            data-tooltip="@itemVM.GetTitleBadge(Loc).Text">
                 <div class="message-tree-item-container">
                     <GenAIItemTitle Item="itemVM" ResourceName="@itemVM.ResourceName" />
                 </div>

@@ -66,7 +66,7 @@ else
                                   IconOnly="true"
                                   IconStart="@(showCollapsedPane ? new Icons.Regular.Size16.PanelLeftExpand() : new Icons.Regular.Size16.PanelLeftContract())"
                                   OnClick="TogglePaneCollapsedAsync"
-                                  Title="@(showCollapsedPane ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneExpand)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCollapse)])"
+                                  data-tooltip="@(showCollapsedPane ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneExpand)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCollapse)])"
                                   aria-label="@(showCollapsedPane ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneExpand)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCollapse)])"
                                   aria-expanded="@((!showCollapsedPane).ToString().ToLowerInvariant())" />
                 }
@@ -77,7 +77,7 @@ else
                                   IconOnly="true"
                                   IconStart="@(new Icons.Regular.Size16.Dismiss())"
                                   OnClick="CloseDrawer"
-                                  Title="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClose)]"
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClose)]"
                                   aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneClose)]" />
                 }
             </div>
@@ -127,7 +127,7 @@ else
                         <a class="resource-row-link"
                            href="@GetSelectionUrl([])"
                            aria-current="@(isAllSelected ? "page" : null)"
-                           title="@allResourcesText"
+                           data-tooltip="@allResourcesText"
                            @onclick="OnAllResourcesClickAsync"
                            @onclick:preventDefault="true">
                             <span class="resource-row-icon">
@@ -165,7 +165,7 @@ else
                         <div class="resource-tag-group @(group.Tag is null ? "untagged" : string.Empty)" role="group" aria-label="@groupName" @key="@($"tag:{GetTagGroupKey(group)}")">
                             @if (showCollapsedPane)
                             {
-                                <div class="resource-tag-divider" title="@groupName"></div>
+                                <div class="resource-tag-divider" data-tooltip="@groupName"></div>
                             }
                             else
                             {
@@ -234,7 +234,7 @@ else
                             <a class="resource-row-link"
                                href="@GetRowUrl(telemetryResourceName)"
                                aria-current="@GetRowAriaCurrent(isSelected)"
-                               title="@telemetryResourceName"
+                               data-tooltip="@telemetryResourceName"
                                @onclick="@(e => OnRowClickAsync(e, telemetryResourceName))"
                                @onclick:preventDefault="true">
                                 <span class="resource-row-icon">
@@ -318,7 +318,7 @@ else
                                            Id="@GetTabId(tab.Tab)"
                                            Visible="@tab.IsVisible"
                                            Disabled="@(tab.Href is null)"
-                                           title="@(tab.Href is null ? Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)] : null)"
+                                           data-tooltip="@(tab.Href is null ? Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)] : null)"
                                            IconStart="@tab.Icon">
                                     <HeaderTemplate>
                                         <span>@tab.Text</span>
@@ -368,7 +368,7 @@ else
         {
             var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
             <FluentButton Appearance="ButtonAppearance.Default"
-                          Title="@commandTitle"
+                          data-tooltip="@commandTitle"
                           IconStart="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor(Color.Primary)"
                           OnClick="@(() => ExecuteResourceCommandAsync(selected, command))"
                           Disabled="@(DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selected.Name, command.Name))">
@@ -398,7 +398,7 @@ else
                           IconOnly="true"
                           IconStart="@(new Icons.Regular.Size20.TextBulletListLtr())"
                           OnClick="OpenDrawer"
-                          Title="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneOpen)]"
+                          data-tooltip="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneOpen)]"
                           aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneOpen)]" />
         }
 
@@ -475,7 +475,7 @@ else
                 <div class="resource-header-meta resource-header-selection">
                     @foreach (var item in _selectedItems)
                     {
-                        <a class="resource-header-chip" href="@GetRowUrl(item.Name)" title="@item.Name">
+                        <a class="resource-header-chip" href="@GetRowUrl(item.Name)" data-tooltip="@item.Name">
                             <FluentIcon Width="14px"
                                         Color="Color.Custom"
                                         CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(item.Name)"
@@ -531,7 +531,7 @@ else
                href="@GetRowUrl(resourceName)"
                style="@(showCollapsedPane || depth == 0 ? null : $"--resource-row-depth: {depth}")"
                aria-current="@GetRowAriaCurrent(isSelected)"
-               title="@($"{resource.ResourceType}: {resourceName}")"
+               data-tooltip="@($"{resource.ResourceType}: {resourceName}")"
                @onclick="@(e => OnRowClickAsync(e, resourceName))"
                @onclick:preventDefault="true">
                 <span class="resource-row-icon">
@@ -557,7 +557,7 @@ else
                     </span>
                     @if (errorCount > 0)
                     {
-                        <span class="error-badge" title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)">@errorCount</span>
+                        <span class="error-badge" data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)">@errorCount</span>
                     }
                 }
             </a>

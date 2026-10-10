@@ -25,8 +25,11 @@
                               Height="400px"
                               Disabled="@_loadingPropertyKeys"
                               OptionText="@((SelectViewModel<string>? c) => c?.Name)"
-                              OptionDisabled="@((SelectViewModel<string>? c) => c is not null && c.Id is null)"
-                              OptionTitle="@((SelectViewModel<string> c) => DashboardUIHelpers.ResolveTooltip(c.Name))">
+                              OptionDisabled="@((SelectViewModel<string>? c) => c is not null && c.Id is null)">
+                    <OptionTemplate Context="optionContext">
+                        <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(optionContext.Name)"></span>
+                        @optionContext.Name
+                    </OptionTemplate>
                 </FluentSelect>
                 @if (_loadingPropertyKeys)
                 {
@@ -77,7 +80,7 @@
                                           IconOnly="true"
                                           Type="ButtonType.Button"
                                           Class="aspire-icon-button"
-                                          Title="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
+                                          data-tooltip="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
                                           aria-label="@Loc[nameof(Dialogs.FilterDialogPickDateButtonTitle)]"
                                           OnClick="OpenDatePickerAsync">
                                 <FluentIcon Value="@(new Icons.Regular.Size16.Calendar())" Color="Color.Primary" />
@@ -117,13 +120,13 @@
                                             Width="100%"
                                             Height="400px"
                                             Disabled="@_loadingFieldValues"
-                                            OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)"
-                                            OptionTitle="@((SelectViewModel<FieldValue> c) => DashboardUIHelpers.ResolveTooltip(c.Name))">
+                                            OptionText="@((SelectViewModel<FieldValue>? c) => c?.Name)">
                                 @* The native dropdown needs a freeform option to retain unmatched text on blur. *@
                                 <FreeOption>
                                     <FreeOptionOutput />
                                 </FreeOption>
                                 <OptionTemplate Context="optionContext">
+                                    <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(optionContext.Name)"></span>
                                     <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
                                     <FluentBadge slot="description" Circular="true" Appearance="BadgeAppearance.Tint" Color="BadgeColor.Subtle">
                                         @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
@@ -149,13 +152,13 @@
                 {
                     if (Content.Filter.Enabled)
                     {
-                        <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Disable"><FluentIcon Value="@(new Icons.Regular.Size16.Pause())" Color="Color.Primary" /></FluentButton>
+                        <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" data-tooltip="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Disable"><FluentIcon Value="@(new Icons.Regular.Size16.Pause())" Color="Color.Primary" /></FluentButton>
                     }
                     else
                     {
-                        <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Enable"><FluentIcon Value="@(new Icons.Regular.Size16.Play())" Color="Color.Primary" /></FluentButton>
+                        <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" data-tooltip="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Enable"><FluentIcon Value="@(new Icons.Regular.Size16.Play())" Color="Color.Primary" /></FluentButton>
                     }
-                    <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" Title="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" OnClick="Delete"><FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Primary" /></FluentButton>
+                    <FluentButton Class="aspire-button" Appearance="ButtonAppearance.Default" data-tooltip="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" OnClick="Delete"><FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Primary" /></FluentButton>
                 }
             </FluentStack>
 

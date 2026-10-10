@@ -174,7 +174,7 @@
                     @if (source is not null)
                     {
                         <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</dt>
-                        <dd class="overview-mono" title="@source.Tooltip">@source.Value</dd>
+                        <dd class="overview-mono" data-tooltip="@source.Tooltip">@source.Value</dd>
                     }
                 </dl>
             </section>
@@ -199,22 +199,22 @@
                         var url = group.Primary;
                         var label = url.DisplayName is { } displayName && url.Name == "-" ? displayName : url.Name;
                         <li>
-                            <span class="overview-list-label" title="@label">@label</span>
+                            <span class="overview-list-label" data-tooltip="@label">@label</span>
                             @if (url.Url is not null)
                             {
                                 var maskedUrl = DashboardUIHelpers.MaskQueryStringValues(url.Url);
-                                <a class="overview-list-value" href="@url.Url" title="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
+                                <a class="overview-list-value" href="@url.Url" data-tooltip="@maskedUrl" target="_blank" rel="noreferrer noopener">@(url.DisplayName ?? maskedUrl)</a>
                             }
                             else
                             {
-                                <span class="overview-list-value overview-mono" title="@url.Text">@url.Text</span>
+                                <span class="overview-list-value overview-mono" data-tooltip="@url.Text">@url.Text</span>
                             }
                             @if (group.Secondary?.Url is { } secondaryUrl)
                             {
                                 @* The secondary url (typically the internal address of the same endpoint) is shown as faint
                                    supplementary text instead of a duplicate row, and hides first as space runs out. *@
                                 var maskedSecondaryUrl = DashboardUIHelpers.MaskQueryStringValues(secondaryUrl);
-                                <span class="overview-list-ghost overview-mono" title="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
+                                <span class="overview-list-ghost overview-mono" data-tooltip="@maskedSecondaryUrl">@maskedSecondaryUrl</span>
                             }
                             @if (url.IsInternal)
                             {
@@ -352,7 +352,7 @@
                             {
                                 <li @key="log.InternalId">
                                     <span class="overview-level @(log.IsError ? "error" : "warning")">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" title="@log.Message">@log.Message</a>
+                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
                                     <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
                                 </li>
                             }
@@ -365,7 +365,7 @@
                             {
                                 <li @key="log.InternalId">
                                     <span class="overview-level">@log.Severity</span>
-                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" title="@log.Message">@log.Message</a>
+                                    <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
                                     <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
                                 </li>
                             }
@@ -414,13 +414,13 @@
                                 <li @key="trace.TraceId">
                                     @if (trace.HasError)
                                     {
-                                        <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
+                                        <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
                                     }
                                     else
                                     {
                                         <span class="overview-dot"></span>
                                     }
-                                    <a class="overview-list-value" href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" title="@trace.FullName">@trace.FullName</a>
+                                    <a class="overview-list-value" href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" data-tooltip="@trace.FullName">@trace.FullName</a>
                                     <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
                                 </li>
                             }
@@ -465,7 +465,7 @@
                         @foreach (var instrument in telemetry.Instruments.Take(MetricsPreviewCount))
                         {
                             <li @key="@($"{instrument.Parent.Name}/{instrument.Name}")">
-                                <a class="overview-metric-tile" href="@DashboardUrls.MetricsUrl(resourceName, instrument.Parent.Name, instrument.Name)" title="@instrument.Description">
+                                <a class="overview-metric-tile" href="@DashboardUrls.MetricsUrl(resourceName, instrument.Parent.Name, instrument.Name)" data-tooltip="@instrument.Description">
                                     <span class="overview-metric-name">@instrument.Name</span>
                                     <span class="overview-metric-meter">@instrument.Parent.Name</span>
                                 </a>
@@ -591,14 +591,14 @@
                         @foreach (var volume in volumes)
                         {
                             <li>
-                                <span class="overview-list-label overview-mono" title="@volume.Source">@(string.IsNullOrEmpty(volume.Source) ? "-" : volume.Source)</span>
+                                <span class="overview-list-label overview-mono" data-tooltip="@volume.Source">@(string.IsNullOrEmpty(volume.Source) ? "-" : volume.Source)</span>
                                 @if (!string.IsNullOrEmpty(volume.Source))
                                 {
                                     <FluentButton Appearance="ButtonAppearance.Transparent"
                                                   IconOnly="true"
                                                   Class="aspire-icon-button overview-volume-action"
-                                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
-                                                  AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(volume.Source, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                                                  data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]"
+                                                  @attributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(volume.Source, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                                         <FluentIcon Value="@(new Icons.Regular.Size16.Copy())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
                                     </FluentButton>
                                     @if (volume.IsBindMount)
@@ -606,18 +606,18 @@
                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       IconOnly="true"
                                                       Class="aspire-icon-button overview-volume-action"
-                                                      Title="@ControlsStringsLoc[nameof(ControlsStrings.VolumeRevealInFileExplorer)]"
+                                                      data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.VolumeRevealInFileExplorer)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.VolumeRevealInFileExplorer)]"
                                                       OnClick="@(() => RevealVolumeSourceAsync(volume))">
                                             <FluentIcon Value="@(new Icons.Regular.Size16.FolderOpen())" Width="12px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
                                         </FluentButton>
                                     }
                                 }
                                 <FluentIcon Value="@(new Icons.Regular.Size12.ArrowRight())" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
-                                <span class="overview-list-value overview-mono" title="@volume.Target">@volume.Target</span>
+                                <span class="overview-list-value overview-mono" data-tooltip="@volume.Target">@volume.Target</span>
                                 <span class="overview-badge overview-volume-type">
                                     @if (volume.IsReadOnly)
                                     {
-                                        <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Color="Color.Custom" CustomColor="currentColor" Title="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeReadOnlyTitle)]" />
+                                        <FluentIcon Value="@(new Icons.Regular.Size12.LockClosed())" Color="Color.Custom" CustomColor="currentColor" data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeReadOnlyTitle)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.VolumeMountTypeReadOnlyTitle)]" />
                                     }
                                     @volume.MountType.Humanize()
                                 </span>
@@ -652,10 +652,10 @@
                                     (Icon? healthIcon, Color healthColor) = ResourceIconHelpers.GetHealthStatusIcon(report.HealthStatus);
                                     <FluentIcon Value="@healthIcon" Color="@healthColor" Width="16px" />
                                 }
-                                <span class="overview-list-label" title="@report.Name">@report.Name</span>
-                                <span class="overview-list-value overview-muted" title="@report.DisplayedDescription">@report.DisplayedDescription</span>
+                                <span class="overview-list-label" data-tooltip="@report.Name">@report.Name</span>
+                                <span class="overview-list-value overview-muted" data-tooltip="@report.DisplayedDescription">@report.DisplayedDescription</span>
                                 <ExceptionDetails ExceptionText="@report.ExceptionText" />
-                                <span class="overview-list-time" title="@HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
+                                <span class="overview-list-time" data-tooltip="@HealthReportFormatter.GetStatusTooltip(report, Loc, TimeProvider)">@HealthReportFormatter.GetStatusWithTime(report, Loc)</span>
                             </li>
                         }
                     </ul>
@@ -705,7 +705,7 @@
         <FluentButton Appearance="ButtonAppearance.Transparent"
                       IconOnly="true"
                       Class="aspire-icon-button overview-card-action"
-                      Title="@title"
+                      data-tooltip="@title"
                       aria-label="@title"
                       OnClick="@onClick">
             <FluentIcon Value="@icon" Color="Color.Primary" />
@@ -807,7 +807,7 @@
                                 Color="Color.Custom"
                                 CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(resourceName)"
                                 Value="@ResourceIconHelpers.GetIconForResource(IconResolver, resource, IconSize.Size20)" />
-                    <a class="overview-selection-card-title" href="@DashboardUrls.ResourceOverviewUrl(resourceName)" title="@resourceName">@resourceName</a>
+                    <a class="overview-selection-card-title" href="@DashboardUrls.ResourceOverviewUrl(resourceName)" data-tooltip="@resourceName">@resourceName</a>
                     <span class="overview-state @ResourcesLayout.GetStateClass(resource)">
                         <FluentIcon Value="@stateViewModel.Icon" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
                         @stateViewModel.Text
@@ -831,15 +831,15 @@
                         }
                         else if (primaryUrl.Url is not null)
                         {
-                            <a href="@primaryUrl.Url" title="@primaryUrl.Url" target="_blank" rel="noreferrer noopener">@primaryUrl.Text</a>
+                            <a href="@primaryUrl.Url" data-tooltip="@primaryUrl.Url" target="_blank" rel="noreferrer noopener">@primaryUrl.Text</a>
                         }
                         else
                         {
-                            <span class="overview-mono" title="@primaryUrl.Text">@primaryUrl.Text</span>
+                            <span class="overview-mono" data-tooltip="@primaryUrl.Text">@primaryUrl.Text</span>
                         }
                         @if (urls.Count > 1)
                         {
-                            <span class="overview-badge" title="@string.Join(Environment.NewLine, urls.Skip(1).Select(u => u.Text))">+@(urls.Count - 1)</span>
+                            <span class="overview-badge" data-tooltip="@string.Join(Environment.NewLine, urls.Skip(1).Select(u => u.Text))">+@(urls.Count - 1)</span>
                         }
                     </div>
                     <nav class="overview-selection-actions" aria-label="@resourceName">
@@ -869,7 +869,7 @@
                                 Color="Color.Custom"
                                 CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(name)"
                                 Value="@(new Icons.Regular.Size20.DataUsage())" />
-                    <span class="overview-selection-card-title" title="@name">@name</span>
+                    <span class="overview-selection-card-title" data-tooltip="@name">@name</span>
                 </div>
                 <div class="overview-selection-meta">
                     <span>@LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneTelemetryOnly)]</span>
@@ -891,7 +891,7 @@
         var label = errorCount > 0
             ? $"{title} ({string.Format(CultureInfo.CurrentCulture, LayoutLoc[nameof(Dashboard.Resources.Layout.ResourcePaneUnviewedErrors)], errorCount)})"
             : title;
-        <a class="overview-selection-action" href="@href" title="@label" aria-label="@label">
+        <a class="overview-selection-action" href="@href" data-tooltip="@label" aria-label="@label">
             <FluentIcon Value="@icon" Color="Color.Custom" CustomColor="currentColor" />
             @if (errorCount > 0)
             {

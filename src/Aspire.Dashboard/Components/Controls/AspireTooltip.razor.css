@@ -1,4 +1,0 @@
-/* fluent-tooltip doesn't wrap its text, so longer descriptions would overflow its max width. */
-.aspire-tooltip {
-    white-space: normal;
-}

@@ -26,7 +26,7 @@
                             Id="@GetMeterTreeItemId(meterGroup.Key)"
                             Text="@meterGroup.Key"
                             Data="@meterGroup.Key"
-                            title="@meterGroup.Key"
+                            data-tooltip="@meterGroup.Key"
                             Expanded="@IsMeterExpanded(meterGroup.Key)"
                             ExpandedChanged="@(expanded => SetMeterExpanded(meterGroup.Key, expanded))">
                 @foreach (var instrument in meterGroup.OrderBy(i => i.Name))
@@ -37,7 +37,7 @@
                                     Class="@(hasData ? "nested" : "nested no-data")"
                                     Text="@instrument.Name"
                                     Data="@instrument"
-                                    title="@(hasData ? instrument.Name : $"{instrument.Name} \u2014 {Loc[nameof(Metrics.MetricsInstrumentNoDataTooltip)]}")" />
+                                    data-tooltip="@(hasData ? instrument.Name : $"{instrument.Name} \u2014 {Loc[nameof(Metrics.MetricsInstrumentNoDataTooltip)]}")" />
                 }
             </FluentTreeItem>
         }

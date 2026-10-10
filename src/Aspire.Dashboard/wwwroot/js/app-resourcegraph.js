@@ -372,8 +372,7 @@ class ResourceGraph {
         iconPath
             .attr("fill", n => n.resourceIcon.color)
             .attr("d", n => n.resourceIcon.path)
-            .append("title")
-            .text(n => n.resourceIcon.tooltip);
+            .attr("data-tooltip", n => n.resourceIcon.tooltip);
 
         // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
         iconPath.each(function (d) {
@@ -400,7 +399,6 @@ class ResourceGraph {
             .attr("class", "resource-endpoint")
             .style("display", n => n.endpointText ? null : "none");
         endpointGroup.append("text");
-        endpointGroup.append("title");
 
         // Resource status
         var statusGroup = newNodesContainer
@@ -411,12 +409,10 @@ class ResourceGraph {
             .attr("r", 8)
             .attr("cy", 8)
             .attr("cx", 8)
-            .attr("class", "resource-status-circle")
-            .append("title");
+            .attr("class", "resource-status-circle");
         statusGroup
             .append("path")
-            .attr("class", "resource-status-path")
-            .append("title");
+            .attr("class", "resource-status-path");
 
         var resourceNameGroup = newNodesContainer
             .append("g")
@@ -425,9 +421,7 @@ class ResourceGraph {
         resourceNameGroup
             .append("text")
             .text(n => trimText(n.label, 30));
-        resourceNameGroup
-            .append("title")
-            .text(n => n.label);
+        resourceNameGroup.attr("data-tooltip", n => n.label);
 
         // Context menu affordance. A cog positioned on the circle rim directly below the status badge.
         // The status badge sits at the top-right via "scale(1.6) translate(14,-34)" (center ~(35,-42)),
@@ -453,9 +447,7 @@ class ResourceGraph {
             .append("circle")
             .attr("r", 14)
             .attr("class", "resource-menu-cog-background");
-        cogGroup
-            .append("title")
-            .text(n => this.getResourceMenuLabel(n));
+        cogGroup.attr("data-tooltip", n => this.getResourceMenuLabel(n));
         if (this.menuIcon) {
             var cogIcon = cogGroup
                 .append("path")
@@ -485,8 +477,7 @@ class ResourceGraph {
             .selectAll(".resource-group")
             .select(".resource-menu-cog")
             .attr("aria-label", n => this.getResourceMenuLabel(n))
-            .select("title")
-            .text(n => this.getResourceMenuLabel(n));
+            .attr("data-tooltip", n => this.getResourceMenuLabel(n));
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
@@ -496,20 +487,17 @@ class ResourceGraph {
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
-            .select("title")
-            .text(n => n.endpointText || "");
+            .attr("data-tooltip", n => n.endpointText || "");
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-circle")
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
+            .attr("data-tooltip", n => n.stateIcon.tooltip);
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-path")
             .attr("d", n => n.stateIcon.path)
             .attr("fill", n => n.stateIcon.color)
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
+            .attr("data-tooltip", n => n.stateIcon.tooltip);
 
         // Update links
         this.linkElements = this.linkElementsG

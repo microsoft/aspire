@@ -40,7 +40,7 @@
                                   Immediate="true"
                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
                                   Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                                  title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                                  data-tooltip="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
                         <StartTemplate>
                             <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                         </StartTemplate>
@@ -92,7 +92,7 @@
                             }
                         }
 
-                        <div class="pane-details-title" title="@($"{title} ({subtitle})")">
+                        <div class="pane-details-title" data-tooltip="@($"{title} ({subtitle})")">
                             @title
                             <span class="pane-details-subtext">@subtitle</span>
                         </div>
@@ -210,7 +210,7 @@
                                                     {
                                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                                     IconOnly="true"
-                                                                    Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                                    data-tooltip="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]" aria-label="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                                     Class="genai-details-button"
                                                                     OnClick="() => OnGenAIClickedAsync(context.Span)">
                                                             <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
@@ -265,7 +265,7 @@
                                                                 var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
 
                                                                 <button id="@buttonId"
-                                                                        title="@(!htmlTooltip ? $"{eventName} - {item.LogEntry.ScopeName}" : string.Empty)"
+                                                                        data-tooltip="@(!htmlTooltip ? $"{eventName} - {item.LogEntry.ScopeName}" : string.Empty)"
                                                                         aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
                                                                         class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
                                                                         data-span-color="@spanColor"
@@ -276,7 +276,7 @@
                                                                 @*
                                                                     There is a performance impact to having many tooltips on the page. Limit to 500 tooltips.
                                                                     The button continues to be displayed and clicking on it opens the details view.
-                                                                    A standard browser tooltip is displayed instead of the FluentTooltip.
+                                                                    Later entries use the shared text-only Fluent tooltip instead.
                                                                 *@
                                                                 @if (htmlTooltip)
                                                                 {
@@ -365,7 +365,7 @@
     {
         return @<FluentButton Appearance="ButtonAppearance.Default"
                               Class="toolbar-button trace-back-button"
-                              Title="Back to traces"
+                              data-tooltip="Back to traces"
                               IconStart="@(new Icons.Regular.Size16.ArrowLeft().WithColor(Color.Primary))"
                               OnClick="@(() => NavigationManager.NavigateTo(TracesListUrl))">
             Traces
@@ -377,7 +377,7 @@
         return @<div class="trace-header main-toolbar">
             <div class="trace-header-nav">
                 @GetBackButton()
-                <span class="trace-header-title" title="@GetPageTitle()">@GetPageTitle()</span>
+                <span class="trace-header-title" data-tooltip="@GetPageTitle()">@GetPageTitle()</span>
                 <span class="trace-id">@OtlpHelpers.ToShortenedId(trace.TraceId)</span>
             </div>
             @GetTraceDetailsFragment()
@@ -392,7 +392,7 @@
                               Immediate="true"
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                              title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                              data-tooltip="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
                     <StartTemplate>
                         <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                     </StartTemplate>
@@ -449,7 +449,7 @@
         return @<FluentOverflow TItem="TraceDetailItem" Items="@items" Class="trace-header-details">
             <ItemTemplate Context="item">
                 <div>
-                    @item.Name <strong title="@item.Tooltip">@item.Value</strong>
+                    @item.Name <strong data-tooltip="@item.Tooltip">@item.Value</strong>
                 </div>
             </ItemTemplate>
             <MoreTemplate Context="overflow">
@@ -463,7 +463,7 @@
                                Class="trace-header-tooltip">
                     @foreach (var item in overflow.Items)
                     {
-                        <div style="margin: 5px;" title="@item.Tooltip">@item.Name <strong>@item.Value</strong></div>
+                        <div style="margin: 5px;" data-tooltip="@item.Tooltip">@item.Name <strong>@item.Value</strong></div>
                     }
                 </FluentTooltip>
             </OverflowTemplate>

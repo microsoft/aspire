@@ -14,7 +14,7 @@
 }
 
 <div class="aspire-menu-button">
-    <FluentButton Id="@MenuButtonId" Title="@(UseFluentTooltips ? null : Title)" Appearance="@ButtonAppearance" IconOnly="@iconOnly" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+    <FluentButton Id="@MenuButtonId" data-tooltip="@Title" aria-label="@Title" Appearance="@ButtonAppearance" IconOnly="@iconOnly" @onclick="ToggleMenu" Disabled="@_disabled" @attributes="@additionalButtonAttributes" Class="@ButtonClass">
         @if (IconStart is not null)
         {
             <FluentIcon Class="@IconStartClass" Value="@IconStart" Color="@IconStartColor" CustomColor="@IconStartCustomColor" Slot="start" />
@@ -34,14 +34,9 @@
             }
         }
     </FluentButton>
-    @if (UseFluentTooltips && !string.IsNullOrEmpty(Title))
-    {
-        <AspireTooltip Anchor="@MenuButtonId" Text="@Title" Positioning="below" />
-    }
-
     @* Render lazily because FluentMenu is expensive: building menu items and initializing its JavaScript interop add significant overhead when many menu buttons are displayed. *@
     @if (_renderMenu)
     {
-        <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnItemsChanged="RefreshItems" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" UseFluentTooltips="@UseFluentTooltips" />
+        <AspireMenu Anchor="@MenuButtonId" Open="@_visible" OpenChanged="OnMenuOpenChanged" OnItemsChanged="RefreshItems" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
     }
 </div>

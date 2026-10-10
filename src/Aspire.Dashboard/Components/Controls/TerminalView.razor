@@ -6,7 +6,7 @@
             <FluentButton Class="terminal-selection-copy"
                           Appearance="ButtonAppearance.Default"
                           IconOnly="true"
-                          Title="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
+                          data-tooltip="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]"
                           aria-label="@ControlsLoc[nameof(Resources.ControlsStrings.GridValueCopyToClipboard)]">
                 <FluentIcon Value="new Icons.Regular.Size16.Copy()" Width="12px" Color="Color.Default" />
             </FluentButton>
@@ -48,14 +48,14 @@
             <span class="terminal-focus-hint"><kbd>F6</kbd>: @Loc[nameof(Resources.TerminalStrings.TerminalFocusControlsDescription)]</span>
             <div class="terminal-controls">
                 <FluentButton Class="terminal-font-minus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanDecreaseFontSize || ReadOnly)"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
+                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarDecreaseFontSize)]"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx - 1))">
                     <FluentIcon Icon="Icons.Regular.Size20.FontDecrease" Width="16px" Color="Color.Primary" />
                 </FluentButton>
                 <span class="terminal-font-size">@(_state.FontPx > 0 ? $"{_state.FontPx}px" : null)</span>
                 <FluentButton Class="terminal-font-plus toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.CanIncreaseFontSize || ReadOnly)"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
+                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarIncreaseFontSize)]"
                               OnClick="@(() => SetFontSizeAsync(_state.FontPx + 1))">
                     <FluentIcon Icon="Icons.Regular.Size20.FontIncrease" Width="16px" Color="Color.Primary" />
@@ -63,7 +63,7 @@
                 @if (ShowDimensionsPicker)
                 {
                     <FluentButton Class="terminal-fit toolbar-button" Appearance="ButtonAppearance.Default" IconOnly="true" Disabled="@(!_state.FitEnabled || ReadOnly)"
-                                  Title="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
+                                  data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
                                   aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalToolbarGridSizeAuto)]"
                                   OnClick="FitToContainerAsync">
                         <FluentIcon Icon="Icons.Regular.Size20.ArrowExpand" Width="16px" Color="Color.Primary" />

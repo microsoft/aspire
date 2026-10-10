@@ -13,7 +13,7 @@
         <header>
             <div class="brand-logo-container">
                 <a href="/" class="logo"
-                              title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                              data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
                               aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                     <AspireLogo />
                 </a>
@@ -34,20 +34,20 @@
             }
             <a class="header-button"
                           href="https://aka.ms/aspire/repo" target="_blank" rel="noreferrer noopener"
-                          title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
                 <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Default"/>
             </a>
             <FluentButton Class="header-button"
                           Id="@HelpButtonId"
                           Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Default"/>
             </FluentButton>
             @if (Options.CurrentValue.UI.DisableAgentHelp != true)
             {
                 <FluentButton Class="header-button"
                               Appearance="ButtonAppearance.Default" OnClick="@LaunchAIAgentsAsync"
-                              Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
+                              data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
                     <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Default"/>
                 </FluentButton>
             }
@@ -55,7 +55,7 @@
             <FluentButton Class="header-button"
                           Id="@SettingsButtonId"
                           Appearance="ButtonAppearance.Default" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
-                          Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Default"/>
             </FluentButton>
             <UserProfile/>
@@ -66,7 +66,7 @@
     {
         <div class="aspire-icon">
             <a href="/" class="logo"
-                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
                           aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
                 <AspireLogo />
             </a>
@@ -88,7 +88,8 @@
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size20.Dismiss() : new Icons.Regular.Size20.Navigation())"
                 Id="@NavigationButtonId"
-                Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
+                data-tooltip="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
+                aria-label="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
                 Appearance="ButtonAppearance.Transparent"
                 OnClick="@(() => _isNavMenuOpen = !_isNavMenuOpen)"
                 Class="navigation-button aspire-icon-button"/>
@@ -123,6 +124,7 @@
 
     <DashboardDialogProvider/>
     <FluentTooltipProvider />
+    <aspire-tooltip-provider></aspire-tooltip-provider>
     <InteractionsProvider />
     @if (IsTerminalDockEnabled)
     {

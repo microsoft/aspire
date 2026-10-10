@@ -56,7 +56,7 @@
                                 <FluentButton Appearance="ButtonAppearance.Transparent"
                                               IconOnly="true"
                                               Class="aspire-icon-button terminal-dock-tab-close"
-                                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
                                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
                                               tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
                                               OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
@@ -80,7 +80,7 @@
                               Disabled="true"
                               aria-disabled="true"
                               data-tab-scroll="-1"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]"
+                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]"
                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]">
                     <FluentIcon Value="@(new Icons.Regular.Size16.ChevronLeft())" Color="Color.Default" />
                 </FluentButton>
@@ -90,7 +90,7 @@
                               Disabled="true"
                               aria-disabled="true"
                               data-tab-scroll="1"
-                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]"
+                              data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]"
                               aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]">
                     <FluentIcon Value="@(new Icons.Regular.Size16.ChevronRight())" Color="Color.Default" />
                 </FluentButton>
@@ -111,7 +111,7 @@
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconOnly="true"
                           Class="aspire-icon-button terminal-dock-collapse"
-                          Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
+                          data-tooltip="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
                           aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockHide)]"
                           OnClick="@Hide">
                 <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Default" />

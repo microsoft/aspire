@@ -14,7 +14,7 @@
     }
     else
     {
-        <span class="grid-value" title="@(ToolTip ?? Value)" id="@_cellTextId" @onkeydown:stopPropagation="true">
+        <span class="grid-value" data-tooltip="@(ToolTip ?? Value)" id="@_cellTextId" @onkeydown:stopPropagation="true">
             @if (ContentBeforeValue == null && ContentAfterValue == null && string.IsNullOrEmpty(Value))
             {
                 <span class="empty-data"></span>
@@ -68,7 +68,7 @@
             <FluentButton Appearance="ButtonAppearance.Transparent"
                           IconOnly="true"
                           IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
-                          Title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                          data-tooltip="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
                           OnClick="ToggleMaskStateAsync"
                           aria-label="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
                           Class="grid-value-mask-button" />

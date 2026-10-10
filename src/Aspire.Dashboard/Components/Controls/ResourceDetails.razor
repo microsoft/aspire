@@ -133,15 +133,15 @@
                                 RowSize="DataGridRowSize.Medium"
                                 GridTemplateColumns="1fr 1fr 0.5fr"
                                 ShowHover="true">
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
                         <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
                         @string.Join(", ", context.Types)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
                         <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
-                    </TemplateColumn>
+                    </AspireTemplateColumn>
                 </FluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]"
@@ -158,15 +158,15 @@
                                 RowSize="DataGridRowSize.Medium"
                                 GridTemplateColumns="1fr 1fr 0.5fr"
                                 ShowHover="true">
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]">
                         <ResourceNameValue Resource="@context.Resource" Value="@context.ResourceName" FormatName="@FormatName" />
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]" TooltipText="@(c => string.Join(", ", c.Types))">
                         @string.Join(", ", context.Types)
-                    </TemplateColumn>
-                    <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
+                    </AspireTemplateColumn>
+                    <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
                         <FluentButton Appearance="ButtonAppearance.Transparent" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
-                    </TemplateColumn>
+                    </AspireTemplateColumn>
                 </FluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]"
@@ -281,9 +281,9 @@
         {
             if (highlighting)
             {
-                return @<a href="@vm.Url" title="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
+                return @<a href="@vm.Url" data-tooltip="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
             }
-            return @<a href="@vm.Url" title="@vm.Url" target="_blank">@vm.DisplayName</a>;
+            return @<a href="@vm.Url" data-tooltip="@vm.Url" target="_blank">@vm.DisplayName</a>;
         }
     }
 }

@@ -217,7 +217,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             resource => Assert.Equal("regular-resource2", resource.Name));
 
         // Act & Assert 2: Click the settings menu button to show the menu, then click "Show hidden resources"
-        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        var settingsMenuButton = cut.Find("fluent-button[data-tooltip='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
         Assert.NotNull(settingsMenuButton);
         settingsMenuButton.Click();
 
@@ -293,7 +293,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForState(() => instance.PageViewModel.SelectedResource?.Id?.InstanceId == "test-resource");
 
         // Act: Click the settings menu button
-        var settingsMenuButton = cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
+        var settingsMenuButton = cut.Find("fluent-button[data-tooltip='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']");
         Assert.NotNull(settingsMenuButton);
         settingsMenuButton.Click();
 

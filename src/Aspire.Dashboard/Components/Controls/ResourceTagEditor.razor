@@ -11,7 +11,7 @@
                     <span class="tag-chip-name">@tag</span>
                     <button type="button"
                             class="tag-chip-remove"
-                            title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
+                            data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
                             aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
                             @onclick="@(() => RemoveTag(tag))">
                         <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Width="10px" Color="Color.Custom" CustomColor="currentColor" />

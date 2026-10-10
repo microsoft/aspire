@@ -100,7 +100,7 @@
                                 </span>
                                 <span class="home-tile-text">
                                     @* The name link covers the whole tile, so the tile is clickable while the URL stays a separate link. *@
-                                    <a class="home-tile-name" href="@DashboardUrls.ResourceOverviewUrl(resourceName)" title="@($"{resource.ResourceType}: {resourceName}")">@resourceName</a>
+                                    <a class="home-tile-name" href="@DashboardUrls.ResourceOverviewUrl(resourceName)" data-tooltip="@($"{resource.ResourceType}: {resourceName}")">@resourceName</a>
                                     <span class="home-tile-sub">
                                         <span class="home-tile-state">
                                             <FluentIcon Value="@stateViewModel.Icon" Width="12px" Color="@stateViewModel.Color" />
@@ -111,7 +111,7 @@
                                     </span>
                                     @if (primaryUrl is not null)
                                     {
-                                        <a class="home-tile-url" href="@primaryUrl.Url" target="_blank" rel="noopener noreferrer" title="@primaryUrl.Url">
+                                        <a class="home-tile-url" href="@primaryUrl.Url" target="_blank" rel="noopener noreferrer" data-tooltip="@primaryUrl.Url">
                                             <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
                                             <span>@primaryUrl.Text</span>
                                         </a>
@@ -119,7 +119,7 @@
                                 </span>
                                 @if (errorCount > 0)
                                 {
-                                    <span class="home-error-badge" title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.HomeUnviewedErrors)], errorCount)">@errorCount</span>
+                                    <span class="home-error-badge" data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.HomeUnviewedErrors)], errorCount)">@errorCount</span>
                                 }
                                 @if (GetResourceActivityBuckets(resource) is { } buckets)
                                 {
@@ -156,7 +156,7 @@
                             {
                                 var logResourceName = GetLogResourceName(log.Resource);
                                 <li @key="log.InternalId">
-                                    <a href="@DashboardUrls.StructuredLogsUrl(logResourceName, logEntryId: log.InternalId)" title="@log.Message">
+                                    <a href="@DashboardUrls.StructuredLogsUrl(logResourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">
                                         <span class="home-event-title">@log.Message</span>
                                         <span class="home-event-meta">
                                             <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(logResourceName)"></span>
@@ -195,7 +195,7 @@
                             {
                                 var traceResourceName = GetLogResourceName(trace.RootResource);
                                 <li @key="trace.TraceId">
-                                    <a href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" title="@trace.FullName">
+                                    <a href="@DashboardUrls.TraceDetailUrl(trace.TraceId)" data-tooltip="@trace.FullName">
                                         <span class="home-event-title">@trace.FullName</span>
                                         <span class="home-event-meta">
                                             <span class="home-resource-dot" style="background: @ColorGenerator.Instance.GetColorVariableByKey(traceResourceName)"></span>
@@ -277,8 +277,7 @@
                                 var okHeight = ok * 92.0 / max;
                                 var errorHeight = errors * 92.0 / max;
                                 var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
-                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)">
-                                    <title>@($"{FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart)} · {ok + errors} requests, {errors} failed")</title>
+                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@($"{FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart)} · {ok + errors} requests, {errors} failed")">
                                     <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
                                     @if (errors > 0)
                                     {
@@ -327,7 +326,7 @@
                         @foreach (var endpoint in activity.SlowestEndpoints)
                         {
                             <li>
-                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" title="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
+                                <a href="@DashboardUrls.TracesUrl(resource: endpoint.ResourceName)" data-tooltip="@($"{endpoint.ResourceName}: {endpoint.Label} ({endpoint.Count} requests)")">
                                     <span class="home-insight-row">
                                         <span class="home-insight-name">@endpoint.Label</span>
                                         <span class="home-insight-value">@DurationFormatter.FormatDuration(endpoint.P95, CultureInfo.CurrentCulture)</span>

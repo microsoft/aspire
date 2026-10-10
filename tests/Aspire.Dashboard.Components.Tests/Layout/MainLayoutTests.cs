@@ -372,7 +372,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.True(incompatibleMenuItem.HasAttribute("disabled"));
         cut.WaitForAssertion(() => Assert.Equal(
             incompatibleItem.Tooltip,
-            cut.Find($"fluent-tooltip[anchor='{incompatibleItem.Id}']").TextContent));
+            cut.Find($"#{incompatibleItem.Id}").GetAttribute("data-tooltip")));
 
         Assert.Single(incompatibleMenuItem.QuerySelectorAll("fluent-button")).Click();
 

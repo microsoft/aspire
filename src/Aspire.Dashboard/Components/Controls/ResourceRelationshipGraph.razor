@@ -13,9 +13,7 @@
 
     @foreach (var edge in _layout.Edges)
     {
-        <path class="relationship-graph-edge" d="@edge.Path" marker-end="@($"url(#{_markerId})")">
-            <title>@edge.Type</title>
-        </path>
+        <path class="relationship-graph-edge" d="@edge.Path" marker-end="@($"url(#{_markerId})")" data-tooltip="@edge.Type" aria-label="@edge.Type" />
     }
 
     @foreach (var node in _layout.Nodes)
@@ -24,15 +22,13 @@
         var title = node.IsCenter ? $"{resourceNode.Name} ({resourceNode.Type})" : $"{resourceNode.Type}: {resourceNode.Name}";
         if (resourceNode.Url is { } url)
         {
-            <a class="relationship-graph-node" href="@url" aria-label="@title">
-                <title>@title</title>
+            <a class="relationship-graph-node" href="@url" aria-label="@title" data-tooltip="@title">
                 @NodeContent(node, resourceNode)
             </a>
         }
         else
         {
-            <g class="relationship-graph-node center">
-                <title>@title</title>
+            <g class="relationship-graph-node center" data-tooltip="@title" aria-label="@title">
                 @NodeContent(node, resourceNode)
             </g>
         }

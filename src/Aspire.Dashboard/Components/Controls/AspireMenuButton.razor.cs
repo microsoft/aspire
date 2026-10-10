@@ -68,12 +68,6 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public string? Title { get; set; }
 
-    /// <summary>
-    /// Whether the button's and items' tooltips are shown with a fluent-tooltip instead of the native title attribute.
-    /// </summary>
-    [Parameter]
-    public bool UseFluentTooltips { get; set; }
-
     [Parameter]
     public string MenuButtonId { get; set; } = $"menu-button-{Guid.NewGuid():N}";
 

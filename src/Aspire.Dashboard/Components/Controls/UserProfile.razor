@@ -9,7 +9,7 @@
                               Appearance="ButtonAppearance.Transparent"
                               IconOnly="true"
                               OnClick="@(() => _profileMenuOpen = !_profileMenuOpen)"
-                              Title="@_name"
+                              data-tooltip="@_name"
                               aria-label="@_name"
                               aria-haspopup="dialog"
                               aria-expanded="@_profileMenuOpen.ToString().ToLowerInvariant()">

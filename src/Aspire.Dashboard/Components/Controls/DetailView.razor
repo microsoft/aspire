@@ -6,7 +6,7 @@
     <header style="height: auto;">
         @if (DetailsTitle is not null)
         {
-            <h2 class="details-header-title" title="@DetailsTitle">@DetailsTitle</h2>
+            <h2 class="details-header-title" data-tooltip="@DetailsTitle">@DetailsTitle</h2>
         }
         else if (DetailsTitleTemplate is not null)
         {
@@ -18,12 +18,12 @@
                 <FluentButton Appearance="ButtonAppearance.Default"
                               IconEnd="@(Orientation == Orientation.Horizontal ? _splitHorizontalIcon : _splitVerticalIcon)"
                               OnClick="HandleToggleOrientation"
-                              Title="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"
+                              data-tooltip="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"
                               aria-label="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"/>
             }
 
             <FluentButton Appearance="ButtonAppearance.Default" BackgroundColor="@(ViewportInformation.IsDesktop ? null : "rgba(0, 0, 0, 0)")" IconEnd="@(new Icons.Regular.Size16.Dismiss())"
-                          OnClick="HandleDismissAsync" Title="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]" aria-label="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"/>
+                          OnClick="HandleDismissAsync" data-tooltip="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]" aria-label="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"/>
         </div>
     </header>
     @Details

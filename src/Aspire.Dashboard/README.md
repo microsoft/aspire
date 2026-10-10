@@ -47,6 +47,15 @@ How you configure the dashboard depends on whether it's started by the Aspire Ap
 
 To export the dashboard's own traces, set `OTEL_EXPORTER_OTLP_ENDPOINT`. Exported traces use `aspire-dashboard` as the default `service.name`. Override it with `OTEL_SERVICE_NAME` or `service.name` in `OTEL_RESOURCE_ATTRIBUTES`, using environment variables, command line arguments, or JSON configuration. `OTEL_SERVICE_NAME` takes precedence when both settings specify a service name. The dashboard does not generate a `service.instance.id`, but preserves one supplied in `OTEL_RESOURCE_ATTRIBUTES`.
 
+### Tooltips in dashboard controls
+
+Use `data-tooltip` for text-only tooltips instead of HTML `title` or a Fluent control's `Title` parameter.
+The dashboard's shared provider displays the text using the Fluent UI tooltip component on hover or keyboard focus.
+Keep accessible names such as `aria-label` separate from tooltip text. Rich tooltips can continue to use `FluentTooltip`.
+Use `AspireTemplateColumn` and `AspirePropertyColumn` for grid columns so cell tooltips share the same behavior.
+For select option templates, add a hidden element with `data-tooltip-option` containing the tooltip text; this preserves
+the Fluent option's pointer-selection behavior.
+
 ### Aspire AppHost
 
 The AppHost automatically configures the dashboard, but you can override values if needed. The recommended way to configure the dashboard from the Aspire AppHost is by adding environment variables to the _launchSettings.json_ file. The `:` delimiter must be replaced with double underscore (`__`) in environment variable names. For example, `Dashboard:TelemetryLimits:MaxLogCount` is `DASHBOARD__TELEMETRYLIMITS__MAXLOGCOUNT` as an environment variable.

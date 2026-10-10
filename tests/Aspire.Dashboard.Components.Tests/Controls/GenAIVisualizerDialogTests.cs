@@ -192,7 +192,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             [nameof(ControlsStrings.GridValueCopyToClipboard)].Value;
 
         Assert.Equal(copyButtonLabel, copyButton.GetAttribute("aria-label"));
-        Assert.Equal(copyButtonLabel, copyButton.GetAttribute("title"));
+        Assert.Equal(copyButtonLabel, copyButton.GetAttribute("data-tooltip"));
 
         var instance = cut.FindComponent<GenAIVisualizerDialog>().Instance;
         var selectedMessage = Assert.Single(instance.Content.Items, item => item.InternalId == selectedLogEntryId);

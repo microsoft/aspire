@@ -15,13 +15,13 @@ else if (Item.IsHeader)
         {
             <FluentIcon Value="@Item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Primary" />
         }
-        <span class="aspire-menu-header-text" title="@Item.Text">@Item.Text</span>
+        <span class="aspire-menu-header-text" data-tooltip="@Item.Text">@Item.Text</span>
     </div>
 }
 else if (Item.IsGroupHeader)
 {
     <div id="@Item.Id" class="aspire-menu-group-header" role="presentation">
-        <span class="aspire-menu-header-text" title="@Item.Text">@Item.Text</span>
+        <span class="aspire-menu-header-text" data-tooltip="@Item.Text">@Item.Text</span>
     </div>
 }
 else if (Item.IsEmptyGroupText)
@@ -40,8 +40,7 @@ else
                                 Item="nestedItem"
                                 OnItemActivated="OnItemActivated"
                                 OnSecondaryActionClicked="OnSecondaryActionClicked"
-                                OnItemToggled="OnItemToggled"
-                                UseFluentTooltips="UseFluentTooltips" />
+                                OnItemToggled="OnItemToggled" />
             }
         </text>;
     }
@@ -84,19 +83,14 @@ else
                     <FluentButton Id="@SecondaryActionId"
                                   Class="@($"aspire-menu-secondary-action{(Item.IsSecondaryActionSelected ? " selected" : null)}")"
                                   Appearance="ButtonAppearance.Transparent"
+                                  data-tooltip="@Item.SecondaryActionAriaLabel"
                                   aria-label="@Item.SecondaryActionAriaLabel"
                                   aria-pressed="@(Item.IsSecondaryActionSelected ? "true" : "false")"
                                   @onclick="HandleSecondaryActionClicked">
                         <FluentIcon Value="@Item.SecondaryActionIcon" Width="16px" Color="Color.Primary" />
                     </FluentButton>
-                    <AspireTooltip Anchor="@SecondaryActionId" Text="@Item.SecondaryActionAriaLabel" />
                 }
             </span>
         }
     </FluentMenuItem>
-    @if (UseFluentTooltips && !string.IsNullOrEmpty(ItemTooltip))
-    {
-        @* Positioned beside the item so it doesn't overlap the secondary action's tooltip, which shows above. *@
-        <AspireTooltip Anchor="@Item.Id" Text="@ItemTooltip" Positioning="before" />
-    }
 }

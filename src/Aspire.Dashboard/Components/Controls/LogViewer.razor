@@ -76,7 +76,7 @@
                                         {
                                             @s_spaceMarkup
                                         }
-                                        <span class="timestamp" title="@FormatHelpers.FormatDateTime(TimeProvider, timestamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture)">@GetDisplayTimestamp(timestamp)</span>
+                                        <span class="timestamp" data-tooltip="@FormatHelpers.FormatDateTime(TimeProvider, timestamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture)">@GetDisplayTimestamp(timestamp)</span>
                                     }
                                     @if (ShowResourcePrefix && context.ResourcePrefix is { } resourcePrefix)
                                     {

@@ -379,7 +379,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         download.SetVoidResult();
 
         var downloadButton = Assert.Single(cut.FindComponents<FluentButton>(),
-            button => button.Instance.Title == Aspire.Dashboard.Resources.ControlsStrings.Download);
+            button => button.Find("fluent-button").GetAttribute("data-tooltip") == Aspire.Dashboard.Resources.ControlsStrings.Download);
         await downloadButton.InvokeAsync(downloadButton.Instance.OnClick.InvokeAsync);
 
         Assert.Equal("resources.mmd", Assert.Single(download.Invocations).Arguments[0]);

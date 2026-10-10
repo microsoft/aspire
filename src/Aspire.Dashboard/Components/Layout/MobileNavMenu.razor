@@ -13,7 +13,7 @@
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
         var menuItemAttributes = new Dictionary<string, object>
         {
-            ["title"] = item.Text
+            ["data-tooltip"] = item.Text
         };
         if (isActive)
         {

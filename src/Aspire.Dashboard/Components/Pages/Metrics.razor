@@ -102,12 +102,12 @@
                                             RowSize="DataGridRowSize.Medium"
                                             TGridItem="OtlpInstrumentSummary">
                                             <ChildContent>
-                                                <TemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
+                                                <AspireTemplateColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementNameGridNameColumnHeader)]">
                                                     <a class="aspire-link-button metrics-instrument-link" href="@DashboardUrls.MetricsUrl(resource: PageViewModel.SelectedResource.Name, meter: context.Parent.Name, instrument: context.Name, duration: DurationMinutes, view: ViewKindName)">
                                                         @context.Name
                                                     </a>
-                                                </TemplateColumn>
-                                                <PropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" SortBy="@s_instrumentDescriptionSort" Tooltip="true" TooltipText="@(c => c.Description)" />
+                                                </AspireTemplateColumn>
+                                                <AspirePropertyColumn Title="@Loc[nameof(Dashboard.Resources.Metrics.MetricsInsturementDescriptionGridNameColumnHeader)]" Property="@(c => c.Description)" SortBy="@s_instrumentDescriptionSort" Tooltip="true" TooltipText="@(c => c.Description)" />
                                             </ChildContent>
                                         </FluentDataGrid>
                                     }

@@ -83,7 +83,7 @@
                                         {
                                             <FluentButton Appearance="ButtonAppearance.Transparent"
                                                           IconOnly="true"
-                                                          Title="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                          data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                           OnClick="() => OnGenAIClickedAsync(context)">
                                                 <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
                                                             Color="Color.Primary" />
@@ -196,7 +196,7 @@
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
+                          data-tooltip="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]">
                 <StartTemplate>
                     <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                 </StartTemplate>
@@ -244,7 +244,7 @@
         </div>
     </text>;
 
-    private RenderFragment RenderTraceResourceSummary(TraceResourceSummary item) => @<span class="trace-tag trace-service-tag" title="@(GetSpansTooltip(item))" style="border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(item.Resource)));">
+    private RenderFragment RenderTraceResourceSummary(TraceResourceSummary item) => @<span class="trace-tag trace-service-tag" data-tooltip="@(GetSpansTooltip(item))" style="border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(item.Resource)));">
         @if (item.ErroredSpans > 0)
         {
             <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" Class="trace-tag-icon" />

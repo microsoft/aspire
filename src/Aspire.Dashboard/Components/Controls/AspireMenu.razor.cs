@@ -62,12 +62,6 @@ public partial class AspireMenu : FluentComponentBase
     [Parameter]
     public bool RestoreFocusOnItemClick { get; set; }
 
-    /// <summary>
-    /// Whether item tooltips are shown with a fluent-tooltip instead of the native title attribute.
-    /// </summary>
-    [Parameter]
-    public bool UseFluentTooltips { get; set; }
-
     [Inject]
     public required IJSRuntime JS { get; init; }
 

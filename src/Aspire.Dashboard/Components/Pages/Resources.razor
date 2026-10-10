@@ -200,26 +200,26 @@
                                     <div class="resource-graph-controls">
                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="aspire-icon-button graph-export"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
+                                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)]"
                                                       OnClick="@ExportResourceGraphAsync">
                                             <FluentIcon Value="new Icons.Regular.Size24.ArrowDownload()" Color="Color.Primary" />
                                         </FluentButton>
                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="aspire-icon-button graph-zoom-in"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
+                                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
                                             <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Primary" />
                                         </FluentButton>
                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="aspire-icon-button graph-zoom-out"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
+                                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
                                             <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Primary" />
                                         </FluentButton>
                                         <FluentButton Appearance="ButtonAppearance.Transparent"
                                                       Class="aspire-icon-button graph-reset"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
+                                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
                                             <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
                                         </FluentButton>
@@ -277,7 +277,7 @@
                           Appearance="@(NoFiltersSet ? ButtonAppearance.Default : ButtonAppearance.Primary)"
                           IconEnd="@(new Icons.Regular.Size20.Filter())"
                           @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
-                          Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
+                          data-tooltip="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
                           aria-label="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])" />
 
             <AspireMenuButton ButtonAppearance="ButtonAppearance.Default"

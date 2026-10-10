@@ -24,12 +24,6 @@ public partial class AspireMenuItem
 
     private string SecondaryActionId => $"{Item.Id}-secondary-action";
 
-    /// <summary>
-    /// Whether the item's tooltip is shown with a fluent-tooltip instead of the native title attribute.
-    /// </summary>
-    [Parameter]
-    public bool UseFluentTooltips { get; set; }
-
     private string ItemTooltip => !string.IsNullOrEmpty(Item.Tooltip) ? Item.Tooltip : Item.Text ?? string.Empty;
 
     private Dictionary<string, object> AdditionalMenuItemAttributes
@@ -37,10 +31,7 @@ public partial class AspireMenuItem
         get
         {
             var attributes = new Dictionary<string, object>(Item.AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty);
-            if (!UseFluentTooltips)
-            {
-                attributes["title"] = ItemTooltip;
-            }
+            attributes["data-tooltip"] = ItemTooltip;
 
             return attributes;
         }

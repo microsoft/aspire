@@ -60,7 +60,7 @@
                         var eventName = StructureLogsDetailsViewModel.GetEventName(context!.LogEntry, Loc);
                     }
 
-                    <div class="pane-details-title" title="@($"{eventName} ({context!.LogEntry.Scope.Name})")">
+                    <div class="pane-details-title" data-tooltip="@($"{eventName} ({context!.LogEntry.Scope.Name})")">
                         @eventName
                         <span class="pane-details-subtext">@context!.LogEntry.Scope.Name</span>
                     </div>
@@ -188,7 +188,7 @@
                               Immediate="true"
                               ImmediateDelay="@FluentUIExtensions.InputDelay"
                               Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                              title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageFilter)]">
+                              data-tooltip="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageFilter)]">
                     <StartTemplate>
                         <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                     </StartTemplate>

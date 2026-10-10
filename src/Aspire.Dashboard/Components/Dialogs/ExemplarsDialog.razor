@@ -12,20 +12,20 @@
                     GridTemplateColumns="2fr 1fr 1fr 1fr"
                     TGridItem="ChartExemplar">
         <ChildContent>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTraceColumnHeader)]" TooltipText="@(context => GetTitle(context))" Tooltip="true">
+            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTraceColumnHeader)]" TooltipText="@(context => GetTitle(context))" Tooltip="true">
                 <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(context.Span != null ? ColorGenerator.Instance.GetColorVariableByKey(OtlpResource.GetResourceName(context.Span.Source, Content.Resources)) : "transparent");">
                     @GetTitle(context)
                 </span>
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
+            </AspireTemplateColumn>
+            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
                 @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.Start), MillisecondsDisplay.Truncated)
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogValueColumnHeader)]">
+            </AspireTemplateColumn>
+            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogValueColumnHeader)]">
                 @FormatMetricValue(context.Value)
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogDetailsColumnHeader)]">
+            </AspireTemplateColumn>
+            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ExemplarsDialogDetailsColumnHeader)]">
                 <FluentButton Appearance="ButtonAppearance.Transparent" OnClick="@(() => OnViewDetailsAsync(context))">View</FluentButton>
-            </TemplateColumn>
+            </AspireTemplateColumn>
         </ChildContent>
         <EmptyContent>
             <FluentIcon Icon="Icons.Regular.Size24.ChartMultiple" Color="Color.Primary" />&nbsp;@Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]

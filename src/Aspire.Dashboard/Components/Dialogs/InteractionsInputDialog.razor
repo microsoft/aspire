@@ -72,7 +72,7 @@
                                         {
                                             <FluentButton Appearance="ButtonAppearance.Transparent"
                                                           IconOnly="true"
-                                                          Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                                          data-tooltip="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])" aria-label="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
                                                           OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
                                                           Class="aspire-icon-button secret-text-toggle-button">
                                                 <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" Color="Color.Primary" />
@@ -104,11 +104,14 @@
                                                   Items="input.ViewModel.SelectOptions"
                                                   OptionValue="@((SelectViewModel<string>? vm) => vm?.Id)"
                                                   OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
-                                                  OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                   Height="250px"
                                                   Position="SelectPosition.Below"
                                                   Disabled="input.ViewModel.InputDisabled"
                                                   aria-describedby="@input.DescriptionId">
+                                        <OptionTemplate Context="optionContext">
+                                            <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(optionContext.Name)"></span>
+                                            @optionContext.Name
+                                        </OptionTemplate>
                                     </FluentSelect>
                                 }
                                 else
@@ -135,7 +138,6 @@
                                                             Required="input.ViewModel.Input.Required"
                                                             Items="@input.ViewModel.FilteredOptions()"
                                                             OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
-                                                            OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                             Height="250px"
                                                             Position="SelectPosition.Below"
                                                             Disabled="input.ViewModel.InputDisabled"
@@ -146,6 +148,7 @@
                                                     <FreeOptionOutput />
                                                 </FreeOption>
                                                 <OptionTemplate Context="optionContext">
+                                                    <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(optionContext.Name)"></span>
                                                     <FluentHighlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />
                                                 </OptionTemplate>
                                             </FluentCombobox>

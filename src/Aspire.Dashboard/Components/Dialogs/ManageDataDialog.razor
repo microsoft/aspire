@@ -21,7 +21,7 @@
                     ItemKey="@(item => GetItemKey(item))"
                     Class="enable-row-click aspire-spaced-grid">
         <ChildContent>
-            <TemplateColumn Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
+            <AspireTemplateColumn Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]">
                 <HeaderCellItemTemplate>
                     @{
                         var headerSelectionLabel = GetHeaderSelectionLabel();
@@ -97,8 +97,8 @@
                         }
                     </span>
                 </ChildContent>
-            </TemplateColumn>
-            <TemplateColumn Title="@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]">
+            </AspireTemplateColumn>
+            <AspireTemplateColumn Title="@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]">
                 @if (context.IsResourceRow && context.ResourceRow is not null)
                 {
                     @if (context.ResourceRow.TelemetryData.Count == 0)
@@ -113,7 +113,7 @@
                                 <FluentButton Appearance="ButtonAppearance.Transparent"
                                               IconOnly="true"
                                               OnClick="@(() => NavigateToDataPage(dataRow))"
-                                              Title="@GetDataTypeDisplayName(dataRow.DataType)"
+                                              data-tooltip="@GetDataTypeDisplayName(dataRow.DataType)"
                                               aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
                                               Style="margin-right: 4px;">
                                     <FluentIcon Value="@dataRow.Icon" Color="Color.Primary" />
@@ -122,7 +122,7 @@
                         </span>
                     }
                 }
-            </TemplateColumn>
+            </AspireTemplateColumn>
         </ChildContent>
         <EmptyContent>
             <FluentIcon Icon="Icons.Regular.Size24.AppGeneric" Color="Color.Primary" />&nbsp;@Loc[nameof(Dialogs.ManageDataNoResources)]
@@ -136,7 +136,7 @@
                       Loading="@_isExporting"
                       IconStart="@(new Icons.Regular.Size16.ArrowDownload().WithColor(Color.Primary))"
                       Disabled="@AreNoneExportableSelected()"
-                      Title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
+                      data-tooltip="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
                       aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
             @Loc[nameof(Dialogs.ManageDataExportButtonText)]
         </FluentButton>
@@ -144,7 +144,7 @@
                       Loading="@_isRemoving"
                       IconStart="@(new Icons.Regular.Size16.Delete().WithColor(Color.Primary))"
                       Disabled="@(TelemetryRepository.IsReadOnly || AreNoneSelected())"
-                      Title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
+                      data-tooltip="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
                       aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
             @Loc[nameof(Dialogs.ManageDataRemoveButtonText)]
         </FluentButton>
@@ -163,7 +163,7 @@
             <FluentButton Class="aspire-button" Id="import-button"
                           Loading="@_isImporting"
                           IconStart="@(new Icons.Regular.Size16.ArrowUpload().WithColor(Color.Primary))"
-                          Title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
+                          data-tooltip="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
                           aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
                 @Loc[nameof(Dialogs.SettingsImportButtonText)]
             </FluentButton>

@@ -24,15 +24,15 @@
         GridTemplateColumns="@string.Join(" ", Enumerable.Repeat("1fr", columnCount))"
         ItemKey="@(item => item.DateTime)">
         <ChildContent>
-            <TemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableStartColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.DateTime), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
+            <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableStartColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, TimeProvider.ToLocal(context.DateTime), MillisecondsDisplay.None, CultureInfo.CurrentCulture))" Tooltip="true">
                 @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, TimeProvider.ToLocal(context.DateTime))
-            </TemplateColumn>
+            </AspireTemplateColumn>
 
             @if (ShowPercentiles())
             {
                 foreach (var (percentile, underlineColor) in percentileColumns)
                 {
-                    <TemplateColumn Title="@((_metricsView.FirstOrDefault() as HistogramMetricView)?.Percentiles[percentile].Name ?? (_instrument is not null ? $"P{percentile} {InstrumentUnitResolver.ResolveDisplayedUnit(_instrument, titleCase: true, pluralize: true)}" : $"P{percentile}"))">
+                    <AspireTemplateColumn Title="@((_metricsView.FirstOrDefault() as HistogramMetricView)?.Percentiles[percentile].Name ?? (_instrument is not null ? $"P{percentile} {InstrumentUnitResolver.ResolveDisplayedUnit(_instrument, titleCase: true, pluralize: true)}" : $"P{percentile}"))">
                         @if (context is HistogramMetricView histogramMetric)
                         {
                             var percentileData = histogramMetric.Percentiles[percentile];
@@ -43,16 +43,16 @@
 
                             if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, title))
                             {
-                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
+                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" data-tooltip="@title" aria-label="@title" Color="Color.Primary"/>
                             }
                         }
-                    </TemplateColumn>
+                    </AspireTemplateColumn>
                 }
             }
             else if (_metrics.Values.All(value => value is MetricValueView))
             {
                 <!-- if we're switching between grid types, this could be false -->
-                <TemplateColumn Title="@_unitColumnHeader">
+                <AspireTemplateColumn Title="@_unitColumnHeader">
                     @{
                         var metricValueView = context as MetricValueView;
                     }
@@ -70,14 +70,14 @@
                         <span style="margin-right: 4px;">@metricValueView.Value</span>
                         if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, title))
                         {
-                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title" Color="Color.Primary"/>
+                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" data-tooltip="@title" aria-label="@title" Color="Color.Primary"/>
                         }
                     }
-                </TemplateColumn>
+                </AspireTemplateColumn>
             }
             @if (_exemplars.Count > 0)
             {
-                <TemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableExemplarsColumnHeader)]">
+                <AspireTemplateColumn Title="@Loc[nameof(ControlsStrings.MetricTableExemplarsColumnHeader)]">
                     @if (context.Exemplars.Count > 0)
                     {
                         @* min-width ensures a consistent button width up to 999 metrics *@
@@ -90,7 +90,7 @@
                     {
                         <span>0</span>
                     }
-                </TemplateColumn>
+                </AspireTemplateColumn>
             }
         </ChildContent>
         <EmptyContent>

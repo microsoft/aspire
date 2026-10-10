@@ -100,7 +100,7 @@
         @foreach (var command in _highlightedCommands)
         {
             <FluentButton Appearance="ButtonAppearance.Default"
-                          Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
+                          data-tooltip="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
                           Disabled="@(DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                           OnClick="@(() => ExecuteResourceCommandAsync(command))"
                           Class="highlighted-command toolbar-button">
@@ -127,7 +127,7 @@
                              AutoComplete="off" Immediate="true"
                              ImmediateDelay="@FluentUIExtensions.InputDelay"
                              Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                             title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                             data-tooltip="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
                 <StartTemplate>
                     <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
                 </StartTemplate>
@@ -147,7 +147,7 @@
                          ImmediateDelay="@FluentUIExtensions.InputDelay"
                          Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
                          Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
-                         title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
+                         data-tooltip="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]">
             <StartTemplate>
                 <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
             </StartTemplate>

@@ -81,7 +81,7 @@ internal static class FluentUISetupHelpers
         dataGridModule.SetupVoid("Microsoft.FluentUI.Blazor.DataGrid.EnableColumnResizing", _ => true);
 
         var gridReference = dataGridModule.SetupModule("Microsoft.FluentUI.Blazor.DataGrid.Initialize", _ => true);
-        gridReference.SetupVoid("stop", _ => true);
+        gridReference.SetupVoid("stop", _ => true).SetVoidResult();
     }
 
     public static void SetupFluentSearch(BunitContext context)

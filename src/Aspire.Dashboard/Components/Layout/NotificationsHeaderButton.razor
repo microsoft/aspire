@@ -11,7 +11,7 @@
         <AnchorContent>
             <FluentButton Class="header-button"
                           Appearance="ButtonAppearance.Default" OnClick="@HandleClick"
-                          Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
+                          data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" Style="vertical-align: bottom;" />
             </FluentButton>
         </AnchorContent>
@@ -21,7 +21,7 @@ else
 {
     <FluentButton Class="header-button"
                   Appearance="ButtonAppearance.Default" OnClick="@HandleClick"
-                  Title="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
+                  data-tooltip="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchNotifications)]">
         <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Default" />
     </FluentButton>
 }

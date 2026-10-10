@@ -1234,3 +1234,14 @@ fluent-badge.property-details-accordion-badge {
     vertical-align: text-bottom;
     margin-inline-start: var(--inline-icon-margin);
 }
+/* Text-only tooltips use the same Fluent component as rich tooltips. Preserve multiline
+   descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
+.dashboard-tooltip {
+    width: max-content;
+    overflow-wrap: anywhere;
+}
+
+/* Preserve description newlines only in content, not Fluent's shadow-template whitespace. */
+.dashboard-tooltip > span {
+    white-space: pre-wrap;
+}

@@ -368,7 +368,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.DoesNotContain(
             cut.FindAll("fluent-button"),
             element =>
-                string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) ||
+                string.Equals(element.GetAttribute("data-tooltip"), accessibleName, StringComparison.Ordinal) ||
                 string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal));
 
     private static void AssertButtonDisabled(IRenderedComponent<ManageDataDialog> cut, string accessibleName, bool expectedDisabled)
@@ -379,7 +379,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     }
 
     private static bool ElementHasAccessibleName(IElement element, string accessibleName) =>
-        string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) &&
+        string.Equals(element.GetAttribute("data-tooltip"), accessibleName, StringComparison.Ordinal) &&
         string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal);
 
     private static Task ClickSelectionCheckboxAsync(IRenderedComponent<ManageDataDialog> cut, string accessibleName, string ariaChecked) =>

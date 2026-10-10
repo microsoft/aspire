@@ -45,7 +45,7 @@ public partial class MainLayoutTests
         var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[
             isDesktop ? nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock) : nameof(Resources.TerminalStrings.TerminalTitle)].Value;
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
-        var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
+        var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[data-tooltip='{label}']";
         if (!isDesktop)
         {
             await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
@@ -113,7 +113,7 @@ public partial class MainLayoutTests
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[
             isDesktop ? nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock) : nameof(Resources.TerminalStrings.TerminalTitle)].Value;
-        var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
+        var toggleSelector = isDesktop ? $"fluent-button[aria-label='{label}']" : $"fluent-menu-item[data-tooltip='{label}']";
         if (!isDesktop)
         {
             await cut.InvokeAsync(() => cut.Find($"#{MainLayout.NavigationButtonId}").Click());
@@ -182,7 +182,7 @@ public partial class MainLayoutTests
             new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false)));
         var label = Services.GetRequiredService<IStringLocalizer<Resources.TerminalStrings>>()[
             isDesktop ? nameof(Resources.TerminalStrings.MainLayoutToggleTerminalDock) : nameof(Resources.TerminalStrings.TerminalTitle)].Value;
-        var toggleSelector = isDesktop ? $"header fluent-button[aria-label='{label}']" : $"fluent-menu-item[title='{label}']";
+        var toggleSelector = isDesktop ? $"header fluent-button[aria-label='{label}']" : $"fluent-menu-item[data-tooltip='{label}']";
         var shortcuts = Services.GetRequiredService<ShortcutManager>();
         var dock = cut.FindComponent<TerminalDock>().Instance;
         Assert.Empty(cut.FindAll(".terminal-dock"));

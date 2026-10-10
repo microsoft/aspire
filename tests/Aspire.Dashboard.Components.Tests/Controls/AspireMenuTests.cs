@@ -84,7 +84,7 @@ public class AspireMenuTests : DashboardTestContext
         Assert.NotNull(actionContainer.QuerySelector("fluent-button[aria-label='Pin run']"));
         Assert.Equal("false", pinButton.GetAttribute("aria-pressed"));
         Assert.Null(pinButton.GetAttribute("title"));
-        Assert.Equal("Pin run", menuHost.Find($"fluent-tooltip[anchor='{pinId}']").TextContent.Trim());
+        Assert.Equal("Pin run", pinButton.GetAttribute("data-tooltip"));
         var indicatorIcon = Assert.Single(menuHost.FindAll("span[slot='indicator'] svg"));
         Assert.Contains("fill: var(--colorBrandForeground1)", indicatorIcon.GetAttribute("style"), StringComparison.Ordinal);
         var secondaryActionIcon = Assert.Single(pinButton.QuerySelectorAll("svg"));
@@ -101,7 +101,7 @@ public class AspireMenuTests : DashboardTestContext
             var unpinButton = menuHost.Find("fluent-button[aria-label='Unpin run']");
             Assert.Equal(pinId, unpinButton.Id);
             Assert.Equal("true", unpinButton.GetAttribute("aria-pressed"));
-            Assert.Equal("Unpin run", menuHost.Find($"fluent-tooltip[anchor='{pinId}']").TextContent.Trim());
+            Assert.Equal("Unpin run", unpinButton.GetAttribute("data-tooltip"));
             Assert.Contains(JSInterop.Invocations, invocation =>
                 invocation.Identifier == "focusElement" && invocation.Arguments.Single() is string id && id == pinId);
         });

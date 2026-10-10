@@ -22,12 +22,16 @@
                                   Position="SelectPosition.Below"
                                   OptionText="@((SelectViewModel<string>? option) => option?.Name)"
                                   OptionDisabled="@((SelectViewModel<string>? option) => option is not null && !EnabledOptions.Contains(option.Id))"
-                                  OptionTitle="@((SelectViewModel<string> option) => option.Name)"
                                   @bind-Value="@_selectedFormat"
                                   @bind-Value:after="OnSelectedFormatChanged"
                                   AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
                                   Class="aspire-input text-visualizer-format"
-                                  Style="width: clamp(7rem, 20vw, 12rem); max-width: 100%;" />
+                                  Style="width: clamp(7rem, 20vw, 12rem); max-width: 100%;">
+                        <OptionTemplate>
+                            <span hidden data-tooltip-option="@context.Name"></span>
+                            @context.Name
+                        </OptionTemplate>
+                    </FluentSelect>
                 </div>
             }
         </div>
@@ -82,7 +86,7 @@
                     {
                         <FluentButton Class="aspire-button"
                                       OnClick="@DownloadAsync"
-                                      Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                                      data-tooltip="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
                                       aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
                                       IconStart="new Icons.Regular.Size16.ArrowDownload()">
                             @ControlsStringsLoc[nameof(ControlsStrings.Download)]
