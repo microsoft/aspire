@@ -189,7 +189,7 @@ public class BuildEnvironment
 
         string ExtractRuntimePackage(string packageId, string directory)
         {
-            var packagePath = global::Aspire.Templates.Tests.TemplatesCustomHive.GetPackagePath(BuiltNuGetsPath, $"{packageId}.{RuntimeInformation.RuntimeIdentifier}.");
+            var packagePath = global::Aspire.Templates.Tests.TemplatesCustomHive.GetPackagePath(BuiltNuGetsPath, $"{packageId}.{RuntimeInformation.RuntimeIdentifier}");
             var destination = Path.Combine(runtimeRoot, directory);
             ZipFile.ExtractToDirectory(packagePath, destination);
             return destination;

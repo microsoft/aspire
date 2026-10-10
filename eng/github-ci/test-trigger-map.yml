@@ -499,6 +499,10 @@ path_rules:
     targets: [job:cli-starter-validation]
     reason: package construction and template content consumed by the C# starter validation scenario
   - paths:
+      - src/Aspire.Hosting.Dotnet/**
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Aspire.Templates.Tests, job:cli-starter-validation]
+    reason: runtime-only Dotnet dependency in generated C# AppHosts, including when project-graph analysis is unavailable
+  - paths:
       - playground/**
     targets: [test:Aspire.Playground.Tests]
     reason: Aspire.Playground.Tests builds/runs apps under playground/
