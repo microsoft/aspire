@@ -2,11 +2,14 @@
 
 Registers the [Azure SDK's `ProjectOpenAIClient`](https://github.com/Azure/azure-sdk-for-net/tree/main/sdk/ai/Azure.AI.Extensions.OpenAI) and its `OpenAIClient` alias in the DI container as singletons, with Foundry project configuration, Microsoft Entra authentication, and Microsoft.Extensions.AI telemetry.
 
+Also registers the standard OpenAI SDK's `OpenAIClient` for Azure OpenAI account endpoints,
+with Microsoft Entra or API-key authentication and the same chat/embedding helpers.
+
 ## Getting started
 
 ### Prerequisites
 
-An [Azure subscription](https://azure.microsoft.com/free/), a Microsoft Foundry project, a deployed model or agent, and a Microsoft Entra identity authorized to invoke it. The endpoint must identify the project, for example `https://account.services.ai.azure.com/api/projects/project`. API-key connections, Azure OpenAI account endpoints, and Foundry Local endpoints are not project endpoints.
+An [Azure subscription](https://azure.microsoft.com/free/) and a Microsoft Entra identity authorized to invoke a deployed model or agent, or an API key for account-based access. Use `AddAzureProjectOpenAIClient` for a Foundry project endpoint, or `AddAzureOpenAIClient` for an Azure OpenAI account. Project clients do not accept API keys or account/Foundry Local endpoints.
 
 ### Install the package
 
@@ -131,6 +134,63 @@ builder.AddAzureProjectOpenAIClient("ai",
 
 Without an explicit credential, Aspire uses a development credential locally and managed identity in Azure. API-key connection strings are rejected.
 
+## Azure OpenAI account clients
+
+For an Azure OpenAI account, keep the existing chat-registration pattern:
+
+```csharp
+builder.AddAzureOpenAIClient("chat").AddChatClient();
+```
+
+```json
+{
+  "ConnectionStrings": {
+    "chat": "Endpoint=https://account.openai.azure.com/;Deployment=chat"
+  }
+}
+```
+
+The account endpoint is normalized to `/openai/v1/`. An existing HTTPS v1 endpoint is also
+accepted; project endpoints and legacy deployment-specific routes are rejected.
+Resolve `OpenAI.OpenAIClient` or `IChatClient`, not `Azure.AI.OpenAI.AzureOpenAIClient`.
+
+Without a key, the registration uses Microsoft Entra authentication and Aspire's default
+Azure credential selection. Supply a custom credential through `configureSettings` or
+`configureClientBuilder.WithCredential`. The default token scope is
+`https://ai.azure.com/.default`; set `TokenScope` for other Azure cloud audiences.
+A `Key` connection-string field or settings property selects API-key authentication instead.
+
+```csharp
+builder.AddAzureOpenAIClient("chat",
+    configureSettings: settings =>
+    {
+        settings.Credential = new AzureCliCredential();
+    },
+    configureClientBuilder: client => client.ConfigureOptions(options =>
+    {
+        options.NetworkTimeout = TimeSpan.FromSeconds(60);
+    }))
+    .AddChatClient();
+
+builder.AddKeyedAzureOpenAIClient("other-account")
+    .AddKeyedChatClient("other-chat", "deployment");
+```
+
+Account settings use `Aspire:Azure:AI:OpenAI` and its connection-specific subsection, followed
+by the connection string and `configureSettings`. Root/named `ClientOptions` and the client
+callback customize `OpenAIClientOptions`. `DisableTracing`, `DisableMetrics`, and
+`EnableSensitiveTelemetryData` have the same meaning as for project clients.
+Use distinct service keys when registering multiple account/project clients.
+
+In the AppHost, use `Aspire.Hosting.Azure.CognitiveServices` and keep the deployment reference:
+
+```csharp
+var chat = builder.AddAzureOpenAI("openai")
+    .AddDeployment("chat", "gpt-4o", "2024-05-13");
+
+builder.AddProject<Projects.MyApp>("app").WithReference(chat);
+```
+
 ## AppHost extensions
 
 Install `Aspire.Hosting.Foundry` in the AppHost:
@@ -168,11 +228,25 @@ No health check is registered: the integration does not make billable inference 
 
 For a Foundry project, replace the old package with this package, replace `AddAzureOpenAIClient` or `AddAzureChatCompletionsClient` with `AddAzureProjectOpenAIClient`, and provide the **project endpoint**, not the old account/inference endpoint. Replace API-key authentication with Microsoft Entra credentials and grant the runtime identity the permissions it needs.
 
-Existing `AddChatClient` and `AddEmbeddingGenerator` helpers can be used with the new builder. SDK consumers must replace `AzureOpenAIClient`, `ChatCompletionsClient`, or `EmbeddingsClient` with `ProjectOpenAIClient` or its OpenAI model clients. Inference SDK request/response types are not interchangeable with the OpenAI SDK types.
+For Azure OpenAI accounts, replace the old package with this package and keep
+`AddAzureOpenAIClient` / `AddKeyedAzureOpenAIClient` and the existing chat/embedding helpers.
+The registration now uses the standard OpenAI SDK and v1 routes, while preserving Entra
+authentication and account connection strings. Settings/builder types now live in
+`Aspire.Azure.AI.Extensions.OpenAI`; client-options callbacks use `OpenAIClientOptions`
+instead of `AzureOpenAIClientOptions`. This is registration-pattern compatibility, not
+binary compatibility with the retired package.
 
-`AddOpenAIClientFromConfiguration` and its keyed counterpart are not carried forward. Select the registration explicitly: `AddOpenAIClient` for OpenAI-compatible API-key endpoints, or `AddAzureProjectOpenAIClient` for Foundry projects.
+SDK consumers must replace `AzureOpenAIClient`, `ChatCompletionsClient`, or `EmbeddingsClient`
+with `OpenAIClient` for account access, or `ProjectOpenAIClient` for project access.
+Inference SDK request/response types are not interchangeable with the OpenAI SDK types.
 
-For Foundry Local, use `Aspire.OpenAI` with the connection supplied by `RunAsFoundryLocal`. For an existing Azure OpenAI account that is not a Foundry project, continue using the native `Azure.AI.OpenAI` SDK, or migrate to the OpenAI-compatible v1 API with appropriate authentication; do not pass the account endpoint to a project client. See [Azure's inference migration guide](https://learn.microsoft.com/azure/foundry/how-to/model-inference-to-openai-migration?tabs=openai).
+`AddOpenAIClientFromConfiguration` and its keyed counterpart are not carried forward.
+Select explicitly: `AddOpenAIClient` for generic API-key endpoints, `AddAzureOpenAIClient`
+for Azure OpenAI accounts, or `AddAzureProjectOpenAIClient` for Foundry projects.
+
+For Foundry Local, use `Aspire.OpenAI` with the connection supplied by `RunAsFoundryLocal`.
+See [Azure's OpenAI SDK migration guide](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/openai/Azure.AI.OpenAI/migration-guidance.md)
+for v1 API differences and scenario-specific limitations.
 
 For project and agent-management operations rather than inference, use `Aspire.Azure.AI.Projects` and `AddAzureAIProjectClient`.
 

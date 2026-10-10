@@ -21,6 +21,8 @@ using Xunit;
 
 namespace Aspire.Azure.AI.Extensions.OpenAI.Tests;
 
+// MEAI meters are process-wide; do not overlap export assertions from different test classes.
+[Collection("OpenAI telemetry")]
 public class AspireAzureProjectOpenAIExtensionsTests
 {
     private const string Endpoint = "https://test.services.ai.azure.com/api/projects/test";

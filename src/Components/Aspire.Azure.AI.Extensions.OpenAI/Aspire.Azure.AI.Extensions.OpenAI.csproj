@@ -3,7 +3,7 @@
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <PackageTags>$(ComponentAzurePackageTags) ai foundry openai projects</PackageTags>
-    <Description>Registers an Azure AI Project OpenAI client with Aspire configuration, dependency injection and telemetry.</Description>
+    <Description>Registers Foundry project and Azure OpenAI account clients with Aspire configuration, Microsoft Entra authentication and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)AzureOpenAI_256x.png</PackageIconFullPath>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101;OPENAI001</NoWarn>

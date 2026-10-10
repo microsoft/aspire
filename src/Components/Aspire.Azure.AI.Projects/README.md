@@ -138,7 +138,7 @@ No metrics or health check is registered. The integration does not perform infer
 
 `Aspire.Azure.AI.OpenAI` and `Aspire.Azure.AI.Inference` are no longer produced. Previously published versions remain available; this change does not uninstall them or retire the hosting integrations. See [microsoft/aspire#20401](https://github.com/microsoft/aspire/issues/20401).
 
-Use this package for project and agent-management operations. For model clients, chat, embeddings, or Responses, use `Aspire.Azure.AI.Extensions.OpenAI`; its README describes the endpoint, authentication, and API migration. These project integrations are not drop-in replacements for account-level API-key connections or Foundry Local.
+Use this package for project and agent-management operations. For model clients, chat, embeddings, or Responses, use `Aspire.Azure.AI.Extensions.OpenAI`; its README describes the endpoint, authentication, and API migration. That package also offers `AddAzureOpenAIClient` for Azure OpenAI accounts with Entra or API-key authentication. Foundry Local continues using `Aspire.OpenAI`.
 
 ## Additional documentation
 
