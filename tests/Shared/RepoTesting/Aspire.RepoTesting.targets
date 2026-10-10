@@ -200,6 +200,8 @@
     Disable validation of Aspire Host project resources to avoid loading the Aspire.Hosting.Tasks assembly.
     -->
     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
+    <!-- Test executables run MTP, not the AppHost CLI hook, including metadata-only CI enumeration. -->
+    <_AspireSuppressCliRunHook Condition="'$(IsTestProject)' == 'true'">true</_AspireSuppressCliRunHook>
     <!-- Source imports bypass the package version substitution used by CLI pairing. -->
     <_AspireAppHostPackageVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</_AspireAppHostPackageVersion>
   </PropertyGroup>

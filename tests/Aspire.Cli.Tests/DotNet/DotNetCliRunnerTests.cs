@@ -2039,8 +2039,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", capturedEnv[KnownConfigNames.SuppressCliRunHook]);
     }
 
-    [Fact]
-    public async Task GetAppHostInformationAsync_UsesAspireHostingAppHostPackageVersion()
+    [Theory]
+    [InlineData("true", true)]
+    [InlineData("", true)]
+    [InlineData("false", false)]
+    public async Task GetAppHostInformationAsync_UsesAspireHostingAppHostPackageVersion(string hostProperty, bool expectedHost)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -2056,11 +2059,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, _, _, invocationOptions) =>
             {
                 Assert.Contains("-getItem:PackageReference,AspireProjectOrPackageReference,PackageVersion", args);
-                invocationOptions.StandardOutputCallback?.Invoke("""
+                invocationOptions.StandardOutputCallback?.Invoke($$"""
                     {
                       "Properties": {
                         "MSBuildVersion": "17.0.0",
-                        "IsAspireHost": "true"
+                        "IsAspireHost": "{{hostProperty}}"
                       },
                       "Items": {
                         "PackageReference": [
@@ -2078,8 +2081,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var result = await runner.GetAppHostInformationAsync(projectFile, new ProcessInvocationOptions(), CancellationToken.None);
 
         Assert.Equal(0, result.ExitCode);
-        Assert.True(result.IsAspireHost);
-        Assert.Equal("13.0.0", result.AspireHostingVersion);
+        Assert.Equal(expectedHost, result.IsAspireHost);
+        Assert.Equal(expectedHost ? "13.0.0" : null, result.AspireHostingVersion);
     }
 
     [Fact]
