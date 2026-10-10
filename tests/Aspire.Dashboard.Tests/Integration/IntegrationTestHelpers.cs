@@ -3,6 +3,7 @@
 
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Grpc.Core;
 using Grpc.Net.Client;
@@ -15,6 +16,7 @@ using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+using OpenTelemetry.Logs;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration;
@@ -58,6 +60,7 @@ public static class IntegrationTestHelpers
 
         var initialData = new Dictionary<string, string?>
         {
+            [DashboardTelemetryService.TelemetryOptOutConfigKey] = "true",
             [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
             [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
             [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
@@ -78,12 +81,18 @@ public static class IntegrationTestHelpers
         {
             preConfigureBuilder?.Invoke(builder);
 
-            // Clear log filter rules by default so all logs are available in test output.
+            // Enable all local diagnostics without removing the product export restriction.
             if (clearLogFilterRules.Value)
             {
                 builder.Services.PostConfigure<LoggerFilterOptions>(o =>
                 {
-                    o.Rules.Clear();
+                    for (var i = o.Rules.Count - 1; i >= 0; i--)
+                    {
+                        if (o.Rules[i].ProviderName != typeof(OpenTelemetryLoggerProvider).FullName)
+                        {
+                            o.Rules.RemoveAt(i);
+                        }
+                    }
                 });
             }
 

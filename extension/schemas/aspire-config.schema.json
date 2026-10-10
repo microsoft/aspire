@@ -88,6 +88,22 @@
           "description": "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
           "default": false
         },
+        "experimentalHostingIntegrations": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          ],
+          "description": "Enable experimental hosting integrations authored outside .NET",
+          "default": false
+        },
         "experimentalPolyglotGo": {
           "anyOf": [
             {
@@ -252,10 +268,62 @@
       "additionalProperties": false
     },
     "packages": {
-      "description": "Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.",
+      "description": "Package references for the AppHost. Value is either a string (NuGet, short form — empty = SDK version, otherwise explicit version) or an object with a required \"source\" discriminator (\"nuget\", \"project\", or \"npm\") and per-source fields (version for nuget, path for project/npm).",
       "type": "object",
       "additionalProperties": {
-        "type": "string"
+        "anyOf": [
+          {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "enum": [
+                  "nuget",
+                  "project",
+                  "npm"
+                ]
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "source"
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "project",
+                        "npm"
+                      ]
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            ],
+            "additionalProperties": false
+          }
+        ]
       }
     },
     "profiles": {

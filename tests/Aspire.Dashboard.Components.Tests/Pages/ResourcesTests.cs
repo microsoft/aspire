@@ -17,6 +17,8 @@ using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Serialization;
+using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
@@ -39,6 +41,56 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(Components.Pages.Resources.ResourceViewKind.Graph)]
+    [InlineData(Components.Pages.Resources.ResourceViewKind.Parameters)]
+    public async Task Resources_TelemetryRecordsSelectedView(Components.Pages.Resources.ResourceViewKind viewKind)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources:
+        [
+            CreateResource("private-resource-a", "private-type-a", "Running", null),
+            CreateResource("private-resource-b", "private-type-b", "Running", null)
+        ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        using var fixture = new DashboardTelemetryFixture();
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        await cut.InvokeAsync(() => cut.Instance.TelemetryContext.Initialize(fixture.Telemetry, browserUserAgent: null));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var initializeLog));
+        Assert.Equal(TelemetryEventKeys.ComponentInitialize, initializeLog.Message);
+
+        using var activity = fixture.Telemetry.StartReportedActivity("resources");
+        Assert.NotNull(activity);
+        await cut.InvokeAsync(() =>
+        {
+            cut.Instance.PageViewModel.SelectedViewKind = viewKind;
+            cut.Instance.UpdateTelemetryProperties();
+        });
+
+        var expectedView = viewKind.ToString();
+        Assert.Collection(cut.Instance.TelemetryContext.Properties.OrderBy(p => p.Key, StringComparer.Ordinal),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardComponentId, property.Key),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardComponentType, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, AspireTelemetryProperty>(TelemetryPropertyKeys.ResourceView,
+                new AspireTelemetryProperty(expectedView, AspireTelemetryPropertyType.UserSetting)), property));
+        Assert.True(fixture.LogChannel.Reader.TryRead(out var log));
+        Assert.Equal(TelemetryEventKeys.ParametersSet, log.Message);
+        Assert.Collection(log.Attributes.OrderBy(p => p.Key, StringComparer.Ordinal),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardBuildId, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentId, TelemetryComponentIds.Resources), property),
+            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.DashboardComponentType, nameof(Components.Pages.ComponentType.Page)), property),
+            property => Assert.Equal(new KeyValuePair<string, object?>(TelemetryPropertyKeys.ResourceView, expectedView), property),
+            property => Assert.Equal(TelemetryPropertyKeys.DashboardVersion, property.Key),
+            property => Assert.Equal(new KeyValuePair<string, object?>("microsoft.operation_name", TelemetryEventKeys.ParametersSet), property),
+            property => Assert.Equal(new KeyValuePair<string, object?>("{OriginalFormat}", TelemetryEventKeys.ParametersSet), property));
+        Assert.Equal(activity.TraceId, log.TraceId);
+        Assert.Equal(activity.SpanId, log.SpanId);
+        Assert.Empty(activity.Events);
+        await cut.InvokeAsync(cut.Instance.UpdateTelemetryProperties);
+        Assert.False(fixture.LogChannel.Reader.TryPeek(out _));
+        cut.Dispose();
+    }
+
     [Fact]
     public void ResourceOptions_SelectionChanges_UpdateAllCheckboxState()
     {
@@ -482,6 +534,7 @@ public partial class ResourcesTests : DashboardTestContext
 
         var dialog = Assert.Single(dialogs);
         Assert.Equal("resources.mmd", dialog.DownloadFileName);
+        Assert.Equal(Aspire.Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription, dialog.MarkdownDescription);
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.FixedFormat);
         Assert.False(dialog.ContainsSecret);
         Assert.Empty(JSInterop.Invocations["downloadStreamAsFile"]);

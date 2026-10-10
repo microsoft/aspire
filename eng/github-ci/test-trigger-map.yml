@@ -212,9 +212,10 @@ path_rules:
   # the blast radius is not precise enough, keep the conservative full-matrix target.
   - paths:
       - .github/actions/check-changed-files/**
+      - .github/actions/create-pull-request/**
       - .github/actions/select-tests/**
     targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates the changed-file gate and selector action behavior
+    reason: Infrastructure.Tests validates these composite actions' behavior
   - paths:
       - .github/actions/enumerate-tests/**
     targets: [DOTNET_TESTS]
@@ -273,10 +274,19 @@ path_rules:
   # narrow sub-paths, non-compiled baselines) remain here.
   - paths:
       - tests/PolyglotAppHosts/**
+      - playground/TsIntegrationSpike/**
+      - playground/TsKafkaLib/**
+      - playground/NuxtApp/**
+      - src/Aspire.Hosting.Nuxt/**
       - .github/workflows/polyglot-validation/**
       - .github/workflows/polyglot-validation.yml
     targets: [job:polyglot]
-    reason: polyglot fixtures + workflow; the typesystem/SDK/CLI/codegen production projects are in affected_project_rules
+    reason: polyglot fixtures, TypeScript integration playgrounds, and validation workflow inputs
+  - paths:
+      - playground/TsIntegrationSpike/kafka-integration/host-runtime.ts
+      - src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/**
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: integration-host lifetime E2Es consume the copied fixture and generated TypeScript runtime
   - paths:
       - src/Aspire.Hosting.Blazor/Aspire.Hosting.Blazor.csproj
       - src/Aspire.Hosting.Blazor/BlazorGatewayExtensions.cs
@@ -287,10 +297,15 @@ path_rules:
     reason: Blazor gateway runtime assets must work from both MSBuild output and package-loaded polyglot AppHosts
   - paths:
       - tests/Aspire.Hosting.CodeGeneration.TypeScript.JsTests/**
+      - playground/TsIntegrationSpike/deno-api/**
+      - playground/TsIntegrationSpike/deno-integration/**
+      - playground/TsIntegrationSpike/kafka-integration/**
+      - playground/NuxtApp/verify.mjs
+      - src/Aspire.Hosting.Nuxt/**
       - src/Aspire.Cli/Templating/Templates/ts-starter/**
       - .github/workflows/typescript-sdk-tests.yml
     targets: [job:typescript-sdk]
-    reason: vitest over generated TS SDK; ts-starter is a narrow sub-path of Aspire.Cli, not the whole project
+    reason: vitest over the TS SDK, integration-host playgrounds, and ts-starter configuration
   - paths:
       - src/**/*.tscompat.suppression.txt
       - tools/TypeScriptApiCompat/**
@@ -509,6 +524,7 @@ path_rules:
   - paths:
       - .github/workflows/**
       - .github/actionlint.yaml
+      - .github/actionlint-version.json
       - eng/pipelines/**
       - eng/Signing.props
       - eng/Publishing.props

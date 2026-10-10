@@ -417,6 +417,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             DialogService = DialogService,
             ValueDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)],
+            MarkdownDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription)],
             // Map the current model even while the graph's asynchronous initialization is pending.
             Value = ResourceGraphMermaidExporter.Export(GetResourceGraphResources()),
             DownloadFileName = "resources.mmd",
@@ -1035,8 +1036,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         var properties = new List<ComponentTelemetryProperty>
         {
-            new(TelemetryPropertyKeys.ResourceView, new AspireTelemetryProperty(PageViewModel.SelectedViewKind.ToString(), AspireTelemetryPropertyType.UserSetting)),
-            new(TelemetryPropertyKeys.ResourceTypes, new AspireTelemetryProperty(_resourceByName.Values.Select(r => TelemetryPropertyValues.GetResourceTypeTelemetryValue(r.ResourceType, r.SupportsDetailedTelemetry)).OrderBy(t => t).ToList()))
+            new(TelemetryPropertyKeys.ResourceView, new AspireTelemetryProperty(PageViewModel.SelectedViewKind.ToString(), AspireTelemetryPropertyType.UserSetting))
         };
 
         TelemetryContext.UpdateTelemetryProperties(properties.ToArray(), Logger);

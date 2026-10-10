@@ -302,16 +302,17 @@ public sealed class ExtensionWorkflowTests
     {
         var results = Mapping(s_ciJobs, "results");
         Assert.Equal(
-            ["prepare_for_ci", "tests", "stabilization_check"],
+            ["actionlint", "prepare_for_ci", "tests", "stabilization_check"],
             SequenceScalars(results, "needs"));
 
         var failureStep = Assert.Single(Steps(results), step => Scalar(step, "name") == "Fail if any of the dependent jobs failed");
         Assert.Equal(
-            "${{ always() && needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
+            "${{ always() && (needs.actionlint.result != 'success' || " +
+            "(needs.prepare_for_ci.outputs.skip_workflow != 'true' && " +
             "(contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || " +
             "needs.tests.result != 'success' || " +
             "(needs.prepare_for_ci.outputs.STABILIZATION_ENABLED == 'true' && " +
-            "github.event_name == 'pull_request' && needs.stabilization_check.result != 'success')) }}",
+            "github.event_name == 'pull_request' && needs.stabilization_check.result != 'success')))) }}",
             CollapseWhitespace(Scalar(failureStep, "if")));
     }
 
@@ -320,7 +321,7 @@ public sealed class ExtensionWorkflowTests
     {
         var tracker = Mapping(s_ciJobs, "ci_failure_tracker");
 
-        Assert.Equal(["prepare_for_ci", "tests", "stabilization_check"], SequenceScalars(tracker, "needs"));
+        Assert.Equal(["actionlint", "prepare_for_ci", "tests", "stabilization_check"], SequenceScalars(tracker, "needs"));
         Assert.Equal(
             "${{ always() && github.event_name == 'push' && github.repository_owner == 'microsoft' }}",
             Scalar(tracker, "if"));
@@ -329,7 +330,8 @@ public sealed class ExtensionWorkflowTests
         var environment = Mapping(scriptStep, "env");
         Assert.Equal("${{ contains(needs.*.result, 'failure') }}", Scalar(environment, "CI_RED"));
         Assert.Equal(
-            "${{ needs.prepare_for_ci.result == 'success' && needs.tests.result == 'success' }}",
+            "${{ needs.actionlint.result == 'success' && needs.prepare_for_ci.result == 'success' && " +
+            "needs.tests.result == 'success' }}",
             CollapseWhitespace(Scalar(environment, "CI_GREEN")));
     }
 

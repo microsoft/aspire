@@ -16,7 +16,7 @@ It is a consumer of the shared, repo-agnostic tracking-issue engine
 ([`tracking-issue.js`](../../.github/workflows/tracking-issue.js)), alongside the
 [scheduled-workflow scanner](monitor-scheduled-workflows.md), the
 [specialized-test failure reporter](specialized-test-failure-issues.md), and the
-[nightly-pipeline failure reporter](pipeline-failure-issues.md).
+[scheduled-pipeline failure reporter](pipeline-failure-issues.md).
 
 ## Push only — PR failures are excluded
 

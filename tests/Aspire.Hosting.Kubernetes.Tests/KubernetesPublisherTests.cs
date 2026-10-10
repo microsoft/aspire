@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -317,7 +316,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder.AddKubernetesEnvironment("env");
 
         // Add a container to the application
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var api = builder
             .AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
@@ -330,7 +328,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithHttpsEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         var app = builder.Build();
 
@@ -977,11 +974,9 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("k8s");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder.AddContainer("api", "questdb/questdb:9.4.1")
             .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
             .WithHttpProbe(ProbeType.Readiness, "/ready");
-#pragma warning restore ASPIREPROBES001
 
         var app = builder.Build();
         app.Run();

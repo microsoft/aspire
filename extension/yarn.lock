@@ -5105,9 +5105,9 @@ process-nextick-args@^2.0.0, process-nextick-args@~2.0.0:
   integrity sha1-eCDZsWEgzFXKmud5JoCufbptf+I=
 
 proxy-addr@^2.0.7:
-  version "2.0.7"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/proxy-addr/-/proxy-addr-2.0.7.tgz"
-  integrity sha1-8Z/mnOqzEe65S0LnDowgcPm6ECU=
+  version "2.0.8"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/proxy-addr/-/proxy-addr-2.0.8.tgz#624e760fd8ab06b1b8320c2f8506d4422cf8e932"
+  integrity sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==
   dependencies:
     forwarded "0.2.0"
     ipaddr.js "1.9.1"
@@ -5685,9 +5685,9 @@ slice-ansi@^4.0.0:
     is-fullwidth-code-point "^3.0.0"
 
 source-map-js@^1.2.1:
-  version "1.2.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/source-map-js/-/source-map-js-1.2.1.tgz"
-  integrity sha1-HOVlD93YerwJnto33P8CTCZnrkY=
+  version "1.2.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/source-map-js/-/source-map-js-1.2.2.tgz#79fb88d97535a21cb27162cb05d211b67acea4ab"
+  integrity sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==
 
 source-map-resolve@^0.6.0:
   version "0.6.0"

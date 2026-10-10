@@ -11,6 +11,7 @@
 namespace Aspire.Dashboard.Resources {
     using System;
 
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -18,7 +19,7 @@ namespace Aspire.Dashboard.Resources {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "17.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "18.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Resources {
@@ -56,6 +57,33 @@ namespace Aspire.Dashboard.Resources {
             }
             set {
                 resourceCulture = value;
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (just now).
+        /// </summary>
+        public static string HealthCheckStatusJustNowFormat {
+            get {
+                return ResourceManager.GetString("HealthCheckStatusJustNowFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} ({1} ago).
+        /// </summary>
+        public static string HealthCheckStatusWithTimeFormat {
+            get {
+                return ResourceManager.GetString("HealthCheckStatusWithTimeFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (last run at {1}).
+        /// </summary>
+        public static string HealthCheckStatusWithTimeTooltipFormat {
+            get {
+                return ResourceManager.GetString("HealthCheckStatusWithTimeTooltipFormat", resourceCulture);
             }
         }
 
@@ -132,20 +160,20 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
-        /// </summary>
-        public static string ResourceCommandCanceled {
-            get {
-                return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Cancel.
         /// </summary>
         public static string ResourceCommandCancel {
             get {
                 return ResourceManager.GetString("ResourceCommandCancel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
+        /// </summary>
+        public static string ResourceCommandCanceled {
+            get {
+                return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
             }
         }
 
@@ -227,33 +255,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceFilterOptionEmpty {
             get {
                 return ResourceManager.GetString("ResourceFilterOptionEmpty", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} ({1} ago).
-        /// </summary>
-        public static string HealthCheckStatusWithTimeFormat {
-            get {
-                return ResourceManager.GetString("HealthCheckStatusWithTimeFormat", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} (just now).
-        /// </summary>
-        public static string HealthCheckStatusJustNowFormat {
-            get {
-                return ResourceManager.GetString("HealthCheckStatusJustNowFormat", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to {0} (last run at {1}).
-        /// </summary>
-        public static string HealthCheckStatusWithTimeTooltipFormat {
-            get {
-                return ResourceManager.GetString("HealthCheckStatusWithTimeTooltipFormat", resourceCulture);
             }
         }
 
@@ -411,20 +412,20 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project path.
-        /// </summary>
-        public static string ResourcesDetailsProjectPathProperty {
-            get {
-                return ResourceManager.GetString("ResourcesDetailsProjectPathProperty", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Launch profile.
         /// </summary>
         public static string ResourcesDetailsProjectLaunchProfileProperty {
             get {
                 return ResourceManager.GetString("ResourcesDetailsProjectLaunchProfileProperty", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Project path.
+        /// </summary>
+        public static string ResourcesDetailsProjectPathProperty {
+            get {
+                return ResourceManager.GetString("ResourcesDetailsProjectPathProperty", resourceCulture);
             }
         }
 
@@ -470,6 +471,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourcesGraphExportMermaidButton {
             get {
                 return ResourceManager.GetString("ResourcesGraphExportMermaidButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).
+        /// </summary>
+        public static string ResourcesGraphExportMermaidDescription {
+            get {
+                return ResourceManager.GetString("ResourcesGraphExportMermaidDescription", resourceCulture);
             }
         }
 
@@ -528,20 +538,20 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No resources found.
-        /// </summary>
-        public static string ResourcesNoResources {
-            get {
-                return ResourceManager.GetString("ResourcesNoResources", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to No parameters found.
         /// </summary>
         public static string ResourcesNoParameters {
             get {
                 return ResourceManager.GetString("ResourcesNoParameters", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No resources found.
+        /// </summary>
+        public static string ResourcesNoResources {
+            get {
+                return ResourceManager.GetString("ResourcesNoResources", resourceCulture);
             }
         }
 
@@ -636,24 +646,6 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resources&lt;/strong&gt;.
-        /// </summary>
-        public static string TotalItemsFooterPluralText {
-            get {
-                return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resource&lt;/strong&gt;.
-        /// </summary>
-        public static string TotalItemsFooterSingularText {
-            get {
-                return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;.
         /// </summary>
         public static string TotalItemsFooterParametersPluralText {
@@ -668,6 +660,24 @@ namespace Aspire.Dashboard.Resources {
         public static string TotalItemsFooterParametersSingularText {
             get {
                 return ResourceManager.GetString("TotalItemsFooterParametersSingularText", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resources&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterPluralText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resource&lt;/strong&gt;.
+        /// </summary>
+        public static string TotalItemsFooterSingularText {
+            get {
+                return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
             }
         }
 

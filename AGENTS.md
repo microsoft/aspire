@@ -130,6 +130,16 @@ When reviewing a pull request, do not request automated tests solely for visual-
 
 ### API Files and Public API Surface
 
+`Aspire.Dashboard` and `Aspire.Cli` are applications, not reusable libraries.
+Their public C# types and members are implementation details, not supported
+public APIs. Do not flag breaking changes to those types or members, require
+compatibility overloads or deprecation shims, or flag missing XML documentation.
+XML documentation is optional for application code regardless of accessibility.
+Continue reviewing compatibility of user-visible behavior and external contracts,
+such as CLI commands, options, exit codes, machine-readable output, and dashboard
+endpoints and protocols. The library API guidance below does not apply to these
+application implementation details.
+
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.
 
 When reviewing pull requests:
@@ -659,6 +669,7 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
 | `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
 | `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Aspire.Cli/**/*.cs` | `.github/instructions/cli.instructions.md` - CLI application review guidance |
 | `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |

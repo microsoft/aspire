@@ -21,7 +21,7 @@ namespace Aspire.Cli.Projects;
 /// <see cref="IAppHostServerProject.RunAsync"/>. Termination is requested either by cancelling the
 /// <c>stopRequested</c> token passed to the constructor, or by calling <see cref="DisposeAsync"/>.
 /// Both routes cancel the same internal linked CTS, which the drive loop passes to
-/// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/>; the execution runs the
+/// <see cref="Aspire.Shared.IChildProcess.WaitForExitAsync(CancellationToken)"/>; the execution runs the
 /// shared shutdown ladder (graceful signal → bounded wait → tree-kill, or force-kill fallback)
 /// from inside that call. The session itself never spawns or kills — there is exactly one shutdown
 /// driver, and it lives in <see cref="ProcessExecution"/>.
@@ -321,6 +321,14 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
         connectCts.Cancel();
         ObserveFaultedTask(connectTask);
+        // The exit task drains stdout/stderr. Surface that output even when the server
+        // died too quickly to return its startup failure through RPC.
+        var outputLines = _output?.GetLines().ToArray();
+        if (outputLines is { Length: > 0 })
+        {
+            _logger.LogError("AppHost server startup output:\n{Output}", string.Join(Environment.NewLine, outputLines.Select(line => line.Line)));
+        }
+
         var exitCode = TryGetServerExitCode();
         throw new InvalidOperationException(
             exitCode is { } code

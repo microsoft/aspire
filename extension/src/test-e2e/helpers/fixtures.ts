@@ -2,13 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
+import { getPsFollowProcessLogPath, readPsFollowProcesses, type PsFollowProcessRecord } from '../../testing/psFollowProcessLog';
 import {
     lsJsonStreamCapability,
     type ConfigInfo,
 } from '../../types/configInfo';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { VSBrowser } from './extester';
-import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { getCliPath, getControlFilePath, getPrimaryAppHostProjectPath, getRepoRoot, getRunId, getRunRoot, getStateFilePath, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
 import { reloadWindow } from './vscode';
 
@@ -507,6 +508,14 @@ export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: str
         psSnapshotDelayMs: delayMs,
     });
     return { cliPath, invocationLogPath };
+}
+
+export function getPsFollowProcesses(): PsFollowProcessRecord[] {
+    const runId = getRunId();
+    if (!runId) {
+        throw new Error('ASPIRE_EXTENSION_E2E_RUN_ID is required to identify owned ps followers.');
+    }
+    return readPsFollowProcesses(getPsFollowProcessLogPath(getStateFilePath()), runId);
 }
 
 export function getCliWrapperInvocations(invocationLogPath: string): string[][] {

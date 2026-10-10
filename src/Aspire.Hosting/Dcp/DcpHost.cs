@@ -22,7 +22,6 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Dcp;
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 internal sealed class DcpHost
 {

@@ -49,6 +49,8 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
         public const string LanguageDetect = "aspire.hosting.remotehost.language.detect";
         public const string LanguageGetRuntimeSpec = "aspire.hosting.remotehost.language.get_runtime_spec";
         public const string LanguageScaffold = "aspire.hosting.remotehost.language.scaffold";
+        public const string IntegrationHostStartup = "aspire.hosting.remotehost.integration.startup";
+        public const string IntegrationHostPhase = "aspire.hosting.remotehost.integration.phase";
     }
 
     internal static class Tags
@@ -85,6 +87,10 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
         public const string DetectionMatched = "aspire.hosting.remotehost.language.detection_matched";
         public const string ExceptionType = "exception.type";
         public const string ExceptionMessage = "exception.message";
+        public const string IntegrationPackage = "aspire.hosting.remotehost.integration.package";
+        public const string IntegrationPhase = "aspire.hosting.remotehost.integration.phase";
+        public const string IntegrationProcessId = "aspire.hosting.remotehost.integration.supervisor_pid";
+        public const string IntegrationTimeout = "aspire.hosting.remotehost.integration.timeout_ms";
     }
 
     internal static class Events
@@ -210,6 +216,17 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
     {
         var activity = StartActivity(Activities.LanguageScaffold, ActivityKind.Server);
         activity.SetLanguage(language);
+        return activity;
+    }
+
+    public ActivityScope StartIntegrationHostStartup() => StartActivity(Activities.IntegrationHostStartup);
+
+    public ActivityScope StartIntegrationHostPhase(string phase, string? package = null, string? language = null, TimeSpan? timeout = null)
+    {
+        var activity = StartActivity(Activities.IntegrationHostPhase);
+        activity.SetIntegrationHostPhase(phase, package, timeout);
+        activity.SetLanguage(language);
+
         return activity;
     }
 
@@ -466,6 +483,15 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
         }
 
         public void SetLanguage(string? language) => SetTag(Tags.Language, language);
+
+        public void SetIntegrationHostPhase(string phase, string? package, TimeSpan? timeout)
+        {
+            SetTag(Tags.IntegrationPhase, phase);
+            SetTag(Tags.IntegrationPackage, package);
+            SetTag(Tags.IntegrationTimeout, timeout?.TotalMilliseconds);
+        }
+
+        public void SetIntegrationHostProcessId(int processId) => SetTag(Tags.IntegrationProcessId, processId);
 
         public void SetTransport(string transport) => SetTag(Tags.Transport, transport);
 

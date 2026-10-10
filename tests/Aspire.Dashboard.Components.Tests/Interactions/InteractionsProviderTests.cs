@@ -8,7 +8,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Telemetry;
-using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
@@ -737,7 +736,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(selectedDashboardClient ?? new TestDashboardClient());
         Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient ?? new TestDashboardClient());
         Services.AddSingleton<DashboardTelemetryService>();
-        Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
+        Services.AddSingleton(new DashboardTelemetryConfiguration { ReportedTelemetryEnabled = false });
         Services.AddSingleton<ComponentTelemetryContextProvider>();
         Services.AddSingleton<DimensionManager>();
         Services.AddScoped<DashboardDialogService>();

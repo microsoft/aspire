@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Polly;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREMONGODB001
@@ -55,6 +56,64 @@ public class SingleMemberReplicaSetFunctionalTests(ITestOutputHelper testOutputH
         using var databaseClient = new MongoClient(await database.Resource.ConnectionStringExpression.GetValueAsync(operations.Token));
         await VerifyTransactionsAndChangeStreamsAsync(serverClient.GetDatabase("serverdb"), operations.Token);
         await VerifyTransactionsAndChangeStreamsAsync(databaseClient.GetDatabase("orders"), operations.Token);
+        await app.StopAsync();
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.ContainerRuntime)]
+    public Task MongoExpressConnectsWithoutADeveloperCertificate() => VerifyMongoExpressAsync(useTls: false);
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    [RequiresFeature(TestFeature.DevCert)]
+    public Task MongoExpressConnectsWithTls() => VerifyMongoExpressAsync(useTls: true);
+
+    private async Task VerifyMongoExpressAsync(bool useTls)
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        if (!useTls)
+        {
+            builder.Services.AddSingleton<IDeveloperCertificateService>(new TestDeveloperCertificateService(
+                [], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: false));
+        }
+
+        var mongo = builder.AddMongoDB("mongo");
+        if (useTls)
+        {
+            mongo.WithHttpsDeveloperCertificate();
+        }
+
+        var mongoExpress = null as IResourceBuilder<MongoExpressContainerResource>;
+        mongo.WithReplicaSet().WithMongoExpress(configureContainer: c => mongoExpress = c);
+        Assert.NotNull(mongoExpress);
+
+        using var app = builder.Build();
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo.Resource.Name, cts.Token);
+        Assert.Equal(useTls, mongo.Resource.TlsEnabled);
+
+        using var client = new MongoClient(await mongo.Resource.ConnectionStringExpression.GetValueAsync(cts.Token));
+        await client.GetDatabase("mongoexpressprobe").GetCollection<BsonDocument>("items")
+            .InsertOneAsync(new BsonDocument("_id", 1), cancellationToken: cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceAsync(mongoExpress.Resource.Name, KnownResourceStates.Running, cts.Token);
+        using var httpClient = new HttpClient { BaseAddress = new Uri(mongoExpress.Resource.GetEndpoint("http").Url) };
+
+        // Mongo Express only serves its UI once it has connected, and exits if server selection fails. Following the
+        // single-member set's `localhost` member address instead of connecting directly makes it exit after its server
+        // selection timeout, so the database listing is what proves it reached the server.
+        var pipeline = new ResiliencePipelineBuilder()
+            .AddRetry(new() { MaxRetryAttempts = 30, Delay = TimeSpan.FromSeconds(3) })
+            .Build();
+        var body = await pipeline.ExecuteAsync(async token =>
+        {
+            using var response = await httpClient.GetAsync("/", token);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadAsStringAsync(token);
+        }, cts.Token);
+        Assert.Contains("mongoexpressprobe", body);
+
         await app.StopAsync();
     }
 

@@ -4,6 +4,7 @@
 using System.Reflection;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
@@ -71,7 +72,10 @@ public class DashboardServerFixture : IAsyncLifetime
         var currentAssemblyDirectory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!;
         var aspireAssemblyDirectory = currentAssemblyDirectory.Replace(currentAssemblyName, aspireDashboardAssemblyName);
 
-        var config = new ConfigurationManager().AddInMemoryCollection(configuration).Build();
+        var config = new ConfigurationManager().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DashboardTelemetryService.TelemetryOptOutConfigKey] = "true"
+        }).AddInMemoryCollection(configuration).Build();
 
         // Add services to the container.
         return new DashboardWebApplication(

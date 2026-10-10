@@ -94,7 +94,9 @@ internal sealed class AuxiliaryBackchannelMonitor(
         try
         {
             await ProcessDirectoryChangesAsync(cancellationToken, pruneOrphanedSockets: true, throwOnDiscoveryFailure: false).ConfigureAwait(false);
-            yield return Connections.ToList();
+            var initialConnections = Connections.ToList();
+            var previousConnections = new HashSet<IAppHostAuxiliaryBackchannel>(initialConnections, ReferenceEqualityComparer.Instance);
+            yield return initialConnections;
 
             fileProviders = CreateFileProviders();
 
@@ -118,7 +120,16 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             await foreach (var _ in connectionChanges.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
             {
-                yield return Connections.ToList();
+                var connections = Connections.ToList();
+
+                // The initial scan and a filesystem change can both queue notifications for the
+                // same connection set. Suppress them before consumers perform enrichment RPCs,
+                // but preserve a replacement connection even when its AppHost path/PID matches.
+                if (!previousConnections.SetEquals(connections))
+                {
+                    previousConnections = new(connections, ReferenceEqualityComparer.Instance);
+                    yield return connections;
+                }
             }
         }
         finally

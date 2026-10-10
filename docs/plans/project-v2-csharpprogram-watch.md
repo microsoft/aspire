@@ -10,8 +10,9 @@ package** as the unit that owns how a language's services are launched (run *and
 1. A new experimental **`Aspire.Hosting.Dotnet`** package — the C# peer of `Aspire.Hosting.Go`,
    `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`. It introduces a new **`ExecutableResource`-based**
    **`DotnetProjectResource`** + **`AddDotnetProject`** (a C# project or file-based app added **by path**,
-   polyglot-friendly). The shipped **`CSharpAppResource` + `AddCSharpApp`** in core `Aspire.Hosting` are
-   **left unchanged** and are out of scope for the watch work.
+   polyglot-friendly). The shipped **`CSharpAppResource` + `AddCSharpApp`** in core `Aspire.Hosting`
+   retain their existing runtime behavior and are out of scope for the watch work.
+   `AddCSharpApp` is obsolete in favor of `AddDotnetProject`, rather than experimental.
 2. **`aspire run --watch`** — a **sub-mode of `aspire run`**. In watch sub-mode the C# language
    integration package launches each `DotnetProjectResource` via the watch tool's **`resource`** command, coordinated
    by a hidden **watch `server`** system resource; the app host itself runs under the tool's **`host`**
@@ -33,7 +34,7 @@ generalize cleanly so Go/Python/JavaScript can add watch support later.
 | # | Decision |
 |---|----------|
 | **D1** | **New `Aspire.Hosting.Dotnet` language integration package**, structured as a peer of `Aspire.Hosting.Go` / `Aspire.Hosting.Python` / `Aspire.Hosting.JavaScript`. |
-| **D2** | **Introduce a new `DotnetProjectResource : ExecutableResource` + `AddDotnetProject` (+ the polyglot `addDotnetProject` export) in `Aspire.Hosting.Dotnet`.** Core `Aspire.Hosting` keeps `AddProject<T>` / `ProjectResource` **and the shipped `CSharpAppResource` / `AddCSharpApp` (still `: ProjectResource`, diagnostic `ASPIRECSHARPAPPS001`) unchanged**. Project v2 mechanics (ExecutableResource launch, watch, coordinated build) target the **new** `DotnetProjectResource`, so there is **no breaking change** to the existing experimental surface. |
+| **D2** | **Introduce a new `DotnetProjectResource : ExecutableResource` + `AddDotnetProject` (+ the polyglot `addDotnetProject` export) in `Aspire.Hosting.Dotnet`.** Core `Aspire.Hosting` keeps `AddProject<T>` / `ProjectResource` and the implementations of `CSharpAppResource` / `AddCSharpApp` (still `: ProjectResource`). `AddCSharpApp` is obsolete in favor of `AddDotnetProject`. Project v2 mechanics (ExecutableResource launch, watch, coordinated build) target the **new** `DotnetProjectResource`, without changing legacy launch or publishing behavior. |
 | **D3** | **Activation is `aspire run --watch`** (watch is a **sub-mode of local run**, not a separate command). In watch sub-mode the **app host runs via the watch tool's `host` command** *and* **each C# service runs via the tool's `resource` command**, coordinated by a hidden watch **`server`**. |
 | **D4** | **Only C# watch is implemented now.** Design a **general per-language-package watch seam** so Go/Python/JavaScript can adopt watch later, but do not implement them in this plan. Non-C# services run normally under watch until their package adds support. |
 | **D5** | **Core exposes run configuration as state** on `DistributedApplicationExecutionContext` (a `RunConfiguration` with a `WatchEnabled` property); language packages query it. **All watch mechanics** (server, `host`/`resource`/`server` commands, pipes, builds) live in the language package. Core is **not** involved in watch details. |
@@ -188,8 +189,9 @@ debug launch config for F5).
   (`.csproj`/`.cs`, .NET-version check) in `OnBeforeResourceStarted`.
 - **`AddDotnetProjectForPolyglot`** (new, `internal`, `[AspireExport("addDotnetProject")]`). New capability id
   `Aspire.Hosting.Dotnet/addDotnetProject`.
-- Core `CSharpAppResource` / `AddCSharpApp` (+ `addCSharpApp`, `ASPIRECSHARPAPPS001`) stay in `Aspire.Hosting`
-  unchanged; this package does not touch them.
+- Core `CSharpAppResource` / `AddCSharpApp` (+ `addCSharpApp`) stay in `Aspire.Hosting`
+  for compatibility. `AddCSharpApp` and `addCSharpApp` are obsolete in favor of `AddDotnetProject`
+  and `addDotnetProject` from `Aspire.Hosting.Dotnet`; their implementations remain unchanged.
 
 ### 5.2 `DotnetWatchServerResource` (new, internal) — hidden system resource
 `internal sealed class DotnetWatchServerResource : ExecutableResource` running
@@ -247,7 +249,8 @@ working through the same generalized helpers unchanged.
   both as `buildTransitive` assets for C# AppHosts and beside the package assembly for package-backed polyglot
   AppHosts, which load integration assemblies directly without running the package's MSBuild targets.
 - Polyglot SDKs: the `addDotnetProject` export is **additive** in `Aspire.Hosting.Dotnet`; core
-  `addCSharpApp` is unchanged. The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
+  `addCSharpApp` retains its signature and runtime behavior but is obsolete in favor of `addDotnetProject`.
+  The Blazor variant exports `addDotnetProjectBlazorGateway` and exports the
   `DotnetProjectResource` overload with the distinct `withDotnetProjectBlazorClientApp` capability ID while
   retaining `withBlazorClientApp` as the generated method name on that resource type. Generated APIs compile in
   TypeScript, Go, Java, and Python; a package-backed TypeScript run verifies the gateway serves an attached Blazor
@@ -259,12 +262,13 @@ working through the same generalized helpers unchanged.
 
 > Sequential unless noted. Every session ends **green**: `./build.sh` clean + targeted tests, and (where
 > applicable) a manual run against a **TypeScript** app host first, then a C# app host. Keep all surface
-> `[Experimental]`. Do **not** hand-edit generated `api/*` files.
+> `[Experimental]`. Legacy `AddCSharpApp` carries `[Obsolete]` instead. Do **not** hand-edit generated `api/*` files.
 
 ### Session 1 — Scaffold `Aspire.Hosting.Dotnet`; add `DotnetProjectResource`/`AddDotnetProject`
 Create the package (mirror `Aspire.Hosting.Go`). Add `DotnetProjectResource` (`: ExecutableResource`) and
 `AddDotnetProject` (+ polyglot `addDotnetProject`); core
-`CSharpAppResource`/`AddCSharpApp` are untouched. Add the core project-defaults generalization (§5.4 —
+`CSharpAppResource`/`AddCSharpApp` retain their existing implementations; `AddCSharpApp` is obsolete
+in favor of `AddDotnetProject`. Add the core project-defaults generalization (§5.4 —
 `ProjectLaunchDefaultsAnnotation`). Reproduce **non-watch, non-debug** launch via `dotnet run --project …`
 args + generalized project defaults. Add the new `DotnetProjectResource`-backed Blazor gateway variant (§5.8);
 regenerate polyglot SDKs/api (additive). 
@@ -458,7 +462,8 @@ callbacks may need to run for build/closure even when a resource isn't "running"
 - **R7 — `--watch` vs `DefaultWatchEnabled` vs the old `dotnet watch`.** Reconcile UX/strings so the explicit
   flag, the feature flag, and the host-command behavior don't collide (Sessions 7–8).
 - **R8 — New polyglot capabilities.** `addDotnetProject` is a new capability in `Aspire.Hosting.Dotnet`
-  (additive; core `addCSharpApp` is unchanged). The Blazor package also adds
+  (additive; core `addCSharpApp` retains its runtime behavior but is obsolete in favor of `addDotnetProject`).
+  The Blazor package also adds
   `addDotnetProjectBlazorGateway` and `withDotnetProjectBlazorClientApp`; the latter keeps
   `withBlazorClientApp` as its generated method name on `DotnetProjectResource`. Confirm guest SDK
   regeneration picks them up in TypeScript, Go, Java, and Python.

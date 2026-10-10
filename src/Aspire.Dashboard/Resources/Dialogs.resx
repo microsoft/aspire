@@ -217,6 +217,9 @@
   <data name="HelpDialogGoToMetrics" xml:space="preserve">
     <value>Go to Metrics</value>
   </data>
+  <data name="HelpDialogGoToTerminals" xml:space="preserve">
+    <value>Go to Terminals</value>
+  </data>
   <data name="HelpDialogGoToHelp" xml:space="preserve">
     <value>Go to Help</value>
   </data>
@@ -268,6 +271,9 @@
   </data>
   <data name="TextVisualizerDialogMarkdownFormat" xml:space="preserve">
     <value>Markdown</value>
+  </data>
+  <data name="TextVisualizerDialogSqlFormat" xml:space="preserve">
+    <value>SQL</value>
   </data>
   <data name="TextVisualizerSelectFormatType" xml:space="preserve">
     <value>Select format</value>

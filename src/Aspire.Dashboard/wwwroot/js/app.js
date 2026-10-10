@@ -342,6 +342,8 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
                     return 230;
                 case "m": // go to metrics
                     return 240;
+                case "e": // go to terminals
+                    return 250;
             }
         }
 

@@ -11,8 +11,19 @@ public sealed class OpenTextVisualizerDialogOptions
     public required DashboardDialogService DialogService { get; init; }
     public required string ValueDescription { get; init; }
     public required string Value { get; init; }
+
+    /// <summary>
+    /// Optional Markdown description displayed above the text content.
+    /// </summary>
+    public string? MarkdownDescription { get; init; }
+
     public bool ContainsSecret { get; init; }
     public string? DownloadFileName { get; init; }
+
+    /// <summary>
+    /// The initial format, overriding automatic format detection. Users can still change the format.
+    /// </summary>
+    public string? InitialFormat { get; init; }
 
     /// <summary>
     /// If set, the dialog will use this format and hide the format dropdown.

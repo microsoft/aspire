@@ -1,5 +1,6 @@
 // transport.mts - ATS transport layer: RPC, Handle, errors, callbacks
 import * as net from 'net';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import * as rpc from 'vscode-jsonrpc/node.js';
 
 // ============================================================================
@@ -151,6 +152,11 @@ function createAbortError(message: string): Error {
     const error = new Error(message);
     error.name = 'AbortError';
     return error;
+}
+
+function createPendingPromiseError(errors: unknown[]): AggregateError {
+    const messages = errors.map(error => error instanceof Error ? error.message : String(error));
+    return new AggregateError(errors, `One or more unawaited fluent calls failed: ${messages.join('; ')}`);
 }
 
 function createCircularReferenceError(capabilityId: string, path: string): AppHostUsageError {
@@ -550,6 +556,28 @@ export function getCallbackCount(): number {
     return callbackRegistry.size;
 }
 
+/**
+ * Invoke a callback previously registered by registerCallback.
+ *
+ * Hosts that provide their own JSON-RPC connection, such as external integration hosts,
+ * use this to service .NET callback invocations without duplicating callback registry
+ * internals. The registered wrapper handles positional argument unpacking, handle wrapping,
+ * and DTO writeback.
+ */
+export async function invokeRegisteredCallback(callbackId: string, args: unknown, client: AspireClientRpc): Promise<unknown> {
+    const callback = callbackRegistry.get(callbackId);
+    if (!callback) {
+        throw new Error(`Callback not found: ${callbackId}`);
+    }
+
+    try {
+        return await Promise.resolve(callback(args, client));
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Callback execution failed: ${message}`);
+    }
+}
+
 // ============================================================================
 // Cancellation Token Registry
 // ============================================================================
@@ -763,14 +791,83 @@ export class AspireClient implements AspireClientRpc {
     private _pendingCalls = 0;
     private _connectPromise: Promise<void> | null = null;
     private _disconnectNotified = false;
-    private _pendingPromises: Set<Promise<unknown>> = new Set();
-    private _rejectedErrors: Set<unknown> = new Set();
+    private readonly _pendingWork = { promises: new Set<Promise<unknown>>(), errors: new Set<unknown>() };
+    private readonly _promiseScopes = new AsyncLocalStorage<typeof this._pendingWork>();
+    private _keepAlive = false;
+    private _logInvocation: ((message: string) => void) | undefined;
+    private _invocationCounter = 0;
     throwOnPendingRejections = true;
 
     constructor(private socketPath: string) { }
 
+    /** Uses an authenticated host-owned connection without opening another socket. */
+    static fromConnection(connection: rpc.MessageConnection, socket: net.Socket, logInvocation: (message: string) => void): AspireClient {
+        const client = new AspireClient('');
+        client.connection = connection;
+        client.socket = socket;
+        // Integration hosts must stay alive between requests, unlike guest scripts.
+        client._keepAlive = true;
+        client._logInvocation = logInvocation;
+        connectedClients.add(client);
+        connection.onClose(() => {
+            client.connection = null;
+            connectedClients.delete(client);
+        });
+        connection.onRequest('invokeCallback', (callbackId: string, args: unknown) =>
+            client.runWithPendingPromises(() => invokeRegisteredCallback(callbackId, args, client)));
+        return client;
+    }
+
+    /** Completes one integration export or callback, including its unawaited fluent work. */
+    async runWithPendingPromises<T>(action: () => Promise<T>): Promise<T> {
+        return this._promiseScopes.run({ promises: new Set(), errors: new Set() }, async () => {
+            let result: T;
+            try {
+                result = await action();
+            } catch (error) {
+                try {
+                    await this.drainPendingPromises();
+                } catch (flushError) {
+                    const failures = new Set([error, ...(flushError instanceof AggregateError ? flushError.errors : [flushError])]);
+                    if (failures.size === 1) {
+                        throw error;
+                    }
+                    throw createPendingPromiseError([...failures]);
+                }
+                throw error;
+            }
+
+            // Work queued by a fluent continuation belongs to this request too. Separate
+            // async scopes keep concurrent exports and reentrant callbacks from waiting
+            // on one another's promises.
+            await this.drainPendingPromises();
+            return result;
+        });
+    }
+
+    private async drainPendingPromises(): Promise<void> {
+        const errors = new Set<unknown>();
+        do {
+            try {
+                await this.flushPendingPromises();
+            } catch (error) {
+                if (error instanceof AggregateError) {
+                    for (const failure of error.errors) {
+                        errors.add(failure);
+                    }
+                } else {
+                    errors.add(error);
+                }
+            }
+        } while (this._promiseScopes.getStore()!.promises.size > 0);
+        if (errors.size > 0) {
+            throw createPendingPromiseError([...errors]);
+        }
+    }
+
     trackPromise(promise: Promise<unknown>): void {
-        this._pendingPromises.add(promise);
+        const pending = this._promiseScopes.getStore() ?? this._pendingWork;
+        pending.promises.add(promise);
         // Remove on both resolve and reject. The reject handler swallows the
         // error to prevent Node.js unhandled-rejection crashes.
         //
@@ -787,30 +884,31 @@ export class AspireClient implements AspireClientRpc {
         // then continue to build) can opt out with:
         //   createBuilder({ throwOnPendingRejections: false })
         promise.then(
-            () => this._pendingPromises.delete(promise),
+            () => pending.promises.delete(promise),
             (err) => {
-                this._pendingPromises.delete(promise);
+                pending.promises.delete(promise);
                 if (this.throwOnPendingRejections) {
-                    this._rejectedErrors.add(err);
+                    pending.errors.add(err);
                 }
             }
         );
     }
 
     async flushPendingPromises(): Promise<void> {
-        if (this._pendingPromises.size > 0) {
-            console.warn(`Flushing ${this._pendingPromises.size} pending promise(s). Consider awaiting fluent calls to avoid implicit flushing.`);
+        const pendingWork = this._promiseScopes.getStore() ?? this._pendingWork;
+        if (pendingWork.promises.size > 0) {
+            console.warn(`Flushing ${pendingWork.promises.size} pending promise(s). Consider awaiting fluent calls to avoid implicit flushing.`);
             // Snapshot the current set before awaiting. Promises tracked after
             // flush starts (e.g. by .then() callbacks or the build PromiseImpl
             // constructor) are excluded. This prevents deadlocks where a tracked
             // promise depends on flush completing.
-            const pending = [...this._pendingPromises];
+            const pending = [...pendingWork.promises];
             await Promise.allSettled(pending);
         }
-        if (this._rejectedErrors.size > 0) {
-            const errors = [...this._rejectedErrors];
-            this._rejectedErrors.clear();
-            throw new AggregateError(errors, 'One or more unawaited fluent calls failed');
+        if (pendingWork.errors.size > 0) {
+            const errors = [...pendingWork.errors];
+            pendingWork.errors.clear();
+            throw createPendingPromiseError(errors);
         }
     }
 
@@ -942,20 +1040,8 @@ export class AspireClient implements AspireClientRpc {
                     this.connection.onError((err: any) => console.error('JsonRpc connection error:', err));
 
                     // Handle callback invocations from the .NET side
-                    this.connection.onRequest('invokeCallback', async (callbackId: string, args: unknown) => {
-                        const callback = callbackRegistry.get(callbackId);
-                        if (!callback) {
-                            throw new Error(`Callback not found: ${callbackId}`);
-                        }
-                        try {
-                            // The registered wrapper handles arg unpacking and handle wrapping
-                            // Pass this client so handles can be wrapped with typed wrapper classes
-                            return await Promise.resolve(callback(args, this));
-                        } catch (error) {
-                            const message = error instanceof Error ? error.message : String(error);
-                            throw new Error(`Callback execution failed: ${message}`);
-                        }
-                    });
+                    this.connection.onRequest('invokeCallback', (callbackId: string, args: unknown) =>
+                        invokeRegisteredCallback(callbackId, args, this));
 
                     socket.on('error', onConnectedSocketError);
                     socket.on('close', onConnectedSocketClose);
@@ -1004,9 +1090,17 @@ export class AspireClient implements AspireClientRpc {
      * @param tokenId - The token ID to cancel
      * @returns True if the token was found and cancelled, false otherwise
      */
-    cancelToken(tokenId: string): Promise<boolean> {
+    async cancelToken(tokenId: string): Promise<boolean> {
         if (!this.connection) return Promise.reject(new Error('Not connected to AppHost'));
-        return this.connection.sendRequest('cancelToken', tokenId);
+        this._logInvocation?.(`Canceling server token ${tokenId}`);
+        try {
+            const canceled = await this.connection.sendRequest<boolean>('cancelToken', tokenId);
+            this._logInvocation?.(`Server token ${tokenId} cancellation acknowledged (found: ${canceled})`);
+            return canceled;
+        } catch (error) {
+            this._logInvocation?.(`Server token ${tokenId} cancellation failed: ${error instanceof Error ? error.message : String(error)}`);
+            throw error;
+        }
     }
 
     /**
@@ -1030,6 +1124,9 @@ export class AspireClient implements AspireClientRpc {
 
         validateCapabilityArgs(capabilityId, args);
         const cancellationIds: string[] = [];
+        const invocation = ++this._invocationCounter;
+        const started = performance.now();
+        this._logInvocation?.(`Engine capability ${capabilityId} started (RPC ${invocation})`);
 
         try {
             const rpcArgs = await marshalTransportValue(args ?? null, this, cancellationIds, capabilityId);
@@ -1058,11 +1155,15 @@ export class AspireClient implements AspireClientRpc {
                 return wrapIfHandle(result, this) as T;
             } finally {
                 this._pendingCalls--;
-                if (this._pendingCalls === 0) {
+                if (this._pendingCalls === 0 && !this._keepAlive) {
                     this.socket?.unref();
                 }
             }
+        } catch (error) {
+            this._logInvocation?.(`Engine capability ${capabilityId} failed (RPC ${invocation}): ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+            throw error;
         } finally {
+            this._logInvocation?.(`Engine capability ${capabilityId} finished (RPC ${invocation}, elapsed ${Math.round(performance.now() - started)}ms)`);
             for (const cancellationId of cancellationIds) {
                 unregisterCancellation(cancellationId);
             }

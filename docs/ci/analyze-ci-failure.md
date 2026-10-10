@@ -137,5 +137,5 @@ dotnet test --project tests/Infrastructure.Tests/Infrastructure.Tests.csproj \
   --filter-not-trait "quarantined=true" \
   --filter-not-trait "outerloop=true"
 
-gh aw compile analyze-ci-failure --validate --actionlint --shellcheck
+gh aw compile analyze-ci-failure --validate --actionlint --shellcheck --schedule-seed microsoft/aspire
 ```

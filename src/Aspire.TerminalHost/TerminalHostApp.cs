@@ -359,8 +359,8 @@ public sealed class TerminalHostApp : IAsyncDisposable
 
     internal static HostApplicationBuilder? CreateTelemetryHostBuilder(IConfiguration configuration)
     {
-        // An inherited OTLP endpoint must not turn a hidden implementation detail into
-        // a telemetry resource. The AppHost explicitly sets this flag from ShowTerminalHost.
+        // Standalone runs require explicit telemetry activation; the AppHost enables this flag
+        // only when the dashboard is enabled, independently of terminal-host visibility.
         // Malformed values (e.g. "not-a-bool") must leave telemetry disabled, not stop the terminal.
         if (!configuration.GetBool(KnownConfigNames.TerminalHostTelemetryEnabled, defaultValue: false) ||
             string.IsNullOrEmpty(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
