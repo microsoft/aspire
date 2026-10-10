@@ -344,6 +344,14 @@ internal static class JavaAppHostToolchainResolver
         // exit code. See the quote-processing rules printed by `cmd /?`.
         var relativeWrapperPath = Path.GetRelativePath(appHostDirectory.FullName, wrapperPath);
 
+        // A bare "mvnw.cmd" is only found in the working directory while cmd.exe searches it, and
+        // NoDefaultCurrentDirectoryInExePath=1 (a common hardening setting) turns that search off, which
+        // fails with "'mvnw.cmd' is not recognized". A "." segment makes it a path rather than a name.
+        if (!Path.IsPathRooted(relativeWrapperPath))
+        {
+            relativeWrapperPath = Path.Combine(".", relativeWrapperPath);
+        }
+
         return new JavaToolInvocation(
             Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe",
             ["/c", "call", relativeWrapperPath],

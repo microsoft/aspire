@@ -412,7 +412,7 @@ public class AddJavaAppTests
         var (command, leadingArgs) = JavaHostingExtensions.WrapperInvocationFor(wrapperPath, workingDirectory, isWindows: true);
 
         Assert.Equal(Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", command);
-        Assert.Equal(["/c", "call", Path.Combine("..", "..", "build tools", wrapperName)], leadingArgs);
+        Assert.Equal(["/c", "call", Path.Combine(".", "..", "..", "build tools", wrapperName)], leadingArgs);
     }
 
     [Fact]
