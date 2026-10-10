@@ -378,6 +378,12 @@ public static partial class JavaHostingExtensions
     /// the application already binds all interfaces.
     /// </para>
     /// <para>
+    /// When a server certificate is available (the developer certificate by default, or one supplied with
+    /// <c>WithHttpsCertificate</c>), Quarkus serves HTTPS on the allocated port and the plain HTTP listener is
+    /// turned off, so the endpoint is switched to <c>https</c> in run mode. Call <c>WithoutHttpsCertificate()</c>
+    /// to keep serving plain HTTP.
+    /// </para>
+    /// <para>
     /// No health check is added. <c>/q/health</c> only exists when the application depends on
     /// <c>quarkus-smallrye-health</c>, and adding it unconditionally would leave applications without that
     /// extension permanently unhealthy and silently stall every <c>WaitFor</c> on them. Add
@@ -424,8 +430,46 @@ public static partial class JavaHostingExtensions
         // endpoint's host. QUARKUS_HTTP_PORT is the variable Quarkus reads for its listening port.
         resourceBuilder = resourceBuilder.WithHttpEndpoint(env: "QUARKUS_HTTP_PORT");
 
+        var httpEndpoint = resourceBuilder.GetEndpoint("http");
+
+        resourceBuilder.WithHttpsCertificateConfiguration(ctx =>
+        {
+            // Quarkus listens for HTTP on quarkus.http.port and for HTTPS on a separate quarkus.http.ssl-port,
+            // so serving TLS on the one endpoint Aspire allocated means moving the HTTPS listener to that port
+            // and turning the plain HTTP listener off. Otherwise the endpoint link would point at a port that
+            // only speaks HTTP while HTTPS sat on Quarkus' default 8443, which two services would both claim.
+            // See https://quarkus.io/guides/http-reference#ssl.
+            ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_PORT"] = httpEndpoint.Property(EndpointProperty.TargetPort);
+            ctx.EnvironmentVariables["QUARKUS_HTTP_INSECURE_REQUESTS"] = "disabled";
+
+            if (ctx.Password is null)
+            {
+                // Aspire writes the key as an unencrypted PEM when no password is configured, which is the only
+                // key form quarkus.http.ssl.certificate.key-files accepts.
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"] = ctx.CertificatePath;
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"] = ctx.KeyPath;
+            }
+            else
+            {
+                // With a password the PEM key is encrypted, which Quarkus cannot read, so hand it the PKCS#12
+                // key store instead. An unencrypted PKCS#12 file does not work the other way round: the JVM
+                // finds no usable key without a password and every handshake fails.
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"] = ctx.PfxPath;
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"] = "PKCS12";
+                ctx.EnvironmentVariables["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_PASSWORD"] = ctx.Password;
+            }
+
+            return Task.CompletedTask;
+        });
+
         if (builder.ExecutionContext.IsRunMode)
         {
+            // The HTTP listener is disabled once a certificate is configured, so the only endpoint is TLS.
+            resourceBuilder.SubscribeHttpsEndpointsUpdate(_ =>
+            {
+                resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
+            });
+
             resourceBuilder.WithEnvironment("QUARKUS_PROFILE", "dev");
 
             // Quarkus turns on its Host header validation filter whenever quarkus.http.host holds a

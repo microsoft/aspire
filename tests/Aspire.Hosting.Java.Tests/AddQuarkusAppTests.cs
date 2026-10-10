@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001
+
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
@@ -10,6 +12,76 @@ namespace Aspire.Hosting.Java.Tests;
 
 public class AddQuarkusAppTests
 {
+    [Fact]
+    public async Task AddQuarkusApp_WithoutAPassword_ServesHttpsOnTheEndpointPortFromPemFiles()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null);
+
+        Assert.Equal("disabled", envVars["QUARKUS_HTTP_INSECURE_REQUESTS"]);
+        Assert.Equal("/certs/cert.pem", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"]).ValueExpression);
+        Assert.Equal("/certs/key.pem", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"]).ValueExpression);
+        Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"));
+
+        // The HTTPS listener has to move onto the port Aspire allocated for the endpoint, because the plain
+        // HTTP listener that normally owns it is switched off.
+        var sslPort = Assert.IsType<EndpointReferenceExpression>(envVars["QUARKUS_HTTP_SSL_PORT"]);
+        Assert.Equal(EndpointProperty.TargetPort, sslPort.Property);
+        Assert.Equal("http", sslPort.Endpoint.EndpointName);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_WithAPassword_UsesThePkcs12KeyStore()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var password = builder.AddParameter("cert-password", "secret");
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password.Resource);
+
+        Assert.Equal("/certs/cert.pfx", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"]).ValueExpression);
+        Assert.Equal("PKCS12", envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"]);
+        Assert.Same(password.Resource, envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_PASSWORD"]);
+        Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_FILES"));
+        Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"));
+    }
+
+    private static async Task<Dictionary<string, object>> RunHttpsCertificateCallbackAsync(IResource resource, IServiceProvider services, IValueProvider? password)
+    {
+        var annotation = Assert.Single(resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>());
+
+        var envVars = new Dictionary<string, object>();
+        await annotation.Callback(new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(
+                new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                {
+                    Services = services
+                }),
+            Resource = resource,
+            Arguments = [],
+            EnvironmentVariables = envVars,
+            CertificatePath = ReferenceExpression.Create($"/certs/cert.pem"),
+            KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"/certs/combined.pem"),
+            PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
+            Password = password,
+            CancellationToken = default
+        });
+
+        return envVars;
+    }
+
     [Theory]
     [InlineData("pom.xml", "maven")]
     [InlineData("build.gradle", "gradle")]
