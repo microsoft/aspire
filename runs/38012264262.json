@@ -1,0 +1,242 @@
+{
+  "run_id": 38012264262,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/38012264262",
+  "run_scope": "main",
+  "analyzed_at": "2026-10-10T02:18:52Z",
+  "verdict": "mixed",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 20819,
+    "title": "Add Markdown descriptions to dashboard text visualizer dialogs",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "dashboard-text-visualizer-description",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/20819",
+    "merged_at": "2026-10-10T01:12:23Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "88ff9ba57c2841cce759adffa849373f9406b0f5",
+    "failed_sha": "a011c879e2294c0f103ef09000fe1450dc1189bf",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "message": "fix(deps): patch JavaScript proxy, source-map and database telemetry (#20831) ## Description **Patch vulnerable JavaScript dependencies in shipped starter frontends, playgrounds, deployment fixtures, and TypeScript SDK tests.** - Update `proxy-addr` to 2.0.8 in ten npm locks and the NodeFrontend pnpm lock, fixing IPv4 spoofing through incorrectly trusted IPv4-mapped IPv6 subnets ([GHSA-jqcg-44mw-7w3h](https://github.com/jshttp/proxy-addr/security/advisories/GHSA-jqcg-44mw-7w3h)). - Update `sourc",
+        "html_url": "https://github.com/microsoft/aspire/commit/4a69a9f04f983f5a9f58a42e97ec688a70461ada",
+        "pull_request": {
+          "number": 20831,
+          "title": "fix(deps): patch JavaScript proxy, source-map and database telemetry",
+          "url": "https://github.com/microsoft/aspire/pull/20831",
+          "merged_at": "2026-10-09T17:25:22Z"
+        }
+      },
+      {
+        "sha": "006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "message": "Fix TypeScript Bicep parameter expressions on enum Azure properties (#20557) ## Description TypeScript AppHosts currently fail when `configureInfrastructure` assigns a `bicep().parameter(...)` expression to an enum-valued Azure provisioning property, such as a Storage SKU name. The generated TypeScript accepts the assignment, but publishing stops with `A value of type String cannot be assigned to a BicepValue<StorageSkuName>`. Allow string-backed Bicep expressions to flow into enum-valued proper",
+        "html_url": "https://github.com/microsoft/aspire/commit/006dcf0f47684cb65f1f0a530ba383d4f09c30c2",
+        "pull_request": {
+          "number": 20557,
+          "title": "Fix TypeScript Bicep parameter expressions on enum Azure properties",
+          "url": "https://github.com/microsoft/aspire/pull/20557",
+          "merged_at": "2026-10-09T18:59:06Z"
+        }
+      },
+      {
+        "sha": "c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "message": "[WIP] Fix Go AppHost start timeout error (#20086) - [x] Identify the Go AppHost startup failure from logs and code. - [x] Implement a focused fix with regression coverage. - [x] Run targeted validation and review the final changes. <!-- START COPILOT CODING AGENT SUFFIX --> - Fixes #20056 --------- Co-authored-by: copilot-swe-agent[bot] <198982749+Copilot@users.noreply.github.com> Co-authored-by: davidfowl <95136+davidfowl@users.noreply.github.com> Co-authored-by: David Pine <7679720+IEvangelist",
+        "html_url": "https://github.com/microsoft/aspire/commit/c7cd7ce8d6e9f50d306145fcd85d7b948058bad3",
+        "pull_request": {
+          "number": 20086,
+          "title": "[WIP] Fix Go AppHost start timeout error",
+          "url": "https://github.com/microsoft/aspire/pull/20086",
+          "merged_at": "2026-10-09T20:10:35Z"
+        }
+      },
+      {
+        "sha": "ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "message": "Remove ASPIREAZURE003 from Azure role-assignment APIs (#20857) ## Description `AzureRoleAssignmentResource` is going stable: it is no longer experimental. Consumers can use this API without suppressing `ASPIREAZURE003`. Azure role assignments are not an Azure Networking feature, so the networking experimental diagnostic should not apply to this type. Remove its `Experimental` attribute and clean up obsolete suppressions in `RoleAssignmentResourceAnnotation`, the shared ACR pull identity helper, ",
+        "html_url": "https://github.com/microsoft/aspire/commit/ca257405b7ced2e7b96c9992cf7f4f56b181c775",
+        "pull_request": {
+          "number": 20857,
+          "title": "Remove ASPIREAZURE003 from Azure role-assignment APIs",
+          "url": "https://github.com/microsoft/aspire/pull/20857",
+          "merged_at": "2026-10-09T20:42:47Z"
+        }
+      },
+      {
+        "sha": "517d566279e2c1ceded7788930197e5f6667bbb0",
+        "message": "Add polyglot hosting integrations through ATS projection (#16110) ## Description Part of #16220. Adds support for hosting integrations authored outside .NET through Aspire's ATS metadata, SDK generation, and runtime dispatch pipeline. A consuming AppHost gets normal generated builder methods, while the integration executes in its own runtime and configures the same .NET resource model as a managed integration. Integration-host ownership belongs to the AppHost server rather than the CLI. The CLI ",
+        "html_url": "https://github.com/microsoft/aspire/commit/517d566279e2c1ceded7788930197e5f6667bbb0",
+        "pull_request": {
+          "number": 16110,
+          "title": "Add polyglot hosting integrations through ATS projection",
+          "url": "https://github.com/microsoft/aspire/pull/16110",
+          "merged_at": "2026-10-09T21:41:12Z"
+        }
+      },
+      {
+        "sha": "ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "message": "fix(java): update Log4j in Spring Boot samples and starter (#20830) ## Description The Spring Boot catalog and orders playground services, and the CLI's Java starter API, resolve Log4j API 2.24.3. That version is affected by [CVE-2026-49844](https://logging.apache.org/security.html#CVE-2026-49844): `MapMessage` can serialize non-finite floating-point values as invalid JSON, disrupting downstream log parsing when the affected logging path is used. Spring Boot's dependency management still imports",
+        "html_url": "https://github.com/microsoft/aspire/commit/ee444aedc1edcd4d832fe39bf0365e22585add1d",
+        "pull_request": {
+          "number": 20830,
+          "title": "fix(java): update Log4j in Spring Boot samples and starter",
+          "url": "https://github.com/microsoft/aspire/pull/20830",
+          "merged_at": "2026-10-09T22:06:46Z"
+        }
+      },
+      {
+        "sha": "213aa53159663c6f3e4a29bf7df907179ae6e1c4",
+        "message": "Remove obsolete ASP.NET policy links from issue templates (#20782) ## Description Remove inherited ASP.NET issue-policy links from Aspire’s issue templates while retaining issue guidance and existing-issue checks. - **Templates:** Remove the policy contact link and references from the bug and feature request forms. ## Checklist - Is this feature complete?   - [x] Yes. Ready to ship.   - [ ] No. Follow-up changes expected. - Are you including unit tests for the changes and scenario tests if relev",
+        "html_url": "https://github.com/microsoft/aspire/commit/213aa53159663c6f3e4a29bf7df907179ae6e1c4",
+        "pull_request": {
+          "number": 20782,
+          "title": "Remove obsolete ASP.NET policy links from issue templates",
+          "url": "https://github.com/microsoft/aspire/pull/20782",
+          "merged_at": "2026-10-10T00:14:12Z"
+        }
+      },
+      {
+        "sha": "ccc9d55a69991612581e841a5c664432af1c9332",
+        "message": "Recover ambiguous DCP creates with configurable timeouts (#20752) ## Description A single timed-out or HTTP 504 DCP create currently puts a resource into `FailedToStart`, even though the server may have committed the object. The 20-second steady-state client budget can also expire before DCP's own create timeout, and users cannot configure those limits for slower environments. Recover ambiguous creates by checking whether the same kind/namespace/name exists before retrying the POST. Creation has",
+        "html_url": "https://github.com/microsoft/aspire/commit/ccc9d55a69991612581e841a5c664432af1c9332",
+        "pull_request": {
+          "number": 20752,
+          "title": "Recover ambiguous DCP creates with configurable timeouts",
+          "url": "https://github.com/microsoft/aspire/pull/20752",
+          "merged_at": "2026-10-10T00:49:21Z"
+        }
+      },
+      {
+        "sha": "a011c879e2294c0f103ef09000fe1450dc1189bf",
+        "message": "Add Markdown descriptions to dashboard text visualizer dialogs (#20819) ## Description Mermaid graph exports currently show diagram source without explaining the format. This change adds an optional Markdown description above text visualizer content and uses it to explain Mermaid with a link to Aspire's documentation. - Display descriptions above text/code or rendered Markdown, using the existing Markdown renderer and safe URL schemes. - Keep the description behind the existing secret-warning co",
+        "html_url": "https://github.com/microsoft/aspire/commit/a011c879e2294c0f103ef09000fe1450dc1189bf",
+        "pull_request": {
+          "number": 20819,
+          "title": "Add Markdown descriptions to dashboard text visualizer dialogs",
+          "url": "https://github.com/microsoft/aspire/pull/20819",
+          "merged_at": "2026-10-10T01:12:23Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "id": 114100338894,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38012264262/job/114100338894",
+      "classification": "flaky-test",
+      "reason": "Single test ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput failed with a known intermittent build-count race on Windows (prior cause aspire-hosting-resourcecommandservice-rebuild-buildcount-race, 7 prior occurrences).",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting, Hosting, tests/Aspire.Hosting.Tests/... / Hosting (windows-latest)",
+      "id": 114100342661,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38012264262/job/114100342661",
+      "classification": "main-repository-breakage",
+      "reason": "KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay deterministically asserts recorded HTTP methods ([POST, GET]) but none were recorded (empty array); this test name/behavior matches the 'Recover ambiguous DCP creates with configurable timeouts' (#20752) change merged into main in this candidate window.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "id": 114100350718,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38012264262/job/114100350718",
+      "classification": "flaky-test",
+      "reason": "ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees fails intermittently reading ExitCode on a process object not started by the harness, a timing-dependent process-lifecycle race on Windows unrelated to candidate merges.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "id": 114100355628,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38012264262/job/114100355628",
+      "classification": "flaky-test",
+      "reason": "DevTunnelMonitorTests.CancellingAHealthCallerDoesNotCancelTheSharedObserver fails with ObjectDisposedException on a disposed IServiceProvider, exactly matching prior cause devtunnels-devtunnelmonitor-cancellinghealthcaller-objectdisposed.",
+      "failed_steps": [
+        "Run tests (Linux/macOS)"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / TypeScript SDK Validation (Node 22.x)",
+      "id": 114101941471,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38012264262/job/114101941471",
+      "classification": "main-repository-breakage",
+      "reason": "After all 59 TypeScript validation AppHosts pass, the generated Nuxt 'web' publish image build deterministically fails at 'RUN npm ci' during docker build, matching prior tracked cause typescript-sdk-nuxt-integration-[REDACTED].",
+      "failed_steps": [
+        "Run TypeScript SDK validation"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 114103853258,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/38012264262/job/114103853258",
+      "classification": "main-repository-breakage",
+      "reason": "This is a gating job that deterministically fails because the TypeScript SDK Validation job it depends on failed (Nuxt npm ci docker build failure); Python/Go/Java/Rust validations succeeded.",
+      "failed_steps": [
+        "Check validation results"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.DevTunnels.Tests.DevTunnelMonitorTests.CancellingAHealthCallerDoesNotCancelTheSharedObserver",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.DevTunnels.Tests, Hosting.DevTunnels, Hosting.DevTunnel... / Hosting.DevTunnels (ubuntu-latest)",
+      "error": "System.ObjectDisposedException : Cannot access a disposed object.\nObject name: 'IServiceProvider'.",
+      "stack_trace": "at Microsoft.Extensions.DependencyInjection.ServiceLookup.ThrowHelper.ThrowObjectDisposedException()\n   at Microsoft.Extensions.DependencyInjection.ServiceLookup.ServiceProviderEngineScope.GetService(Type serviceType)\n   at Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetService[T](IServiceProvider provider)\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.get_Configuration() in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 34\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.RecordResourceLifecycleMilestones(IResource resource, String resourceId, ResourceNotificationState notificationState, CustomResourceSnapshot previousSnapshot, CustomResourceSnapshot snapshot) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 998\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, String resourceId, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 923\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.PublishUpdateAsync(IResource resource, Func`2 stateFactory) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 1271\n   at Aspire.Hosting.DevTunnelsResourceBuilderExtensions.UpdatePortAccessAsync(DevTunnelPortResource portResource, ResourceNotificationService notifications, ResourceLoggerService logs, DateTimeOffset now) in /_/src/Aspire.Hosting.DevTunnels/DevTunnelResourceBuilderExtensions.cs:line 811\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass40_0.<<RefreshAccessAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 356\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.DevTunnels.DevTunnelMonitor.<>c__DisplayClass55_0`1.<<InvokeAsync>b__0>d.MoveNext() in /_/src/Aspire.Hosting.DevTunnels/DevTunnelMonitor.cs:line 724\n--- End of stack trace from previo",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior tracked flaky cause devtunnels-devtunnelmonitor-cancellinghealthcaller-objectdisposed exactly (same test, same exception, disposed IServiceProvider race during teardown)."
+    },
+    {
+      "name": "Aspire.Hosting.Tests.ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting-2, Hosting-2, tests/Aspire.Hosting.Te... / Hosting-2 (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 2\nActual:   3",
+      "stack_trace": "at Aspire.Hosting.Tests.ResourceCommandServiceTests.ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\ResourceCommandServiceTests.cs:line 1770\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Hosting.TestUtilities\\Workspace\\31fclnvs.id2\n| [2026-10-10T01:45:05] Aspire.Hosting.DistributedApplication Information: Aspire AppHost version: 17.0.0-ci\n| [2026-10-10T01:45:05] Aspire.Hosting.DistributedApplication Information: Distributed application starting.\n| [2026-10-10T01:45:05] Aspire.Hosting.DistributedApplication Information: Application host directory is: D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.TestUtilities\n| [2026-10-10T01:45:05] Aspire.Hosting.Cli.CliOrphanDetector Debug: No CLI process ID configured. Orphan detection disabled.\n| [2026-10-10T01:45:05] Aspire.Hosting.Cli.BackchannelService Debug: Backchannel socket path was not specified.\n| [2026-10-10T01:45:05] Aspire.Hosting.Devcontainers.Codespaces.CodespacesResourceUrlRewriterService Trace: Not running in Codespaces, skipping URL rewriting.\n| [2026-10-10T01:45:05] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Starting auxiliary backchannel service on socket path: C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAIS525syk.7384\n| [2026-10-10T01:45:05] Aspire.Hosting.Backchannel.AuxiliaryBackchannelService Debug: Auxiliary backchannel listening on C:\\Users\\runneradmin\\.aspire\\cli\\bch\\vygPxKePKFAIS525syk.7384\n| [2026-10-10T01:45:05] Aspire.Hosting.Dcp.DcpHost Warning: No trusted Aspire development certificate was found. See https://aka.ms/aspire/devcerts for more information.\n| [2026-10-10T01:45:05] Aspire.Hosting.FileSystemService Debug: Allocated temporary directory: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpr1m3q3rt.qvo\n| [2026-10-10T01:45:05] Aspire.Hosting.Dcp.DcpHost Information: Starting DCP with arguments: start-apiserver --monitor 7384 --detach --kubeconfig \"C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aspire-dcpr1m3q3rt.qvo\\kubeconfig\"\n| [2026-10-10T01:45:05] Aspire.Hosting.Dcp.DcpHost Debug: A complete bundled ConPTY provider was not found; DCP will use the inbox Windows provider.\n| [2026-10-10T01:45:05] Aspire.Hosting.Dcp.DcpExecutor Debug: Preparing services. Ports randomized: True\n| [2026-10-10T01:45:05] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource myProject/myProject-qrvfxdet update published: ResourceType = Project, CreationTimeStamp = (null), State = { Text = (null), Style = (null) }, IsHidden = False, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = {  }, HealthReports = {  }, Commands = { start (Start) = Disabled stop (Stop) = Hidden restart (Restart) = Disabled rebuild (Rebuild) = Disabled }\n| [2026-10-10T01:45:05] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Version: 1 Resource myProject-rebuilder/myProject-rebuilder-heksqgzs update published: ResourceType = Executable, CreationTimeStamp = (null), State = { Text = NotStarted, Style = (null) }, IsHidden = True, HeathStatus = (null), ResourceReady = False, ExitCode = (null), Urls = {  }, EnvironmentVariables = {  }, Properties = { resource.parentName = myProject-qrvfxdet }, HealthReports = {  }, Commands = {  }\n| [2026-10-10T01:45:05] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Converting relative endpoint URLs to absolute URLs for resource 'myProject-rebuilder'.\n| [2026-10-10T01:45:05] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Added total of 0 URLs to resource 'myProject-rebuilder'\n| [2026-10-10T01:45:05] Aspire.Hosting.ApplicationModel.ResourceNotificationService Trace: Resource myProject-rebuilder/myProject-rebuilder-heksqgzs update skipped because the snapshot is unchanged.\n| [2026-10-10T01:45:05] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Converting relative endpoint URLs to absolute URLs for resource 'myProject'.\n| [2026-10-10T01:45:05] Aspire.Hosting.Orchestrator.ApplicationOrchestrator Trace: Added total of 0 URLs to resource 'myProject'\n| [2026-10-10T01:45:05] Aspire.Hosting.ApplicationModel.ResourceNotificationSe",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Matches prior tracked flaky cause aspire-hosting-resourcecommandservice-rebuild-buildcount-race exactly (same test, same assertion values, Windows build-count race)."
+    },
+    {
+      "name": "Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(dispose: True, ownedTree: False)",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "error": "System.InvalidOperationException : Process was not started by this object, so requested information cannot be determined.",
+      "stack_trace": "at System.Diagnostics.Process.get_ExitCode()\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 382\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 394\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in D:\\a\\aspire\\aspire\\tests\\Shared\\Processes\\ChildProcessTests.cs:line 394\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Timing-dependent Windows process-lifecycle test accessing ExitCode on a process handle not tied to the started process; no prior exact cause match found, new cause recorded."
+    },
+    {
+      "name": "Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(useHttpDate: False, retryAfterSeconds: 2147483647)",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting, Hosting, tests/Aspire.Hosting.Tests/... / Hosting (windows-latest)",
+      "error": "Assert.Equal() Failure: Collections differ\n           ↓ (pos 0)\nExpected: [\"POST\", \"GET\"]\nActual:   []",
+      "stack_trace": "at Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(Boolean useHttpDate, Int32 retryAfterSeconds) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Dcp\\KubernetesServiceTests.cs:line 663\n   at Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(Boolean useHttpDate, Int32 retryAfterSeconds) in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Tests\\Dcp\\KubernetesServiceTests.cs:line 663\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Test asserts behavior of DCP create recovery/retry logic introduced by PR #20752 ('Recover ambiguous DCP creates with configurable timeouts') merged into this candidate window; the empty recorded-methods result indicates the new retry path did not record expected calls, a deterministic main-repository breakage rather than a flaky test."
+    }
+  ],
+  "causes": [
+    "devtunnels-devtunnelmonitor-cancellinghealthcaller-objectdisposed",
+    "aspire-hosting-resourcecommandservice-rebuild-buildcount-race",
+    "aspire-shared-tests-childprocesstests-windows-gracefultimeout-exitcode-race",
+    "kubernetesservicetests-recoverybudget-confirmationretrydelay-empty-methods",
+    "typescript-sdk-nuxt-integration-npm-ci-docker-build-failure"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "aspire-shared-tests-childprocesstests-windows-gracefultimeout-exitcode-race",
+  "type": "flaky-test",
+  "title": "Flaky: ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees throws when reading ExitCode on a process not started by the object",
+  "test_name": "Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(dispose: True, ownedTree: False)",
+  "error_pattern": "System.InvalidOperationException : Process was not started by this object, so requested information cannot be determined.\n   at System.Diagnostics.Process.get_ExitCode()\n   at Aspire.Shared.Tests.ChildProcessTests.Windows_GracefulTimeoutPreservesAppHostCleanupWorkerButReapsOwnedTrees(Boolean dispose, Boolean ownedTree) in ChildProcessTests.cs:line 382",
+  "occurrences": [
+    {
+      "run_id": 38012264262,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/38012264262",
+      "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-10T02:18:52Z"
+    }
+  ]
+}

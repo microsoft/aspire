@@ -1,0 +1,15 @@
+{
+  "id": "kubernetesservicetests-recoverybudget-confirmationretrydelay-empty-methods",
+  "type": "main-repository-breakage",
+  "title": "KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay asserts recorded HTTP methods but none were recorded",
+  "error_pattern": "Assert.Equal() Failure: Collections differ\n   (pos 0)\nExpected: [\"POST\", \"GET\"]\nActual:   []\n   at Aspire.Hosting.Tests.Dcp.KubernetesServiceTests.CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(Boolean useHttpDate, Int32 retryAfterSeconds) in KubernetesServiceTests.cs:line 663. Test name/behavior directly corresponds to the 'Recover ambiguous DCP creates with configurable timeouts' feature merged into main in this window.",
+  "occurrences": [
+    {
+      "run_id": 38012264262,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/38012264262",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting, Hosting, tests/Aspire.Hosting.Tests/... / Hosting (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-10T02:18:52Z"
+    }
+  ]
+}
