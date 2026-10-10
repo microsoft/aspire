@@ -1,0 +1,105 @@
+{
+  "definitions": {
+    "logLevel": {
+      "properties": {
+        "Azure": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Azure.Core": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "Azure.Identity": {
+          "$ref": "#/definitions/logLevelThreshold"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "Aspire": {
+      "type": "object",
+      "properties": {
+        "Azure": {
+          "type": "object",
+          "properties": {
+            "AI": {
+              "type": "object",
+              "properties": {
+                "Projects": {
+                  "type": "object",
+                  "properties": {
+                    "ClientOptions": {
+                      "type": "object",
+                      "properties": {
+                        "ClientLoggingOptions": {
+                          "type": "object",
+                          "properties": {
+                            "AllowedHeaderNames": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Gets or sets a list of header names that are not redacted during logging."
+                            },
+                            "AllowedQueryParameters": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Gets or sets a list of query parameter names that are not redacted during logging."
+                            },
+                            "EnableLogging": {
+                              "type": "boolean",
+                              "description": "Gets or sets value indicating if logging should be enabled in this client pipeline."
+                            },
+                            "EnableMessageContentLogging": {
+                              "type": "boolean",
+                              "description": "Gets or sets value indicating if request and response content should be logged."
+                            },
+                            "EnableMessageLogging": {
+                              "type": "boolean",
+                              "description": "Gets or sets value indicating if request and response uri and header information should be logged."
+                            },
+                            "MessageContentSizeLimit": {
+                              "type": "integer",
+                              "description": "Gets or sets value indicating maximum size of content to log in bytes."
+                            }
+                          },
+                          "description": "The options to be used to configure logging within the 'System.ClientModel.Primitives.ClientPipeline'."
+                        },
+                        "EnableDistributedTracing": {
+                          "type": "boolean",
+                          "description": "Gets or sets whether distributed tracing should be enabled. If null, this value will be treated as true. The default is null."
+                        },
+                        "NetworkTimeout": {
+                          "type": "string",
+                          "pattern": "^-?(\\d{1,7}|((\\d{1,7}[\\.:])?(([01]?\\d|2[0-3]):[0-5]?\\d|([01]?\\d|2[0-3]):[0-5]?\\d:[0-5]?\\d)(\\.\\d{1,7})?))$",
+                          "description": "The timeout applied to an individual network operation."
+                        },
+                        "UserAgentApplicationId": {
+                          "type": "string",
+                          "description": "An optional application ID to use as part of the request User-Agent header."
+                        }
+                      },
+                      "description": "Client options for AIProjectClient."
+                    },
+                    "DisableTracing": {
+                      "type": "boolean",
+                      "description": "Gets or sets whether tracing is disabled. The default is false."
+                    },
+                    "Endpoint": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Gets or sets the HTTPS Foundry project endpoint, such as https://account.services.ai.azure.com/api/projects/project."
+                    }
+                  },
+                  "description": "Configures the connection and tracing for an Azure AI Projects client."
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

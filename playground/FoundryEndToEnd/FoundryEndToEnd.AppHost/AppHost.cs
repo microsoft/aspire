@@ -14,10 +14,17 @@ var model = foundry.Resource.IsEmulator
 
 var chat = foundry.AddDeployment("chat", model);
 
-builder.AddProject<Projects.FoundryEndToEnd_WebStory>("webstory")
+var webstory = builder.AddProject<Projects.FoundryEndToEnd_WebStory>("webstory")
        .WithExternalHttpEndpoints()
        .WithReference(chat)
+       .WithEnvironment("UseFoundryLocal", foundry.Resource.IsEmulator ? "true" : "false")
        .WaitFor(chat);
+
+if (!foundry.Resource.IsEmulator)
+{
+    var project = foundry.AddProject("project");
+    webstory.WithReference(foundry).WithReference(project);
+}
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

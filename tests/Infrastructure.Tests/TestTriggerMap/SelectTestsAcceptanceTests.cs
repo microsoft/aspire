@@ -861,7 +861,7 @@ public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) :
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.cs"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"));
         Assert.True(filter.IsExcluded("src/Aspire.Hosting.Redis/api/Aspire.Hosting.Redis.cs"));
-        Assert.True(filter.IsExcluded("src/Components/Aspire.Azure.AI.Inference/api/Aspire.Azure.AI.Inference.cs"));
+        Assert.True(filter.IsExcluded("src/Components/Aspire.OpenAI/api/Aspire.OpenAI.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Helper.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Dashboard/api/ApiAuthenticationHandler.cs"));
         Assert.False(filter.IsExcluded("src/Aspire.Hosting/api/Aspire.Hosting.tscompat.suppression.txt"));

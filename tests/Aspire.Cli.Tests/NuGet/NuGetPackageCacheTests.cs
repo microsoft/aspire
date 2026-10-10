@@ -126,6 +126,76 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.Contains("Aspire.Hosting.NodeJs", packageIds);
     }
 
+    [Theory]
+    [InlineData("Aspire.Azure.AI.Inference")]
+    [InlineData("Aspire.Azure.AI.OpenAI")]
+    [InlineData("aspire.azure.ai.inference")]
+    [InlineData("aspire.azure.ai.openai")]
+    [InlineData("Aspire.Azure.AI.Projects")]
+    [InlineData("Aspire.Azure.AI.Extensions.OpenAI")]
+    [InlineData("Aspire.OpenAI")]
+    public void ClientPackagesAreExcludedFromHostingDiscovery(string packageId)
+    {
+        Assert.False(PackageIdFilters.IsOfficialOrCommunityToolkitPackage(packageId));
+        Assert.False(PackageIdFilters.IsIntegrationPackageId(packageId));
+    }
+
+    [Theory]
+    [InlineData("Aspire.Azure.AI.Inference", true, false)]
+    [InlineData("Aspire.Azure.AI.Inference", true, true)]
+    [InlineData("Aspire.Azure.AI.OpenAI", true, false)]
+    [InlineData("Aspire.Azure.AI.OpenAI", true, true)]
+    [InlineData("aspire.azure.ai.inference", true, false)]
+    [InlineData("aspire.azure.ai.inference", true, true)]
+    [InlineData("aspire.azure.ai.openai", true, false)]
+    [InlineData("aspire.azure.ai.openai", true, true)]
+    [InlineData("Aspire.Azure.AI.Projects", false, false)]
+    [InlineData("Aspire.Azure.AI.Projects", false, true)]
+    [InlineData("Aspire.Azure.AI.Extensions.OpenAI", false, false)]
+    [InlineData("Aspire.Azure.AI.Extensions.OpenAI", false, true)]
+    [InlineData("Aspire.OpenAI", false, false)]
+    [InlineData("Aspire.OpenAI", false, true)]
+    public async Task GetPackageVersionsAsync_RespectsClientPackageRetirement(string packageId, bool deprecated, bool showDeprecatedPackages)
+    {
+        Assert.Equal(deprecated, DeprecatedPackages.IsDeprecated(packageId));
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.EnabledFeatures = showDeprecatedPackages ? [KnownFeatures.ShowDeprecatedPackages] : [];
+            configure.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, query, exactMatch, _, _, _, _, _, _, _) =>
+                {
+                    Assert.Equal(packageId, query);
+                    Assert.True(exactMatch);
+
+                    return (0, [
+                        new NuGetPackage { Id = packageId, Version = "13.3.0", Source = "nuget.org" },
+                        new NuGetPackage { Id = packageId, Version = "13.2.0", Source = "nuget.org" }
+                    ]);
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
+        var packages = (await nuGetPackageCache.GetPackageVersionsAsync(
+            workspace.WorkspaceRoot,
+            packageId,
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None).DefaultTimeout()).ToArray();
+
+        string[] expectedVersions = showDeprecatedPackages || !deprecated ? ["13.3.0", "13.2.0"] : [];
+        Assert.Equal(expectedVersions, packages.Select(package => package.Version));
+        Assert.All(packages, package => Assert.Equal(packageId, package.Id));
+    }
+
     [Fact]
     public async Task CustomFilterBypassesDeprecatedPackageFiltering()
     {

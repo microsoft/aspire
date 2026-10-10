@@ -57,6 +57,8 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 {
                     SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
+                        new("Aspire.Azure.AI.Inference", "9.4.0", "nuget.org", ["9.4.0"]),
+                        new("Aspire.Azure.AI.OpenAI", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.GitHub.Models", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -79,6 +81,8 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("Aspire.Hosting.Dapr", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.NodeJs", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.Inference", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.OpenAI", packageIds);
     }
 
     [Fact]
@@ -96,6 +100,8 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 {
                     SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
+                        new("Aspire.Azure.AI.Inference", "9.4.0", "nuget.org", ["9.4.0"]),
+                        new("Aspire.Azure.AI.OpenAI", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.GitHub.Models", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -118,6 +124,9 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
         Assert.Contains("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.Contains("Aspire.Hosting.NodeJs", packageIds);
+        // The deprecated-package flag does not expand hosting discovery to client packages.
+        Assert.DoesNotContain("Aspire.Azure.AI.Inference", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.OpenAI", packageIds);
     }
 
     [Fact]

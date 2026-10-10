@@ -45,6 +45,11 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
     public bool DisableTracing { get; } = disableTracing;
 
     /// <summary>
+    /// Gets a flag indicating whether metrics should be disabled.
+    /// </summary>
+    public bool DisableMetrics { get; init; }
+
+    /// <summary>
     /// Gets a flag indicating whether potentially sensitive information should be included in telemetry.
     /// </summary>
     public bool EnableSensitiveTelemetryData { get; } = enableSensitiveTelemetryData;

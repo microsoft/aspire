@@ -7,8 +7,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.AddAzureChatCompletionsClient("chat")
-       .AddChatClient();
+if (builder.Configuration.GetValue<bool>("UseFoundryLocal"))
+{
+    builder.AddOpenAIClient("chat").AddChatClient();
+}
+else
+{
+    builder.AddAzureProjectOpenAIClient("project").AddChatClient("chat");
+}
 
 // Add services to the container.
 builder.Services.AddRazorComponents()

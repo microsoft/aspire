@@ -11,8 +11,9 @@
       CS8002: Referenced assembly does not have a strong name
       OPENAI001: OpenAI Responses API types are marked as preview/evaluation
       OPENAICUA001: OpenAI computer-use API types are marked as preview/evaluation
+      AAIP002: Azure OpenAI extension tool types are marked as preview/evaluation
     -->
-    <NoWarn>$(NoWarn);CS8002;ASPIRECOMPUTE001;ASPIREPIPELINES003;OPENAI001;OPENAICUA001;AAIP001</NoWarn>
+    <NoWarn>$(NoWarn);CS8002;ASPIRECOMPUTE001;ASPIREPIPELINES003;OPENAI001;OPENAICUA001;AAIP001;AAIP002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

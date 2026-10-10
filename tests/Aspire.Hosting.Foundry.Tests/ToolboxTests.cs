@@ -324,7 +324,7 @@ public class ToolboxTests
     }
 
     [Fact]
-    public async Task WebSearchToolDefinition_ConvertsToProjectsAgentTool()
+    public async Task WebSearchToolDefinition_ConvertsToToolboxTool()
     {
         var tool = new FoundryToolboxWebSearchToolDefinition("web-search");
 
@@ -357,7 +357,7 @@ public class ToolboxTests
     }
 
     [Fact]
-    public async Task AzureAISearchToolDefinition_ConvertsToAzureAISearchTool()
+    public async Task AzureAISearchToolDefinition_ConvertsToAzureAISearchToolboxTool()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -378,8 +378,8 @@ public class ToolboxTests
 
         var projectTool = (await def.ResolveAsync(CancellationToken.None)).Tool;
 
-        var aiSearch = Assert.IsType<AzureAISearchTool>(projectTool);
-        var index = Assert.Single(aiSearch.Options.Indexes);
+        var aiSearch = Assert.IsType<AzureAISearchToolboxTool>(projectTool);
+        var index = Assert.Single(aiSearch.AzureAiSearch.Indexes);
         Assert.Equal("/subscriptions/sub/resourceGroups/rg/connections/search", index.ProjectConnectionId);
         Assert.Equal("docs", index.IndexName);
         var json = ModelReaderWriter.Write(
