@@ -197,15 +197,15 @@ internal static class JavaAppHostToolchainResolver
         DirectoryInfo appHostDirectory,
         JavaAppHostToolchain toolchain)
     {
-        var (wrapperName, generateCommand) = toolchain switch
+        var (wrapperName, generateCommand, wrapperTool) = toolchain switch
         {
             // -N keeps the goal from recursing into the modules of a multi-module build.
-            JavaAppHostToolchain.Maven => (OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw", "mvn -N wrapper:wrapper"),
-            JavaAppHostToolchain.Gradle => (OperatingSystem.IsWindows() ? "gradlew.bat" : "gradlew", "gradle wrapper"),
+            JavaAppHostToolchain.Maven => (OperatingSystem.IsWindows() ? "mvnw.cmd" : "mvnw", "mvn -N wrapper:wrapper", JavaWrapperTool.Maven),
+            JavaAppHostToolchain.Gradle => (OperatingSystem.IsWindows() ? "gradlew.bat" : "gradlew", "gradle wrapper", JavaWrapperTool.Gradle),
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
 
-        var wrapperPath = JavaWrapper.Find(projectDirectory.FullName, wrapperName, toolchain == JavaAppHostToolchain.Maven ? JavaWrapperTool.Maven : JavaWrapperTool.Gradle);
+        var wrapperPath = JavaWrapper.Find(projectDirectory.FullName, wrapperName, wrapperTool);
 
         // A globally installed Maven or Gradle is deliberately not used as a fallback: the wrapper pins the
         // tool version in the repository, so every machine builds the AppHost with the same one. Falling
