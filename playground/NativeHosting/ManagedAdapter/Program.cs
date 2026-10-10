@@ -6,7 +6,9 @@ using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NativeHosting;
 
@@ -14,6 +16,7 @@ using NativeHosting;
 Console.SetOut(Console.Error);
 var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
 {
+    Args = args,
     DisableDashboard = true,
     AllowUnsecuredTransport = true,
     TrustDeveloperCertificate = false,
@@ -24,7 +27,14 @@ builder.Services.AddLogging(logging => logging.AddConsole(options => options.Log
 var owner = Guid.NewGuid().ToString("N");
 var resources = new Dictionary<string, IResourceBuilder<RedisResource>>(StringComparer.OrdinalIgnoreCase);
 IResourceBuilder<IResourceWithEndpoints>? baseline = null;
+var published = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+builder.Eventing.Subscribe<AfterPublishEvent>((@event, cancellationToken) =>
+{
+    published.TrySetResult();
+    return Task.CompletedTask;
+});
 DistributedApplication? app = null;
+ManagedEdges? edges = null;
 RpcPeer? peer = null;
 peer = new RpcPeer(InvokeAsync);
 try
@@ -83,6 +93,27 @@ async Task<JsonNode?> InvokeAsync(string method, JsonObject args, CancellationTo
         return null;
     }
 
+    if (method == "importNative")
+    {
+        if (app is not null || edges is not null)
+        {
+            throw new InvalidOperationException("Import must happen once, before building the application.");
+        }
+
+        edges = new ManagedEdges(builder, peer!, owner, RpcPeer.RequiredObject(args, "resource"), resources["cache"], args);
+        return edges.Describe();
+    }
+
+    if (method.StartsWith("edge", StringComparison.Ordinal))
+    {
+        if (edges is null)
+        {
+            throw new InvalidOperationException("Import a native resource first.");
+        }
+
+        return await edges.InvokeAsync(method, args, app, cancellationToken);
+    }
+
     if (method == "start")
     {
         if (app is not null)
@@ -92,6 +123,19 @@ async Task<JsonNode?> InvokeAsync(string method, JsonObject args, CancellationTo
 
         app = builder.Build();
         await app.StartAsync(cancellationToken);
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            // Publishing runs in a hosted service. StartAsync alone does not mean
+            // the manifest has been flushed; publisher completion stops the host.
+            await app.WaitForShutdownAsync(cancellationToken);
+            if (!published.Task.IsCompletedSuccessfully)
+            {
+                throw new InvalidOperationException("Publishing did not complete successfully. See the pipeline error on stderr.");
+            }
+
+            return null;
+        }
+
         await Task.WhenAll(resources.Keys.Select(name => app.ResourceNotifications.WaitForResourceHealthyAsync(name, cancellationToken)));
         if (baseline is not null)
         {
@@ -119,6 +163,11 @@ async Task<JsonNode?> InvokeAsync(string method, JsonObject args, CancellationTo
     }
 
     var reference = RpcPeer.RequiredObject(args, "reference");
+    if (method == "resolve" && edges is not null && edges.Owns(reference))
+    {
+        return await edges.ResolveAsync(args, cancellationToken);
+    }
+
     if (RpcPeer.RequiredString(reference, "owner") != owner || !resources.TryGetValue(RpcPeer.RequiredString(reference, "name"), out var redis))
     {
         throw new InvalidOperationException("Managed resource owner or identity is invalid for this session.");

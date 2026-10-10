@@ -87,6 +87,34 @@ async Task<JsonNode?> InvokeAsync(string method, JsonObject args, CancellationTo
         return handle.DeepClone();
     }
 
+    if (method == "applyEnvironment")
+    {
+        var environment = RpcPeer.RequiredObject(args, "environment");
+        foreach (var entry in environment)
+        {
+            if (entry.Value is JsonObject expression)
+            {
+                _ = RpcPeer.RequiredString(RpcPeer.RequiredObject(expression, "reference"), "owner");
+                _ = RpcPeer.RequiredString(RpcPeer.RequiredObject(expression, "reference"), "name");
+                _ = RpcPeer.RequiredString(expression, "property");
+            }
+            else if (entry.Value is not JsonValue value || !value.TryGetValue<string>(out _))
+            {
+                throw new ArgumentException($"Invalid environment value for '{entry.Key}'.");
+            }
+        }
+
+        lock (target)
+        {
+            foreach (var entry in environment)
+            {
+                target["environment"]![entry.Key] = entry.Value!.DeepClone();
+            }
+        }
+
+        return handle.DeepClone();
+    }
+
     JsonObject snapshot;
     lock (target)
     {

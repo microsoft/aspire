@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
-import { cp, copyFile, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
 import { dirname, resolve, join } from 'node:path';
@@ -219,20 +219,23 @@ function processRows() {
         }).filter(row => !row.state.startsWith('Z'));
 }
 
-async function verifyCleanup() {
+async function verifyCleanup(retained: ReadonlySet<number>) {
     for (let attempt = 0; attempt < 20; attempt++) {
-        const remaining = processRows().filter(row => observedProcesses.get(row.pid) === row.started);
+        const remaining = processRows().filter(row => !retained.has(row.pid) && observedProcesses.get(row.pid) === row.started);
         if (remaining.length === 0) return;
         await delay(250);
     }
     throw new Error('A process observed in this session survived graceful shutdown.');
 }
 
-async function cleanupRemainingProcesses() {
+async function cleanupRemainingProcesses(keepAlive: ChildProcessWithoutNullStreams[] = []) {
+    // The edge experiment deliberately keeps the leaf native core alive across
+    // managed-owner shutdowns. It must not be reaped with the stopped owner's DCP.
+    const retained = new Set(keepAlive.flatMap(child => child.pid ? [child.pid] : []));
     // Re-check start time before signaling: a recycled PID is not our process.
     const signaled = new Set<number>();
     for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
-        const remaining = processRows().filter(row => observedProcesses.get(row.pid) === row.started);
+        const remaining = processRows().filter(row => !retained.has(row.pid) && observedProcesses.get(row.pid) === row.started);
         for (const row of remaining) {
             try {
                 process.kill(row.pid, signal);
@@ -243,7 +246,7 @@ async function cleanupRemainingProcesses() {
         }
         if (remaining.length) await delay(1000);
     }
-    await verifyCleanup();
+    await verifyCleanup(retained);
     if (signaled.size) process.stderr.write(`Harness supervision reaped ${signaled.size} remaining owned process(es).\n`);
     return signaled.size;
 }
@@ -395,6 +398,289 @@ async function allocatePort(): Promise<{ port: number }> {
     return { port };
 }
 
+interface EdgeDescription {
+    clrType: string;
+    isExecutable: boolean;
+    isJavaScript: boolean;
+    relationships: string[];
+    waits: string[];
+    consumerWaits: string[];
+    graphCallbackRan: boolean;
+    callbackCalls: number;
+}
+
+async function runEdges() {
+    const coreProcess = start(coreBinary, []);
+    const core = connect(coreProcess);
+    const nativeDefinition = {
+        name: 'web', directory: join(work, 'web'), executable: process.execPath,
+        arguments: ['.output/server/index.mjs'],
+        publish: { buildExecutable: process.execPath, buildArguments: ['node_modules/nuxt/bin/nuxt.mjs', 'build'],
+            entryPoint: '.output/server/index.mjs', outputDirectory: '.output' },
+    };
+    const native = await request<ResourceHandle>(core, 'addExecutable', nativeDefinition);
+    await assert.rejects(request(core, 'applyEnvironment', { resource: native, environment: { BAD: 42 } }), /Invalid environment value/);
+    await assert.rejects(request(core, 'applyEnvironment', { resource: native, environment: { BAD: { property: 'Uri' } } }), /reference/);
+    const resultPath = join(work, 'managed-consumer-result.json');
+    const importArgs = {
+        resource: native, node: process.execPath, directory: work,
+        consumerScript: join(directory, 'managed-consumer.mts'), resultPath,
+    };
+    const managedProcess = start('dotnet', [adapterAssembly]);
+    const managed = connect(managedProcess);
+    managed.onRequest('describeNative', (args, cancellation) => core.sendRequest('describe', args, cancellation));
+    core.onRequest('resolveOwner', (args, cancellation) => managed.sendRequest('resolve', args, cancellation));
+    await request(managed, 'addRedis', { name: 'cache' });
+    const imported = await request<EdgeDescription>(managed, 'importNative', importArgs);
+    assert.equal(imported.isExecutable, false);
+    assert.equal(imported.isJavaScript, false);
+    assert.deepEqual(imported.waits, ['cache']);
+    assert.deepEqual(imported.consumerWaits, ['web']);
+    assert.ok(imported.relationships.includes('Reference:cache'));
+    const exportEnvironment = async () => {
+        const environment = await request<object>(managed, 'edgeExport', {});
+        await request(core, 'applyEnvironment', { resource: native, environment });
+    };
+    await exportEnvironment();
+    const symbolicBefore = await request<ExecutableDescription>(core, 'resolveEnvironment', { resource: native, mode: 'publish' });
+    assert.ok(typeof symbolicBefore.environment.NUXT_REDIS_URI === 'string');
+    assert.ok(symbolicBefore.environment.NUXT_REDIS_URI.includes('{cache-password.value}'));
+    // Managed startup can await a consumer's native endpoint. Start both owners
+    // concurrently rather than waiting for the whole managed island first.
+    const started = request(managed, 'start', {}).then(() => null, error => error as Error);
+    await request(managed, 'edgeWaitDependencies', {});
+    await request(managed, 'edgeBeforeStart', {});
+    await exportEnvironment();
+    const graph = await request<EdgeDescription>(managed, 'edgeDescribe', {});
+    assert.equal(graph.graphCallbackRan, true);
+    // Production gathering caches callbacks. Exporting again should not repeat
+    // user side effects even though deferred providers remain re-resolvable.
+    await exportEnvironment();
+    const gatheredAgain = await request<EdgeDescription>(managed, 'edgeDescribe', {});
+    assert.equal(gatheredAgain.callbackCalls, graph.callbackCalls);
+    const plan = await request<ExecutableDescription>(core, 'resolveEnvironment', { resource: native, mode: 'run' });
+    assert.equal(plan.environment.MANAGED_GRAPH, 'visible-in-before-start');
+    assert.equal(plan.environment.MANAGED_LITERAL, 'configured-through-CSharp');
+    assert.equal(plan.environment.MANAGED_CALLBACK, 'web');
+    assert.equal(plan.environment.MANAGED_BEFORE_RESOURCE, 'before-native-launch');
+    assert.ok(typeof plan.environment.CACHE_URI === 'string', 'Real WithReference must splat Redis properties');
+    assert.equal(plan.environment.CACHE_URI, plan.environment.NUXT_REDIS_URI);
+    assert.ok(typeof plan.environment.ConnectionStrings__cache === 'string');
+    assert.equal(plan.environment['ConnectionStrings__my-db'], plan.environment.ConnectionStrings__my_db);
+    await assert.rejects(request(managed, 'edgeConflict', {}), /both use.*ConnectionStrings__my_db/);
+    const localNetwork = await request<{ host: string; port: number }>(managed, 'edgeNetwork', { network: 'localhost' });
+    const containerNetwork = await request<{ host: string; port: number }>(managed, 'edgeNetwork', { network: 'container' });
+    assert.ok(['localhost', '127.0.0.1'].includes(localNetwork.host));
+    assert.equal(containerNetwork.port, 6379);
+    assert.notEqual(containerNetwork.host, localNetwork.host);
+    const unresolved = await request<ExecutableDescription>(core, 'describe', { resource: native });
+    assert.equal(typeof unresolved.environment.CACHE_URI, 'object');
+    assert.equal(typeof unresolved.environment.ConnectionStrings__cache, 'object');
+
+    const environment: NodeJS.ProcessEnv = { ...process.env, HOST: '127.0.0.1', NUXT_TELEMETRY_DISABLED: '1' };
+    for (const [key, value] of Object.entries(plan.environment)) {
+        assert.ok(typeof value === 'string');
+        environment[key] = value;
+    }
+    const launch = async () => {
+        const { port } = await allocatePort();
+        const child = start(plan.executable, plan.arguments, { cwd: plan.directory, env: { ...environment, PORT: String(port) } });
+        child.stdout.pipe(process.stderr, { end: false });
+        const url = `http://127.0.0.1:${port}`;
+        await waitHealthy(url);
+        return { child, port, url };
+    };
+    // The real managed consumer must still be waiting before the owner announces
+    // readiness. It will be launched by DCP, not manually by this harness.
+    await assert.rejects(readFile(resultPath), /ENOENT/);
+    const first = await launch();
+    const bridgeResponse = await fetch(`${first.url}/api/bridge`, { signal: AbortSignal.timeout(15000) });
+    assert.equal(bridgeResponse.status, 200);
+    assert.deepEqual(await bridgeResponse.json(), {
+        literal: 'configured-through-CSharp', graph: 'visible-in-before-start',
+        beforeResource: 'before-native-launch', callback: 'web',
+    });
+    await request(managed, 'edgeState', { resource: native, generation: 1, state: 'Running', port: first.port });
+    const startupError = await started;
+    if (startupError) throw startupError;
+    await request(managed, 'edgeWaitHealthy', {});
+    await request(managed, 'edgeWaitConsumer', {});
+    const model = await request<ManagedStats>(managed, 'stats', {});
+    assert.deepEqual(model.modelResources.toSorted(), ['cache', 'managed-consumer', 'web']);
+    const nativeStats = await request<CoreStats>(core, 'stats', {});
+    assert.equal(nativeStats.resources, 1, 'The facade must not create a second native workload');
+    const consumer = JSON.parse(await readFile(resultPath, 'utf8')) as { url: string; serviceDiscovery: string; redisRoundTrip: string };
+    assert.equal(consumer.url, first.url);
+    assert.equal(consumer.serviceDiscovery, first.url);
+    assert.equal(consumer.redisRoundTrip, 'passed');
+    const commandResult = await request<{ success: boolean }>(managed, 'edgeCommand', {});
+    assert.equal(commandResult.success, true);
+    await assert.rejects(request(managed, 'edgeState', { resource: native, generation: 1, state: 'Running', port: first.port }), /Stale/);
+    await assert.rejects(request(managed, 'edgeState', {
+        resource: { ...native, owner: 'old-session' }, generation: 2, state: 'Running', port: first.port,
+    }), /foreign/);
+    await request(managed, 'edgeState', { resource: native, generation: 2, state: 'Exited' });
+    await stopChild(first.child);
+    const second = await launch();
+    await request(managed, 'edgeState', { resource: native, generation: 3, state: 'Running', port: second.port });
+    await request(managed, 'edgeWaitHealthy', {});
+    const endpoints = await request<{ held: string; fresh: string; state: string }>(managed, 'edgeEndpoints', {});
+    assert.equal(endpoints.fresh, second.url);
+    assert.equal(endpoints.held, second.url, 'A previously captured EndpointReference must use the latest owner allocation');
+    assert.equal(endpoints.state, 'Running');
+    await verifyRoundTrip(endpoints.held);
+    const repeatedState = await Promise.allSettled(Array.from({ length: 4 }, () =>
+        request(managed, 'edgeState', { resource: native, generation: 4, state: 'Running', port: second.port })));
+    assert.equal(repeatedState.filter(result => result.status === 'fulfilled').length, 1);
+    for (const result of repeatedState) {
+        if (result.status === 'rejected') assert.match(String(result.reason), /Stale/);
+    }
+    const symbolicAfter = await request<ExecutableDescription>(core, 'resolveEnvironment', { resource: native, mode: 'publish' });
+    assert.equal(symbolicAfter.environment.NUXT_REDIS_URI, symbolicBefore.environment.NUXT_REDIS_URI);
+    await stopChild(second.child);
+    coreProcess.stdin.end();
+    const [coreExit] = await once(coreProcess, 'exit');
+    assert.equal(coreExit, 0);
+    const cacheUriExpression = unresolved.environment.CACHE_URI;
+    assert.ok(typeof cacheUriExpression === 'object');
+    const providerArgs = {
+        reference: cacheUriExpression.reference,
+        property: 'CACHE_URI', consumer: native, mode: 'run',
+    };
+    await assert.rejects(request(managed, 'resolve', providerArgs), /closed|disposed|disconnected/);
+    await request(managed, 'edgeInvalidate', {});
+    await assert.rejects(request(managed, 'resolve', providerArgs), /invalidated/);
+    // Built-in endpoint providers retain the last allocation: demonstrate the
+    // lifecycle hole instead of claiming owner invalidation fixes arbitrary CLR reads.
+    const invalidated = await request<{ held: string; state: string }>(managed, 'edgeEndpoints', {});
+    assert.equal(invalidated.held, second.url);
+    assert.equal(invalidated.state, 'FailedToStart');
+    processTree();
+    await request(managed, 'stop', {});
+    managed.dispose();
+    managedProcess.stdin.end();
+    const [exit] = await once(managedProcess, 'exit');
+    assert.equal(exit, 0);
+    await cleanupRemainingProcesses();
+
+    const publishCoreProcess = start(coreBinary, []);
+    const publishCore = connect(publishCoreProcess);
+    const publishNative = await request<ResourceHandle>(publishCore, 'addExecutable', nativeDefinition);
+    assert.notEqual(publishNative.owner, native.owner);
+    await assert.rejects(request(publishCore, 'describe', { resource: native }), /invalid/);
+    const publish = async (bridgePublisher: boolean) => {
+        const manifestPath = join(work, `edge-manifest-${bridgePublisher}.json`);
+        const child = start('dotnet', [adapterAssembly, '--publisher', 'manifest', '--output-path', manifestPath]);
+        const connection = connect(child);
+        connection.onRequest('describeNative', (args, cancellation) => publishCore.sendRequest('describe', args, cancellation));
+        await request(connection, 'addRedis', { name: 'cache' });
+        await request(connection, 'importNative', { ...importArgs, resource: publishNative, bridgePublisher });
+        await request(connection, 'start', {});
+        const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+            resources: Record<string, { error?: string; type?: string; env?: Record<string, string>; bindings?: object; build?: object }>;
+        };
+        if (output) await copyFile(manifestPath, join(dirname(output), `native-edge-manifest-${bridgePublisher}.json`));
+        processTree();
+        await request(connection, 'stop', {});
+        connection.dispose();
+        child.stdin.end();
+        const [code] = await once(child, 'exit');
+        assert.equal(code, 0);
+        await cleanupRemainingProcesses([publishCoreProcess]);
+        return manifest;
+    };
+    const unsupported = await publish(false);
+    assert.equal(unsupported.resources.web.error, 'This resource does not support generation in the manifest.');
+    const bridged = await publish(true);
+    assert.equal(bridged.resources.web.type, 'native-executable.v0');
+    // The real manifest writer externalizes URI-encoded parameters as formatted
+    // resources. Returning ValueExpression alone misses this publisher dependency.
+    assert.equal(bridged.resources.web.env?.NUXT_REDIS_URI,
+        symbolicBefore.environment.NUXT_REDIS_URI.replace('{cache-password.value}', '{cache-password-uri-encoded.value}'));
+    assert.ok(bridged.resources.web.bindings);
+    assert.ok(bridged.resources.web.build);
+    assert.equal(bridged.resources['managed-consumer'].env?.NATIVE_URL, '{web.bindings.http.url}');
+    assert.equal(bridged.resources['managed-consumer'].env?.services__web__http__0, '{web.bindings.http.url}');
+    assert.ok(bridged.resources['cache-password']);
+    assert.deepEqual(bridged.resources['cache-password-uri-encoded'], {
+        type: 'annotated.string', value: '{cache-password.value}', filter: 'uri',
+    });
+    const manifestText = JSON.stringify(bridged);
+    assert.equal(manifestText.includes(first.url), false);
+    assert.equal(manifestText.includes(second.url), false);
+    assert.ok(typeof plan.environment.NUXT_REDIS_URI === 'string');
+    assert.equal(manifestText.includes(new URL(plan.environment.NUXT_REDIS_URI).password), false);
+    publishCore.dispose();
+    publishCoreProcess.stdin.end();
+    const [publishCoreExit] = await once(publishCoreProcess, 'exit');
+    assert.equal(publishCoreExit, 0);
+    const failedPublisher = start('dotnet', [adapterAssembly, '--publisher', 'manifest',
+        '--output-path', join(work, 'edge-manifest-owner-dead.json')]);
+    const failedConnection = connect(failedPublisher);
+    failedConnection.onRequest('describeNative', (args, cancellation) => publishCore.sendRequest('describe', args, cancellation));
+    await request(failedConnection, 'addRedis', { name: 'cache' });
+    await request(failedConnection, 'importNative', { ...importArgs, resource: publishNative, bridgePublisher: true });
+    await assert.rejects(request(failedConnection, 'start', {}), /Publishing did not complete successfully/);
+    failedConnection.dispose();
+    failedPublisher.stdin.end();
+    const [failedPublisherExit] = await once(failedPublisher, 'exit');
+    assert.equal(failedPublisherExit, 0, 'The RPC reports a publish failure without crashing the adapter');
+    return {
+        managedToNativeReference: 'passed', nativeToManagedServiceDiscovery: consumer,
+        deferredClrProviders: 'passed', graphEnumerationAndMutation: {
+            callbackRan: graph.graphCallbackRan, modelResources: model.modelResources,
+            environmentApplied: plan.environment.MANAGED_GRAPH,
+        },
+        nativeBeforeStartCallbackInjection: 'verified inside the real Nuxt process over HTTP',
+        concreteTypeCompatibility: { clrType: imported.clrType, isExecutable: imported.isExecutable, isJavaScript: imported.isJavaScript },
+        referenceRelationships: imported.relationships,
+        productionCallbackCaching: { callsAfterGather: graph.callbackCalls, callsAfterSecondGather: gatheredAgain.callbackCalls },
+        portableConnectionNamesAndConflictValidation: 'passed', sourceNetworkContext: { localNetwork, containerNetwork },
+        managedReadinessAndWaits: 'passed', managedCommandRouting: 'passed', restartEndpointRebinding: 'passed',
+        staleGenerationRejection: 'passed', foreignSessionRejection: 'passed', guardedOwnerInvalidation: 'passed',
+        concurrentStateFencing: 'one accepted, three duplicate revisions rejected',
+        unguardedEndpointAfterOwnerDeath: 'retains last URL; requires a production invalidation contract',
+        defaultManifest: unsupported.resources.web, bridgedManifest: 'passed; experimental native-executable.v0, not a deployment target',
+        formattedSecretDependency: 'cache-password-uri-encoded emitted by the real manifest writer',
+        publishOwnerFailure: 'explicit RPC failure, not a successful partial manifest',
+    };
+}
+
+async function runNativeOnly() {
+    const coreProcess = start(coreBinary, []);
+    const hostProcess = start(process.execPath, [join(directory, 'nuxt-integration.mts')]);
+    const core = connect(coreProcess);
+    const host = connect(hostProcess);
+    host.onRequest('invokeCore', ({ method, args }, cancellation) => core.sendRequest(method, args, cancellation));
+    const web = await request<ResourceHandle>(host, 'addNuxt', { name: 'web', directory: join(work, 'web') });
+    const plan = await request<ExecutableDescription>(core, 'resolveEnvironment', { resource: web, mode: 'run' });
+    const { port } = await allocatePort();
+    const workload = start(plan.executable, [plan.publish.entryPoint], {
+        cwd: plan.directory, env: { ...process.env, HOST: '127.0.0.1', PORT: String(port) },
+    });
+    workload.stdout.pipe(process.stderr, { end: false });
+    await waitHealthy(`http://127.0.0.1:${port}`);
+    const rows = processTree();
+    assert.deepEqual(rows.filter(row => row.command.includes('NativeHosting.ManagedAdapter.dll')), [],
+        'A native-only session must not launch a managed adapter');
+    const stats = await request<CoreStats>(core, 'stats', {});
+    assert.equal(stats.dynamicCodeSupported, false);
+    assert.equal(stats.resources, 1);
+    const memory = await sampleMemory();
+    await stopChild(workload);
+    for (const connection of [host, core]) connection.dispose();
+    for (const child of [hostProcess, coreProcess]) {
+        child.stdin.end();
+        const [code] = await once(child, 'exit');
+        assert.equal(code, 0);
+    }
+    await cleanupRemainingProcesses();
+    return {
+        health: 'passed', managedAdapters: 0, ...memory,
+        caveat: 'Health-only Nuxt workload without Redis. Not a parity comparison with mixed sessions.',
+    };
+}
+
 async function runManagedBaseline() {
     const began = performance.now();
     const child = start('dotnet', [adapterAssembly]);
@@ -427,9 +713,17 @@ try {
     await copyFile(join(repository, 'playground/NuxtApp/web/package.json'), join(work, 'web/package.json'));
     await cp(join(directory, 'web'), join(work, 'web'), { recursive: true });
     await symlink(join(repository, 'playground/NuxtApp/web/node_modules'), join(work, 'web/node_modules'), 'dir');
-    const split = await runSplit();
-    const managedBaseline = await runManagedBaseline();
-    const results = { split, managedBaseline };
+    let results: object;
+    if (process.env.NATIVE_HOSTING_EDGES_ONLY === '1') {
+        await command(process.execPath, ['node_modules/nuxt/bin/nuxt.mjs', 'build'], join(work, 'web'));
+        results = { edges: await runEdges(), nativeOnly: await runNativeOnly() };
+    } else {
+        const split = await runSplit();
+        const edges = await runEdges();
+        const nativeOnly = await runNativeOnly();
+        const managedBaseline = await runManagedBaseline();
+        results = { split, edges, nativeOnly, managedBaseline };
+    }
     if (output) await writeFile(output, JSON.stringify(results, null, 2));
     console.log(JSON.stringify(results, null, 2));
 } finally {
