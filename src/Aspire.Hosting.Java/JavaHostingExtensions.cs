@@ -295,10 +295,11 @@ public static partial class JavaHostingExtensions
     /// loaded until a build has written it.
     /// </para>
     /// <para>
-    /// When a server certificate is available (the developer certificate by default, or one supplied with
-    /// <c>WithHttpsCertificate</c>), the application is configured to serve HTTPS through
-    /// <c>SERVER_SSL_KEY_STORE</c> and the related variables, and its endpoint is switched to <c>https</c> in run
-    /// mode. Call <c>WithoutHttpsCertificate()</c> to keep serving plain HTTP.
+    /// The application serves plain HTTP by default. Call <c>WithHttpsDeveloperCertificate()</c> (or
+    /// <c>WithHttpsCertificate</c> for a specific certificate) to serve HTTPS instead: the application is then
+    /// configured through <c>SERVER_SSL_KEY_STORE</c> and the related variables, and its endpoint is switched to
+    /// <c>https</c> in run mode. A resource that references it then receives the address as
+    /// <c>services__{name}__https__0</c> rather than <c>services__{name}__http__0</c>.
     /// </para>
     /// <para>
     /// No health check is added. <c>/actuator/health</c> only exists when the application depends on
@@ -347,19 +348,21 @@ public static partial class JavaHostingExtensions
         // Spring Boot services both asking for 8080 would collide.
         resourceBuilder = resourceBuilder
             .WithHttpEndpoint(env: "SERVER_PORT")
+            // Opt-in: switching the scheme renames the service discovery variable consumers read, which
+            // would silently break existing applications that read the http one.
+            .WithoutHttpsCertificate()
             .WithHttpsCertificateConfiguration(ctx =>
             {
                 // Spring Boot's relaxed binding maps these variables onto server.ssl.key-store,
                 // server.ssl.key-store-type and server.ssl.key-store-password, so no application code or
-                // application.properties change is needed. Only applied when a certificate is available
-                // (the developer certificate by default, or one set with WithHttpsCertificate).
+                // application.properties change is needed. Only applied when a certificate is available,
+                // which requires WithHttpsDeveloperCertificate or WithHttpsCertificate.
                 ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE"] = ctx.PfxPath;
                 ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE_TYPE"] = "PKCS12";
 
-                if (ctx.Password is not null)
-                {
-                    ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE_PASSWORD"] = ctx.Password;
-                }
+                // Always set, even when empty: with no password Java skips the key entry and Tomcat fails
+                // with "Private key must be accompanied by certificate chain".
+                ctx.EnvironmentVariables["SERVER_SSL_KEY_STORE_PASSWORD"] = (object?)ctx.Password ?? string.Empty;
 
                 return Task.CompletedTask;
             });

@@ -29,7 +29,68 @@ public class AddSpringBootAppTests
     }
 
     [Fact]
-    public async Task AddSpringBootApp_ConfiguresTheKeyStoreFromTheHttpsCertificate()
+    public async Task AddSpringBootApp_ConfiguresTheKeyStoreWithAnEmptyPasswordWhenTheCertificateHasNone()
+    {
+        var envVars = await GetHttpsCertificateEnvironmentAsync(password: null);
+
+        Assert.Collection(
+            envVars.OrderBy(kvp => kvp.Key),
+            kvp =>
+            {
+                Assert.Equal("SERVER_SSL_KEY_STORE", kvp.Key);
+                Assert.Equal("/certs/cert.pfx", ((ReferenceExpression)kvp.Value).ValueExpression);
+            },
+            kvp =>
+            {
+                // Java skips the key entry of a PKCS12 file opened with no password, so this must be set.
+                Assert.Equal("SERVER_SSL_KEY_STORE_PASSWORD", kvp.Key);
+                Assert.Equal(string.Empty, kvp.Value);
+            },
+            kvp =>
+            {
+                Assert.Equal("SERVER_SSL_KEY_STORE_TYPE", kvp.Key);
+                Assert.Equal("PKCS12", kvp.Value);
+            });
+    }
+
+    [Fact]
+    public async Task AddSpringBootApp_ConfiguresTheKeyStorePasswordFromTheHttpsCertificate()
+    {
+        var password = ReferenceExpression.Create($"secret");
+
+        var envVars = await GetHttpsCertificateEnvironmentAsync(password);
+
+        Assert.Same(password, envVars["SERVER_SSL_KEY_STORE_PASSWORD"]);
+    }
+
+    [Fact]
+    public void AddSpringBootApp_DoesNotUseAnHttpsCertificateByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddSpringBootApp("catalog", tempDir.Path);
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
+        Assert.Null(annotation.Certificate);
+        Assert.False(annotation.UseDeveloperCertificate);
+    }
+
+    [Fact]
+    public void AddSpringBootApp_UsesTheDeveloperCertificateWhenOptedIn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddSpringBootApp("catalog", tempDir.Path).WithHttpsDeveloperCertificate();
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
+        Assert.True(annotation.UseDeveloperCertificate);
+    }
+
+    private static async Task<Dictionary<string, object>> GetHttpsCertificateEnvironmentAsync(IValueProvider? password)
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
         using var tempDir = new TempJavaAppDirectory();
@@ -55,22 +116,11 @@ public class AddSpringBootAppTests
             KeyPath = ReferenceExpression.Create($"/certs/key.pem"),
             CertificateWithKeyPath = ReferenceExpression.Create($"/certs/combined.pem"),
             PfxPath = ReferenceExpression.Create($"/certs/cert.pfx"),
-            Password = null,
+            Password = password,
             CancellationToken = default
         });
 
-        Assert.Collection(
-            envVars.OrderBy(kvp => kvp.Key),
-            kvp =>
-            {
-                Assert.Equal("SERVER_SSL_KEY_STORE", kvp.Key);
-                Assert.Equal("/certs/cert.pfx", ((ReferenceExpression)kvp.Value).ValueExpression);
-            },
-            kvp =>
-            {
-                Assert.Equal("SERVER_SSL_KEY_STORE_TYPE", kvp.Key);
-                Assert.Equal("PKCS12", kvp.Value);
-            });
+        return envVars;
     }
 
     [Fact]
