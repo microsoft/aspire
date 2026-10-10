@@ -184,13 +184,9 @@ public class JavaWrapperTests
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Drive letters only exist on Windows.")]
     public void GetInvocation_OnWindowsKeepsAWrapperOnAnotherDriveAbsolute()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         var (_, leadingArgs) = JavaWrapper.GetInvocation(@"Z:\tools\mvnw.cmd", @"C:\repo", isWindows: true);
 
         Assert.Equal(["/c", "call", @"Z:\tools\mvnw.cmd"], leadingArgs);
