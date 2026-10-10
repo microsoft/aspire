@@ -31,6 +31,11 @@ public class BuildEnvironment
     public static readonly TestTargetFramework DefaultTargetFramework = ComputeDefaultTargetFramework();
     public static readonly string           TestAssetsPath = Path.Combine(AppContext.BaseDirectory, "testassets");
     public static readonly string           TestRootPath = Path.Combine(TempDir, "templates-testroot");
+    private static readonly Lazy<string> s_testRoot = new(() =>
+    {
+        CleanupTestRootPath();
+        return Directory.CreateDirectory(TestRootPath).FullName;
+    });
 
     public static bool IsRunningOnHelix => Environment.GetEnvironmentVariable("HELIX_WORKITEM_ROOT") is not null;
     public static bool IsRunningOnCIBuildMachine => Environment.GetEnvironmentVariable("BUILD_BUILDID") is not null;
@@ -175,7 +180,7 @@ public class BuildEnvironment
         // in the tests
         EnvVars["_MSBUILDTLENABLED"] = "0";
         EnvVars["SkipAspireWorkloadManifest"] = "true";
-        var runtimeRoot = Directory.CreateTempSubdirectory("aspire-template-runtime-").FullName;
+        var runtimeRoot = Path.Combine(s_testRoot.Value, $"runtime-{Guid.NewGuid():N}");
         var dashboardRoot = ExtractRuntimePackage("Aspire.Dashboard.Sdk", "dashboard");
         var dcpRoot = ExtractRuntimePackage("Aspire.Hosting.Orchestration", "dcp");
         var dashboardPath = Path.Combine(dashboardRoot, "tools", OperatingSystem.IsWindows() ? "Aspire.Dashboard.exe" : "Aspire.Dashboard");
@@ -232,8 +237,6 @@ public class BuildEnvironment
         }
 
         Console.WriteLine($"*** Using path for projects: {TestRootPath}");
-        CleanupTestRootPath();
-        Directory.CreateDirectory(TestRootPath);
 
         Console.WriteLine($"*** Using Sdk path: {sdkForTemplatePath}");
         if (UsesCustomDotNet)
@@ -261,41 +264,40 @@ public class BuildEnvironment
 
         TemplatesCustomHive = TemplatesCustomHive.TemplatesHive;
         TemplatesCustomHive?.EnsureInstalledAsync(this).Wait();
+    }
 
-        static void CleanupTestRootPath()
+    private static void CleanupTestRootPath()
+    {
+        if (!Directory.Exists(TestRootPath))
         {
-            if (!Directory.Exists(TestRootPath))
-            {
-                return;
-            }
+            return;
+        }
 
-            try
+        try
+        {
+            Directory.Delete(TestRootPath, recursive: true);
+        }
+        catch (IOException) when (!EnvironmentVariables.IsRunningOnCI)
+        {
+            // there might be lingering processes that are holding onto the files
+            // try deleting the subdirectories instead
+            Console.WriteLine($"\tFailed to delete {TestRootPath} . Deleting subdirectories.");
+            foreach (var dir in Directory.GetDirectories(TestRootPath))
             {
-                Directory.Delete(TestRootPath, recursive: true);
-            }
-            catch (IOException) when (!EnvironmentVariables.IsRunningOnCI)
-            {
-                // there might be lingering processes that are holding onto the files
-                // try deleting the subdirectories instead
-                Console.WriteLine($"\tFailed to delete {TestRootPath} . Deleting subdirectories.");
-                foreach (var dir in Directory.GetDirectories(TestRootPath))
+                try
                 {
-                    try
-                    {
-                        Directory.Delete(dir, recursive: true);
-                    }
-                    catch (IOException ioex)
-                    {
-                        // ignore
-                        Console.WriteLine($"\tFailed to delete {dir} : {ioex.Message}. Ignoring.");
-                    }
+                    Directory.Delete(dir, recursive: true);
                 }
-
+                catch (IOException ioex)
+                {
+                    // ignore
+                    Console.WriteLine($"\tFailed to delete {dir} : {ioex.Message}. Ignoring.");
+                }
             }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error deleting '{TestRootPath}'.", ex);
-            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Error deleting '{TestRootPath}'.", ex);
         }
     }
 

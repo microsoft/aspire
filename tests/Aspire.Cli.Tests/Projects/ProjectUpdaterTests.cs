@@ -21,22 +21,33 @@ namespace Aspire.Cli.Tests.Projects;
 public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData(false, false, false)]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, false)]
-    [InlineData(true, true, false)]
-    [InlineData(false, false, true)]
-    [InlineData(false, true, true)]
-    public async Task UpdatePackageOnlyAppHostPreservesExplicitPackageAndDoesNotAddSdk(bool fileBased, bool fallback, bool centrallyManaged)
+    [InlineData(false, false, false, false)]
+    [InlineData(false, true, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, true, true, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, false, true, true)]
+    public async Task UpdatePackageOnlyAppHostPreservesExplicitPackageAndDoesNotAddSdk(bool fileBased, bool fallback, bool centrallyManaged, bool imported)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "apphost.cs" : "AppHost.csproj"));
-        var original = fileBased
+        var original = imported
+            ? "<Project Sdk=\"Microsoft.NET.Sdk\" />"
+            : fileBased
             ? "#:package Aspire.Hosting.AppHost@17.0.0\n"
             : centrallyManaged
                 ? "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><PackageReference Include=\"Aspire.Hosting.AppHost\" /></ItemGroup></Project>"
                 : "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"17.0.0\" /></ItemGroup></Project>";
         await File.WriteAllTextAsync(appHost.FullName, original);
+        if (imported)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props"),
+                centrallyManaged
+                    ? "<Project><ItemGroup><PackageReference Include=\"Aspire.Hosting.AppHost\" /></ItemGroup></Project>"
+                    : "<Project><ItemGroup><PackageReference Include=\"Aspire.Hosting.AppHost\" Version=\"17.0.0\" /></ItemGroup></Project>");
+        }
         var configFile = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
         await File.WriteAllTextAsync(configFile, """{"channel":"stable","sdk":{"version":"17.0.0"}}""");
         var cpmFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props");

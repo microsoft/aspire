@@ -1302,7 +1302,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
 
         if (root.Descendants().Any(e => e.Name.LocalName.Equals("PackageReference", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(e.Attribute("Include")?.Value ?? e.Attribute("Update")?.Value,
+            && string.Equals(e.Attribute("Include")?.Value,
                 "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase)))
         {
             return true;

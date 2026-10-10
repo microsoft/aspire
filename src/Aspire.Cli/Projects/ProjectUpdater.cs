@@ -417,8 +417,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         using var sourceDocument = fallbackParser.ParseProject(context.AppHostProjectFile);
         var sourceRoot = sourceDocument.RootElement;
         var usesSdk = sourceRoot.GetProperty("Properties").GetProperty("_UsingAspireAppHostSdk").GetString() == "true";
-        var hasAppHostPackage = sourceRoot.GetProperty("Items").GetProperty("PackageReference")
-            .EnumerateArray().Any(package => string.Equals(package.GetProperty("Identity").GetString(),
+        var itemsAndPropertiesDocument = await GetItemsAndPropertiesWithFallbackAsync(context.AppHostProjectFile, context, cancellationToken);
+        var items = itemsAndPropertiesDocument.RootElement.GetProperty("Items");
+        var hasAppHostPackage = items.TryGetProperty("PackageReference", out var packages)
+            && packages.EnumerateArray().Any(package => string.Equals(package.GetProperty("Identity").GetString(),
                 "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
         if (!usesSdk && hasAppHostPackage)
         {
@@ -428,7 +430,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return;
         }
 
-        var itemsAndPropertiesDocument = await GetItemsAndPropertiesWithFallbackAsync(context.AppHostProjectFile, context, cancellationToken);
         var propertiesElement = itemsAndPropertiesDocument.RootElement.GetProperty("Properties");
         var sdkVersionElement = propertiesElement.GetProperty("AspireHostingSDKVersion");
         var sdkVersion = sdkVersionElement.GetString();

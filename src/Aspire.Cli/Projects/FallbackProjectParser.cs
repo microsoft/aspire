@@ -18,10 +18,10 @@ internal sealed partial class FallbackProjectParser
 {
     private readonly ILogger<FallbackProjectParser> _logger;
 
-    [GeneratedRegex(@"#:sdk\s+Aspire\.AppHost\.Sdk@([\d\.\-a-zA-Z]+|\*)")]
+    [GeneratedRegex(@"^[\t ]*#:sdk[\t ]+Aspire\.AppHost\.Sdk@([\d\.\-+a-zA-Z]+|\*)[\t ]*\r?$", RegexOptions.Multiline)]
     private static partial Regex SdkDirectiveRegex();
 
-    [GeneratedRegex(@"#:package\s+([a-zA-Z0-9\._]+)@([\d\.\-a-zA-Z]+|\*)")]
+    [GeneratedRegex(@"^[\t ]*#:package[\t ]+([a-zA-Z0-9\._]+)@([\d\.\-+a-zA-Z]+|\*)[\t ]*\r?$", RegexOptions.Multiline)]
     private static partial Regex PackageDirectiveRegex();
 
     internal static bool HasAppHostPackageDirective(string content)
