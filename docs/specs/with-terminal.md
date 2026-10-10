@@ -730,5 +730,5 @@ optimizations for the CLI, TerminalHost, Dashboard, and their dependencies.
 Native AOT cannot later JIT-optimize the relay or dashboard terminal mirror, so
 both stages need sufficient throughput to prevent a slow dashboard consumer from
 exhausting the relay's bounded output queue and being disconnected. Ordinary
-managed Debug builds remain unoptimized. Both execution modes use server GC,
-matching the previous managed host.
+managed Debug builds remain unoptimized. TerminalHost uses the console runtime's
+default workstation GC; Dashboard retains its Web SDK GC configuration.

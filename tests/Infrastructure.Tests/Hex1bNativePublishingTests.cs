@@ -105,6 +105,23 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task RepositoryTerminalHostMetadataMatchesItsTargetFramework()
+    {
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "src", "Aspire.TerminalHost", "Aspire.TerminalHost.csproj"),
+             "-nologo", "-p:Configuration=Debug", "-getProperty:TargetFramework,AspireTerminalHostDir"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        var framework = properties.GetProperty("TargetFramework").GetString();
+        Assert.Equal("net11.0", framework);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(RepoRoot.Path, "artifacts", "bin", "Aspire.TerminalHost", "Debug", framework!)),
+            Path.GetFullPath(properties.GetProperty("AspireTerminalHostDir").GetString()!).TrimEnd(Path.DirectorySeparatorChar));
+    }
+
     [Theory]
     [InlineData("win-x64", false)]
     [InlineData("win-x64", true)]

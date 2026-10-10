@@ -82,7 +82,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
-          New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
+          # Repository cleanup can remove artifacts/log while the build is streaming output.
+          $temporaryLog = Join-Path '${{ runner.temp }}' 'BuildBundleDeps.log'
           & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
             -ci `
             -restore `
@@ -94,10 +95,11 @@ jobs:
             /p:BuildBundleDepsOnly=true `
             /p:TargetRids=${{ matrix.targets.rids }} `
             /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
-            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $buildLog
-          if ($LASTEXITCODE -ne 0) {
-            exit $LASTEXITCODE
-          }
+            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $temporaryLog
+          $buildExitCode = $LASTEXITCODE
+          New-Item -ItemType Directory -Force -Path (Split-Path $buildLog -Parent) | Out-Null
+          Copy-Item -LiteralPath $temporaryLog -Destination $buildLog
+          exit $buildExitCode
 
       - name: Verify Native AOT Dashboard warnings
         shell: pwsh
