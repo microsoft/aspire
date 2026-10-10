@@ -146,8 +146,8 @@ public class AddQuarkusAppTests
 
         var certificate = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"];
         var key = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"];
-        Assert.Equal("C:/Users/dev/certs/cert.pem", await certificate.GetValueAsync(default));
-        Assert.Equal("C:/Users/dev/certs/key.pem", await key.GetValueAsync(default));
+        Assert.Equal("C:/Users/dev/certs/cert.pem", await certificate.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("C:/Users/dev/certs/key.pem", await key.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class AddQuarkusAppTests
         var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, "/certs/a\\b");
 
         var certificate = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"];
-        Assert.Equal("/certs/a\\b/cert.pem", await certificate.GetValueAsync(default));
+        Assert.Equal("/certs/a\\b/cert.pem", await certificate.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     private static Task PublishBeforeStartAsync(IDistributedApplicationBuilder builder, DistributedApplication application) =>
@@ -195,7 +195,7 @@ public class AddQuarkusAppTests
             CertificateWithKeyPath = ReferenceExpression.Create($"{certDir}/combined.pem"),
             PfxPath = ReferenceExpression.Create($"{certDir}/cert.pfx"),
             Password = password,
-            CancellationToken = default
+            CancellationToken = TestContext.Current.CancellationToken
         });
 
         return envVars;
