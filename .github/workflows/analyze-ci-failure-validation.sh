@@ -19,7 +19,8 @@ RUN_FILE="ci-failure-data/run.json"
 NORMALIZED_TRUSTED_FAILED_JOBS_FILE="${ANALYSIS_FILE}.trusted-failed-jobs.tmp"
 NORMALIZED_TRUSTED_TEST_FAILURES_FILE="${ANALYSIS_FILE}.trusted-test-failures.tmp"
 BOUND_ANALYSIS_FILE="${ANALYSIS_FILE}.bound.tmp"
-trap 'rm -f "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE" "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" "$BOUND_ANALYSIS_FILE"' EXIT
+FLAKY_CAUSES_FILE="${ANALYSIS_FILE}.flaky-causes.tmp"
+trap 'rm -f "$NORMALIZED_TRUSTED_FAILED_JOBS_FILE" "$NORMALIZED_TRUSTED_TEST_FAILURES_FILE" "$BOUND_ANALYSIS_FILE" "$FLAKY_CAUSES_FILE"' EXIT
 if [ ! -f "$ANALYSIS_FILE" ] || [ ! -f "$RUN_CONTEXT_FILE" ] ||
    [ ! -f "$TRUSTED_FAILED_JOBS_FILE" ] || [ ! -f "$TEST_EVIDENCE_FILE" ] ||
    [ ! -f "$RUN_FILE" ]; then
@@ -170,7 +171,7 @@ if [ "$TEST_EVIDENCE_STATE" = "complete" ]; then
       ($trusted_pairs | length) == ($trusted_pairs | unique | length) and
       ($reported_pairs | sort) == ($trusted_pairs | sort) and
       all(.failed_tests[]; . as $reported |
-        any($trusted_jobs[0][]; .name == $reported.job))
+        ([$trusted_jobs[0][] | select(.name == $reported.job)] | length) == 1)
     ' "$ANALYSIS_FILE" >/dev/null; then
     echo "::error::Analysis failed_tests do not match trusted test failure evidence"
     exit 1
@@ -278,7 +279,7 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
         ((gsub("[\t\n]"; "") | test("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]")) | not) and
         all(explode[]; (. < 65024 or . > 65039) and (. < 917760 or . > 917999));
       (type == "object") and
-      ((keys - ["error_pattern", "id", "job_ids", "test_name", "title", "type"]) | length == 0) and
+      ((keys - ["error_pattern", "id", "job_ids", "test_name", "tests", "title", "type"]) | length == 0) and
       ((.id | type) == "string") and
       ((.type | type) == "string") and
       ((.title | safe_single_line(238)) and (.title | test("[^[:space:]]"))) and
@@ -287,7 +288,28 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
       (all(.job_ids[]; type == "number" and . > 0 and . == floor)) and
       ((.job_ids | unique | length) == (.job_ids | length)) and
       ((.test_name // "") | safe_single_line(500)) and
-      (.type != "infra-failure" or (.test_name // "") == "")
+      # Flaky causes may carry either the legacy scalar label or the modern
+      # exact test/job observations, but never both. When exact observations
+      # are present, require a bounded unique set with no publisher-owned data.
+      # Other cause types cannot claim structured tests, and infrastructure
+      # failures cannot present a scalar test label as evidence.
+      (if .type == "flaky-test" then
+        if has("tests") then
+          (has("test_name") | not) and
+          ((.tests | type) == "array") and (0 < (.tests | length)) and
+          ((.tests | length) <= 200) and
+          all(.tests[];
+            (type == "object") and ((keys - ["name", "job_id"]) | length == 0) and
+            (.name | safe_single_line(500)) and (.name | test("[^[:space:]]")) and
+            (.job_id | type == "number" and . > 0 and . == floor)) and
+          ((.tests | unique_by([.name, .job_id]) | length) == (.tests | length))
+        else
+          true
+        end
+      else
+        (has("tests") | not) and
+        (.type != "infra-failure" or (.test_name // "") == "")
+      end)
     ' "$CAUSE_FILE" >/dev/null; then
       echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} contains unsupported or publisher-owned fields"
       exit 1
@@ -348,7 +370,7 @@ if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
         echo "::error::Cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${PRIOR_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}"
         exit 1
       fi
-      if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+      if [ "$CAUSE_TYPE" = "flaky-test" ] && ! jq -e 'has("tests")' "$CAUSE_FILE" >/dev/null; then
         PRIOR_CAUSE_TEST_NAME=$(jq -r 'if (.test_name | type) == "string" then .test_name else "" end' "$PRIOR_CAUSE_FILE")
         CAUSE_TEST_NAME=$(jq -r '.test_name' "$CAUSE_FILE")
         if [ "$PRIOR_CAUSE_TEST_NAME" != "$CAUSE_TEST_NAME" ]; then
@@ -479,50 +501,41 @@ fi
 if [ "${#CAUSE_FILES[@]}" -ne 0 ]; then
   for CAUSE_FILE in "${CAUSE_FILES[@]}"; do
     if [ "$(jq -r '.type // ""' "$CAUSE_FILE")" = "flaky-test" ]; then
-      CAUSE_TEST_NAME=$(jq -r '.test_name // ""' "$CAUSE_FILE")
-      if ! jq -e --arg test_name "$CAUSE_TEST_NAME" '
-        any(.failed_tests[];
-          .classification == "flaky" and .name == $test_name)
-      ' "$ANALYSIS_FILE" >/dev/null; then
-        echo "::error::Flaky-test cause must reference a validated flaky test"
-        exit 1
-      fi
       if ! jq -e \
-          --arg test_name "$CAUSE_TEST_NAME" \
           --slurpfile analysis "$ANALYSIS_FILE" \
           --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
-          all(.job_ids[]; . as $job_id |
-            ([$trusted_jobs[0][] | select(.id == $job_id)][0].name // "") as $job_name |
-            any($analysis[0].failed_tests[];
-              .classification == "flaky" and
-              .name == $test_name and
-              .job == $job_name))
+          . as $cause |
+          (if has("tests") then .tests
+           else [.job_ids[] | {name: $cause.test_name, job_id: .}] end) as $observations |
+          all($cause.job_ids[]; . as $job_id |
+            any($observations[]; .job_id == $job_id)) and
+          all($observations[]; . as $observation |
+            ($cause.job_ids | index($observation.job_id)) != null and
+            (([$trusted_jobs[0][] | select(.id == $observation.job_id)][0].name // "") as $job_name |
+              any($analysis[0].failed_tests[];
+                .classification == "flaky" and
+                .name == $observation.name and .job == $job_name)))
         ' "$CAUSE_FILE" >/dev/null; then
         printf -v CAUSE_FILE_DISPLAY '%q' "$(basename "$CAUSE_FILE")"
-        echo "::error::Cause ${CAUSE_FILE_DISPLAY} references an unknown or incompatible failed job"
+        echo "::error::Cause ${CAUSE_FILE_DISPLAY} references an unknown or incompatible failed job or test"
         exit 1
       fi
     fi
   done
 
-  FLAKY_CAUSES=$(
-    jq -s \
-      '[.[] | select(.type == "flaky-test") | {test_name, job_ids}]' \
-      "${CAUSE_FILES[@]}"
-  )
+  jq -s \
+    '[.[] | select(.type == "flaky-test") | . as $cause |
+      (if has("tests") then .tests
+       else [.job_ids[] | {name: $cause.test_name, job_id: .}] end)[]]' \
+    "${CAUSE_FILES[@]}" > "$FLAKY_CAUSES_FILE"
   if ! jq -e \
-      --argjson flaky_causes "$FLAKY_CAUSES" \
+      --slurpfile flaky_causes "$FLAKY_CAUSES_FILE" \
       --slurpfile trusted_jobs "$TRUSTED_FAILED_JOBS_FILE" '
       all(.failed_tests[] | select(.classification == "flaky"); . as $test |
-        any($flaky_causes[];
-          . as $cause |
-          $cause.test_name == $test.name and
-          any($cause.job_ids[];
-            . as $job_id |
-            any($trusted_jobs[0][];
-              .id == $job_id and .name == $test.job))))
+        ([$flaky_causes[0][] | select(.name == $test.name) | .job_id as $job_id |
+          $trusted_jobs[0][] | select(.id == $job_id and .name == $test.job)] | length) == 1)
     ' "$ANALYSIS_FILE" >/dev/null; then
-    echo "::error::Every flaky test and job must be covered by a matching cause"
+    echo "::error::Every flaky test and job must be covered by exactly one cause"
     exit 1
   fi
 fi
