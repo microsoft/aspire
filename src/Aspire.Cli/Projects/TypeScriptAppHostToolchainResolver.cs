@@ -29,6 +29,7 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnConfigFileName = ".yarnrc.yml";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
+    private const string PnpmWorkspaceFileName = "pnpm-workspace.yaml";
     private const string DenoLockFileName = "deno.lock";
     private const string DenoJsonFileName = "deno.json";
     private const string DenoJsoncFileName = "deno.jsonc";
@@ -155,7 +156,7 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain)
+    public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain, DirectoryInfo appHostDirectory)
     {
         if (toolchain == TypeScriptAppHostToolchain.Npm)
         {
@@ -171,7 +172,7 @@ internal static class TypeScriptAppHostToolchainResolver
             CodeGenLanguage = baseRuntimeSpec.CodeGenLanguage,
             DetectionPatterns = baseRuntimeSpec.DetectionPatterns,
             Initialize = baseRuntimeSpec.Initialize,
-            InstallDependencies = CreateInstallCommand(toolchain),
+            InstallDependencies = CreateInstallCommand(toolchain, appHostDirectory),
             PreExecute = CreatePreExecuteCommands(toolchain, tsConfigFileName),
             Execute = CreateExecuteCommand(toolchain, tsConfigFileName),
             WatchExecute = CreateWatchCommand(toolchain, tsConfigFileName),
@@ -189,13 +190,14 @@ internal static class TypeScriptAppHostToolchainResolver
         };
     }
 
-    private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
+    private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain, DirectoryInfo appHostDirectory)
     {
-        // pnpm resolves a parent pnpm-workspace.yaml when install runs in a nested package.
-        // The generated brownfield AppHost intentionally lives outside the user's workspace
-        // package graph, so install only that package instead of requiring edits to the
-        // user's workspace file. See https://pnpm.io/workspaces.
-        string[] args = toolchain == TypeScriptAppHostToolchain.Pnpm
+        // A generated brownfield AppHost is intentionally outside its parent's package graph, so
+        // isolate that install. When the AppHost owns the workspace file, pnpm must honor it because
+        // it contains workspace settings such as catalogs and build-script approvals.
+        // See https://pnpm.io/workspaces.
+        string[] args = toolchain == TypeScriptAppHostToolchain.Pnpm &&
+            !File.Exists(Path.Combine(appHostDirectory.FullName, PnpmWorkspaceFileName))
             ? ["install", "--ignore-workspace"]
             : ["install"];
 
