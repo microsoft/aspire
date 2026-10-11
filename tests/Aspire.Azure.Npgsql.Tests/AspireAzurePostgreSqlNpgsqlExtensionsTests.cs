@@ -77,6 +77,34 @@ public class AspireAzurePostgreSqlNpgsqlExtensionsTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    public void ReadsUsernameFromTokenWithBase64UrlCharacters(bool useKeyed)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:npgsql", ConnectionString)
+        ]);
+
+        if (useKeyed)
+        {
+            builder.AddKeyedAzureNpgsqlDataSource("npgsql", configureSettings: ConfigureBase64UrlTokenCredentials);
+        }
+        else
+        {
+            builder.AddAzureNpgsqlDataSource("npgsql", configureSettings: ConfigureBase64UrlTokenCredentials);
+        }
+
+        using var host = builder.Build();
+        var dataSource = useKeyed ?
+            host.Services.GetRequiredKeyedService<NpgsqlDataSource>("npgsql") :
+            host.Services.GetRequiredService<NpgsqlDataSource>();
+
+        Assert.Contains(ConnectionString, dataSource.ConnectionString);
+        Assert.Contains("Username=mikey@mouse.com", dataSource.ConnectionString);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
     public void TokenCredentialIsIgnoredWhenUsernameAndPasswordAreSet(bool useKeyed)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -334,6 +362,24 @@ public class AspireAzurePostgreSqlNpgsqlExtensionsTests
         //   "Issuer": "Issuer",
         //   "Issued At": "2025-03-21T01:37:00.198Z",
         //   "Expiration": "2025-03-21T01:37:00.198Z",
+        //   "Role": "Admin"
+        // }
+
+        settings.Credential = new FakeTokenCredential(accesstoken);
+    }
+
+    private static void ConfigureBase64UrlTokenCredentials(AzureNpgsqlSettings settings)
+    {
+        // The payload segment contains the Base64Url-only characters '-' and '_'.
+        const string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJJc3N1ZXIiOiJJc3N1ZXIiLCJJc3N1ZWQgQXQiOiIyMDI1LTAzLTIxVDAxOjM3OjAwLjE5OFoiLCJFeHBpcmF0aW9uIjoiMjAyNS0wMy0yMVQwMTozNzowMC4xOThaIiwicHJlZmVycmVkX3VzZXJuYW1lIjoibWlrZXlAbW91c2UuY29tIiwibmFtZSI6Ik1pa2V5IH5-IE1vdXNlPz8_IiwiUm9sZSI6IkFkbWluIn0.fzFHyY-rZqLuqZej-jVxID4xiN44-Lg17KgAY_gio7o";
+        var accesstoken = new AccessToken(token, DateTimeOffset.Now.AddHours(1));
+
+        // {
+        //   "Issuer": "Issuer",
+        //   "Issued At": "2025-03-21T01:37:00.198Z",
+        //   "Expiration": "2025-03-21T01:37:00.198Z",
+        //   "preferred_username": "mikey@mouse.com",
+        //   "name": "Mikey ~~ Mouse???",
         //   "Role": "Admin"
         // }
 
