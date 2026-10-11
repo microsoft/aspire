@@ -1,0 +1,100 @@
+parameters:
+  - name: language
+    type: string
+    values:
+      - go
+      - java
+
+jobs:
+  - job: CodeQL_${{ parameters.language }}
+    displayName: ${{ parameters.language }} starter CodeQL
+    timeoutInMinutes: 60
+    workspace:
+      clean: all
+    pool:
+      name: NetCore1ESPool-Internal
+      image: 1es-windows-2022
+      os: windows
+    templateContext:
+      sdl:
+        codeql:
+          # Each job compiles only its own language. Let 1ES inject Initialize
+          # and Finalize around the steps and upload the database to CAP Central.
+          # https://aka.ms/codeql3000-1espt
+          language: ${{ parameters.language }}
+    steps:
+      - checkout: self
+        fetchDepth: 1
+        clean: true
+
+      - task: DownloadPipelineArtifact@2
+        displayName: Download same-build managed packages
+        inputs:
+          artifact: managed_packages_shipping
+          targetPath: '$(Pipeline.Workspace)/codeql-packages'
+
+      - task: DownloadPipelineArtifact@2
+        displayName: Download same-build Windows CLI
+        inputs:
+          artifact: native_archives_win_x64
+          itemPattern: '**/aspire-cli-win-x64-*.zip'
+          targetPath: '$(Pipeline.Workspace)/codeql-archives'
+
+      - pwsh: |
+          $ErrorActionPreference = 'Stop'
+          $archives = @(Get-ChildItem "$(Pipeline.Workspace)/codeql-archives" -Filter 'aspire-cli-win-x64-*.zip' -File -Recurse)
+          if ($archives.Count -ne 1) {
+            throw "Expected exactly one same-build CLI archive, found $($archives.Count)."
+          }
+          $destination = "$(Pipeline.Workspace)/codeql-cli"
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath $destination
+          $executables = @(Get-ChildItem $destination -Filter 'aspire.exe' -File -Recurse)
+          if ($executables.Count -ne 1) {
+            throw "Expected exactly one extracted CLI executable, found $($executables.Count)."
+          }
+          Write-Host "##vso[task.setvariable variable=PolyglotCodeqlCliPath]$($executables[0].FullName)"
+        displayName: Extract same-build CLI
+
+      - ${{ if eq(parameters.language, 'go') }}:
+        - task: GoTool@0
+          displayName: Install Go 1.26
+          inputs:
+            version: '1.26.8'
+
+      - ${{ if eq(parameters.language, 'java') }}:
+        # The starter and generated AppHost use Java 25 language features.
+        # Pin a Microsoft JDK rather than relying on the pool's default JDK.
+        # https://learn.microsoft.com/java/openjdk/download
+        - pwsh: |
+            $ErrorActionPreference = 'Stop'
+            $url = 'https://aka.ms/download-jdk/microsoft-jdk-25.0.4.1-windows-x64.zip'
+            $archive = "$(Agent.TempDirectory)/polyglot-codeql-jdk.zip"
+            Invoke-WebRequest $url -OutFile $archive
+            $checksumFile = "$archive.sha256sum.txt"
+            Invoke-WebRequest "$url.sha256sum.txt" -OutFile $checksumFile
+            $checksum = ((Get-Content -LiteralPath $checksumFile -Raw).Trim() -split '\s+')[0]
+            if ($checksum -notmatch '^[a-fA-F0-9]{64}$') {
+              throw 'Microsoft JDK download checksum has an invalid format.'
+            }
+            if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $checksum) {
+              throw 'Microsoft JDK download checksum did not match.'
+            }
+          displayName: Download Microsoft JDK 25
+        - task: JavaToolInstaller@0
+          displayName: Install Microsoft JDK 25
+          inputs:
+            versionSpec: '25'
+            jdkArchitectureOption: x64
+            jdkSourceOption: LocalDirectory
+            jdkFile: '$(Agent.TempDirectory)/polyglot-codeql-jdk.zip'
+            jdkDestinationDirectory: '$(Agent.TempDirectory)/polyglot-codeql-jdk'
+
+      - pwsh: |
+          & "$(Build.SourcesDirectory)/eng/scripts/build-codeql-starter.ps1" `
+            -Language '${{ parameters.language }}' `
+            -CliPath "$(PolyglotCodeqlCliPath)" `
+            -PackageDirectory "$(Pipeline.Workspace)/codeql-packages" `
+            -OutputDirectory "$(Build.SourcesDirectory)/artifacts/codeql/${{ parameters.language }}"
+        displayName: Scaffold and compile starter AppHost and API
+        env:
+          SYSTEM_ACCESSTOKEN: $(System.AccessToken)
