@@ -1,0 +1,16 @@
+{
+  "id": "aspire-terminalhost-tests-cancellationreachesserver-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: TerminalHostControlJsonSerializerContextTests.CancellationReachesServer times out after 30s on Linux",
+  "test_name": "Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer",
+  "error_pattern": "System.TimeoutException : The operation at TerminalHostControlJsonSerializerContextTests.cs:115 timed out after reaching the limit of 30000ms.\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in AsyncTestHelpers.cs:line 180\n   at Aspire.TerminalHost.Tests.TerminalHostControlJsonSerializerContextTests.CancellationReachesServer()",
+  "occurrences": [
+    {
+      "run_id": 38099325878,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/38099325878",
+      "job": "Tests / No-package tests (regular, Aspire.TerminalHost.Tests, TerminalHost, TerminalHost, tests/Aspire.Te... / TerminalHost (ubuntu-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-11T01:23:31Z"
+    }
+  ]
+}

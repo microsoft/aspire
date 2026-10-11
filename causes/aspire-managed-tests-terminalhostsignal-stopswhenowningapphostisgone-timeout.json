@@ -1,0 +1,16 @@
+{
+  "id": "aspire-managed-tests-terminalhostsignal-stopswhenowningapphostisgone-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone times out (aspire-managed exit code 124) on Windows",
+  "test_name": "Aspire.Managed.Tests.TerminalHostSignalTests.TerminalHostSubcommandStopsWhenOwningAppHostIsGone",
+  "error_pattern": "aspire-managed exited with code 124.\nstdout: \nstderr: \n   at Aspire.Managed.Tests.TerminalHostSignalTests.AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(String hostAssemblyPath) in TerminalHostSignalTests.cs:line 242",
+  "occurrences": [
+    {
+      "run_id": 38099325878,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/38099325878",
+      "job": "Tests / No-package tests (regular, Aspire.Managed.Tests, Managed, Managed, tests/Aspire.Managed.Tests/Asp... / Managed (windows-latest)",
+      "pr_number": 0,
+      "observed_at": "2026-10-11T01:23:31Z"
+    }
+  ]
+}
