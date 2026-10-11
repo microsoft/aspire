@@ -146,6 +146,16 @@ await customInputParam.withCustomInput({
     },
 });
 
+// optional parameter value management
+const optionalParam = await builder.addParameter("optional-value").withOptional();
+const _unsetOptionalValue: string | null = await optionalParam.tryGetCurrentValue();
+await optionalParam.setValueAsync({ value: "configured" });
+const _configuredOptionalValue: string | null = await optionalParam.tryGetCurrentValue();
+await optionalParam.setValueAsync();
+const _clearedOptionalValue: string | null = await optionalParam.tryGetCurrentValue();
+await optionalParam.withRequired({ required: true });
+await optionalParam.withRequired({ required: false });
+
 // ===================================================================
 // Container-specific methods on ContainerResource
 // ===================================================================
@@ -485,8 +495,8 @@ const _isStaging: boolean = await builder.environment().isStaging();
 const _isSpecificEnvironment: boolean = await builder.environment().isEnvironment("Development");
 
 const builderConfiguration = await builder.getConfiguration();
-const _configValue: string = await builderConfiguration.getConfigValue("MyConfig:Key");
-const _connectionString: string = await builderConfiguration.getConnectionString("customcs");
+const _configValue: string | null = await builderConfiguration.getConfigValue("MyConfig:Key");
+const _connectionString: string | null = await builderConfiguration.getConnectionString("customcs");
 const _configSection = await builderConfiguration.getSection("MyConfig");
 const _configChildren = await builderConfiguration.getChildren();
 const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key");
@@ -593,7 +603,7 @@ const beforeStartSubscription = await builder.subscribeBeforeStart(async (before
     const _userSecretsFilePath: string = await userSecretsManager.filePath();
     const _secretSet: boolean = await userSecretsManager.trySetSecret("Validation:Key", "value");
     await userSecretsManager.getOrSetSecret(container, "Validation:GeneratedKey", "generated-value");
-    const _generatedSecretValue: string = await builderConfiguration.getConfigValue("Validation:GeneratedKey");
+    const _generatedSecretValue: string | null = await builderConfiguration.getConfigValue("Validation:GeneratedKey");
     await userSecretsManager.saveStateJson("{\"Validation\":\"Value\"}");
 
     const _modelFromServices = await beforeStartServices.getDistributedApplicationModel();

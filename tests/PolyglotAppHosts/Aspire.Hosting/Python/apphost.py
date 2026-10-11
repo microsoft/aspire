@@ -175,6 +175,25 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # addParameterFromConfiguration
     config_param = builder.add_parameter_from_config("parameter", "Config:Key")
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
+    optional_param = builder.add_parameter("optional-parameter").with_optional()
+    optional_param.with_required()
+    optional_param.with_required(required=False)
+    optional_value: str | None = optional_param.try_get_current_value()
+    assert optional_value is None
+    optional_param.set_value(value="configured")
+    assert optional_param.try_get_current_value() == "configured"
+    optional_param.set_value(value="")
+    assert optional_param.try_get_current_value() is None
+    optional_param.set_value(value="replacement")
+    optional_param.set_value()
+    assert optional_param.try_get_current_value() is None
+    container.with_env("OPTIONAL_PARAMETER", optional_param)
+
+    # False is a scalar value for required, unlike the opt-in optional flag.
+    constructor_optional_param = builder.add_parameter("constructor-optional", required=False, description="")
+    constructor_optional_param.set_value()
+    assert constructor_optional_param.try_get_current_value() is None
+    builder.add_parameter("constructor-optional-flag", optional=True)
     custom_input_param = builder.add_parameter("custom-input")
     custom_input_param.with_custom_input(
         {
