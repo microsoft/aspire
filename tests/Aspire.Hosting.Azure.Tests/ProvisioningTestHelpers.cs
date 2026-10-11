@@ -994,6 +994,8 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     {
         return new TestArmClient();
     }
+
+    public ArmClient GetRawArmClient(TokenCredential credential) => new(credential);
 }
 
 internal sealed class TestSecretClientProvider(ITokenCredentialProvider tokenCredentialProvider) : ISecretClientProvider

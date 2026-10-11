@@ -14,6 +14,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests;
 using Azure;
 using Azure.Core;
+using Azure.ResourceManager;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -5215,6 +5216,9 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         public IArmClient GetArmClient(TokenCredential credential)
             => armClient;
+
+        public ArmClient GetRawArmClient(TokenCredential credential)
+            => new(credential);
     }
 
     private sealed class AzureContextOptionsArmClient : IArmClient
@@ -5822,6 +5826,9 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         public IArmClient GetArmClient(global::Azure.Core.TokenCredential credential)
             => new CancelConflictArmClient();
+
+        public ArmClient GetRawArmClient(global::Azure.Core.TokenCredential credential)
+            => new(credential);
     }
 
     private sealed class CancelConflictArmClient : IArmClient
@@ -5891,6 +5898,9 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         public IArmClient GetArmClient(TokenCredential credential)
             => armClient;
+
+        public ArmClient GetRawArmClient(TokenCredential credential)
+            => new(credential);
     }
 
     private sealed class BlockingDeleteArmClient : IArmClient
@@ -5984,6 +5994,9 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         public IArmClient GetArmClient(global::Azure.Core.TokenCredential credential)
             => new CredentialUnavailableArmClient();
+
+        public ArmClient GetRawArmClient(global::Azure.Core.TokenCredential credential)
+            => new(credential);
     }
 
     private sealed class CredentialUnavailableArmClient : IArmClient
@@ -6050,6 +6063,9 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         public IArmClient GetArmClient(TokenCredential credential)
             => new ThrowingResourceProbeArmClient(exception);
+
+        public ArmClient GetRawArmClient(TokenCredential credential)
+            => new(credential);
     }
 
     private sealed class ThrowingResourceProbeArmClient(RequestFailedException exception) : IArmClient
@@ -6112,6 +6128,9 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         public IArmClient GetArmClient(TokenCredential credential)
             => new DeleteResourceFailureArmClient(existingResourceId, deleteException);
+
+        public ArmClient GetRawArmClient(TokenCredential credential)
+            => new(credential);
     }
 
     private sealed class DeleteResourceFailureArmClient(string existingResourceId, RequestFailedException deleteException) : IArmClient
