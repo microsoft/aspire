@@ -531,7 +531,17 @@ jobs:
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
+          echo "===== BEFORE TEST: DCP PROCESSES ====="
+          pgrep -a dcp || true
 
+          echo "===== BEFORE TEST: SQLITE STATE ====="
+          ls -la /home/runner/.dcp/state/ || true
+
+          echo "===== BEFORE TEST: SQLITE LOCK HOLDERS ====="
+          lsof /home/runner/.dcp/state/state.sqlite3 || true
+
+          echo "===== BEFORE TEST: DCP PROCESSES DETAILS ====="
+          ps aux | grep -i dcp | grep -v grep || true
           # Run tests. Capture the real MTP exit code without letting "set -e" abort the step:
           # "|| TEST_EXIT_CODE=$?" both records the code and keeps the compound command successful.
           TEST_EXIT_CODE=0
