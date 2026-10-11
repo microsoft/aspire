@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREAZURE003 // AzureSubnetResource used in WithSubnet extensions
 
+using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
@@ -755,7 +756,20 @@ public static class AzureKubernetesEnvironmentExtensions
                 {
                     existingSubnet = SubnetResource.FromExisting(subnetIdentifier);
                     existingSubnet.Parent = existingVnet;
-                    existingSubnet.Name = subnet.SubnetName;
+
+                    if (subnet.SubnetName is not null)
+                    {
+                        existingSubnet.Name = subnet.SubnetName;
+                    }
+                    else if (subnet.SubnetNameParameter is not null)
+                    {
+                        existingSubnet.Name = subnet.SubnetNameParameter.AsProvisioningParameter(infrastructure);
+                    }
+                    else
+                    {
+                        throw new UnreachableException("Subnet name must be set.");
+                    }
+
                     infrastructure.Add(existingSubnet);
                     subnetExistingByKey[subnetIdentifier] = existingSubnet;
                 }
