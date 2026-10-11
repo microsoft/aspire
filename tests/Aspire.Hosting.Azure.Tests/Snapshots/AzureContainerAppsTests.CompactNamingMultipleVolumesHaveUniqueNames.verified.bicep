@@ -69,7 +69,7 @@ resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@202
   parent: my_ace
 }
 
-resource my_ace_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource my_ace_storageVolume 'Microsoft.Storage/storageAccounts@2025-06-01' = {
   name: take('myacesv${resourceToken}', 24)
   kind: 'StorageV2'
   location: location
@@ -83,12 +83,12 @@ resource my_ace_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   tags: tags
 }
 
-resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' = {
+resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2025-06-01' = {
   name: 'default'
   parent: my_ace_storageVolume
 }
 
-resource shares_volumes_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2025-06-01' = {
   name: take('${toLower('druid')}-${toLower('druid_shared')}', 60)
   properties: {
     enabledProtocols: 'SMB'
@@ -110,7 +110,7 @@ resource managedStorage_volumes_druid_0 'Microsoft.App/managedEnvironments/stora
   parent: my_ace
 }
 
-resource shares_volumes_druid_1 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_druid_1 'Microsoft.Storage/storageAccounts/fileServices/shares@2025-06-01' = {
   name: take('${toLower('druid')}-${toLower('coordinator_var')}', 60)
   properties: {
     enabledProtocols: 'SMB'
@@ -132,7 +132,7 @@ resource managedStorage_volumes_druid_1 'Microsoft.App/managedEnvironments/stora
   parent: my_ace
 }
 
-resource shares_bindmounts_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_bindmounts_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2025-06-01' = {
   name: take('${toLower('druid')}-${toLower('bm0')}', 60)
   properties: {
     enabledProtocols: 'SMB'
