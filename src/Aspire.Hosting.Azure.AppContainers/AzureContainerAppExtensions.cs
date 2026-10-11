@@ -479,12 +479,15 @@ public static class AzureContainerAppExtensions
                     var containerAppStorage = new ContainerAppManagedEnvironmentStorage(managedStorageName)
                     {
                         Parent = containerAppEnvironment,
-                        ManagedEnvironmentStorageAzureFile = new()
+                        Properties = new()
                         {
-                            ShareName = share.Name,
-                            AccountName = storageVolume.Name,
-                            AccountKey = keyValue,
-                            AccessMode = ContainerAppAccessMode.ReadWrite
+                            AzureFile = new()
+                            {
+                                ShareName = share.Name,
+                                AccountName = storageVolume.Name,
+                                AccountKey = keyValue,
+                                AccessMode = ContainerAppAccessMode.ReadWrite
+                            }
                         }
                     };
 
@@ -603,8 +606,8 @@ public static class AzureContainerAppExtensions
                 }
             }
 
-            // By default the managed environment name is left to Azure.Provisioning, whose sanitizer keeps
-            // only lowercase letters (ContainerAppManagedEnvironment inherits ResourceNameRequirements(1, 24,
+            // By default the managed environment name preserves Azure.Provisioning.AppContainers 1.2.0's
+            // sanitizer, which keeps only lowercase letters (ResourceNameRequirements(1, 24,
             // ResourceNameCharacters.LowercaseLetters)). That drops digits from the bicep identifier, so
             // environments named e.g. "cae1"/"cae2" in the same resource group both resolve to
             // take('cae${uniqueString(resourceGroup().id)}', 24) and collapse onto a single physical
@@ -1162,20 +1165,11 @@ public static class AzureContainerAppExtensions
         bool useUniqueResourceNaming,
         ContainerAppsPipelineStepMarker marker) : DynamicResourceNamePropertyResolver
     {
-        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens and are
-        // 2-60 characters long. These are the managed-environment limits, not the 2-32 character container-app
-        // limits:
-        // https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.ContainerApp.EnvNaming/
-        //
-        // Azure.Provisioning.AppContainers does not override GetResourceNameRequirements for
-        // ContainerAppManagedEnvironment, so it inherits ProvisionableResource's conservative default of
-        // (1, 24, LowercaseLetters). That default silently drops the digits Aspire relies on to keep sibling
-        // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
-        // group (https://github.com/microsoft/aspire/issues/18722).
-        private static readonly ResourceNameRequirements s_requirements = new(
-            minLength: 2,
-            maxLength: 60,
-            validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
+        // Preserve existing deployment names even when the SDK changes its default naming requirements.
+        private static readonly ResourceNameRequirements s_legacyRequirements = new(
+            minLength: 1,
+            maxLength: 24,
+            validCharacters: ResourceNameCharacters.LowercaseLetters);
 
         public ContainerAppManagedEnvironment ManagedEnvironment { get; } = managedEnvironment;
 
@@ -1190,14 +1184,14 @@ public static class AzureContainerAppExtensions
                 return null;
             }
 
-            // Delegate to the standard dynamic naming algorithm. The opt-in substitutes the requirements that
-            // Azure.Provisioning failed to declare; otherwise the supplied requirements preserve the legacy output
+            // Delegate to the standard dynamic naming algorithm. The opt-in uses the SDK's corrected
+            // requirements; otherwise the legacy requirements preserve the output
             // byte-for-byte. Recording the returned expression here means caller-configured resolvers still take
             // precedence and only names produced by this fallback participate in collision validation.
             var resolvedName = base.ResolveName(
                 options,
                 resource,
-                useUniqueResourceNaming ? s_requirements : requirements);
+                useUniqueResourceNaming ? requirements : s_legacyRequirements);
 
             if (resolvedName is not null)
             {

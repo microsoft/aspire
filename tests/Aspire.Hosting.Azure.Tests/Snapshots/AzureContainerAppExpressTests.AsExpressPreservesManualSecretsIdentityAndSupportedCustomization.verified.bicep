@@ -24,6 +24,7 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
   name: 'api'
   location: location
   properties: {
+    environmentId: env_outputs_azure_container_apps_environment_id
     configuration: {
       secrets: [
         {
@@ -44,18 +45,9 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
         }
       ]
     }
-    environmentId: env_outputs_azure_container_apps_environment_id
     template: {
       containers: [
         {
-          probes: [
-            {
-              tcpSocket: {
-                port: 8080
-              }
-              type: 'Liveness'
-            }
-          ]
           image: api_containerimage
           name: 'api'
           env: [
@@ -96,6 +88,14 @@ resource api 'Microsoft.App/containerApps@2026-03-02-preview' = {
             {
               volumeName: 'scratch'
               mountPath: '/scratch'
+            }
+          ]
+          probes: [
+            {
+              tcpSocket: {
+                port: 8080
+              }
+              type: 'Liveness'
             }
           ]
         }
