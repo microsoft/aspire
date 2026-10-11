@@ -1,0 +1,3 @@
+<Project>
+  <!-- Stops the repo-root central package versions from applying; this tool has no package references. -->
+</Project>
