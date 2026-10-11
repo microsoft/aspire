@@ -54,7 +54,7 @@ internal sealed unsafe partial class TrayApplication
         _settingsInitializing = true;
         try
         {
-            var template = CreateDialogTemplate(_interactiveSmoke ? TraySettingsText.PreviewTitle : TraySettingsText.Title, 304, 200, 9);
+            var template = CreateDialogTemplate(_interactiveSmoke ? TraySettingsText.PreviewTitle : TraySettingsText.Title, 304, 200, 10);
             fixed (byte* pointer = template)
             {
                 var window = NativeMethods.CreateDialogIndirectParam(_module, pointer, _window, &SettingsDialogProcedure, 0);
@@ -290,20 +290,15 @@ internal sealed unsafe partial class TrayApplication
 
     private nint HandleSettingsMessage(nint window, uint message, nuint wParam, nint lParam)
     {
+        if (PaintDialog(window, message, wParam, lParam, out var painted))
+        {
+            return painted;
+        }
         switch (message)
         {
             case NativeMethods.WmInitDialog:
                 _settingsWindow = window;
                 return 0;
-            case NativeMethods.WmCtlColorDialog:
-                return NativeMethods.GetSysColorBrush(15); // COLOR_BTNFACE.
-            case NativeMethods.WmCtlColorStatic:
-            case NativeMethods.WmCtlColorButton:
-                NativeMethods.SetTextColor((nint)wParam, NativeMethods.IsWindowEnabled(lParam) == 0
-                    || lParam == _settingsStartupDescription
-                    ? NativeMethods.GetSysColor(17) : NativeMethods.GetSysColor(18)); // COLOR_GRAYTEXT / COLOR_BTNTEXT.
-                NativeMethods.SetBkMode((nint)wParam, 1); // TRANSPARENT.
-                return NativeMethods.GetSysColorBrush(15);
             case NativeMethods.WmVerticalScroll:
             case NativeMethods.WmMouseWheel:
                 ScrollSettings(message, wParam);
@@ -359,6 +354,7 @@ internal sealed unsafe partial class TrayApplication
                 CloseSettings();
                 return 1;
             case NativeMethods.WmNcDestroy:
+                ReleaseDialogAppearance(window);
                 _settingsWindow = 0;
                 _settingsCheckbox = 0;
                 _settingsStartupDescription = 0;

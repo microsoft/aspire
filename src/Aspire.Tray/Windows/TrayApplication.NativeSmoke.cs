@@ -57,10 +57,67 @@ internal sealed unsafe partial class TrayApplication
         ShowSettings();
     }
 
+    private NativeMethods.Rect? _messageWorkAreaForSmoke;
+
     internal void ShowMessageForSmoke()
     {
         RequireSmoke();
+        VerifyMenuCharactersForSmoke();
         ShowMessage("Aspire smoke", "Native message dialog.", 0);
+        var monitor = new NativeMethods.MonitorInfo { Size = (uint)sizeof(NativeMethods.MonitorInfo) };
+        NativeCallException.Require(NativeMethods.GetMonitorInfo(NativeMethods.MonitorFromWindow(_window, 2), ref monitor) != 0,
+            "GetMonitorInfoW(message smoke)");
+        var work = monitor.Work;
+        work.Bottom = work.Top + Math.Min(300, work.Bottom - work.Top);
+        _messageWorkAreaForSmoke = work;
+        try
+        {
+            ShowMessage("Aspire smoke", string.Join("\r\n", Enumerable.Repeat("Long diagnostic text.", 100)), 0);
+        }
+        finally
+        {
+            _messageWorkAreaForSmoke = null;
+        }
+    }
+
+    private void VerifyMenuCharactersForSmoke()
+    {
+        using var menu = new NativeMenu(this);
+        AddAction(menu, menu.Handle, "Open dashboard", new(ActionKind.Dashboard), true);
+        AddAction(menu, menu.Handle, "Open in", new(ActionKind.OpenIn), true);
+        AddAction(menu, menu.Handle, "Settings...", new(ActionKind.Settings), true);
+        AddAction(menu, menu.Handle, "Stop AppHost", new(ActionKind.Stop), false);
+        Append(menu.Handle, NativeMethods.MfSeparator, 0, null);
+        AddAction(menu, menu.Handle, "&Tools", new(ActionKind.Documentation), true);
+        AddSubmenu(menu.Handle, "Recently opened");
+        RefreshMenuPalette();
+        PrepareMenuAppearance(menu.Handle);
+        Expect('s', 2, 2);
+        Expect('r', 6, 2);
+        Expect('&', 5, 2);
+        Expect('o', 0, 3);
+        var highlighted = new NativeMethods.MenuItemInfo
+        {
+            Size = (uint)sizeof(NativeMethods.MenuItemInfo), Mask = NativeMethods.MiimState, State = 0x80
+        };
+        NativeCallException.Require(NativeMethods.SetMenuItemInfo(menu.Handle, 0, 1, ref highlighted) != 0,
+            "SetMenuItemInfoW(character smoke)");
+        Expect('o', 1, 3);
+        highlighted.State = 0;
+        NativeCallException.Require(NativeMethods.SetMenuItemInfo(menu.Handle, 0, 1, ref highlighted) != 0,
+            "SetMenuItemInfoW(character smoke)");
+        highlighted.State = 0x80;
+        NativeCallException.Require(NativeMethods.SetMenuItemInfo(menu.Handle, 1, 1, ref highlighted) != 0,
+            "SetMenuItemInfoW(character smoke)");
+        Expect('O', 0, 3);
+        NativeSmokeHarness.Require(NativeMethods.SendMessage(_window, 0x120, 'z', menu.Handle) == 0,
+            "Unmatched menu characters must be ignored.");
+
+        void Expect(char character, uint position, uint action)
+        {
+            NativeSmokeHarness.Require(NativeMethods.SendMessage(_window, 0x120, character, menu.Handle) == (nint)(position | action << 16),
+                "Owner-drawn menu character matching returned the wrong item or action.");
+        }
     }
 
     private void CompleteDialogForSmoke()
@@ -101,6 +158,20 @@ internal sealed unsafe partial class TrayApplication
         }
         var button = NativeMethods.GetDlgItem(dialog, pending.Response);
         NativeCallException.Require(button != 0, "GetDlgItem(smoke dialog response)");
+        if (_messageWorkAreaForSmoke is { } work)
+        {
+            NativeCallException.Require(NativeMethods.GetWindowRect(dialog, out var bounds) != 0, "GetWindowRect(message smoke)");
+            NativeCallException.Require(NativeMethods.GetWindowRect(button, out var buttonBounds) != 0, "GetWindowRect(message button smoke)");
+            NativeSmokeHarness.Require(bounds.Top >= work.Top && bounds.Bottom <= work.Bottom
+                && buttonBounds.Top >= bounds.Top && buttonBounds.Bottom <= bounds.Bottom,
+                "Long message dialogs and their buttons must fit in the available work area.");
+            var detail = NativeMethods.GetDlgItem(dialog, 2201);
+            char* className = stackalloc char[16];
+            var length = NativeMethods.GetClassName(detail, className, 16);
+            NativeSmokeHarness.Require(new ReadOnlySpan<char>(className, length).Equals("Edit", StringComparison.OrdinalIgnoreCase)
+                && ReadControlText(detail) == _messageDetail,
+                "Constrained message dialogs must retain the full diagnostic in a scrollable edit control.");
+        }
         // WM_COMMAND/BN_CLICKED includes the button HWND in lParam.
         // https://learn.microsoft.com/windows/win32/controls/bn-clicked
         NativeCallException.Require(NativeMethods.PostMessage(dialog, NativeMethods.WmCommand, (nuint)pending.Response, button) != 0, "PostMessageW(smoke dialog response)");
@@ -466,12 +537,12 @@ internal sealed unsafe partial class TrayApplication
         NativeSmokeHarness.Require((NativeMethods.IsWindowVisible(_settingsStatus) != 0) == showDetails
             && (NativeMethods.IsWindowVisible(_settingsRefresh) != 0) == showDetails,
             "Startup details and Refresh must appear only when startup is unavailable or failed.");
-        var expectedControls = new List<string> { "General", "", "&Launch Aspire Tray when I sign in", TraySettingsText.StartupDescription };
+        var expectedControls = new List<string> { "General", "&Launch Aspire Tray when I sign in", TraySettingsText.StartupDescription };
         if (showDetails)
         {
             expectedControls.AddRange([status, "&Refresh startup status"]);
         }
-        expectedControls.AddRange(["About", "", "Aspire logo", "Aspire Tray", AboutDescriptionText, AboutVersionText, "", "&Close"]);
+        expectedControls.AddRange(["About", "Aspire logo", "Aspire Tray", AboutDescriptionText, AboutVersionText, "&Close"]);
         var visibleControls = new List<string>();
         for (var control = NativeMethods.GetWindow(_settingsWindow, 5); control != 0; control = NativeMethods.GetWindow(control, 2))
         {

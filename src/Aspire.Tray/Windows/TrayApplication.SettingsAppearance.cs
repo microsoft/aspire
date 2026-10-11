@@ -15,8 +15,9 @@ internal sealed unsafe partial class TrayApplication
 
     private void UpdateSettingsAppearance()
     {
+        UpdateDialogAppearance(_settingsWindow);
         var dpi = NativeMethods.GetDpiForWindow(_settingsWindow);
-        var font = NativeMethods.CreateFont(-checked((int)((9 * dpi + 36) / 72)), 0, 0, 0, 700, 0, 0, 0, 1, 0, 0, 5, 0, "Segoe UI");
+        var font = NativeMethods.CreateFont(-checked((int)((11 * dpi + 36) / 72)), 0, 0, 0, 700, 0, 0, 0, 1, 0, 0, 5, 0, "Segoe UI");
         NativeCallException.Require(font != 0, "CreateFontW(Settings)");
         foreach (var control in new[] { _settingsGeneral, _settingsAbout, _settingsProductName })
         {
@@ -47,42 +48,42 @@ internal sealed unsafe partial class TrayApplication
         // actual body font so version strings and startup errors can grow the window.
         _settingsControlBounds.Clear();
         var descriptionHeight = MeasureSettingsText(TraySettingsText.StartupDescription, 405);
-        var generalBottom = 68 + descriptionHeight;
+        var generalBottom = 84 + descriptionHeight;
         if (_settingsStatusText.Length != 0)
         {
             var statusHeight = MeasureSettingsText(_settingsStatusText, 405);
             var statusTop = generalBottom + 12;
             var refreshTop = statusTop + statusHeight + 8;
             _settingsControlBounds[_settingsStatus] = SettingsRect(35, statusTop, 405, statusHeight);
-            _settingsControlBounds[_settingsRefresh] = SettingsRect(35, refreshTop, 150, 24);
-            generalBottom = refreshTop + 24 + 12;
+            _settingsControlBounds[_settingsRefresh] = SettingsRect(35, refreshTop, 190, 32);
+            generalBottom = refreshTop + 32 + 12;
         }
         var aboutTop = generalBottom + 22;
         var aboutDescriptionHeight = MeasureSettingsText(AboutDescriptionText, 380);
-        var versionTop = aboutTop + 50 + aboutDescriptionHeight + 12;
+        var versionTop = aboutTop + 58 + aboutDescriptionHeight + 12;
         var versionHeight = MeasureSettingsText(AboutVersionText, 380);
         var aboutBottom = Math.Max(aboutTop + 124, versionTop + versionHeight + 12);
-        _settingsControlBounds[_settingsGeneral] = SettingsRect(16, 16, 52, 18);
+        _settingsControlBounds[_settingsGeneral] = SettingsRect(16, 16, 100, 24);
         _settingsControlBounds[_settingsGeneralSeparator] = SettingsRect(72, 24, 368, 2);
-        _settingsControlBounds[_settingsCheckbox] = SettingsRect(16, 43, 424, 20);
-        _settingsControlBounds[_settingsStartupDescription] = SettingsRect(35, 68, 405, descriptionHeight);
-        _settingsControlBounds[_settingsAbout] = SettingsRect(16, aboutTop, 42, 18);
+        _settingsControlBounds[_settingsCheckbox] = SettingsRect(16, 52, 424, 24);
+        _settingsControlBounds[_settingsStartupDescription] = SettingsRect(35, 84, 405, descriptionHeight);
+        _settingsControlBounds[_settingsAbout] = SettingsRect(16, aboutTop, 100, 24);
         _settingsControlBounds[_settingsAboutSeparator] = SettingsRect(62, aboutTop + 8, 378, 2);
         _settingsControlBounds[_settingsLogo] = SettingsRect(16, aboutTop + 30, 32, 32);
-        _settingsControlBounds[_settingsProductName] = SettingsRect(60, aboutTop + 28, 380, 18);
-        _settingsControlBounds[_settingsAboutDescription] = SettingsRect(60, aboutTop + 50, 380, aboutDescriptionHeight);
+        _settingsControlBounds[_settingsProductName] = SettingsRect(60, aboutTop + 28, 380, 24);
+        _settingsControlBounds[_settingsAboutDescription] = SettingsRect(60, aboutTop + 58, 380, aboutDescriptionHeight);
         _settingsControlBounds[_settingsVersion] = SettingsRect(60, versionTop, 380, versionHeight);
         var footerTop = aboutBottom + 18;
         var closeTop = footerTop + 14;
         if (_settingsPreview != 0)
         {
-            _settingsControlBounds[_settingsPreview] = SettingsRect(16, closeTop, 130, 24);
+            _settingsControlBounds[_settingsPreview] = SettingsRect(16, closeTop, 150, 32);
         }
         _settingsControlBounds[_settingsFooterSeparator] = SettingsRect(0, footerTop, 456, 2);
-        _settingsControlBounds[_settingsClose] = SettingsRect(365, closeTop, 75, 24);
+        _settingsControlBounds[_settingsClose] = SettingsRect(344, closeTop, 96, 32);
         _settingsGeneralBounds = SettingsRect(16, 16, 424, generalBottom - 16);
         _settingsAboutBounds = SettingsRect(16, aboutTop, 424, aboutBottom - aboutTop);
-        var desired = SettingsRect(0, 0, 456, closeTop + 24 + 14);
+        var desired = SettingsRect(0, 0, 456, closeTop + 32 + 20);
         NativeCallException.Require(NativeMethods.GetWindowRect(_settingsWindow, out var window) != 0, "GetWindowRect(Settings)");
         NativeCallException.Require(NativeMethods.GetClientRect(_settingsWindow, out var client) != 0, "GetClientRect(Settings)");
         var monitor = new NativeMethods.MonitorInfo { Size = (uint)sizeof(NativeMethods.MonitorInfo) };
@@ -106,6 +107,9 @@ internal sealed unsafe partial class TrayApplication
         var y = Math.Clamp(window.Top, monitor.Work.Top, Math.Max(monitor.Work.Top, monitor.Work.Bottom - height));
         NativeCallException.Require(NativeMethods.SetWindowPos(_settingsWindow, 0, x, y, width, height, 0x4 | 0x10) != 0,
             "SetWindowPos(Settings size)");
+        NativeMethods.ShowWindow(_settingsGeneralSeparator, 0);
+        NativeMethods.ShowWindow(_settingsAboutSeparator, 0);
+        NativeMethods.ShowWindow(_settingsFooterSeparator, 0);
         PositionSettingsControls();
         EnsureSettingsControlVisible(NativeMethods.GetFocus());
     }
