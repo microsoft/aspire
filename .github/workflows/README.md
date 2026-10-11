@@ -11,8 +11,14 @@ gh extension upgrade aw
 gh aw version
 gh aw fix
 gh aw compile --force-refresh-action-pins --schedule-seed microsoft/aspire
+node .github/workflows/auto-sec/publication-guard.js
 gh aw compile --schedule-seed microsoft/aspire
+node .github/workflows/auto-sec/publication-guard.js
 ```
+
+Each compilation replaces `auto-sec.lock.yml` with raw compiler output, so run
+`publication-guard.js` after every compile pass. Compare the hardened outputs of
+both passes to check that the complete generation sequence is idempotent.
 
 `gh aw fix` is a dry run unless `--write` is supplied. Its write mode also refreshes
 authoring agents and skills; apply source migrations deliberately rather than
@@ -83,6 +89,145 @@ their canonical safe-output JSON remains compiler-managed.
 Node 20 action. There is no supported Node 24 upgrade for that dependency;
 replacing it requires a separate migration of its authentication and locking
 behavior, rather than merely changing an action pin.
+
+## Auto-sec dependency reconciliation
+
+`auto-sec.md` runs every 12 hours (and on demand). It reconciles open Dependabot
+alerts, including malware alerts, and version-mapped code scanning alerts against
+open Dependabot PRs. Pure code findings are out of scope. Only npm (npm, yarn,
+pnpm), pip (`uv.lock`, `pyproject.toml`), NuGet (`Directory.Packages.props`), and
+GitHub Actions alerts are handled; alerts in other ecosystems, such as Maven,
+Gradle, Go, Cargo, or `requirements.txt`, are reported as blocked.
+
+Dependabot coverage collection fails on GitHub API errors instead of treating
+unavailable contents as an absent file. Paginated REST file statuses identify
+added/deleted sides and the original path of renamed files; missing expected
+contents stop reconciliation before the agent can propose a duplicate fix.
+
+- **Dependabot PRs** that fix an open alert are approved by the Aspire bot App only
+  when `.github/workflows/auto-sec/auto-sec.js` re-verifies every gate in the
+  `approve_dependabot_pr` safe-output job. The gates are:
+  - only manifest or lock files change, every commit is a GitHub-verified
+    commit authored by Dependabot, and `package.json`, `pyproject.toml`, and
+    `Directory.Packages.props` change only one version token on dependency-version
+    lines (for `package.json`, only inside the dependency, override, and resolution
+    maps, with only single-bound npm selectors eligible for edits; compound
+    selectors may remain unchanged)
+  - no package source or feed is added (only the dnceng public feeds and sources the
+    file already uses are accepted)
+  - the alert's own manifest is changed and carries the fixed version, and no copy
+    of the package there stays below it or inside any range the advisory lists
+  - CI and statuses are green, and the PR head is unchanged when the review is submitted
+  - every package version the diff introduces, listed in the PR body or not, stays
+    within the same major version (same minor for `0.x`) and was published at least
+    7 days ago
+  - no package the diff changes has an open malware alert (those always need a human
+    review)
+- Approval API, input, and summary failures fail the job with fixed
+  `gate-evaluation-failed` or `approval-submission-failed` reason codes, not raw
+  exception text. Unconfirmed submissions do not count as confirmed approvals,
+  but still consume the submission quota because the remote review may have succeeded.
+- **Remaining alerts** are fixed in a single `[auto-sec]` PR on
+  `auto-sec/security-updates`, labeled `auto-sec`. Later runs update that PR
+  instead of opening another one. A deterministic step in the safe-outputs job
+  fails the run if the agent asks to push to any PR other than the open
+  `auto-sec/security-updates` PR from this repository. A second step checks the
+  agent's patch (sent with the `am` transport so the checked patch is the one
+  applied) and fails the run unless each changed manifest, rebuilt in full from
+  the base blob the patch names, differs only in dependency versions, or if any
+  file adds an unapproved package source. NuGet bumps are made only when the fixed version
+  already restores from an approved dnceng feed that `NuGet.config` package source
+  mapping assigns to the package. Otherwise the alert is reported as blocked on
+  mirroring.
+- The PR body and run summaries intentionally contain only package and version
+  summaries, never advisory details. Before publication, safe-output objects are
+  rebuilt from validated primitive fields; extra properties and unused transport
+  metadata are stripped rather than copied into public artifacts.
+  Code-writing requests are mutually exclusive, and version policy is checked
+  separately for each patch artifact so overlapping paths cannot hide an update.
+  All lockfile additions accept only recognized dependency-data syntax, not new
+  free-text metadata. JSON additions also require schema-defined locations in the
+  reconstructed npm lockfile, not merely package/version-shaped keys; duplicate
+  properties are rejected because parsing would discard earlier values. Unchanged
+  pre-existing metadata is preserved. New override/resolution entries and unsupported
+  lockfile metadata require human intervention and are reported as `update-failed`.
+  Every patch artifact must contain a reconstructed dependency version change;
+  metadata-only patches are rejected. Regenerated package metadata must belong to
+  the specific installed entry whose version changes, not an unchanged copy of
+  that package or an unrelated upgrade. New or re-keyed entries at a version already
+  installed must preserve its existing metadata. npm project/package identities
+  remain unchanged. npm workspace-root selectors and pnpm importer/snapshot
+  references can regenerate only against installed targets with matching version
+  transitions; they cannot authorize changing the consumer's artifact metadata.
+  Other regeneration on unchanged owners requires human intervention.
+  Compound npm selector edits also require human intervention: reducing `>=1 <2`
+  to its first bound cannot prove changes to the other bounds non-breaking.
+  Public summary rows are bound to reconstructed manifest/package/version changes,
+  covering every update exactly once per manifest/package/target in the emitted batch.
+  Commit and push summaries instead cover each distinct package/from/target tuple
+  exactly once, including all prior versions and coalescing identical tuples across
+  manifests. Each commit is bound to its own reconstructed changes; the push message
+  covers the complete batch. Empty, partial, and normalized duplicate summaries
+  cannot authorize publication. Intermediate-only targets absent from final files
+  remain blocked by the final-state version-policy boundary.
+  A created PR's fixed body explicitly identifies its table as the initial batch,
+  not a cumulative inventory; subsequent updates remain in validated commit messages
+  and the full branch diff. A live cumulative body refresh is not implemented.
+  Counts-only reports require unique, positive blocked-reason counts whose sum equals the blocked total;
+  the breakdown is omitted only when that total is zero.
+  Manifest paths must be canonical repository-relative paths; dot-segment aliases,
+  rooted paths, backslashes, and empty path segments cannot authorize publication.
+  Reconstruction, version-only manifest edits, source authorization, and artifact
+  binding are checked before public artifact upload, not just before application.
+  Patch transport also rejects opaque preambles, dates, diffstat text, metadata,
+  and newline markers; hunk context labels must originate in the trusted base.
+  Dependabot approval requires the current base commit to be an ancestor of the
+  requested head, so the patched head proves the merge result rather than omitting
+  newer base-side occurrences. The base SHA and ancestry are rechecked before
+  submission; API failures or a moved base prevent approval.
+  Changed yarn/pnpm fields must occupy supported schema locations in the rebuilt
+  file; version-shaped scalars in arbitrary fields and changed duplicate keys
+  cannot authorize publication. Unsupported legacy fields may remain unchanged
+  at their original locations but cannot regenerate alongside an upgrade.
+  Only the canonical patch filenames are accepted; opaque bundles and symlinks
+  are rejected. Framework base-commit headers are supported as typed SHAs bound,
+  like output transport metadata, to the workflow snapshot or live auto-sec ref.
+  The pre-upload scrub reads bases from the immutable workflow checkout and the
+  bot-owned branch, not arbitrary agent-written blobs; unavailable bases block
+  publication. Pushes to an existing auto-sec PR also require its author to match
+  the configured Aspire bot identity; the branch name alone cannot authorize reuse.
+  uv local-source descriptors count as delivery sources,
+  and pnpm tarball binding covers both inline and block-style resolution tables.
+  The writable framework directory retains only validated safe outputs and patches:
+  all other entries, including prompts and telemetry, are removed before summaries
+  can consume them. Telemetry-dependent framework steps report that telemetry is
+  withheld rather than parsing agent-written files or fabricating zero metrics.
+  The compiler hardening also redirects the gateway and agent host-shell stdout
+  and stderr to `/dev/null` before execution, including inherited child streams.
+  Alert collection suppresses its own diagnostics. Pre-scrub error detection and
+  secret-redaction parsers are withheld because they can re-emit private log data;
+  their transcript-derived classifications are unavailable, not reported as zero.
+  GitHub still records actual execution failures and exit statuses. Unsupported
+  execution layouts fail compilation rather than silently losing this boundary.
+
+Prerequisites:
+- The `auto-sec` label must exist.
+- The Aspire bot App needs pull request write access, and contents write access to
+  push the `auto-sec` branch.
+
+Because the compiler's Windows build mis-handles redaction paths, compile this
+workflow on Linux or WSL.
+
+After compiling `auto-sec`, run
+`node .github/workflows/auto-sec/publication-guard.js`. The pinned compiler emits
+`always()` on post-agent publication steps without a custom scrub-success hook.
+This deterministic compilation pass gates every step after the scrub on both its
+successful outcome and explicit `publication_ready` output. CI applies the same
+pass before checking generated-file drift. It also restricts both uploads to
+validated safe-output files and the two canonical patch filenames; no framework
+logs, prompts, telemetry, or opaque bundles are uploaded. Failed or skipped scrubbing blocks
+summaries, output ingestion, and both artifact uploads even when filesystem errors
+leave private files on disk. Do not replace this gate with best-effort deletion.
 
 ## Quarantine/Disable Test Workflow
 

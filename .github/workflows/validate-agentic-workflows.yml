@@ -18,6 +18,7 @@ on:
       - .github/aw/actions-lock.json
       - .github/actionlint.yaml
       - .github/workflows/validate-agentic-workflows.yml
+      - .github/workflows/auto-sec/*.js
 
 permissions:
   contents: read
@@ -49,6 +50,7 @@ jobs:
           # Match local generation even in forks or checkouts without a canonical origin remote.
           gh aw compile --purge --force-refresh-action-pins \
             --validate --no-check-update --schedule-seed microsoft/aspire
+          node .github/workflows/auto-sec/publication-guard.js
 
       - name: Verify generated files are up to date
         run: |
