@@ -72,6 +72,36 @@ These measurements are not a full AppHost-server size or memory comparison.
 This comparison covers composition only, not execution, Dashboard services,
 callbacks, or diagnostics parity.
 
+The local Rust reference now also passes the current full-contract SDK,
+socket runtime, real DCP workloads, Dashboard, eight resource-preserving
+revision steps, and actual CLI server-swap fixtures. Its resource-service
+gRPC adapter uses Rust `tonic`/`prost` in-process, without a managed helper.
+This does not establish exhaustive equivalence: diagnostic instrumentation
+differs, client-certificate authentication and Linux are unverified, and
+Windows is unsupported.
+
+A subsequent macOS arm64 comparison used three successful independent
+`aspire run` executions per server, alternating implementations, with the
+same Redis/PostgreSQL/local-relay workload, command, and Dashboard browser
+checks. Median server-only measurements were:
+
+| Measurement | C# NativeAOT | Rust |
+| --- | ---: | ---: |
+| Executable size | 14.42 MiB | 5.12 MiB |
+| Ready resident set | 40.84 MiB | 12.78 MiB |
+| CLI launch to Dashboard announcement | 7.25 s | 6.61 s |
+| CLI launch to workloads and command ready | 9.19 s | 8.28 s |
+
+Startup includes CLI preparation, guest compilation, DCP, Dashboard, and
+container startup, not isolated server initialization. Workload readiness
+ranged from 8.17-11.21 seconds for C# and 6.16-10.06 seconds for Rust; three
+runs do not establish a reliable speed advantage. Memory excludes the shared
+CLI, DCP, Dashboard frontend, guest/integration processes, browser, and Docker
+VM/containers. One additional C# run failed the immediate server-cleanup
+assertion after CLI shutdown left its process group stopped; that failed run
+is excluded from the successful-run medians, not classified as passed.
+Results remain local in `artifacts/native-hosting/server-comparison-results.json`.
+
 ## Architecture and dependency boundary
 
 ```text

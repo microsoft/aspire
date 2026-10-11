@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { readFile, unlink } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { StartedWorkload } from './aspire.mjs';
 import { randomBytes } from 'node:crypto';
@@ -13,6 +13,7 @@ import { NativeDashboardSmoke } from './NativeDashboardSmoke.mjs';
 
 const [cliPath, serverPath, workspace] = process.argv.slice(2);
 assert.ok(cliPath && serverPath && workspace && process.env.ASPIRE_NATIVE_DCP_PATH);
+const serverProcessPattern = new RegExp(`${basename(serverPath).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\((\\d+)\\) started`);
 const resultsPath = resolve(workspace, 'cli-apphost-proof.json');
 const dashboardKey = randomBytes(32).toString('hex');
 try {
@@ -48,7 +49,7 @@ function observeCliOutput(chunk: Buffer): void {
     // DCP-owned Dashboard (1234) listening on http://127.0.0.1:50123/.
     // Retain a bounded suffix because a diagnostic line may span chunks.
     buffered += String(chunk);
-    const pid = /Native\.Server\((\d+)\) started/.exec(buffered);
+    const pid = serverProcessPattern.exec(buffered);
     if (pid) serverPid = Number(pid[1]);
     const address = /DCP-owned Dashboard \((\d+)\) listening on (http:\/\/(?:127\.0\.0\.1|localhost):\d+\/)\./.exec(buffered);
     if (address && process.env.ASPIRE_NATIVE_DASHBOARD_DLL && !browserWork) {
