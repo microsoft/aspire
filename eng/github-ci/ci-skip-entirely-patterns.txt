@@ -83,7 +83,6 @@ eng/Version.Details.xml
 .github/workflows/update-nix-cli-flake.yml
 .github/workflows/update-aspire-skills-bundle.yml
 .github/workflows/update-dependencies.yml
-.github/workflows/auto-rerun-transient-ci-failures.*
 
 # GitHub Agentic Workflows (gh-aw): shared action locks (.github/aw/**), compiled
 # *.lock.yml workflows, and the agentics-maintenance workflows. The .md source files

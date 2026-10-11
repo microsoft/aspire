@@ -161,6 +161,22 @@ public sealed class TestTriggerMapTests
         Assert.Contains("job:extension-e2e", targets);
     }
 
+    [Theory]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.js")]
+    [InlineData(".github/workflows/auto-rerun-transient-ci-failures.yml")]
+    public void AutoRerunWorkflowInputsReachInfrastructureTests(string path)
+    {
+        var result = SelectWithRealMap(path);
+        var skipPatterns = File.ReadAllLines(Path.Combine(RepoRoot.Path, s_map.Prefilter!.PatternsFile!))
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0 && !line.StartsWith('#'));
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains("Infrastructure.Tests", result.TestProjects);
+        Assert.DoesNotContain(skipPatterns, pattern => TestTriggerMap.GlobMatches(pattern, path));
+    }
+
     [Fact]
     public void ExtensionE2eProjectAndPathRulesCoverTheSameConsumers()
     {
