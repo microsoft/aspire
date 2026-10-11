@@ -2619,6 +2619,99 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.False(updateResult.UpdatedApplied);
     }
 
+    [Theory]
+    [InlineData("The SDK 'Aspire.AppHost.Sdk' could not be found. [C:\\projects\\AppHost.csproj]", "error MSB4236: The SDK was not found.")]
+    [InlineData("A compatible .NET SDK was not found. [C:\\projects\\global.json]", "")]
+    [InlineData("", "Requested SDK version [10.0.300-preview.0.26177.108] was not found.")]
+    [InlineData("", "")]
+    public async Task UpdateProjectFileAsync_ReferencedProjectEvaluationFailure_PreservesDiagnostics(string standardOutput, string standardError)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+        var referencedFolder = workspace.CreateDirectory("UpdateTester.ServiceDefaults");
+        var referencedProjectFile = new FileInfo(Path.Combine(referencedFolder.FullName, "UpdateTester.ServiceDefaults.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+                <ItemGroup>
+                    <ProjectReference Include="..\UpdateTester.ServiceDefaults\UpdateTester.ServiceDefaults.csproj" />
+                </ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(referencedProjectFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+
+        var referencedProjectEvaluationCount = 0;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                {
+                    Assert.Equal("Aspire.AppHost.Sdk", query);
+                    return (0, [new NuGetPackageCli { Id = query, Version = "9.5.0", Source = "nuget.org" }]);
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, options, _) =>
+                {
+                    if (projectFile.FullName == appHostProjectFile.FullName)
+                    {
+                        var itemsAndProperties = new JsonObject()
+                            .WithSdkVersion("9.4.1")
+                            .WithProjectReference(referencedProjectFile.FullName);
+                        return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                    }
+
+                    Assert.Equal(referencedProjectFile.FullName, projectFile.FullName);
+                    referencedProjectEvaluationCount++;
+                    if (!string.IsNullOrEmpty(standardOutput))
+                    {
+                        options.StandardOutputCallback!(standardOutput);
+                    }
+                    if (!string.IsNullOrEmpty(standardError))
+                    {
+                        options.StandardErrorCallback!(standardError);
+                    }
+
+                    return (1, null);
+                }
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var projectUpdater = new ProjectUpdater(
+            provider.GetRequiredService<ILogger<ProjectUpdater>>(),
+            provider.GetRequiredService<IDotNetCliRunner>(),
+            provider.GetRequiredService<IInteractionService>(),
+            provider.GetRequiredService<IMemoryCache>(),
+            CreateExecutionContext(workspace.WorkspaceRoot),
+            provider.GetRequiredService<FallbackProjectParser>());
+        var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout())
+            .Single(c => c.Name == "default");
+        var context = CreateUpdateContext(appHostProjectFile, channel);
+
+        var firstException = await Assert.ThrowsAsync<ProjectUpdaterException>(() => projectUpdater.UpdateProjectAsync(context).DefaultTimeout());
+        var secondException = await Assert.ThrowsAsync<ProjectUpdaterException>(() => projectUpdater.UpdateProjectAsync(context).DefaultTimeout());
+
+        Assert.Equal(1, referencedProjectEvaluationCount);
+        Assert.Equal(firstException.Message, secondException.Message);
+        var genericMessage = $"Failed to fetch items and properties for project: {referencedProjectFile.FullName}";
+        if (string.IsNullOrWhiteSpace(standardOutput) && string.IsNullOrWhiteSpace(standardError))
+        {
+            Assert.Equal(genericMessage, firstException.Message);
+        }
+        else
+        {
+            Assert.StartsWith(genericMessage + Environment.NewLine, firstException.Message, StringComparison.Ordinal);
+            Assert.Contains(standardOutput, firstException.Message, StringComparison.Ordinal);
+            Assert.Contains(standardError, firstException.Message, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task UpdateProjectFileAsync_SingleFileAppHost_UpdatesSdkDirectiveWithVersion()
     {

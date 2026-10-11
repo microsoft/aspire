@@ -134,6 +134,39 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_ProjectUpdaterFailure_PreservesDiagnosticMarkupCharacters()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "<Project />");
+
+        var expectedMessage = $"Failed to fetch items and properties for project: {appHostProjectFile.FullName}{Environment.NewLine}A compatible .NET SDK was not found. [C:\\projects\\global.json]";
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) => Task.FromResult<FileInfo?>(projectFile)
+            };
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+            {
+                UpdateProjectAsyncCallback = (_, _) => throw new ProjectUpdaterException(expectedMessage)
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"update --apphost \"{appHostProjectFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
+        Assert.Equal(expectedMessage, Assert.Single(interactionService.DisplayedErrors));
+    }
+
+    [Fact]
     public async Task UpdateCommand_WhenProjectOptionSpecified_PassesProjectFileToProjectLocator()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
