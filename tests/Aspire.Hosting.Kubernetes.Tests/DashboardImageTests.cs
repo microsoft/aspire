@@ -7,6 +7,12 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class DashboardImageTests
 {
+    [Fact]
+    public void Name_UsesCanonicalAspireNightlyRepository()
+    {
+        Assert.Equal("mcr.microsoft.com/aspire/nightly/dashboard", DashboardImage.Name);
+    }
+
     [Theory]
     // Informational version (SemVer with prerelease + build metadata) is preferred and reduced to major.minor.
     [InlineData("13.5.0-preview.1.25111.1+ad18db0213e9db8209bca0feb83fc801f34634f5", "13.5.0.0", "13.5")]

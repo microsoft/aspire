@@ -52,7 +52,7 @@ docker run --rm -d \
     --env ASPIRE_DASHBOARD_APPLICATION_NAME=my-app \
     --env ASPIRE_DASHBOARD_DATA_DIRECTORY=/dashboard-data \
     --env ASPIRE_DASHBOARD_PERSISTENCE_MODE=Resume \
-    mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    mcr.microsoft.com/aspire/dashboard:latest
 ```
 
 Restart the container with the same volume, application name, data directory, and persistence mode to continue using the existing database. The Dashboard can remain running through idle periods, and its data remains available after stop and restart, subject to the configured telemetry retention limits.
