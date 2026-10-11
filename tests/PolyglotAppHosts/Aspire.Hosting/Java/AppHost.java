@@ -59,6 +59,21 @@ void main() throws Exception {
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
+        var optionalParam = builder.addParameter("optional-parameter").withOptional();
+        optionalParam.withRequired().withRequired(false);
+        String optionalValue = optionalParam.tryGetCurrentValue();
+        if (optionalValue != null) {
+            throw new IllegalStateException("Expected an unset optional parameter");
+        }
+        optionalParam.setValueAsync(new SetValueAsyncOptions().value("configured"));
+        if (!"configured".equals(optionalParam.tryGetCurrentValue())) {
+            throw new IllegalStateException("Expected the configured optional parameter value");
+        }
+        optionalParam.setValueAsync();
+        if (optionalParam.tryGetCurrentValue() != null) {
+            throw new IllegalStateException("Expected the optional parameter to be cleared");
+        }
+        container.withEnvironment("OPTIONAL_PARAMETER", optionalParam);
         var customInputParam = builder.addParameter("custom-input");
         var customInputOptions = new ParameterCustomInputOptions();
         customInputOptions.setInputType(InputType.NUMBER);
