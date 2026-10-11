@@ -25,6 +25,7 @@ public static class MongoDBReplicaSetBuilderExtensions
     private const int MaxVotingMembers = 7;
     private const string ReplicaSetAlreadyInitializedCodeName = "AlreadyInitialized";
     private const string ReplicaSetNotYetInitializedCodeName = "NotYetInitialized";
+    private const string ReplicaSetInterruptedDueToReplStateChangeCodeName = "InterruptedDueToReplStateChange";
     private const string NewReplicaSetConfigurationIncompatibleCodeName = "NewReplicaSetConfigurationIncompatible";
     private const string ConfigurationInProgressCodeName = "ConfigurationInProgress"; // NOTE: Represents the error `Cannot run replSetReconfig because the node is currently updating its configuration.` that can be returned by `replSetReconfig` when a preceding `replSetInitiate` (or `replSetReconfig`, for that matter) command is still being processed in the background.
     private static readonly TimeSpan s_rsInitiationRetryWaitInterval = TimeSpan.FromSeconds(1);
@@ -213,6 +214,13 @@ public static class MongoDBReplicaSetBuilderExtensions
                             {
                                 // Keep probing. A newly inserted member can be uninitialized while another declared member
                                 // still holds the persisted replica set configuration that must be preserved.
+                            }
+                            catch (MongoCommandException ex) when (IsTransientReplicaSetConfigurationProbeError(ex.CodeName))
+                            {
+                                // A member can interrupt config reads while transitioning during initialization. Its persisted
+                                // configuration is unknown, so retry before deciding whether the set needs to be initialized.
+                                allMembersUninitialized = false;
+                                logger.LogInformation("MongoDB replica set member '{MemberName}' is recovering", memberConnection.Resource.Name);
                             }
                         }
 
@@ -660,6 +668,11 @@ public static class MongoDBReplicaSetBuilderExtensions
         }
 
         return result;
+    }
+
+    internal static bool IsTransientReplicaSetConfigurationProbeError(string? codeName)
+    {
+        return codeName is ReplicaSetInterruptedDueToReplStateChangeCodeName;
     }
 
     /// <summary>
