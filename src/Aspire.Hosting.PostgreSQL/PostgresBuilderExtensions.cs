@@ -839,7 +839,7 @@ public static class PostgresBuilderExtensions
 
             logger.LogDebug("Database '{DatabaseName}' created successfully", npgsqlDatabase.DatabaseName);
         }
-        catch (PostgresException p) when (p.SqlState == "42P04")
+        catch (PostgresException p) when (IsDatabaseAlreadyExists(p))
         {
             // Ignore the error if the database already exists.
             logger.LogDebug("Database '{DatabaseName}' already exists", npgsqlDatabase.DatabaseName);
@@ -849,4 +849,18 @@ public static class PostgresBuilderExtensions
             logger.LogError(e, "Failed to create database '{DatabaseName}'", npgsqlDatabase.DatabaseName);
         }
     }
+
+    // PostgreSQL reports an existing database in two ways:
+    // - 42P04 (duplicate_database) when CREATE DATABASE finds the name already in pg_database.
+    // - 23505 (unique_violation) on pg_database_datname_index when another session creates the same
+    //   database concurrently: both pass the duplicate check, and the second insert into pg_database
+    //   then fails on the unique index.
+    // See https://www.postgresql.org/docs/current/errcodes-appendix.html
+    internal static bool IsDatabaseAlreadyExists(PostgresException exception) =>
+        exception.SqlState == PostgresErrorCodes.DuplicateDatabase ||
+        exception is
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: "pg_database_datname_index"
+        };
 }
