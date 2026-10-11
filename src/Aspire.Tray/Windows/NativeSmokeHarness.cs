@@ -21,6 +21,7 @@ internal sealed class NativeSmokeHarness
     private readonly bool _interactiveSmoke;
     private readonly CancellationTokenSource _shutdown = new();
     private readonly AppHostInfo[] _hosts;
+    private readonly AppHostInfo[] _groupHosts;
     private readonly string _pinned;
     private readonly string _recent;
     private readonly string _missing;
@@ -54,6 +55,25 @@ internal sealed class NativeSmokeHarness
             41001 + index, index == 0 ? "http://localhost:19001/" : null)
         {
             ProcessStartTimeUnixMilliseconds = 1_700_000_000_001 + index, Health = health
+        }).ToArray();
+        var common = Path.Combine(_directory.FullName, "shop-repository", ".git");
+        Directory.CreateDirectory(common);
+        _groupHosts = new[] { "feature/cart", "release/2.0", "experiment-a" }.Select((branch, index) =>
+        {
+            var root = Path.Combine(_directory.FullName, "worktree-" + index);
+            var git = Path.Combine(common, "worktrees", "worktree-" + index);
+            Directory.CreateDirectory(git);
+            Directory.CreateDirectory(root);
+            File.WriteAllText(Path.Combine(root, ".git"), "gitdir: " + git);
+            File.WriteAllText(Path.Combine(git, "commondir"), "../..");
+            File.WriteAllText(Path.Combine(git, "HEAD"), "ref: refs/heads/" + branch);
+            var path = Path.Combine(root, "Shop.AppHost.cs");
+            File.WriteAllText(path, "// Native grouping fixture; never executed.");
+            return new AppHostInfo(path, 42001 + index, "http://localhost:19001/")
+            {
+                ProcessStartTimeUnixMilliseconds = 1_700_000_010_001 + index,
+                Health = index == 2 ? AppHostHealth.Warning : AppHostHealth.Healthy
+            };
         }).ToArray();
         _pinned = CreateFile("Pinned.AppHost.cs");
         _recent = CreateFile("Recent & caf\u00e9.AppHost.cs");
@@ -370,6 +390,80 @@ internal sealed class NativeSmokeHarness
                 }
                 _application.VerifyNativeStateForSmoke();
                 Require(state.AppHosts.All(host => !host.CanStop && !host.CanStart), "Disconnected rows allow lifecycle actions.");
+                Publish(_groupHosts);
+                _phase = 14;
+                break;
+            case 14:
+                if (!state.AppHosts.Any(host => host.Id == _groupHosts[0].Id))
+                {
+                    return;
+                }
+                _application.VerifyNativeStateForSmoke();
+
+                Require(state.MenuGroups.Single(group => group.Title == "Shop").Instances.Count == 3, "Grouping must nest three worktrees.");
+                Invoke("Dashboard", _groupHosts[1].Id);
+                _retainedStop = _application.CaptureActionForSmoke("Stop", _groupHosts[0].Id);
+                _trackingMenu = _application.MenuForSmoke;
+                _trackingRows = _application.RowIdsForSmoke;
+                _phase = 16;
+                _application.TrackForSmoke(_groupHosts[0].Id);
+                break;
+            case 16:
+                Require(_application.IsTrackingForSmoke, "Grouped smoke must enter genuine native menu tracking.");
+                _trackingMenu = _application.MenuForSmoke;
+                _trackingRows = _application.RowIdsForSmoke;
+                Publish([_groupHosts[2], Replacement(_groupHosts[0]), _groupHosts[1]]);
+                _phase = 17;
+                break;
+            case 17:
+                if (!state.AppHosts.Any(host => host.Id == Replacement(_groupHosts[0]).Id))
+                {
+                    return;
+                }
+                Require(_application.MenuForSmoke == _trackingMenu && _application.RowIdsForSmoke.SequenceEqual(_trackingRows),
+                    "Grouped menu structure moved during tracking.");
+                _application.VerifyNativeStateForSmoke(retained: true);
+                var errors = _errors;
+                _application.InvokeActionForSmoke(_retainedStop);
+                Require(_errors == errors + 1 && !_client.Stops.Contains(Replacement(_groupHosts[0]).Id), "A nested stale command targeted a replacement lifetime.");
+                _phase = 18;
+                _application.EndTrackingForSmoke();
+                break;
+            case 18:
+                _application.VerifyNativeStateForSmoke();
+                Publish([]);
+                _phase = 19;
+                break;
+            case 19:
+                if (state.HasActiveAppHosts)
+                {
+                    return;
+                }
+                _application.VerifyNativeStateForSmoke();
+                var recentGroup = state.RecentMenuGroups.Single(group => group.Title == "Shop");
+                Require(recentGroup.Instances.Count == 3, "Recent worktrees must remain grouped inside history.");
+                Invoke("CopyPath", recentGroup.Instances[1].Id);
+                Require(_copiedPaths.Last() == Path.GetDirectoryName(recentGroup.Instances[1].Id.AppHostPath),
+                    "Nested recent actions must target the selected worktree.");
+                _phase = 20;
+                _application.TrackForSmoke(recentGroup.Instances[0].Id);
+                break;
+            case 20:
+                Require(_application.IsTrackingForSmoke, "Recent groups must enter native menu tracking.");
+                _trackingMenu = _application.MenuForSmoke;
+                _trackingRows = _application.RowIdsForSmoke;
+                _controller.RemoveRecent(_groupHosts[0].AppHostPath);
+                _phase = 21;
+                break;
+            case 21:
+                Require(_application.MenuForSmoke == _trackingMenu && _application.RowIdsForSmoke.SequenceEqual(_trackingRows),
+                    "Removing history must retain the tracked instance identities.");
+                _application.VerifyNativeStateForSmoke(retained: true);
+                _phase = 22;
+                _application.EndTrackingForSmoke();
+                break;
+            case 22:
+                _application.VerifyNativeStateForSmoke();
                 _finished = true;
                 _phase = 13;
                 Program.Log("Windows native smoke passed: AppHost health icons, Documentation/Settings command icons, running AppHost dashboard actions, divided actions, separate status/path details, full-value details tooltips, live/stale refresh, tooltip focus/dismissal, compact names without status suffixes, menu tracking, immutable actions, native stop checkbox/opt-out, original-case Copy path, pins/history, discovery icons, artwork invalidation, Explorer recovery, activation, terminal arguments, compact modeless Settings with About logo and isolated startup preferences.");
@@ -379,7 +473,7 @@ internal sealed class NativeSmokeHarness
                     // Keep the isolated fake client/store; never connect preview gestures
                     // to a real CLI or the account's startup registration.
                     _controller.SetConfirmStop(true);
-                    Publish(_hosts.Select(host => host with
+                    Publish(_groupHosts.Select(host => host with
                     {
                         ProcessStartTimeUnixMilliseconds = host.ProcessStartTimeUnixMilliseconds + 1000
                     }).ToArray());

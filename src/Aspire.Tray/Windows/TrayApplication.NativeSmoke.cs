@@ -227,9 +227,9 @@ internal sealed unsafe partial class TrayApplication
         VerifyStatusTextForSmoke();
         if (!retained)
         {
-            NativeSmokeHarness.Require(menu.Rows.Select(row => row.Id).SequenceEqual(state.AppHosts.Concat(state.RecentAppHosts).Select(row => row.Id)),
+            NativeSmokeHarness.Require(menu.Rows.Select(row => row.Id).SequenceEqual(state.MenuGroups.SelectMany(group => group.Instances).Concat(state.RecentMenuGroups.SelectMany(group => group.Instances)).Select(row => row.Id)),
                 "Native host order differs from the shared view state.");
-            NativeSmokeHarness.Require(NativeMethods.GetMenuItemCount(menu.Handle) == state.AppHosts.Count + 7 + (state.ShowStatus ? 1 : 0),
+            NativeSmokeHarness.Require(NativeMethods.GetMenuItemCount(menu.Handle) == state.MenuGroups.Count + 7 + (state.ShowStatus ? 1 : 0),
                 "Root menu contains an unexpected header or item.");
         }
         var rootTitles = ReadMenuTitles(menu.Handle);
@@ -282,7 +282,7 @@ internal sealed unsafe partial class TrayApplication
             NativeSmokeHarness.Require((details.State & 3) != 0 && details.Id == 0 && details.Submenu == 0,
                 "The AppHost details entry must be non-actionable.");
             NativeSmokeHarness.Require(ReadText(row.Parent, row.Position, true)
-                == Literal(host is null ? row.Title : AppHostPresentation.GetCompactMenuLabel(host)),
+                == Literal(row.Title),
                 "Native AppHost labels must retain their name without a status suffix.");
             NativeSmokeHarness.Require(row.DetailsText == AppHostPresentation.GetMenuDetailsText(row.Id.AppHostPath,
                 host?.Subtitle ?? "AppHost no longer available")
@@ -290,6 +290,14 @@ internal sealed unsafe partial class TrayApplication
                 "The AppHost details entry is not up to date.");
             NativeSmokeHarness.Require(StringInfo.ParseCombiningCharacters(titles[^1].Replace("&&", "&", StringComparison.Ordinal)).Length <= 44,
                 "The displayed path must fit within 44 text elements.");
+        }
+        foreach (var group in menu.Groups)
+        {
+            var item = ReadItem(group.Parent, group.Position, true);
+            NativeSmokeHarness.Require(item.Submenu != 0 && NativeMethods.GetMenuItemCount(item.Submenu) == group.Group.Instances.Count,
+                "A grouped application must contain exactly its instance submenus.");
+            NativeSmokeHarness.Require(menu.Rows.Where(row => row.Parent == item.Submenu).Select(row => row.Id)
+                .SequenceEqual(group.Group.Instances.Select(host => host.Id)), "Nested actions must retain the grouped instance identities.");
         }
         VerifyMenuIcons(menu, menu.Handle);
     }
@@ -343,7 +351,14 @@ internal sealed unsafe partial class TrayApplication
             var state = controller.State;
             var host = row is null ? null
                 : (row.Recent ? state.RecentAppHosts : state.AppHosts).SingleOrDefault(host => host.Id == row.Id);
-            var expectedBitmap = row is not null
+            var groupRow = root.Groups.SingleOrDefault(group => group.Parent == menu && group.Position == (uint)position);
+            var expectedBitmap = groupRow is not null
+                ? _artwork!.Status(GetGroupStatus(groupRow.Group with
+                {
+                    Instances = groupRow.Group.Instances.Select(original => (groupRow.Recent ? state.RecentAppHosts : state.AppHosts).SingleOrDefault(host => host.Id == original.Id)
+                        ?? original with { IsRunning = false, IsStarting = false, IsStopping = false, Error = null, Health = AppHostHealth.Unknown }).ToArray()
+                }, state.Discovery == DiscoveryState.Live))
+                : row is not null
                 ? _artwork!.Status(GetMenuStatus(host, state.Discovery == DiscoveryState.Live))
                 : item.Submenu == 0 && root.Commands.TryGetValue(item.Id, out var command) ? command.Kind switch
             {

@@ -59,17 +59,11 @@ internal sealed unsafe partial class TrayApplication
                 root.StatusPosition = (uint)NativeMethods.GetMenuItemCount(root.Handle);
                 Append(root.Handle, NativeMethods.MfGrayed, 0, state.Status);
             }
-            foreach (var host in state.AppHosts)
-            {
-                AddHost(root, root.Handle, host, recent: false, state.Discovery == DiscoveryState.Live);
-            }
+            AddGroups(root, root.Handle, state.MenuGroups, recent: false, state.Discovery == DiscoveryState.Live);
             Append(root.Handle, NativeMethods.MfSeparator, 0, null);
             var recent = AddSubmenu(root.Handle, "Recently opened");
             root.RecentHandle = recent;
-            foreach (var host in state.RecentAppHosts)
-            {
-                AddHost(root, recent, host, recent: true, state.Discovery == DiscoveryState.Live);
-            }
+            AddGroups(root, recent, state.RecentMenuGroups, recent: true, state.Discovery == DiscoveryState.Live);
             if (state.RecentAppHosts.Count == 0)
             {
                 Append(recent, NativeMethods.MfGrayed, 0, "No recently opened AppHosts");
@@ -90,6 +84,26 @@ internal sealed unsafe partial class TrayApplication
         {
             root.Dispose();
             throw;
+        }
+    }
+
+    private void AddGroups(NativeMenu root, nint menu, IReadOnlyList<AppHostMenuGroup> groups, bool recent, bool discoveryAvailable)
+    {
+        foreach (var group in groups)
+        {
+            var parent = menu;
+            if (group.IsGroup)
+            {
+                var position = (uint)NativeMethods.GetMenuItemCount(parent);
+                var submenu = AddSubmenu(parent, group.Title);
+                root.Groups.Add(new(parent, position, group, recent));
+                SetMenuBitmap(parent, position, _artwork!.Status(GetGroupStatus(group, discoveryAvailable)), byPosition: true);
+                parent = submenu;
+            }
+            foreach (var host in group.Instances)
+            {
+                AddHost(root, parent, host, recent, discoveryAvailable);
+            }
         }
     }
 
@@ -144,13 +158,21 @@ internal sealed unsafe partial class TrayApplication
         {
             UpdateItem(menu.Handle, statusPosition, true, state.ShowStatus ? state.Status : "Aspire", false);
         }
+        foreach (var row in menu.Groups)
+        {
+            // Retain membership while tracking; aggregate only these original lifetimes.
+            var instances = row.Group.Instances.Select(original => (row.Recent ? state.RecentAppHosts : state.AppHosts).SingleOrDefault(host => host.Id == original.Id)
+                ?? original with { IsRunning = false, Health = AppHostHealth.Unknown, Error = null, IsStarting = false, IsStopping = false }).ToArray();
+            var group = row.Group with { Instances = instances };
+            SetMenuBitmap(row.Parent, row.Position, _artwork!.Status(GetGroupStatus(group, state.Discovery == DiscoveryState.Live)), byPosition: true);
+        }
         foreach (var row in menu.Rows)
         {
             // A row stays bound to the original lifetime even if a PID/path is reused while
             // TrackPopupMenuEx or MessageBox pumps a nested loop. Never rebind a command ID.
             var host = (row.Recent ? state.RecentAppHosts : state.AppHosts).SingleOrDefault(item => item.Id == row.Id);
             UpdateItem(row.Parent, row.Position, true,
-                host is null ? row.Title : AppHostPresentation.GetCompactMenuLabel(host),
+                row.Title,
                 host is not null);
             SetMenuBitmap(row.Parent, row.Position,
                 _artwork!.Status(GetMenuStatus(host, state.Discovery == DiscoveryState.Live)), byPosition: true);
@@ -204,6 +226,19 @@ internal sealed unsafe partial class TrayApplication
             return 0;
         }
     }
+
+    private static MenuStatus GetGroupStatus(AppHostMenuGroup group, bool discoveryAvailable)
+        => !discoveryAvailable ? MenuStatus.Warning
+            : !group.IsRunning && group.GetHealth(true) == AppHostHealth.Unknown ? MenuStatus.Stopped
+            : group.GetHealth(true) switch
+            {
+                AppHostHealth.Healthy => MenuStatus.Healthy,
+                AppHostHealth.Warning => MenuStatus.Warning,
+                AppHostHealth.Unhealthy => MenuStatus.Unhealthy,
+                _ => MenuStatus.Unknown
+            };
+
+    private sealed record GroupRow(nint Parent, uint Position, AppHostMenuGroup Group, bool Recent);
 
     private string StopMenuLabel => controller.ConfirmStop ? "Stop AppHost..." : "Stop AppHost";
 
@@ -434,6 +469,7 @@ internal sealed unsafe partial class TrayApplication
         internal nint Handle { get; } = Create();
         internal Dictionary<uint, ActionTarget> Commands { get; } = [];
         internal List<HostRow> Rows { get; } = [];
+        internal List<GroupRow> Groups { get; } = [];
         internal uint? StatusPosition { get; set; }
         internal nint RecentHandle { get; set; }
         internal uint ClearCommand { get; set; }
