@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <!-- This executable is a build tool, never a runtime dependency of its AOT caller. -->
+    <ShouldBeValidatedAsExecutableReference>false</ShouldBeValidatedAsExecutableReference>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Aspire.Hosting.Ats.Abstractions/Aspire.Hosting.Ats.Abstractions.csproj" />
+    <ProjectReference Include="../Aspire.Hosting.CodeGeneration.TypeScript/Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <Compile Include="../Aspire.Hosting.RemoteHost/AtsCapabilityScanner.cs" Link="AtsCapabilityScanner.cs" />
+    <EmbeddedResource Include="../Aspire.Hosting.Native.Server/Core/**/*.cs;../Aspire.Hosting.Native.Server/Api/**/*.cs">
+      <LogicalName>NativeContract/%(Identity)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

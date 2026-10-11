@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsTestProject>false</IsTestProject>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <PublishAot>true</PublishAot>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Aspire.Hosting.Native.Server/Aspire.Hosting.Native.Server.csproj" />
+    <Compile Include="../TestServices/DiagnosticCapture.cs" Link="DiagnosticCapture.cs" />
+  </ItemGroup>
+</Project>

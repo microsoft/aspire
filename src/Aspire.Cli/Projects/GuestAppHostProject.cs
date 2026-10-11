@@ -519,7 +519,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var config = LoadConfiguration(directory);
             var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
             var sdkVersion = GetPrepareSdkVersion(config);
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+            var appHostServerProject = _environment.GetEnvironmentVariable(NativeAppHostServerProject.ExecutableEnvironmentVariable) is { Length: > 0 } nativeExecutable
+                ? new NativeAppHostServerProject(directory.FullName, nativeExecutable, _processExecutionFactory, _logger)
+                : await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
             var buildResult = await _interactionService.ShowStatusAsync(
                 "Preparing Aspire server...",
@@ -556,6 +558,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 args: context.UnmatchedTokens);
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                // Auxiliary discovery identifies the guest file, not the native
+                // server executable or its working directory.
+                launchSettingsEnvVars["AppHost__FilePath"] = appHostFile.FullName;
+            }
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)

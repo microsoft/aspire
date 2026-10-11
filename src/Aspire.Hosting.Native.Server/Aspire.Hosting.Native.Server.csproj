@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
+    <NativeGeneratedDirectory>$(IntermediateOutputPath)native-ats/</NativeGeneratedDirectory>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Aspire.Hosting.Ats.Abstractions/Aspire.Hosting.Ats.Abstractions.csproj" />
+    <ProjectReference Include="../Aspire.Hosting.Native.CodeGeneration/Aspire.Hosting.Native.CodeGeneration.csproj"
+                      ReferenceOutputAssembly="false" Private="false"
+                      GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="System.IO.Hashing" />
+    <Compile Include="../Shared/AppHostSocketManager.cs" Link="Auxiliary/AppHostSocketManager.cs" />
+    <Compile Include="../Shared/BackchannelConstants.cs" Link="Auxiliary/BackchannelConstants.cs" />
+    <Compile Include="../Shared/PathNormalizer.cs" Link="Auxiliary/PathNormalizer.cs" />
+    <Compile Include="../Shared/SocketPermissionHelper.cs" Link="Auxiliary/SocketPermissionHelper.cs" />
+    <Compile Include="../Shared/SocketDirectoryNames.cs" Link="Auxiliary/SocketDirectoryNames.cs" />
+    <Compile Include="../Shared/DirectoryHelper.cs" Link="Auxiliary/DirectoryHelper.cs" />
+    <Compile Include="../Shared/StringComparers.cs" Link="Auxiliary/StringComparers.cs" />
+    <Compile Include="../Shared/ProcessStartTimeHelper.cs" Link="Auxiliary/ProcessStartTimeHelper.cs" />
+    <Compile Include="../Shared/DcpKubeconfigData.cs" Link="Dcp/DcpKubeconfigData.cs" />
+    <Compile Include="../Shared/DcpConnectionMaterial.cs" Link="Dcp/DcpConnectionMaterial.cs" />
+    <Protobuf Include="../Aspire.Hosting/Dashboard/proto/dashboard_service.proto" GrpcServices="Both" Access="Internal" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.AotSmoke" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)contract.json" LogicalName="Aspire.Hosting.Native.Rpc.contract.json" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)languages.json" LogicalName="NativeLanguages.json" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)aspire.mts" LogicalName="NativeSdk.aspire.mts" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)base.mts" LogicalName="NativeSdk.base.mts" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)transport.mts" LogicalName="NativeSdk.transport.mts" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)integration-host.mts" LogicalName="NativeSdk.integration-host.mts" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)native-client.mts" LogicalName="NativeSdk.native-client.mts" />
+  </ItemGroup>
+  <Target Name="GenerateNativeAts" BeforeTargets="PrepareResourceNames;CoreCompile" DependsOnTargets="ResolveProjectReferences">
+    <MSBuild Projects="../Aspire.Hosting.Native.CodeGeneration/Aspire.Hosting.Native.CodeGeneration.csproj"
+             Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)"
+             RemoveProperties="PublishAot;RuntimeIdentifier;SelfContained">
+      <Output TaskParameter="TargetOutputs" ItemName="_NativeCodeGenerationPath" />
+    </MSBuild>
+    <Exec Command="dotnet &quot;@(_NativeCodeGenerationPath)&quot; &quot;$(NativeGeneratedDirectory)&quot;" />
+    <ItemGroup>
+      <Compile Include="$(NativeGeneratedDirectory)NativeDispatch.g.cs" />
+    </ItemGroup>
+  </Target>
+</Project>

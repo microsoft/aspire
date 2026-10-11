@@ -1,0 +1,473 @@
+{
+  "Aspire.Hosting/createBuilder": {
+    "route": "create",
+    "target": "argsOrOptions",
+    "targetType": "any",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    "returnsBuilder": false,
+    "targets": [
+      "any",
+      "any"
+    ],
+    "parameters": []
+  },
+  "Aspire.Hosting/build": {
+    "route": "build",
+    "target": "context",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.DistributedApplication",
+    "returnsBuilder": false,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+    ],
+    "parameters": [
+      {
+        "name": "context",
+        "optional": false,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+      }
+    ]
+  },
+  "Aspire.Hosting/run": {
+    "route": "run",
+    "target": "context",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.DistributedApplication",
+    "returnType": "void",
+    "returnsBuilder": false,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.DistributedApplication",
+      "Aspire.Hosting/Aspire.Hosting.DistributedApplication"
+    ],
+    "parameters": [
+      {
+        "name": "context",
+        "optional": false,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.DistributedApplication"
+      },
+      {
+        "name": "cancellationToken",
+        "optional": true,
+        "nullable": false,
+        "type": "cancellationToken"
+      }
+    ]
+  },
+  "Aspire.Hosting/waitFor": {
+    "route": "wait",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisCommanderResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgAdminContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgWebContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PostgresMcpContainerResource",
+      "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport"
+    ],
+    "parameters": [
+      {
+        "name": "dependency",
+        "optional": false,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource"
+      },
+      {
+        "name": "waitBehavior",
+        "optional": true,
+        "nullable": true,
+        "type": "enum:Aspire.Hosting.ApplicationModel.WaitBehavior"
+      }
+    ]
+  },
+  "Aspire.Hosting/withEnvironment": {
+    "route": "environment",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisCommanderResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgAdminContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgWebContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PostgresMcpContainerResource",
+      "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment"
+    ],
+    "parameters": [
+      {
+        "name": "name",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "value",
+        "optional": false,
+        "nullable": false,
+        "type": "string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ExternalServiceResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue"
+      }
+    ]
+  },
+  "Aspire.Hosting/withReference": {
+    "route": "reference",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisCommanderResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgAdminContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgWebContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PostgresMcpContainerResource",
+      "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment"
+    ],
+    "parameters": [
+      {
+        "name": "source",
+        "optional": false,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|string|uri"
+      },
+      {
+        "name": "connectionName",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "optional",
+        "optional": true,
+        "nullable": false,
+        "type": "boolean"
+      },
+      {
+        "name": "name",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      }
+    ]
+  },
+  "Aspire.Hosting/withHttpEndpoint": {
+    "route": "endpoint",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisCommanderResource",
+      "Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgAdminContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PgWebContainerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.Postgres.PostgresMcpContainerResource",
+      "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource",
+      "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints"
+    ],
+    "parameters": [
+      {
+        "name": "port",
+        "optional": true,
+        "nullable": true,
+        "type": "number"
+      },
+      {
+        "name": "targetPort",
+        "optional": true,
+        "nullable": true,
+        "type": "number"
+      },
+      {
+        "name": "name",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "env",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "isProxied",
+        "optional": true,
+        "nullable": true,
+        "type": "boolean"
+      }
+    ]
+  },
+  "Aspire.Hosting/getConnectionProperty": {
+    "route": "property",
+    "target": "resource",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString",
+    "returnType": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression",
+    "returnsBuilder": false,
+    "targets": [
+      "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresDatabaseResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+      "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString"
+    ],
+    "parameters": [
+      {
+        "name": "key",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      }
+    ]
+  },
+  "Aspire.Hosting.Redis/addRedis": {
+    "route": "external",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    "returnType": "Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+    ],
+    "parameters": [
+      {
+        "name": "name",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "port",
+        "optional": true,
+        "nullable": true,
+        "type": "number"
+      },
+      {
+        "name": "password",
+        "optional": true,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource"
+      }
+    ]
+  },
+  "Aspire.Hosting.PostgreSQL/addPostgres": {
+    "route": "external",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    "returnType": "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+    ],
+    "parameters": [
+      {
+        "name": "name",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "userName",
+        "optional": true,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource"
+      },
+      {
+        "name": "password",
+        "optional": true,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource"
+      },
+      {
+        "name": "port",
+        "optional": true,
+        "nullable": true,
+        "type": "number"
+      }
+    ]
+  },
+  "Aspire.Hosting.PostgreSQL/addDatabase": {
+    "route": "external",
+    "target": "builder",
+    "targetType": "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+    "returnType": "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresDatabaseResource",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource",
+      "Aspire.Hosting.PostgreSQL/Aspire.Hosting.ApplicationModel.PostgresServerResource"
+    ],
+    "parameters": [
+      {
+        "name": "name",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "databaseName",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      }
+    ]
+  },
+  "Aspire.Hosting.JavaScript/addJavaScriptApp": {
+    "route": "external",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    "returnType": "Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+    ],
+    "parameters": [
+      {
+        "name": "name",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "appDirectory",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "runScriptName",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      }
+    ]
+  },
+  "Aspire.Hosting.DevTunnels/addDevTunnel": {
+    "route": "external",
+    "target": "builder",
+    "targetType": "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+    "returnType": "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder",
+      "Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder"
+    ],
+    "parameters": [
+      {
+        "name": "name",
+        "optional": false,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "tunnelId",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "allowAnonymous",
+        "optional": true,
+        "nullable": false,
+        "type": "boolean"
+      },
+      {
+        "name": "description",
+        "optional": true,
+        "nullable": false,
+        "type": "string"
+      },
+      {
+        "name": "labels",
+        "optional": true,
+        "nullable": false,
+        "type": "string[]"
+      }
+    ]
+  },
+  "Aspire.Hosting.DevTunnels/withReferenceResourceAnonymous": {
+    "route": "external",
+    "target": "tunnelBuilder",
+    "targetType": "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+    "returnType": "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+    "returnsBuilder": true,
+    "targets": [
+      "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource",
+      "Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.DevTunnelResource"
+    ],
+    "parameters": [
+      {
+        "name": "resourceBuilder",
+        "optional": false,
+        "nullable": false,
+        "type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints"
+      },
+      {
+        "name": "allowAnonymous",
+        "optional": false,
+        "nullable": false,
+        "type": "boolean"
+      }
+    ]
+  }
+}

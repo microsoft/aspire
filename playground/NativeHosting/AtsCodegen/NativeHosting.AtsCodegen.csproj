@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Ats/NativeHosting.Ats.csproj" />
+    <ProjectReference Include="../../../src/Aspire.Hosting.CodeGeneration.TypeScript/Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
+    <ProjectReference Include="../../../src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj" />
+    <ProjectReference Include="../../../src/Aspire.Hosting.PostgreSQL/Aspire.Hosting.PostgreSQL.csproj" />
+    <ProjectReference Include="../../../src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj" />
+    <ProjectReference Include="../../../src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj" />
+    <Compile Include="../../../src/Aspire.Hosting.RemoteHost/AtsCapabilityScanner.cs" Link="AtsCapabilityScanner.cs" />
+  </ItemGroup>
+</Project>
