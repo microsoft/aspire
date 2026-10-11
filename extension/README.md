@@ -16,6 +16,8 @@ An **AppHost** defines your app in code: services, containers, databases, front 
 2. Choose your AppHost and press **F5**. Aspire starts every resource in the right order and connects supported debuggers.
 3. Use the **Aspire** view and **Aspire Dashboard** to follow resources, endpoints, logs, traces, and metrics.
 
+Use **Create with Aspire...** in the Aspire view to create a new app or add Aspire to an existing workspace folder. **Add Aspire to this workspace** only targets folders without an AppHost and is hidden when every folder already has one, even if no default AppHost is selected or an existing AppHost cannot build.
+
 ## A better inner dev loop
 
 - **Run your apps:** Start, debug, and stop an Aspire application, or use the available start, stop, and restart actions for individual resources, from the Aspire view.

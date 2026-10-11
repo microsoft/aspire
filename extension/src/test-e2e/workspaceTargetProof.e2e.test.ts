@@ -2,8 +2,8 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitForCommandOutcome, waitForExtensionState, waitForRepositoryIdle, waitForTerminalCommand } from './helpers/assertions';
-import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceFoldersForE2E, runE2eTeardown, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, writeWorkspaceSetting } from './helpers/fixtures';
-import { getRunRoot, getWorkspaceRoot } from './helpers/paths';
+import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceFoldersForE2E, runE2eTeardown, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, writeInitTargetProofCliWrapper, writeWorkspaceSetting } from './helpers/fixtures';
+import { getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
 import { VSBrowser } from './helpers/extester';
 import { answerActiveInput, cancelActiveInput, chooseActiveQuickPick, executeCommandFromPalette, getActiveQuickPickLabels, openAspireView, waitForActiveInput, waitForNotificationMessage } from './helpers/vscode';
 
@@ -14,13 +14,21 @@ const createWithAspireActionLabels = [
 
 suite('Workspace target proof E2E', function () {
     this.timeout(900000);
+    let initTargetFixtureRoot: string | undefined;
 
     teardown(async () => {
         await runE2eTeardown([
+            () => executeCommandFromPalette('Terminal: Kill All Terminals'),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreE2eCliPathForE2E(),
             () => restoreWorkspaceFoldersForE2E(),
             () => writeWorkspaceSetting('files.simpleDialog.enable', undefined),
+            () => {
+                if (initTargetFixtureRoot) {
+                    fs.rmSync(initTargetFixtureRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
+                    initTargetFixtureRoot = undefined;
+                }
+            },
             () => fs.rmSync(path.join(getWorkspaceRoot(), '.new-project-output-collision'), { recursive: true, force: true }),
         ], 'Workspace target proof E2E teardown failed.');
     });
@@ -36,21 +44,23 @@ suite('Workspace target proof E2E', function () {
         const folderA = createFolderFixture(runRoot, 'folder-a', true);
         const folderB = createFolderFixture(runRoot, 'folder-b');
         const folderC = createFolderFixture(runRoot, 'folder-c');
-        const workspaceFolderLabels = ['folder-a', 'folder-b', 'folder-c'] as const;
+        const eligibleWorkspaceFolderLabels = ['folder-b', 'folder-c'] as const;
 
         await openAspireView();
         await addWorkspaceFolder(folderA.folderPath);
         await addWorkspaceFolder(folderB.folderPath);
         await addWorkspaceFolder(folderC.folderPath);
         await setE2eCliPathForE2E(undefined);
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForRepositoryIdle();
 
         const folderAAppHostPath = path.join(folderA.folderPath, 'apphost.cs');
         await waitForExtensionState(
             ({ state }) => state.workspaceAppHostCandidatePaths.some(candidatePath => isSamePath(candidatePath, folderAAppHostPath)),
             `folder-a AppHost candidate '${folderAAppHostPath}'`);
 
-        await invokeCreateWithAspireInitForFolder('folder-b', folderB, workspaceFolderLabels);
-        await invokeCreateWithAspireInitCancellation(workspaceFolderLabels);
+        await invokeCreateWithAspireInitForFolder('folder-b', folderB, eligibleWorkspaceFolderLabels);
+        await invokeCreateWithAspireInitCancellation(eligibleWorkspaceFolderLabels);
         await invokeCreateWithAspireNewForFolder('folder-a', folderA);
         await invokeNewForFolder('folder-c', folderC);
 
@@ -92,6 +102,59 @@ suite('Workspace target proof E2E', function () {
         assert.ok(!updateCommand.commandLine.includes(folderC.wrapperPath), updateCommand.commandLine);
 
         await VSBrowser.instance.takeScreenshot('workspace-target-proof.png');
+    });
+
+    test('initializes only eligible folders when an initialized folder has the active editor', async () => {
+        const runRoot = getRunRoot();
+        assert.ok(runRoot, 'The E2E run root is required for sibling workspace folder fixtures.');
+        initTargetFixtureRoot = path.join(runRoot, 'init-target-proof');
+        const folderB = path.join(initTargetFixtureRoot, 'eligible-b');
+        const folderC = path.join(initTargetFixtureRoot, 'eligible-c');
+        const invocationLogPath = path.join(runRoot, 'eligible-init-invocation.json');
+        const wrapperB = writeInitTargetProofCliWrapper('aspire-eligible-b', path.join(runRoot, 'eligible-b-init-invocation.json'));
+        const wrapperC = writeInitTargetProofCliWrapper('aspire-eligible-c', invocationLogPath);
+        // Sibling folders do not inherit the initialized folder's Aspire configuration.
+        for (const [folderPath, wrapperPath] of [[folderB, wrapperB], [folderC, wrapperC]]) {
+            fs.mkdirSync(path.join(folderPath, '.vscode'), { recursive: true });
+            fs.writeFileSync(path.join(folderPath, '.vscode', 'settings.json'), JSON.stringify({
+                'aspire.aspireCliExecutablePath': wrapperPath,
+            }, undefined, 2));
+        }
+
+        await openAspireView();
+        await addWorkspaceFolder(folderB);
+        await addWorkspaceFolder(folderC);
+        await setE2eCliPathForE2E(undefined);
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForRepositoryIdle();
+        await executeE2eControlCommand({ name: 'openFile', filePath: getPrimaryAppHostProjectPath() });
+
+        const beforeCreate = getCommandInvocationCount('aspire-vscode.createWithAspire');
+        const beforeInit = getCommandInvocationCount('aspire-vscode.init');
+        const beforeTerminal = getTerminalCommandCount();
+        await executeE2eControlCommand(
+            { name: 'executeAspireCommand', commandId: 'aspire-vscode.createWithAspire' },
+            { waitFor: 'started' });
+        assert.deepStrictEqual(await waitForQuickPickLabels(createWithAspireActionLabels), createWithAspireActionLabels);
+        await chooseActiveQuickPick('Add Aspire to this workspace');
+        assert.deepStrictEqual(await waitForQuickPickLabels(['eligible-b', 'eligible-c']), ['eligible-b', 'eligible-c']);
+        await chooseActiveQuickPick('eligible-c');
+
+        await waitForCommandOutcome('aspire-vscode.init', 'success', 60000, beforeInit);
+        await waitForCommandOutcome('aspire-vscode.createWithAspire', 'success', 60000, beforeCreate);
+        const terminalCommand = await waitForTerminalCommand(
+            event => event.subcommand === 'init' && event.commandLine.includes(wrapperC),
+            'initialization in the selected eligible folder',
+            60000,
+            beforeTerminal);
+        assert.strictEqual(terminalCommand.executionSuppressed, false);
+        await VSBrowser.instance.driver.wait(
+            () => fs.existsSync(invocationLogPath),
+            30000,
+            'The selected eligible folder CLI should receive the init invocation.');
+        const invocation = JSON.parse(fs.readFileSync(invocationLogPath, 'utf8')) as { cwd: string; args: string[] };
+        assert.ok(isSamePath(invocation.cwd, folderC));
+        assert.deepStrictEqual(invocation.args, ['init']);
     });
 
     test('reopens the project folder picker after a colliding selection', async function () {
@@ -156,7 +219,10 @@ function createFolderFixture(fixtureRoot: string, folderName: string, withAppHos
             path.join(folderPath, 'apphost.cs'),
             '#:sdk Aspire.AppHost.Sdk\n\nvar builder = DistributedApplication.CreateBuilder(args);\nbuilder.Build().Run();\n');
     }
-    fs.writeFileSync(wrapperPath, `#!/bin/sh\nprintf '%s\\t%s\\n' "$PWD" "$*" >> '${invocationLogPath}'\nif [ "$1" = "--version" ]; then printf '13.5.0-proof\\n'; fi\n`);
+    const candidates = withAppHost
+        ? [{ path: path.join(folderPath, 'apphost.cs'), language: 'csharp', status: 'buildable' }]
+        : [];
+    fs.writeFileSync(wrapperPath, `#!/bin/sh\nprintf '%s\\t%s\\n' "$PWD" "$*" >> '${invocationLogPath}'\nif [ "$1" = "--version" ]; then printf '13.5.0-proof\\n'; fi\nif [ "$1" = "ls" ]; then printf '%s\\n' '${JSON.stringify(candidates)}'; fi\n`);
     fs.chmodSync(wrapperPath, 0o755);
     fs.writeFileSync(path.join(folderPath, '.vscode', 'settings.json'), JSON.stringify({
         'aspire.aspireCliExecutablePath': wrapperPath,
@@ -177,9 +243,9 @@ async function addWorkspaceFolder(folderPath: string): Promise<void> {
     // resolves only once the extension host has observed the folder, so there is nothing left to poll.
     await VSBrowser.instance.waitForWorkbench();
     const response = await executeE2eControlCommand({ name: 'addWorkspaceFolder', folderPath }, { timeoutMs: 60000 });
-    const folders = JSON.stringify(response.result);
-    if (!folders.includes(folderPath)) {
-        throw new Error(`Adding workspace folder '${folderPath}' reported success but the extension lists: ${folders}`);
+    const result = response.result as { folders: string[] };
+    if (!result.folders.some(folder => isSamePath(folder, folderPath))) {
+        throw new Error(`Adding workspace folder '${folderPath}' reported success but the extension lists: ${JSON.stringify(result.folders)}`);
     }
 }
 
@@ -221,9 +287,6 @@ async function invokeCreateWithAspireInitForFolder(
         workspaceFolderLabels,
         expectedWorkspaceFolderLabels,
         'The workspace folders should preserve their workspace order.');
-    assert.ok(
-        workspaceFolderLabels.includes('folder-a'),
-        'The folder picker should include folder-a even though it contains an AppHost.');
     await chooseActiveQuickPick(folderLabel);
 
     await waitForCommandOutcome('aspire-vscode.init', 'success', 60000, beforeInitInvocation);
@@ -254,8 +317,8 @@ async function invokeCreateWithAspireInitCancellation(expectedWorkspaceFolderLab
         'The delegated Init folder picker should preserve the workspace folder order.');
     await cancelActiveInput();
 
-    await waitForCommandOutcome('aspire-vscode.init', 'canceled', 60000, beforeInitInvocation);
     await waitForCommandOutcome('aspire-vscode.createWithAspire', 'canceled', 60000, beforeCreateInvocation);
+    assert.strictEqual(getCommandInvocationCount('aspire-vscode.init'), beforeInitInvocation);
     assert.strictEqual(getTerminalCommandCount(), beforeTerminal);
 }
 

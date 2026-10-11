@@ -4,7 +4,7 @@ import * as path from 'path';
 import { getCommandInvocationCount, isSamePath, waitForCommandOutcome, waitForExtensionState, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, removeLegacyAspireSettings, removeWorkspaceAppHostConfig, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, stopPrimaryAppHostIfRunning, writeLegacyAspireSettings, writeWorkspaceAppHostConfig, writeWorkspaceAppHostConfigRaw } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
-import { openAspireView, waitForWorkbenchText } from './helpers/vscode';
+import { cancelActiveInput, getActiveQuickPickLabels, openAspireView, waitForActiveInput, waitForWorkbenchText } from './helpers/vscode';
 
 suite('Aspire workspace discovery and configuration E2E', function () {
     this.timeout(180000);
@@ -24,6 +24,7 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
+        await assertCreateWithAspireOnlyOffersNew();
 
         removeWorkspaceAppHostConfig();
         const refreshWithoutConfigBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
@@ -49,6 +50,7 @@ suite('Aspire workspace discovery and configuration E2E', function () {
             'completed discovery with multiple AppHost candidates',
             60000);
         assert.ok(multipleCandidates.state.workspaceAppHostCandidatePaths.length >= 2);
+        await assertCreateWithAspireOnlyOffersNew();
 
         restoreWorkspaceAppHostConfig();
         removeAdditionalAppHostCandidate();
@@ -65,6 +67,21 @@ suite('Aspire workspace discovery and configuration E2E', function () {
             60000);
         assert.ok(restored.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())));
     });
+
+    async function assertCreateWithAspireOnlyOffersNew(): Promise<void> {
+        const before = getCommandInvocationCount('aspire-vscode.createWithAspire');
+        await executeE2eControlCommand(
+            { name: 'executeAspireCommand', commandId: 'aspire-vscode.createWithAspire' },
+            { waitFor: 'started' });
+        try {
+            await waitForActiveInput('Choose how to set up Aspire');
+            assert.deepStrictEqual(await getActiveQuickPickLabels(), ['Create a new Aspire app']);
+        }
+        finally {
+            await cancelActiveInput();
+            await waitForCommandOutcome('aspire-vscode.createWithAspire', 'canceled', 60000, before);
+        }
+    }
 
     test('handles malformed, JSONC, absolute, and legacy AppHost configuration files', async () => {
         await openAspireView();
