@@ -340,7 +340,7 @@ public class AddParameterTests
     }
 
     [Fact]
-    public async Task OptionalParameterManifestMarksInputAsNotRequired()
+    public async Task OptionalParameterCannotBePublishedToManifest()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
@@ -350,20 +350,13 @@ public class AddParameterTests
         using var app = appBuilder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var paramManifest = await ManifestUtils.GetManifest(appModel.Resources.OfType<ParameterResource>().Single(r => r.Name == "optional")).DefaultTimeout();
-        var expectedManifest = $$"""
-            {
-              "type": "parameter.v0",
-              "value": "{optional.inputs.value}",
-              "inputs": {
-                "value": {
-                  "type": "string",
-                  "required": false
-                }
-              }
-            }
-            """;
-        Assert.Equal(expectedManifest, paramManifest.ToString());
+        var parameter = Assert.Single(appModel.Resources.OfType<ParameterResource>(), r => r.Name == "optional");
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => ManifestUtils.GetManifest(parameter)).DefaultTimeout();
+
+        Assert.Equal(
+            "Optional parameter resource 'optional' cannot be published because the manifest schema does not support optional parameter inputs.",
+            exception.Message);
     }
 
     [Theory]

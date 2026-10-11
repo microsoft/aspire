@@ -282,6 +282,12 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
 
     internal Task WriteParameterAsync(ParameterResource parameter)
     {
+        if (!parameter.Required)
+        {
+            throw new DistributedApplicationException(
+                $"Optional parameter resource '{parameter.Name}' cannot be published because the manifest schema does not support optional parameter inputs.");
+        }
+
         Writer.WriteString("type", "parameter.v0");
 
         if (parameter.IsConnectionString)
@@ -300,11 +306,6 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         if (parameter.Secret)
         {
             Writer.WriteBoolean("secret", true);
-        }
-
-        if (!parameter.Required)
-        {
-            Writer.WriteBoolean("required", false);
         }
 
         if (parameter.Default is not null)

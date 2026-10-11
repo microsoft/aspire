@@ -223,6 +223,7 @@ public static class ParameterResourceBuilderExtensions
     /// <remarks>
     /// Optional parameters that do not have values are not prompted for during run or publish operations.
     /// When referenced as environment variables or other value providers, unset optional parameters resolve to <see langword="null"/>.
+    /// The manifest publisher does not currently support optional parameters and throws a <see cref="DistributedApplicationException"/>.
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<ParameterResource> WithOptional(this IResourceBuilder<ParameterResource> builder)
