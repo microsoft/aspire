@@ -111,6 +111,12 @@ To test changes from a specific pull request locally, see [dogfooding-pull-reque
 
 To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
 
+### NuGet configuration in CLI unit tests
+
+Use `NuGetTestHelper.CreateClient()` or `CreateService()` for tests that compose real NuGet configuration, and `NuGetTestHelper.LoadSettings()` for native settings assertions. These helpers preserve directory-level configuration inheritance while replacing the runner's user-wide settings with a controlled baseline and excluding machine-wide settings by default. Supply `TestMachineWideSettings` explicitly when testing machine-wide policy.
+
+`TemporaryWorkspace.CreateForCli()` isolates Aspire settings, not NuGet settings. Do not change process-wide environment variables to isolate NuGet configuration in parallel tests.
+
 ## Coding Agents
 
 Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.

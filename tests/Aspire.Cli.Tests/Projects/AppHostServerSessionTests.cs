@@ -670,6 +670,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IEnumerable<IntegrationReference> integrations,
             string? requestedChannel = null,
             string? packageSourceOverride = null,
+            string? packageSourceOverridePattern = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -715,6 +716,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IEnumerable<IntegrationReference> integrations,
             string? requestedChannel = null,
             string? packageSourceOverride = null,
+            string? packageSourceOverridePattern = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
@@ -767,6 +769,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             IEnumerable<IntegrationReference> integrations,
             string? requestedChannel = null,
             string? packageSourceOverride = null,
+            string? packageSourceOverridePattern = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

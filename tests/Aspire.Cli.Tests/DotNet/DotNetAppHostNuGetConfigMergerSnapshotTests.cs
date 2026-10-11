@@ -9,15 +9,13 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Cli.Tests.Packaging;
+namespace Aspire.Cli.Tests.DotNet;
 
-// Initial focused snapshot tests for NuGetConfigMerger. These allow us to feed a literal NuGet.config
-// then exercise CreateOrUpdateAsync and verify the resulting XML in a stable, readable snapshot.
-public class NuGetConfigMergerSnapshotTests
+public class DotNetAppHostNuGetConfigMergerSnapshotTests
 {
     private readonly ITestOutputHelper _output;
 
-    public NuGetConfigMergerSnapshotTests(ITestOutputHelper output)
+    public DotNetAppHostNuGetConfigMergerSnapshotTests(ITestOutputHelper output)
     {
         _output = output;
     }
@@ -68,7 +66,7 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -91,6 +89,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_WithBrokenSdkState_ProducesExpectedXml(string channelName)
     {
+        const string stalePrHivePath = @"C:\Users\aspire-test\.aspire\hives\pr-old";
         using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
@@ -103,19 +102,19 @@ public class NuGetConfigMergerSnapshotTests
 
         // Existing config purposely minimal (no packageSourceMapping yet)
         await WriteConfigAsync(root,
-            """
+            $$"""
             <configuration>
                 <packageSources>
                     <clear />
                     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
                     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
-                    <add key="C:\Users\davifowl\.aspire\hives\pr-11227" value="C:\Users\davifowl\.aspire\hives\pr-11227" />
+                    <add key="{{stalePrHivePath}}" value="{{stalePrHivePath}}" />
                 </packageSources>
                 <packageSourceMapping>
                     <packageSource key="https://api.nuget.org/v3/index.json">
                         <package pattern="*" />
                     </packageSource>
-                    <packageSource key="C:\Users\davifowl\.aspire\hives\pr-11227">
+                    <packageSource key="{{stalePrHivePath}}">
                         <package pattern="Aspire*" />
                     </packageSource>
                     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
@@ -130,10 +129,11 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
-        var xmlString = updated.ToString();
+        var xmlString = updated.ToString()
+            .Replace(stalePrHivePath, "{STALE_PR_HIVE}", StringComparison.Ordinal);
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
@@ -191,7 +191,7 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -250,7 +250,13 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        var configPath = Path.Combine(root.FullName, "nuget.config");
+        var originalContent = await File.ReadAllBytesAsync(configPath);
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        if (channelName == PackageChannelNames.Daily)
+        {
+            Assert.Equal(originalContent, await File.ReadAllBytesAsync(configPath));
+        }
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
         var xmlString = updated.ToString();
@@ -273,6 +279,7 @@ public class NuGetConfigMergerSnapshotTests
     [InlineData("pr-1234")]
     public async Task Merge_ExtraPatternOnDailyFeedWhenOnPrFeedGetsConsolidatedWithOtherPatterns_ProducesExpectedXml(string channelName)
     {
+        const string stalePrHivePath = @"C:\Users\aspire-test\.aspire\hives\pr-old";
         using var workspace = TemporaryWorkspace.CreateForCli(_output);
         var root = workspace.WorkspaceRoot;
 
@@ -285,7 +292,7 @@ public class NuGetConfigMergerSnapshotTests
 
         // Existing config purposely minimal (no packageSourceMapping yet)
         await WriteConfigAsync(root,
-            """
+            $$"""
             <?xml version="1.0" encoding="utf-8"?>
             <configuration>
                 <packageSources>
@@ -293,7 +300,7 @@ public class NuGetConfigMergerSnapshotTests
                     <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
                     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
                     <add key="mycompany" value="http://mycompany.com/feed" />
-                    <add key="C:\Users\midenn\.aspire\hives\pr-11275" value="C:\Users\midenn\.aspire\hives\pr-11275" />
+                    <add key="{{stalePrHivePath}}" value="{{stalePrHivePath}}" />
                 </packageSources>
                 <packageSourceMapping>
                     <packageSource key="https://api.nuget.org/v3/index.json">
@@ -302,7 +309,7 @@ public class NuGetConfigMergerSnapshotTests
                     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
                         <package pattern="Microsoft.Extensions.HelperStuff*" />
                     </packageSource>
-                    <packageSource key="C:\Users\midenn\.aspire\hives\pr-11275">
+                    <packageSource key="{{stalePrHivePath}}">
                         <package pattern="Aspire*" />
                     </packageSource>
                 </packageSourceMapping>
@@ -314,10 +321,11 @@ public class NuGetConfigMergerSnapshotTests
         // which has no mappings and would produce a no-op merge (nothing meaningful to snapshot).
         var channel = channels.First(c => c.Type is PackageChannelType.Explicit && string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(root, channel).DefaultTimeout();
 
         var updated = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
-        var xmlString = updated.ToString();
+        var xmlString = updated.ToString()
+            .Replace(stalePrHivePath, "{STALE_PR_HIVE}", StringComparison.Ordinal);
 
         // Normalize machine-specific absolute hive paths in PR channel snapshots for stability
         if (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))

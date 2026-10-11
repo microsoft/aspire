@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +13,92 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("Aspire.Hosting.Redis", true)]
+    [InlineData("aspire.hosting.redis", true)]
+    [InlineData("Aspire.Hosting.CommunityToolkit.Redis", true)]
+    [InlineData("CommunityToolkit.Aspire.Hosting.Redis", false)]
+    [InlineData("Acme.Aspire.Hosting.Redis", false)]
+    [InlineData("Aspire.HostingExtra.Redis", false)]
+    [InlineData("Aspire.Hosting.Sdk", false)]
+    [InlineData("Aspire.Hosting.AppHost", false)]
+    public void IsOfficialIntegrationPackageIdRecognizesOfficialIntegrations(string packageId, bool expected)
+    {
+        Assert.Equal(expected, PackageIdFilters.IsOfficialIntegrationPackageId(packageId));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SearchAppliesMappingsToLatestAndExactVersionResults(bool useChannelOverlay)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string selectedFeed = "https://example.test/selected/v3/index.json";
+        const string ambientFeed = "https://example.test/ambient/v3/index.json";
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "NuGet.Config"),
+            $"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="selected" value="{selectedFeed}" />
+                <add key="ambient" value="{ambientFeed}" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="selected">
+                  <package pattern="Aspire.Hosting.Redis" />
+                </packageSource>
+                <packageSource key="ambient">
+                  <package pattern="*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.NuGetClientFactory = _ => NuGetTestHelper.CreateClient();
+            configure.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, _, exactMatch, _, _, _, _, _, _, _) => exactMatch
+                    ? (0, [
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = ambientFeed },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = selectedFeed }
+                    ])
+                    : (0, [
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "9.0.0", Source = "ambient" },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "1.0.0", Source = "selected" },
+                        new NuGetPackage { Id = "CommunityToolkit.Aspire.Hosting.Custom", Version = "2.0.0", Source = "ambient" }
+                    ])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var cache = provider.GetRequiredService<INuGetPackageCache>();
+        using var configuration = await cache.CreateChannelConfigurationAsync(
+            workspace.WorkspaceRoot,
+            useChannelOverlay ? [new PackageMapping("Aspire*", selectedFeed)] : null,
+            TestContext.Current.CancellationToken);
+
+        var packages = await cache.GetIntegrationPackagesAsync(configuration, prerelease: true, TestContext.Current.CancellationToken);
+        Assert.Collection(
+            packages,
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal("1.0.0", package.Version);
+            },
+            package => Assert.Equal("CommunityToolkit.Aspire.Hosting.Custom", package.Id));
+
+        var versions = await cache.GetPackageVersionsAsync(
+            configuration,
+            "Aspire.Hosting.Redis",
+            prerelease: true,
+            useCache: false,
+            TestContext.Current.CancellationToken);
+        var selected = Assert.Single(versions);
+        Assert.Equal("1.0.0", selected.Version);
+        Assert.Equal(selectedFeed, selected.Source);
+    }
+
     [Fact]
     public async Task NonAspireCliPackagesWillNotBeConsidered()
     {

@@ -5,10 +5,12 @@
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
+    <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
     <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
+      <package pattern="*" />
       <package pattern="Aspire*" />
     </packageSource>
   </packageSourceMapping>

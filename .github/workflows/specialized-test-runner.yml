@@ -75,33 +75,48 @@ jobs:
 
       - name: Inject enablePlaywrightInstall into runsheet properties
         id: inject_properties
+        env:
+          RUNSHEET: ${{ steps.generate_tests_matrix_raw.outputs.runsheet }}
+          ENABLE_PLAYWRIGHT_INSTALL: ${{ inputs.enablePlaywrightInstall }}
         run: |
-          RUNSHEET='${{ steps.generate_tests_matrix_raw.outputs.runsheet }}'
           if [ "$RUNSHEET" = "[]" ] || [ -z "$RUNSHEET" ]; then
-            echo "runsheet=[]" >> $GITHUB_OUTPUT
+            echo "runsheet=[]" >> "$GITHUB_OUTPUT"
           else
-            UPDATED=$(echo "$RUNSHEET" | jq -c --argjson epw ${{ inputs.enablePlaywrightInstall }} '[.[] | .properties.enablePlaywrightInstall = $epw]')
-            echo "runsheet=$UPDATED" >> $GITHUB_OUTPUT
+            UPDATED=$(printf '%s\n' "$RUNSHEET" | jq -c --argjson epw "$ENABLE_PLAYWRIGHT_INSTALL" '[.[] | .properties.enablePlaywrightInstall = $epw]')
+            echo "runsheet=$UPDATED" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if any test requires NuGets
         id: check_nugets
+        env:
+          RUNSHEET: ${{ steps.inject_properties.outputs.runsheet }}
         run: |
-          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresNugets == true)' > /dev/null 2>&1; then
-            echo "requiresNugets=true" >> $GITHUB_OUTPUT
+          if printf '%s\n' "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresNugets == true)' > /dev/null 2>&1; then
+            echo "requiresNugets=true" >> "$GITHUB_OUTPUT"
           else
-            echo "requiresNugets=false" >> $GITHUB_OUTPUT
+            echo "requiresNugets=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check if any test requires CLI archives
         id: check_cli_archive
+        env:
+          RUNSHEET: ${{ steps.inject_properties.outputs.runsheet }}
         run: |
-          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresCliArchive == true)' > /dev/null 2>&1; then
-            echo "requiresCliArchive=true" >> $GITHUB_OUTPUT
+          if printf '%s\n' "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresCliArchive == true)' > /dev/null 2>&1; then
+            echo "requiresCliArchive=true" >> "$GITHUB_OUTPUT"
           else
-            echo "requiresCliArchive=false" >> $GITHUB_OUTPUT
+            echo "requiresCliArchive=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if any test requires GitHub token
+        id: check_github_token
+        env:
+          RUNSHEET: ${{ steps.inject_properties.outputs.runsheet }}
+        run: |
+          if printf '%s\n' "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresGitHubToken == true)' > /dev/null 2>&1; then
+            echo "requiresGitHubToken=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "requiresGitHubToken=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Upload logs, and test results

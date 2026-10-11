@@ -518,7 +518,7 @@ internal sealed class CliServiceCollectionTestOptions
         var cache = serviceProvider.GetRequiredService<IMemoryCache>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var fallbackParser = serviceProvider.GetRequiredService<FallbackProjectParser>();
-        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        return new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, serviceProvider.GetRequiredService<BundleNuGetService>());
     };
 
     public Func<IServiceProvider, ICliHostEnvironment> CliHostEnvironmentFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -599,7 +599,8 @@ internal sealed class CliServiceCollectionTestOptions
         var cache = serviceProvider.GetRequiredService<IMemoryCache>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
-        return new NuGetPackageCache(cliRunner, cache, telemetry, features);
+        var nuGetService = serviceProvider.GetRequiredService<BundleNuGetService>();
+        return new NuGetPackageCache(cliRunner, cache, telemetry, features, nuGetService);
     };
 
     public Func<IServiceProvider, INuGetClient> NuGetClientFactory { get; set; } = _ => new FakeNuGetClient();

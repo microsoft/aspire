@@ -91,6 +91,75 @@ public sealed class CiWorkflowTests
     }
 
     [Fact]
+    public void CliTestsUseGitHubActionsNuGetServiceIndexOverride()
+    {
+        var workflow = ReadWorkflow("run-tests.yml");
+        var configureStep = GetStep(GetJob(workflow, "test"), "Configure CLI test NuGet service index");
+        Assert.Contains("$env:TEST_ASSEMBLY_NAME -eq 'Aspire.Cli.Tests'", configureStep);
+        Assert.Contains("$env:GITHUB_ENV", configureStep);
+        var serviceIndexMatch = System.Text.RegularExpressions.Regex.Match(
+            configureStep,
+            "ASPIRE_CLI_NUGET_SERVICE_INDEX=(?<source>https://[^\"\\r\\n]+)");
+        Assert.True(serviceIndexMatch.Success, "The GitHub test runner must provide an HTTPS NuGet service index.");
+        Assert.Equal(
+            "https://packagefeedproxy.microsoft.io/nuget/v3/index.json",
+            serviceIndexMatch.Groups["source"].Value);
+    }
+
+    [Fact]
+    public void AcquisitionOuterloopTestsReceiveGitHubToken()
+    {
+        var properties = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "eng",
+            "testing",
+            "CITestsProperties.props"));
+        Assert.Contains(
+            "<CITestsProperty Include=\"requiresGitHubToken\" MSBuildProp=\"RequiresGitHubToken\"",
+            properties);
+
+        var acquisitionTests = File.ReadAllText(Path.Combine(
+            RepoRoot.Path,
+            "tests",
+            "Aspire.Acquisition.Tests",
+            "Aspire.Acquisition.Tests.csproj"));
+        Assert.Contains("<RequiresGitHubToken>true</RequiresGitHubToken>", acquisitionTests);
+
+        var specializedRunner = ReadWorkflow("specialized-test-runner.yml");
+        var tokenCheck = GetStep(
+            GetJob(specializedRunner, "generate_tests_matrix"),
+            "Check if any test requires GitHub token");
+        Assert.Contains("steps.inject_properties.outputs.runsheet", tokenCheck);
+        Assert.Contains(".properties.requiresGitHubToken == true", tokenCheck);
+
+        var testRunner = GetJob(ReadWorkflow("run-tests.yml"), "test");
+        Assert.Contains(
+            "fromJson(inputs.properties).requiresGitHubToken == true",
+            testRunner);
+    }
+
+    [Theory]
+    [InlineData("Inject enablePlaywrightInstall into runsheet properties", "steps.generate_tests_matrix_raw.outputs.runsheet")]
+    [InlineData("Check if any test requires NuGets", "steps.inject_properties.outputs.runsheet")]
+    [InlineData("Check if any test requires CLI archives", "steps.inject_properties.outputs.runsheet")]
+    [InlineData("Check if any test requires GitHub token", "steps.inject_properties.outputs.runsheet")]
+    public void SpecializedTestRunnerPassesRunsheetThroughEnvironment(
+        string stepName,
+        string runsheetOutput)
+    {
+        var workflow = ReadWorkflow("specialized-test-runner.yml");
+        var step = GetStep(GetJob(workflow, "generate_tests_matrix"), stepName);
+
+        Assert.Contains($"RUNSHEET: ${{{{ {runsheetOutput} }}}}", step);
+
+        var run = System.Text.RegularExpressions.Regex.Match(
+            step,
+            "(?ms)^        run: \\|\\r?\\n(?<body>.*)$");
+        Assert.True(run.Success, $"Could not find the run script for '{stepName}'.");
+        Assert.DoesNotContain("${{", run.Groups["body"].Value);
+    }
+
+    [Fact]
     public void CiFailureTrackerCheckoutDoesNotPinMain()
     {
         var workflow = ReadWorkflow("ci.yml");

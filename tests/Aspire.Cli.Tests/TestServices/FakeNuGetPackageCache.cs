@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -13,25 +14,40 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
     public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetCliPackagesAsyncCallback { get; set; }
     public Func<DirectoryInfo, string, bool, FileInfo?, bool, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetPackageVersionsAsyncCallback { get; set; }
 
-    public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        => GetTemplatePackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
+    public Task<NuGetPackageOperationConfiguration> CreateChannelConfigurationAsync(
+        DirectoryInfo workingDirectory,
+        IReadOnlyList<PackageMapping>? channelMappings,
+        CancellationToken cancellationToken)
+    {
+        return NuGetTestHelper.CreateService().CreatePackageOperationConfigurationAsync(
+            workingDirectory, channelMappings, restrictToSelectedSources: false, cancellationToken);
+    }
+
+    public Task<NuGetPackageOperationConfiguration> CreateSourceRestrictedConfigurationAsync(
+        DirectoryInfo workingDirectory,
+        PackageMapping[] mappings,
+        CancellationToken cancellationToken)
+        => NuGetTestHelper.CreateService().CreatePackageOperationConfigurationAsync(workingDirectory, mappings, restrictToSelectedSources: true, cancellationToken);
+
+    public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
+        => GetTemplatePackagesAsyncCallback?.Invoke(configuration.OriginalWorkingDirectory, prerelease, configuration.ConfigurationFile, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
-    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        => GetIntegrationPackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
+        => GetIntegrationPackagesAsyncCallback?.Invoke(configuration.OriginalWorkingDirectory, prerelease, configuration.ConfigurationFile, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
-    public Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        => GetCliPackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(NuGetPackageOperationConfiguration configuration, bool prerelease, CancellationToken cancellationToken)
+        => GetCliPackagesAsyncCallback?.Invoke(configuration.OriginalWorkingDirectory, prerelease, configuration.ConfigurationFile, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
     public Func<DirectoryInfo, string, Func<string, bool>?, bool, FileInfo?, bool, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetPackagesAsyncCallback { get; set; }
 
-    public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(NuGetPackageOperationConfiguration configuration, string packageId, Func<string, bool>? filter, bool prerelease, bool useCache, CancellationToken cancellationToken)
     {
         if (GetPackagesAsyncCallback is not null)
         {
-            return GetPackagesAsyncCallback.Invoke(workingDirectory, packageId, filter, prerelease, nugetConfigFile, useCache, cancellationToken);
+            return GetPackagesAsyncCallback.Invoke(configuration.OriginalWorkingDirectory, packageId, filter, prerelease, configuration.ConfigurationFile, useCache, cancellationToken);
         }
 
         // Polyglot integration discovery resolves the compatible allow-list via a `tags:polyglot` search
@@ -42,13 +58,13 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
         // compatible subset set GetPackagesAsyncCallback explicitly to override this default.
         if (packageId.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
         {
-            return GetIntegrationPackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+            return GetIntegrationPackagesAsync(configuration, prerelease, cancellationToken);
         }
 
         return Task.FromResult<IEnumerable<NuGetPackage>>([]);
     }
 
-    public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-        => GetPackageVersionsAsyncCallback?.Invoke(workingDirectory, exactPackageId, prerelease, nugetConfigFile, useCache, cancellationToken)
+    public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(NuGetPackageOperationConfiguration configuration, string exactPackageId, bool prerelease, bool useCache, CancellationToken cancellationToken)
+        => GetPackageVersionsAsyncCallback?.Invoke(configuration.OriginalWorkingDirectory, exactPackageId, prerelease, configuration.ConfigurationFile, useCache, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 }

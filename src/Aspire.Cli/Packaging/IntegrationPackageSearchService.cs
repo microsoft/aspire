@@ -4,14 +4,17 @@
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Packaging;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
-namespace Aspire.Cli.Commands;
+namespace Aspire.Cli.Packaging;
 
+/// <summary>
+/// Coordinates shared integration discovery, channel selection, and package matching.
+/// </summary>
 internal sealed class IntegrationPackageSearchService(
     IPackagingService packagingService,
     IProjectLocator projectLocator,
@@ -23,16 +26,37 @@ internal sealed class IntegrationPackageSearchService(
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, cancellationToken);
+        return await GetIntegrationPackagesWithChannelsAsync(
+            workingDirectory,
+            configuredChannel,
+            sourceOverride: null,
+            cancellationToken);
+    }
+
+    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(
+        DirectoryInfo workingDirectory,
+        string? configuredChannel,
+        string? sourceOverride,
+        CancellationToken cancellationToken)
+    {
+        var channels = await GetSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        var sourceMappings = string.IsNullOrWhiteSpace(sourceOverride)
+            ? null
+            : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
-            var integrationPackages = await channel.GetIntegrationPackagesAsync(
-                workingDirectory: workingDirectory,
-                cancellationToken: ct);
+            var integrationPackages = sourceMappings is null
+                ? await channel.GetIntegrationPackagesAsync(
+                    workingDirectory: workingDirectory,
+                    cancellationToken: ct)
+                : await channel.GetIntegrationPackagesAsync(
+                    workingDirectory,
+                    sourceMappings,
+                    ct);
             lock (packagesLock)
             {
                 packages.AddRange(integrationPackages.Select(p => (p, channel)));
@@ -43,7 +67,7 @@ internal sealed class IntegrationPackageSearchService(
     }
 
     /// <summary>
-    /// Searches the same channels as <see cref="GetIntegrationPackagesWithChannelsAsync"/> and, in the same
+    /// Searches the same channels as <see cref="GetIntegrationPackagesWithChannelsAsync(DirectoryInfo, string, CancellationToken)"/> and, in the same
     /// pass, resolves the union of integration package IDs that are marked polyglot-compatible (carry the
     /// <c>polyglot</c> NuGet tag). Used by <c>aspire add</c> and integration discovery to hide integrations a
     /// non-C# AppHost cannot consume unless <c>--all</c> is passed.
@@ -54,7 +78,23 @@ internal sealed class IntegrationPackageSearchService(
     /// </remarks>
     public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, cancellationToken);
+        return await GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+            workingDirectory,
+            configuredChannel,
+            sourceOverride: null,
+            cancellationToken);
+    }
+
+    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+        DirectoryInfo workingDirectory,
+        string? configuredChannel,
+        string? sourceOverride,
+        CancellationToken cancellationToken)
+    {
+        var channels = await GetSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        var sourceMappings = string.IsNullOrWhiteSpace(sourceOverride)
+            ? null
+            : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var polyglotIds = new HashSet<string>(StringComparers.NuGetPackageId);
@@ -64,8 +104,12 @@ internal sealed class IntegrationPackageSearchService(
         {
             // Resolve the integration list and the polyglot allow-list for this channel concurrently so the
             // compatibility lookup runs alongside the integration search instead of as a second serial pass.
-            var integrationPackagesTask = channel.GetIntegrationPackagesAsync(workingDirectory: workingDirectory, cancellationToken: ct);
-            var polyglotIdsTask = channel.GetPolyglotCompatiblePackageIdsAsync(workingDirectory: workingDirectory, cancellationToken: ct);
+            var integrationPackagesTask = sourceMappings is null
+                ? channel.GetIntegrationPackagesAsync(workingDirectory: workingDirectory, cancellationToken: ct)
+                : channel.GetIntegrationPackagesAsync(workingDirectory, sourceMappings, ct);
+            var polyglotIdsTask = sourceMappings is null
+                ? channel.GetPolyglotCompatiblePackageIdsAsync(workingDirectory: workingDirectory, cancellationToken: ct)
+                : channel.GetPolyglotCompatiblePackageIdsAsync(workingDirectory, sourceMappings, ct);
             await Task.WhenAll(integrationPackagesTask, polyglotIdsTask);
 
             lock (gate)
@@ -78,13 +122,26 @@ internal sealed class IntegrationPackageSearchService(
         return (packages, polyglotIds);
     }
 
-    private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(string? configuredChannel, CancellationToken cancellationToken)
+    private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(
+        string? configuredChannel,
+        string? sourceOverride,
+        CancellationToken cancellationToken)
     {
         // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
         // as `requestedChannelName` so PackagingService can synthesize the staging channel
         // for out-of-tree apphosts whose directory wasn't picked up by
         // ConfigurationHelper.RegisterSettingsFiles.
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
+        var allChannels = await packagingService.GetChannelsAsync(
+            cancellationToken,
+            string.IsNullOrWhiteSpace(sourceOverride) ? configuredChannel : null);
+
+        if (!string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            // --source owns discovery, but not the eventual dependency closure. Use the implicit
+            // Quality.Both channel as the search engine so the specified source can offer stable
+            // and prerelease packages without resolving or inheriting any configured channel.
+            return allChannels.Where(static channel => channel.Type is PackageChannelType.Implicit).Take(1);
+        }
 
         // Channels included in the search:
         //   * Implicit channel: always.
@@ -176,13 +233,17 @@ internal sealed class IntegrationPackageSearchService(
         return (friendlyName, packageWithChannel.Package, packageWithChannel.Channel);
     }
 
+    /// <summary>
+    /// Orders matching integrations by official-package priority, then relevance and friendly name.
+    /// </summary>
     public static IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> GetIntegrationSearchMatches(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string searchTerm)
     {
         return packages
             .Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: GetIntegrationSearchScore(searchTerm, p)))
             .Where(p => p.SearchScore > FuzzyMatchThreshold)
-            .OrderByDescending(p => p.SearchScore)
-            .ThenByDescending(p => p.FriendlyName, new CommunityToolkitFirstComparer());
+            .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+            .ThenByDescending(p => p.SearchScore)
+            .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase);
     }
 
     public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages)

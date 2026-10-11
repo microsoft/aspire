@@ -1,0 +1,15 @@
+﻿<configuration>
+  <packageSources>
+    <add key="aspire-test" value="https://feed1.example" />
+    <add key="aspire-test-0" value="https://feed2.example" />
+  </packageSources>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="aspire-test">
+      <package pattern="Aspire.*" />
+    </packageSource>
+    <packageSource key="aspire-test-0">
+      <package pattern="*" />
+    </packageSource>
+  </packageSourceMapping>
+</configuration>

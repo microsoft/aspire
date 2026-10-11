@@ -41,11 +41,10 @@ public class DotNetTemplateFactoryTests
     }
 
     /// <summary>
-    /// Test that simulates the path comparison logic by testing NuGetConfigMerger behavior
-    /// directly, which is what PromptToCreateOrUpdateNuGetConfigAsync will ultimately call.
+    /// Verifies .NET configuration persistence into an existing workspace.
     /// </summary>
     [Fact]
-    public async Task NuGetConfigMerger_InPlaceCreation_WithoutExistingConfig_CreatesInWorkingDirectory()
+    public async Task DotNetConfigurationPersistence_InPlaceCreation_WithoutExistingConfig_CreatesInWorkingDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -58,7 +57,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate in-place creation: output directory same as working directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(workingDir.FullName, "nuget.config");
@@ -66,7 +65,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_InPlaceCreation_WithExistingConfig_UpdatesWorkingDirectoryConfig()
+    public async Task DotNetConfigurationPersistence_InPlaceCreation_WithExistingConfig_UpdatesWorkingDirectoryConfig()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -90,7 +89,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate in-place creation: output directory same as working directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(workingDir.FullName, "nuget.config");
@@ -101,7 +100,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_SubdirectoryCreation_WithParentConfig_IgnoresParentAndCreatesInOutputDirectory()
+    public async Task DotNetConfigurationPersistence_SubdirectoryCreation_WithParentConfig_PreservesParentAndCreatesInOutputDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -127,7 +126,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate subdirectory creation: output directory different from working directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // Parent nuget.config should remain unchanged
@@ -145,7 +144,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_SubdirectoryCreation_WithExistingConfigInOutputDirectory_MergesInOutputDirectory()
+    public async Task DotNetConfigurationPersistence_SubdirectoryCreation_WithExistingConfigInOutputDirectory_MergesInOutputDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -170,7 +169,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate subdirectory creation: merge into existing config in output directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         var outputConfigPath = Path.Combine(outputDir.FullName, "nuget.config");
@@ -182,7 +181,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_SubdirectoryCreation_WithoutAnyConfig_CreatesInOutputDirectory()
+    public async Task DotNetConfigurationPersistence_SubdirectoryCreation_WithoutAnyConfig_CreatesInOutputDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -196,7 +195,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate subdirectory creation: create new config in output directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // No nuget.config should exist in working directory
@@ -212,7 +211,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_ImplicitChannel_DoesNothing()
+    public async Task DotNetConfigurationPersistence_ImplicitChannel_DoesNothing()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -222,7 +221,7 @@ public class DotNetTemplateFactoryTests
         var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // No nuget.config should be created anywhere
@@ -233,7 +232,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_ExplicitChannelWithoutMappings_DoesNothing()
+    public async Task DotNetConfigurationPersistence_ExplicitChannelWithoutMappings_DoesNothing()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -243,7 +242,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel([]); // No mappings
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // No nuget.config should be created anywhere
@@ -352,7 +351,7 @@ public class DotNetTemplateFactoryTests
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment, NuGetTestHelper.CreateService());
 
         return new DotNetTemplateFactory(
             interactionService,

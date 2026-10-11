@@ -1,0 +1,22 @@
+﻿{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Aspire.Hosting.Dcp": "Warning"
+    }
+  },
+  "AtsAssemblies": [
+    "Aspire.Hosting",
+      "Aspire.Hosting.Redis",
+      "MyIntegration"
+  ],
+  "ASPIRE_INTEGRATION_HOSTS_ENABLED": true,
+  "IntegrationHosts": [
+    {
+  "Language": "typescript/nodejs",
+  "PackageName": "@test/integration",
+  "HostEntryPoint": "/path/to/host.mts"
+}
+  ]
+}

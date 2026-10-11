@@ -37,6 +37,9 @@ concurrency:
 
 jobs:
   quarantine_tests:
+    permissions:
+      actions: read
+      contents: read
     uses: ./.github/workflows/specialized-test-runner.yml
     with:
       testRunnerName: "QuarantinedTestRunsheetBuilder"

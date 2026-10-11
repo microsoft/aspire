@@ -358,6 +358,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.
+        /// </summary>
+        public static string SourceWithCredentialsNotSupported {
+            get {
+                return ResourceManager.GetString("SourceWithCredentialsNotSupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to The requested version &apos;{1}&apos; was not found for package &apos;{0}&apos;..
         /// </summary>
         internal static string SpecifiedVersionNotFoundForPackage {

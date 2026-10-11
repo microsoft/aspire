@@ -36,6 +36,9 @@ concurrency:
 
 jobs:
   outerloop_tests:
+    permissions:
+      actions: read
+      contents: read
     uses: ./.github/workflows/specialized-test-runner.yml
     with:
       testRunnerName: "OuterloopTestRunsheetBuilder"

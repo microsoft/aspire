@@ -54,6 +54,9 @@
   <data name="FailedDiscoverNuGetConfig" xml:space="preserve">
     <value>Failed to discover NuGet.config files.</value>
   </data>
+  <data name="ChannelUpdateRequiresAmbientNuGetConfigurationFormat" xml:space="preserve">
+    <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</value>
+  </data>
   <data name="FailedFetchItemsAndPropertiesFormat" xml:space="preserve">
     <value>Failed to fetch items and properties for project: {0}</value>
   </data>
@@ -249,5 +252,23 @@
   </data>
   <data name="FailedReadToolManifestFormat" xml:space="preserve">
     <value>Failed to read tool manifest '{0}': {1}</value>
+  </data>
+  <data name="PreparingSdkForUpdateStatus" xml:space="preserve">
+    <value>Preparing the target AppHost SDK...</value>
+  </data>
+  <data name="UpdateCandidateFileChangedFormat" xml:space="preserve">
+    <value>The file '{0}' changed after the update was planned. Run 'aspire update' again.</value>
+  </data>
+  <data name="UpdateCandidatePolicyChangedFormat" xml:space="preserve">
+    <value>NuGet policy for '{0}' changed while the update was being validated. Run 'aspire update' again.</value>
+  </data>
+  <data name="UpdateCandidateRollbackFileChangedFormat" xml:space="preserve">
+    <value>Could not restore '{0}' because it changed after the candidate edit.</value>
+  </data>
+  <data name="UpdateCandidateRollbackFailed" xml:space="preserve">
+    <value>The update failed and some original files could not be restored.</value>
+  </data>
+  <data name="NuGetConfigOutsideHierarchyFormat" xml:space="preserve">
+    <value>NuGet configuration '{0}' must be in '{1}' or an ancestor directory so that native restore uses the updated policy.</value>
   </data>
 </root>

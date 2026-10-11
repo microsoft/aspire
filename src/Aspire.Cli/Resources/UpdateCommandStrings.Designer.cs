@@ -761,5 +761,47 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("YesOptionDescription", resourceCulture);
             }
         }
+
+        internal static string ChannelUpdateRequiresAmbientNuGetConfigurationFormat {
+            get {
+                return ResourceManager.GetString("ChannelUpdateRequiresAmbientNuGetConfigurationFormat", resourceCulture);
+            }
+        }
+
+        internal static string NuGetConfigOutsideHierarchyFormat {
+            get {
+                return ResourceManager.GetString("NuGetConfigOutsideHierarchyFormat", resourceCulture);
+            }
+        }
+
+        internal static string PreparingSdkForUpdateStatus {
+            get {
+                return ResourceManager.GetString("PreparingSdkForUpdateStatus", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateFileChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidateFileChangedFormat", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidatePolicyChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidatePolicyChangedFormat", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateRollbackFailed {
+            get {
+                return ResourceManager.GetString("UpdateCandidateRollbackFailed", resourceCulture);
+            }
+        }
+
+        internal static string UpdateCandidateRollbackFileChangedFormat {
+            get {
+                return ResourceManager.GetString("UpdateCandidateRollbackFileChangedFormat", resourceCulture);
+            }
+        }
     }
 }

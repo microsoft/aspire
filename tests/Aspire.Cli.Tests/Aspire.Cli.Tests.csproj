@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <Using Include="Aspire.Tests.Utils" />
+    <None Update="TestServices\NuGetTestSettings.config" CopyToOutputDirectory="PreserveNewest" TargetPath="NuGetTestSettings.config" />
   </ItemGroup>
 
   <!-- The CLI bootstrap reads AspireCliChannel from typeof(Aspire.Cli.Program).Assembly — the
@@ -39,6 +40,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Cli\Aspire.Cli.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>
 

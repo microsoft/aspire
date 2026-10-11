@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -262,10 +263,8 @@ internal sealed partial class FallbackProjectParser
                 continue;
             }
 
-            // Convert relative path to absolute path
-            var fullPath = Path.IsPathRooted(include)
-                ? include
-                : Path.GetFullPath(Path.Combine(projectFile.DirectoryName!, include));
+            // MSBuild accepts either separator, such as "..\Web\Web.csproj", on every platform.
+            var fullPath = Path.GetFullPath(PathNormalizer.NormalizePathForStorage(include), projectFile.DirectoryName!);
 
             var projectRef = new ProjectReferenceInfo
             {

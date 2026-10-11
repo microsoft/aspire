@@ -1,14 +1,19 @@
 ﻿<configuration>
   <packageSources>
     <clear />
+    <add key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
     <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
-    <add key="{PR_HIVE}/packages" value="{PR_HIVE}/packages" />
+    <add key="aspire-test" value="{PR_HIVE}/packages" />
   </packageSources>
   <packageSourceMapping>
+    <clear />
     <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
-    <packageSource key="{PR_HIVE}/packages">
+    <packageSource key="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-test">
       <package pattern="Aspire*" />
     </packageSource>
   </packageSourceMapping>

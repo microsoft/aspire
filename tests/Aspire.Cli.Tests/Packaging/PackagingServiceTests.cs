@@ -800,7 +800,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
     /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a
     /// non-empty <see cref="PackageChannel.Mappings"/> array containing a <see cref="PackageMapping.AllPackages"/>
-    /// pattern. <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// pattern. <c>TemplateNuGetConfigService.ConfigureDotNetAppHostNuGetConfigAsync</c>
     /// short-circuits if the matching channel is not explicit or has no mappings, so a future
     /// refactor that flipped stable to implicit / removed its mappings would silently turn the
     /// workspace-NuGet.config write into a no-op for every stable-channel CLI user. The
@@ -1088,7 +1088,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
+    public async Task DotNetConfigurationPersistence_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1115,7 +1115,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");
@@ -1342,7 +1342,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
+    public async Task DotNetConfigurationPersistence_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1370,7 +1370,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");
@@ -2320,7 +2320,22 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
     private sealed class FakeNuGetPackageCacheWithPackages(List<Aspire.Shared.NuGetPackageCli> packages) : INuGetPackageCache
     {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        public Task<NuGetPackageOperationConfiguration> CreateChannelConfigurationAsync(
+            DirectoryInfo workingDirectory,
+            IReadOnlyList<PackageMapping>? channelMappings,
+            CancellationToken cancellationToken)
+            => Task.FromResult(NuGetPackageOperationConfiguration.Ambient(workingDirectory, cacheIdentity: "ambient"));
+
+        public Task<NuGetPackageOperationConfiguration> CreateSourceRestrictedConfigurationAsync(
+            DirectoryInfo workingDirectory,
+            PackageMapping[] mappings,
+            CancellationToken cancellationToken)
+            => Task.FromResult(NuGetPackageOperationConfiguration.Ambient(workingDirectory, cacheIdentity: "source-restricted"));
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
         {
             // Simulate what the real cache does: filter by prerelease flag
             var filtered = prerelease
@@ -2329,16 +2344,33 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(filtered.ToList());
         }
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
             => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            string packageId,
+            Func<string, bool>? filter,
+            bool prerelease,
+            bool useCache,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(
+            NuGetPackageOperationConfiguration configuration,
+            string exactPackageId,
+            bool prerelease,
+            bool useCache,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
     }
 }
