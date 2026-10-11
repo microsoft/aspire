@@ -81,6 +81,19 @@ suite('utils/strings tests', () => {
         }
     });
 
+    test('resource source command and failure copy are localized', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        assert.strictEqual(packageNls['command.openResourceSource'], 'Open resource source');
+        assert.deepStrictEqual(Object.fromEntries(Object.entries(packageNls).filter(([key]) => key.startsWith('aspire-vscode.strings.resourceSource'))), {
+            'aspire-vscode.strings.resourceSourceNotFound': 'Could not determine the resource source to open.',
+            'aspire-vscode.strings.resourceSourceOpenFailed': 'Failed to open resource source: {0}',
+        });
+        assert.strictEqual(locStrings.resourceSourceNotFound, 'Could not determine the resource source to open.');
+        assert.strictEqual(locStrings.resourceSourceOpenFailed('frontend.ts'), 'Failed to open resource source: frontend.ts');
+    });
+
     test('editor assistance invocation and confirmation copy is localized and generated into XLF', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');

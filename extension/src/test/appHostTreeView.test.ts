@@ -14,8 +14,8 @@ import { registerTreeViewCommands } from '../activation/registerTreeViewCommands
 import { AppHostDataRepository, shortenPath, shortenPaths } from '../data/AppHostDataRepository';
 import { AspireCliFailedError } from '../data/appHostCliContracts';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { getResourceContextValue, getResourceIcon, getResourceCommandIcon, resolveAppHostSourcePath, buildResourceDescription, buildResourceTooltip } from '../views/treePresentation';
-import { AppHostItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
+import { getResourceContextValue, getResourceSourcePaths, getResourceIcon, getResourceCommandIcon, resolveAppHostSourcePath, buildResourceDescription, buildResourceTooltip } from '../views/treePresentation';
+import { AppHostItem, ResourceItem, WorkspaceAppHostItem, WorkspaceResourcesItem } from '../views/treeItems';
 import type { Clipboard } from '../views/AspireAppHostTreeProvider';
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../data/AppHostDataRepository';
 import { AppHostCliRunner } from '../data/appHostCliRunner';
@@ -24,7 +24,7 @@ import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConst
 import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService, type AppHostOperationState } from '../services/AppHostLaunchService';
-import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid, appHostSourceNotFound, loadingPipelineSteps } from '../loc/strings';
+import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid, appHostSourceNotFound, loadingPipelineSteps, resourceSourceNotFound, resourceSourceOpenFailed } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import {
@@ -36,7 +36,7 @@ import {
 import { windowCliPathTarget, workspaceFolderCliPathTarget, type CliPathResolutionTarget } from '../utils/cliPathVariables';
 import { getResourceSource } from '../utils/resourceDisplay';
 
-import { createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
+import { createMockDocument, createWorkspaceFolder, removeDirectorySafely } from './testHelpers';
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
         name: 'my-service',
@@ -125,6 +125,28 @@ function getResourceCommandItems(provider: AspireAppHostTreeProvider): readonly 
     assert.ok(commandsGroup);
 
     return provider.getChildren(commandsGroup);
+}
+
+function getResourceItems(provider: AspireAppHostTreeProvider): ResourceItem[] {
+    const [appHostItem] = provider.getChildren();
+    const group = appHostItem instanceof WorkspaceResourcesItem
+        ? appHostItem
+        : provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+    assert.ok(group);
+    return provider.getChildren(group).map(item => {
+        assert.ok(item instanceof ResourceItem);
+        return item;
+    });
+}
+
+function stubSourceOpening(sandbox: sinon.SinonSandbox, document: vscode.TextDocument) {
+    return {
+        open: sandbox.stub(vscode.workspace, 'openTextDocument').resolves(document),
+        show: sandbox.stub(vscode.window, 'showTextDocument').resolves(),
+        reveal: sandbox.stub(vscode.commands, 'executeCommand').resolves(),
+        warning: sandbox.stub(vscode.window, 'showWarningMessage'),
+        workspaceFolder: sandbox.stub(vscode.workspace, 'getWorkspaceFolder'),
+    };
 }
 
 function makeTreeProviderWithLaunchService(appHosts: readonly AppHostDisplayInfo[], launchService: AppHostLaunchService): AspireAppHostTreeProvider {
@@ -1765,6 +1787,264 @@ suite('resolveAppHostSourcePath', () => {
         const result = resolveAppHostSourcePath(csprojPath, () => false);
         assert.strictEqual(result, csprojPath);
     });
+});
+
+suite('source navigation', () => {
+    const sandbox = sinon.createSandbox();
+    const document = createMockDocument('source', __filename);
+    let directory: string;
+    let appHostPath: string;
+    let workerDirectory: string;
+    let sourcePath: string;
+    let resource: ResourceJson;
+    let provider: AspireAppHostTreeProvider | undefined;
+    let api: ReturnType<typeof stubSourceOpening>;
+
+    setup(() => {
+        directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-resource-source-'));
+        const appHostDirectory = path.join(directory, 'AppHost');
+        workerDirectory = path.join(directory, 'worker');
+        fs.mkdirSync(appHostDirectory);
+        fs.mkdirSync(workerDirectory);
+        appHostPath = path.join(appHostDirectory, 'AppHost.csproj');
+        sourcePath = path.join(workerDirectory, 'run.cmd');
+        fs.writeFileSync(sourcePath, '@echo worker');
+        fs.writeFileSync(path.join(appHostDirectory, 'run.cmd'), '@echo unrelated');
+        resource = makeResource({
+            resourceType: 'Executable',
+            source: 'run.cmd',
+            properties: {
+                'executable.path': './run.cmd',
+                'executable.workDir': workerDirectory,
+            },
+        });
+        api = stubSourceOpening(sandbox, document);
+        api.workspaceFolder.returns(createWorkspaceFolder('source', directory));
+    });
+
+    teardown(() => {
+        provider?.dispose();
+        provider = undefined;
+        sandbox.restore();
+        removeDirectorySafely(directory);
+    });
+
+    function assertFileOpened(expectedPath: string) {
+        assert.strictEqual(api.open.calledOnceWithExactly(sinon.match.has('fsPath', vscode.Uri.file(expectedPath).fsPath)), true);
+        assert.deepStrictEqual(api.show.args, [[document, { preview: false }]]);
+        assert.strictEqual(api.reveal.called, false);
+    }
+
+    test('resolves source metadata and preserves candidate precedence without checking availability', () => {
+        const missingPath = path.join(workerDirectory, 'missing.csproj');
+        const parentPath = `${workerDirectory}${path.sep}..${path.sep}worker`;
+        const cases: [NonNullable<ResourceJson['properties']>, string | undefined, string[], string][] = [
+            [resource.properties!, appHostPath, [sourcePath, workerDirectory], 'Executable'],
+            [{ 'executable.path': './run.cmd', 'executable.workDir': '../worker' }, appHostPath, [sourcePath, workerDirectory], 'Executable'],
+            [resource.properties!, undefined, [sourcePath, workerDirectory], 'Executable'],
+            [{ 'executable.path': './run.cmd' }, appHostPath, [path.join(path.dirname(appHostPath), 'run.cmd')], 'Executable'],
+            [{ 'executable.path': sourcePath, 'executable.workDir': path.dirname(appHostPath) }, appHostPath, [sourcePath, path.dirname(appHostPath)], 'Executable'],
+            [{ 'project.path': sourcePath }, appHostPath, [sourcePath], 'Project'],
+            [{ 'executable.path': 'dotnet', 'executable.workDir': workerDirectory }, undefined, [workerDirectory], 'Executable'],
+            [{ 'executable.path': 'dotnet', 'executable.workDir': parentPath }, appHostPath, [workerDirectory], 'Executable'],
+            [{ 'project.path': `${parentPath}${path.sep}run.cmd` }, appHostPath, [sourcePath], 'Project'],
+            [{ 'project.path': sourcePath, 'resource.source': 'run.cmd' }, appHostPath, [sourcePath], 'BlazorWasmApp'],
+            [{ 'project.path': missingPath, ...resource.properties, 'resource.source': 'run.cmd' }, appHostPath,
+                [missingPath, sourcePath, workerDirectory], 'Project'],
+        ];
+        for (const [properties, owner, expected, resourceType] of cases) {
+            const candidate = makeResource({ properties, resourceType });
+            assert.deepStrictEqual(getResourceSourcePaths(candidate, owner), expected, JSON.stringify(properties));
+            assert.strictEqual(getResourceContextValue(candidate, owner), 'resource:canOpenSource');
+        }
+    });
+
+    test('display-only sources and bare PATH commands do not navigate to colliding files', () => {
+        const candidates = [
+            makeResource({ source: sourcePath }),
+            makeResource({ properties: { 'executable.path': 'run.cmd' } }),
+            makeResource({ properties: { 'executable.workDir': workerDirectory } }),
+            ...[sourcePath, 'run.cmd', 'OpenAI', 'OpenAI Models', 'frontend/http', '/subscriptions/test/deployments/app', 'BlazorApp.csproj']
+                .map(source => makeResource({ resourceType: 'Custom', properties: { 'resource.source': source } })),
+        ];
+        for (const candidate of candidates) {
+            assert.deepStrictEqual(getResourceSourcePaths(candidate, appHostPath), []);
+            assert.strictEqual(getResourceContextValue(candidate, appHostPath), 'resource');
+        }
+    });
+
+    for (const sourceProperty of ['project.path', 'executable.path']) {
+        test(`empty, but not whitespace, resource.source suppresses ${sourceProperty}`, () => {
+            for (const source of ['', ' ']) {
+                const candidate = makeResource({ properties: { [sourceProperty]: sourcePath, 'resource.source': source } });
+                assert.deepStrictEqual(getResourceSourcePaths(candidate, appHostPath), source === '' ? [] : [sourcePath]);
+                assert.strictEqual(getResourceContextValue(candidate, appHostPath), source === '' ? 'resource' : 'resource:canOpenSource');
+            }
+        });
+    }
+
+    const nonFilesystemSources: { name: string; resourceType: string; properties: Record<string, string> }[] = [
+        { name: 'container image', resourceType: 'Container', properties: { 'container.image': 'run.cmd' } },
+        { name: 'tool package', resourceType: 'Tool', properties: { 'tool.package': 'run.cmd', 'executable.path': 'dotnet' } },
+        { name: 'parameter configuration key', resourceType: 'Parameter', properties: {} },
+        { name: 'external service hostname', resourceType: 'ExternalService', properties: {} },
+    ];
+
+    for (const { name, resourceType, properties } of nonFilesystemSources) {
+        for (const kind of ['file', 'directory']) {
+            test(`non-filesystem ${name} does not navigate to a colliding ${kind}`, () => {
+                if (kind === 'directory') {
+                    const collisionPath = path.join(path.dirname(appHostPath), 'run.cmd');
+                    fs.unlinkSync(collisionPath);
+                    fs.mkdirSync(collisionPath);
+                }
+                const nonFilesystemResource = makeResource({
+                    resourceType,
+                    source: 'run.cmd',
+                    properties: { 'resource.source': 'run.cmd', ...properties },
+                });
+
+                assert.deepStrictEqual(getResourceSourcePaths(nonFilesystemResource, appHostPath), []);
+                assert.strictEqual(getResourceContextValue(nonFilesystemResource, appHostPath), 'resource');
+            });
+        }
+    }
+
+    test('an existing absolute tool launcher is not its source', () => {
+        const tool = makeResource({
+            resourceType: 'Tool',
+            properties: { 'tool.package': 'run.cmd', 'executable.path': sourcePath, 'executable.workDir': workerDirectory, 'resource.source': 'run.cmd' },
+        });
+        assert.deepStrictEqual(getResourceSourcePaths(tool, appHostPath), []);
+        assert.strictEqual(getResourceContextValue(tool, appHostPath), 'resource');
+    });
+
+    test('resource item rendering does not probe the filesystem for either owner kind', () => {
+        const error = new Error('Tree rendering must not probe the filesystem.');
+        const probes = [
+            sandbox.stub(fs, 'existsSync').throws(error),
+            sandbox.stub(fs, 'statSync').throws(error),
+            sandbox.stub(fs.promises, 'stat').rejects(error),
+            sandbox.stub(fs.promises, 'access').rejects(error),
+        ];
+        for (const pid of [null, 123]) {
+            for (const source of [sourcePath, path.join(workerDirectory, 'missing.cs'), 'run.cmd']) {
+                const item = new ResourceItem(makeResource({ properties: { 'project.path': source } }), pid, false, undefined, appHostPath);
+                assert.strictEqual(item.contextValue, 'resource:canOpenSource');
+            }
+        }
+        assert.deepStrictEqual(probes.map(probe => probe.called), [false, false, false, false]);
+    });
+
+    for (const viewMode of ['workspace', 'global'] as const) {
+        test(`${viewMode} resource navigation rejects non-filesystem and explicitly suppressed sources`, async () => {
+            const resources = [
+                ...nonFilesystemSources.map(({ resourceType, properties }) => makeResource({
+                    name: resourceType,
+                    resourceType,
+                    source: 'run.cmd',
+                    properties: { 'resource.source': 'run.cmd', ...properties },
+                })),
+                ...['project.path', 'executable.path'].map(sourceProperty => makeResource({
+                    name: sourceProperty,
+                    resourceType: sourceProperty === 'project.path' ? 'Project' : 'Executable',
+                    properties: { [sourceProperty]: sourcePath, 'resource.source': '' },
+                })),
+            ];
+            provider = makeTreeProvider([makeAppHost({
+                appHostPath,
+                resources,
+            })], viewMode);
+            for (const item of getResourceItems(provider)) {
+                assert.strictEqual(item.contextValue, 'resource');
+                await provider.openResourceSource(item);
+            }
+            assert.deepStrictEqual([api.open.called, api.show.called, api.reveal.called], [false, false, false]);
+            assert.deepStrictEqual(api.warning.args, resources.map(() => [resourceSourceNotFound]));
+        });
+
+        for (const kind of ['executable', 'file', 'outside-workspace-file', 'directory']) {
+            test(`${viewMode} opens ${kind} source using its owning AppHost`, async () => {
+                const source = kind === 'directory' ? workerDirectory : kind === 'outside-workspace-file' ? __filename : sourcePath;
+                const candidate = kind === 'executable' ? resource : makeResource({ properties: kind === 'directory'
+                    ? { 'executable.path': 'dotnet', 'executable.workDir': source } : { 'project.path': source } });
+                provider = makeTreeProvider([makeAppHost({ appHostPath, resources: [candidate] })], viewMode);
+                if (kind === 'outside-workspace-file') {
+                    api.workspaceFolder.returns(undefined);
+                }
+                const [item] = getResourceItems(provider);
+                assert.strictEqual(item.appHostPath, appHostPath);
+                await provider.openResourceSource(item);
+                if (kind === 'directory') {
+                    assert.strictEqual(api.reveal.calledOnceWithExactly('revealInExplorer', sinon.match.has('fsPath', vscode.Uri.file(source).fsPath)), true);
+                    assert.deepStrictEqual([api.open.called, api.show.called], [false, false]);
+                } else {
+                    assertFileOpened(source);
+                }
+            });
+        }
+
+        for (const extension of ['.csproj', '.mts']) {
+            test(`${viewMode} opens ${extension} AppHost source in a non-preview editor`, async () => {
+                const appHost = path.join(path.dirname(appHostPath), `apphost${extension}`);
+                const source = extension === '.csproj' ? path.join(path.dirname(appHostPath), 'AppHost.cs') : appHost;
+                fs.writeFileSync(source, 'source');
+                provider = makeTreeProvider([makeAppHost({ appHostPath: appHost })], viewMode);
+                const item = provider.findAppHostElement(appHost);
+                assert.ok(item instanceof AppHostItem || item instanceof WorkspaceResourcesItem || item instanceof WorkspaceAppHostItem);
+                await provider.openAppHostSource(item);
+                assertFileOpened(source);
+            });
+        }
+
+        for (const code of ['ENOENT', 'ENOTDIR', 'EACCES']) {
+            test(`${viewMode} asynchronously handles ${code} when opening source`, async () => {
+                const missingPath = path.join(workerDirectory, 'missing.csproj');
+                const sourceStat = fs.statSync(sourcePath);
+                const stat = sandbox.stub(fs.promises, 'stat');
+                stat.withArgs(missingPath).rejects(Object.assign(new Error('Source lookup failed.'), { code }));
+                stat.withArgs(sourcePath).resolves(sourceStat);
+                provider = makeTreeProvider([makeAppHost({
+                    appHostPath, resources: [makeResource({ properties: { 'project.path': missingPath, 'executable.path': sourcePath } })],
+                })], viewMode);
+                const [item] = getResourceItems(provider);
+                assert.strictEqual(stat.called, false);
+                await provider.openResourceSource(item);
+                assert.deepStrictEqual(stat.args, code === 'EACCES' ? [[missingPath]] : [[missingPath], [sourcePath]]);
+                if (code === 'EACCES') {
+                    assert.deepStrictEqual([api.open.called, api.show.called, api.reveal.called], [false, false, false]);
+                    assert.deepStrictEqual(api.warning.args, [[resourceSourceOpenFailed(missingPath)]]);
+                } else {
+                    assertFileOpened(sourcePath);
+                    assert.strictEqual(api.warning.called, false);
+                }
+            });
+        }
+    }
+
+    for (const failure of ['missing', 'outside-workspace-directory', 'stat', 'open', 'show', 'reveal'] as const) {
+        test(`reports source opening failure: ${failure}`, async () => {
+            const source = failure === 'missing' ? path.join(workerDirectory, 'missing.cs')
+                : failure === 'reveal' || failure === 'outside-workspace-directory' ? workerDirectory : sourcePath;
+            provider = makeTreeProvider([makeAppHost({ appHostPath, resources: [makeResource({ properties:
+                failure === 'reveal' || failure === 'outside-workspace-directory'
+                    ? { 'executable.path': 'dotnet', 'executable.workDir': source } : { 'project.path': source },
+            })] })]);
+            const error = new Error('Source navigation failed.');
+            if (failure === 'stat') {
+                sandbox.stub(fs.promises, 'stat').rejects(error);
+            } else if (failure === 'outside-workspace-directory') {
+                api.workspaceFolder.returns(undefined);
+            } else if (failure !== 'missing') {
+                api[failure].rejects(error);
+            }
+            await provider.openResourceSource(getResourceItems(provider)[0]);
+            assert.deepStrictEqual(api.warning.args, [[resourceSourceOpenFailed(source)]]);
+            if (failure === 'missing' || failure === 'stat' || failure === 'outside-workspace-directory') {
+                assert.deepStrictEqual([api.open.called, api.show.called, api.reveal.called], [false, false, false]);
+            }
+        });
+    }
 });
 
 suite('resource source', () => {
