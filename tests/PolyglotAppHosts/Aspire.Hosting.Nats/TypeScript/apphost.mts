@@ -47,4 +47,19 @@ const _uri = await nats.uriExpression();
 const _userName = await nats.userNameReference();
 
 const _cstr = await nats.connectionStringExpression();
+
+const clusterMember1 = await builder.addNats("cluster-member-1")
+    .withJetStream();
+const clusterMember2 = await builder.addNats("cluster-member-2")
+    .withJetStream();
+const clusterMember3 = await builder.addNats("cluster-member-3")
+    .withJetStream();
+
+const cluster = await builder.addNatsCluster("nats-cluster")
+    .withMember(clusterMember1)
+    .withMember(clusterMember2)
+    .withMember(clusterMember3);
+
+const _clusterCstr = await cluster.connectionStringExpression();
+
 await builder.build().run();
