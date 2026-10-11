@@ -58,6 +58,17 @@ A local-only independent Rust reference implements the eight composition
 capabilities to vet the C# NativeAOT implementation with the same ATS bundle and
 generated TypeScript consumer. It is not a shipping implementation, repository
 dependency, or proposed second host. It is kept outside commits and the PR.
+The latest reference builds from the current ATS bundle and advertises only
+its eight implemented capabilities. It passes the same generated-SDK
+composition, authority/error, snapshot-shape, and 101-replacement scenario as
+the current C# smoke executable.
+
+On local macOS arm64, the current C# smoke executable was 15,156,352 bytes with
+three identical 24,559,616-byte resident-set samples; the Rust reference was
+517,904 bytes with three identical 3,457,024-byte samples. The workload is the
+same, but the binaries are **not feature-equivalent**: C# includes the current
+45-export server surface while Rust implements only eight composition exports.
+These measurements are not a full AppHost-server size or memory comparison.
 This comparison covers composition only, not execution, Dashboard services,
 callbacks, or diagnostics parity.
 
@@ -700,7 +711,7 @@ package registration/dispatch or three complete reusable integration APIs.
 The forwarding executable is not the live Dev Tunnels service. CLI file watching and guest reexecution,
 deployment lowering, full interaction input/terminal/upload support, arbitrary
 package acquisition, and automated multi-platform AOT/E2E coverage remain work.
-Rust stays locally excluded and is only evidence for the earlier composition
+Rust stays locally excluded and is only evidence for the composition
 contract; it is neither shipped nor wired into production dependencies or CI.
 
 ### Implemented resource-preserving revision slice
