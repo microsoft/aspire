@@ -44,6 +44,11 @@ builder.Services.AddHttpClient("weatherapi", client =>
     client.BaseAddress = new Uri("https+http://weatherapi");
 });
 
+builder.Services.AddHttpClient("timeapi", client =>
+{
+    client.BaseAddress = new Uri("https+http://timeapi");
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
