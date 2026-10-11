@@ -102,10 +102,14 @@ You can also pass the `Action<MicrosoftAzureCosmosSettings> configureSettings` d
 builder.AddAzureCosmosClient("cosmosConnectionName", settings => settings.DisableTracing = true);
 ```
 
-You can also setup the [CosmosClientOptions](https://learn.microsoft.com/dotnet/api/microsoft.azure.cosmos.cosmosclientoptions) using the optional `Action<CosmosClientOptions> configureClientOptions` parameter of the `AddAzureCosmosClient` method. For example, to set the `ApplicationName` "User-Agent" header suffix for all requests issues by this client:
+You can also set up the [CosmosClientOptions](https://learn.microsoft.com/dotnet/api/microsoft.azure.cosmos.cosmosclientoptions) using the optional `Action<IServiceProvider, CosmosClientOptions> configureClientOptions` parameter of the `AddAzureCosmosClient` method. The service provider can be used to resolve services needed to configure the client. For example:
 
 ```csharp
-builder.AddAzureCosmosClient("cosmosConnectionName", configureClientOptions: clientOptions => clientOptions.ApplicationName = "myapp");
+builder.AddAzureCosmosClient("cosmosConnectionName", configureClientOptions: (serviceProvider, clientOptions) =>
+{
+    clientOptions.ApplicationName = "myapp";
+    clientOptions.CustomHandlers.Add(serviceProvider.GetRequiredService<MyRequestHandler>());
+});
 ```
 
 ## Health checks
