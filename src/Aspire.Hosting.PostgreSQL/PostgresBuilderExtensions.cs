@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREMCP001
 #pragma warning disable ASPIRETERMINAL001
+#pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
 using System.Globalization;
 using System.Text;
@@ -26,6 +27,7 @@ public static class PostgresBuilderExtensions
     private const string UserEnvVarName = "POSTGRES_USER";
     private const string PasswordEnvVarName = "POSTGRES_PASSWORD";
     private const string PostgresMcpDatabaseUriEnvVarName = "DATABASE_URI";
+    private const string InitDbArgs = "--auth-host=scram-sha-256 --auth-local=scram-sha-256";
 
     /// <summary>
     /// Adds a PostgreSQL resource to the application model. A container is used for local development.
@@ -117,7 +119,16 @@ public static class PostgresBuilderExtensions
                       .WithImageRegistry(PostgresContainerImageTags.Registry)
                       .WithIconName("DatabaseMultiple")
                       .WithEnvironment("POSTGRES_HOST_AUTH_METHOD", "scram-sha-256")
-                      .WithEnvironment("POSTGRES_INITDB_ARGS", "--auth-host=scram-sha-256 --auth-local=scram-sha-256")
+                      .WithEnvironment(context =>
+                      {
+                          // initdb fsyncs the whole data directory before the server starts. When the data
+                          // directory is discarded with the container, that durability buys nothing and
+                          // roughly doubles the time until the server accepts connections.
+                          context.EnvironmentVariables["POSTGRES_INITDB_ARGS"] =
+                              context.ExecutionContext.IsRunMode && IsDataDirectoryEphemeral(postgresServer)
+                                  ? $"{InitDbArgs} --nosync"
+                                  : InitDbArgs;
+                      })
                       .WithEnvironment(context =>
                       {
                           context.EnvironmentVariables[UserEnvVarName] = postgresServer.UserNameReference;
@@ -755,6 +766,28 @@ public static class PostgresBuilderExtensions
         writer.Flush();
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>
+    /// Determines whether the server's data directory is discarded together with the container: no volume or
+    /// bind mount covers it and the container is not kept across application host runs.
+    /// </summary>
+    internal static bool IsDataDirectoryEphemeral(PostgresServerResource resource)
+    {
+        if (resource.Annotations.OfType<PersistenceAnnotation>().Any() ||
+            resource.Annotations.OfType<ContainerLifetimeAnnotation>().LastOrDefault() is { Lifetime: ContainerLifetime.Persistent })
+        {
+            return false;
+        }
+
+        // The data directory lives under /var/lib/postgresql for every image version (see GetPostgresDataDirectoryPath),
+        // so any mount at, above, or below that path may hold data that outlives the container.
+        const string dataRoot = "/var/lib/postgresql/";
+        return !resource.Annotations.OfType<ContainerMountAnnotation>().Any(mount =>
+        {
+            var target = mount.Target.TrimEnd('/') + "/";
+            return dataRoot.StartsWith(target, StringComparison.Ordinal) || target.StartsWith(dataRoot, StringComparison.Ordinal);
+        });
     }
 
     /// <summary>
