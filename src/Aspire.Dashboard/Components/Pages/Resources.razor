@@ -167,7 +167,7 @@
                                                             </FluentButton>
                                                         }
                                                     </span>
-                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
+                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" ShowHiddenIndicator="true" />
                                                 </span>
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
