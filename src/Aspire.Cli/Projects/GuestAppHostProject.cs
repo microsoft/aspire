@@ -558,6 +558,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 args: context.UnmatchedTokens);
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
+            if (appHostServerProject is NativeAppHostServerProject)
+            {
+                // Auxiliary discovery identifies the guest file, not the native
+                // server executable or its working directory.
+                launchSettingsEnvVars["AppHost__FilePath"] = appHostFile.FullName;
+            }
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)

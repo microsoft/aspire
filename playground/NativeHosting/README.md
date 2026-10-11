@@ -2,6 +2,78 @@
 
 This is an isolated experiment for [#20873](https://github.com/microsoft/aspire/issues/20873), not a new supported AppHost runtime. C# hosting remains managed and the default guest server selection stays unchanged. An explicit development-only CLI override now exercises the native server and extends the command's cleanup window. No Nuxt package, dependency version, or generated API baseline is changed. The original handwritten-RPC experiments remain available; the ATS-native server below uses generated ATS APIs instead.
 
+## Current native server auxiliary backchannel
+
+`src/Aspire.Hosting.Native.Server` exposes the existing Hosting auxiliary protocol
+alongside its CLI run backchannel. It source-links the shared socket discovery,
+path normalization, owner-only permissions, and process-identity helpers. Normal
+`aspire run` projects the selected guest AppHost's absolute path into the native
+server's boot environment as `AppHost__FilePath`; discovery works automatically
+without a native-specific path override or a new RPC. Standalone server callers
+must supply their AppHost path explicitly. Resolution prefers `AppHost__FilePath`,
+then accepts `ASPIRE_APPHOST_FILEPATH`, `AppHost__Path`, and the experimental
+`ASPIRE_NATIVE_APPHOST_PATH`. No filename is inferred from the working directory.
+The compact socket under `~/.aspire/cli/bch` is discoverable by the existing CLI.
+
+The server advertises `aux.v1`, `aux.v2`, `aux.v3`, and
+`resource-snapshot-versions.v1`. Source-generated JSON implements resource
+snapshots/watches, console logs/search/tail/follow/batches, registered commands,
+resource/startup waits, Dashboard metadata, and cooperative stop. Snapshot versions
+remain ordered across revisions and replacement runtimes. Authoring configuration
+and launch environments are not exposed. Resource URLs, console logs, and command
+result messages retain their integration-supplied content; this is not a general
+secret-redaction layer. Dashboard API credentials are separate from browser login
+and resource-service credentials.
+
+Native commands have no argument declarations: validation never dispatches a
+command, and nonempty argument submissions fail explicitly. MCP endpoint calls
+fail because the native kernel has no MCP exports; the legacy Dashboard MCP
+lookup returns null, matching current managed Hosting. Terminal queries report
+no terminals, and `terminals.v1` is deliberately not advertised.
+
+### Auxiliary conformance verification
+
+The shared [auxiliary smoke script](../../tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/NativeAuxiliarySmoke.mts)
+accepts a built CLI executable, native server executable, and prepared AppHost
+workspace. It uses the same scenario for C# NativeAOT and Rust. After compiling the
+smoke scripts and preparing the fixture with the existing native runtime SDK setup,
+the verified macOS arm64 C# invocation is:
+
+```bash
+DOTNET_ROOT="$PWD/.dotnet" \
+PATH="$PWD/.dotnet:$PATH" \
+ASPIRE_NATIVE_DCP_PATH="$HOME/.nuget/packages/microsoft.developercontrolplane.darwin-arm64/0.26.5/tools/dcp" \
+ASPIRE_DASHBOARD_PATH="$PWD/artifacts/bin/Aspire.Dashboard/Debug/net11.0/Aspire.Dashboard.dll" \
+node artifacts/native-hosting/runtime-sdk/out/NativeAuxiliarySmoke.mjs \
+  "$PWD/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire" \
+  "$PWD/artifacts/native-hosting/csharp-aux-publish/Aspire.Hosting.Native.Server" \
+  "$PWD/artifacts/native-hosting/csharp-aux-fixture"
+```
+
+This passed without `ASPIRE_NATIVE_APPHOST_PATH`: normal CLI boot supplied the
+actual AppHost path. Coverage includes two concurrent auxiliary clients,
+capabilities/process identity/startup readiness, snapshot versions/filtering,
+resource watches and enumeration abort, logs/batches, request cancellation,
+validation-only versus real command dispatch, resource waits, and authenticated
+Dashboard API access (wrong key: 401; correct key: 200). It also runs the actual
+CLI `describe`, `logs`, `resource`, `wait`, and instance-scoped `stop` commands.
+
+The script verifies server/socket and owned workload cleanup before independently
+signalling its fixture launcher. Instance-scoped stop deliberately does not signal
+the launcher or other AppHost instances. The C# run is recorded in
+`artifacts/native-hosting/csharp-auxiliary-e2e.log`; the full native core suite and
+eight headless revision scenarios also passed after the transport extraction.
+
+Server shutdown quiesces Dashboard resource-service requests before deleting the
+Dashboard executable: active watches cancel immediately and reconnects receive
+503. Without this ordering, Dashboard termination consumed the entire CLI grace
+window and tree-kill escalation could suspend DCP while cleanup was still pending.
+The unchanged browser/confirmation smoke scenario passed twice after the fix,
+with DCP shutdown completing within the ordinary CLI grace window. Evidence is in
+`artifacts/native-hosting/csharp-aux/browser-e2e.log` and
+`artifacts/native-hosting/csharp-aux/browser-e2e-repeat.log`; the auxiliary scenario
+also passed again in `artifacts/native-hosting/csharp-aux/auxiliary-after-shutdown-fix.log`.
+
 ## ATS-native integration authoring direction
 
 [App Model v2](../../docs/specs/appmodelv2.md) is the living design companion for

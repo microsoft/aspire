@@ -13,6 +13,7 @@ using Aspire.Hosting.Native.Server;
 using Aspire.Hosting.Native.Dashboard;
 using Aspire.Hosting.Native.Cli;
 using Aspire.Hosting.Native.Runtime;
+using Aspire.Hosting.Native.Auxiliary;
 
 var options = NativeServerOptions.Load(Environment.GetEnvironmentVariable("ASPIRE_NATIVE_SERVER_OPTIONS_PATH"));
 var token = Environment.GetEnvironmentVariable("ASPIRE_NATIVE_RPC_TOKEN")
@@ -75,6 +76,20 @@ using var backchannel = Environment.GetEnvironmentVariable("ASPIRE_BACKCHANNEL_P
     ? new NativeCliProtocol(backchannelPath, server, shutdown.Cancel,
         dashboardReady.Task.WaitAsync, logs, options)
     : null;
+var appHostPath = NativeAuxiliaryBackchannel.ResolveAppHostPath(
+    Environment.GetEnvironmentVariable("AppHost__FilePath"),
+    Environment.GetEnvironmentVariable("ASPIRE_APPHOST_FILEPATH"),
+    Environment.GetEnvironmentVariable("AppHost__Path"),
+    Environment.GetEnvironmentVariable("ASPIRE_NATIVE_APPHOST_PATH"));
+using var auxiliary = new NativeAuxiliaryBackchannel(appHostPath,
+    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), server, options,
+    exitCode =>
+    {
+        Environment.ExitCode = exitCode ?? 0;
+        shutdown.Cancel();
+    },
+    backchannel is not null ? backchannel.WaitForAppHostReadyAsync : WaitForNativeAppHostReadyAsync,
+    dashboardReady.Task.WaitAsync, () => dashboardState.ApiToken, logs);
 try
 {
     var dashboardPort = Environment.GetEnvironmentVariable("ASPIRE_NATIVE_DASHBOARD_PORT");
@@ -95,7 +110,8 @@ try
     }
     Console.WriteLine($"Native AppHost server listening on {listener.EndPoint}.");
     var listening = Task.WhenAll(listener.RunAsync(shutdown.Token),
-        backchannel?.RunAsync(shutdown.Token) ?? Task.CompletedTask);
+        backchannel?.RunAsync(shutdown.Token) ?? Task.CompletedTask,
+        auxiliary.RunAsync(shutdown.Token));
     try
     {
         try
@@ -145,11 +161,12 @@ finally
     await startup.CancelAsync().ConfigureAwait(false);
     if (dashboard is not null)
     {
+        dashboard.BeginShutdown();
         try
         {
-            // The Dashboard owns long-lived gRPC watches. Stop its DCP process
-            // before the resource service, so those requests finish rather than
-            // consuming the HTTP server's entire graceful shutdown budget.
+            // Watches were quiesced before requesting Dashboard deletion. Remove its DCP
+            // process before disposing the resource-service host so reconnects cannot keep
+            // either side alive through the CLI's graceful shutdown budget.
             using var cleanup = new CancellationTokenSource(options.CleanupTimeout);
             if (dashboardCleanup is null)
             {
@@ -167,6 +184,15 @@ finally
     }
 }
 
+async Task WaitForNativeAppHostReadyAsync(CancellationToken cancellationToken)
+{
+    await dcpReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+    while (server.GetApplicationObserver() is null)
+    {
+        await Task.Delay(options.RetryInterval, cancellationToken).ConfigureAwait(false);
+    }
+}
+
 async Task StopDashboardOnShutdownAsync()
 {
     try
@@ -178,6 +204,7 @@ async Task StopDashboardOnShutdownAsync()
     }
     // Dashboard and application workloads are independent DCP resources. Start
     // their cleanup together rather than accumulating graceful-stop budgets.
+    dashboard?.BeginShutdown();
     using var cleanup = new CancellationTokenSource(options.CleanupTimeout);
     await dashboardState.StopAsync(dcp, cleanup.Token).ConfigureAwait(false);
 }

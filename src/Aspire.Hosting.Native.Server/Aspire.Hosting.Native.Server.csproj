@@ -8,6 +8,7 @@
     <EnablePackageValidation>false</EnablePackageValidation>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <NativeGeneratedDirectory>$(IntermediateOutputPath)native-ats/</NativeGeneratedDirectory>
   </PropertyGroup>
@@ -18,6 +19,15 @@
                       GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="System.IO.Hashing" />
+    <Compile Include="../Shared/AppHostSocketManager.cs" Link="Auxiliary/AppHostSocketManager.cs" />
+    <Compile Include="../Shared/BackchannelConstants.cs" Link="Auxiliary/BackchannelConstants.cs" />
+    <Compile Include="../Shared/PathNormalizer.cs" Link="Auxiliary/PathNormalizer.cs" />
+    <Compile Include="../Shared/SocketPermissionHelper.cs" Link="Auxiliary/SocketPermissionHelper.cs" />
+    <Compile Include="../Shared/SocketDirectoryNames.cs" Link="Auxiliary/SocketDirectoryNames.cs" />
+    <Compile Include="../Shared/DirectoryHelper.cs" Link="Auxiliary/DirectoryHelper.cs" />
+    <Compile Include="../Shared/StringComparers.cs" Link="Auxiliary/StringComparers.cs" />
+    <Compile Include="../Shared/ProcessStartTimeHelper.cs" Link="Auxiliary/ProcessStartTimeHelper.cs" />
     <Compile Include="../Shared/DcpKubeconfigData.cs" Link="Dcp/DcpKubeconfigData.cs" />
     <Compile Include="../Shared/DcpConnectionMaterial.cs" Link="Dcp/DcpConnectionMaterial.cs" />
     <Protobuf Include="../Aspire.Hosting/Dashboard/proto/dashboard_service.proto" GrpcServices="Both" Access="Internal" />

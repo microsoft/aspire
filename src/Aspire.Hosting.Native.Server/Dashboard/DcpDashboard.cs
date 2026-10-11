@@ -18,6 +18,7 @@ internal sealed class DcpDashboard
     private string? _name;
     private string? _service;
     public NativeCliDashboardUrls Urls => Volatile.Read(ref _urls);
+    public string? ApiToken { get; private set; }
 
     public async Task StartAsync(DcpApiClient client, string dashboardPath, Uri resourceService,
         string apiKey, NativeServerOptions options, CancellationToken cancellationToken)
@@ -34,6 +35,9 @@ internal sealed class DcpDashboard
             ?? Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         ArgumentException.ThrowIfNullOrWhiteSpace(browserToken);
         var otlpToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        var dashboardApiToken = Environment.GetEnvironmentVariable("AppHost__DashboardApiKey")
+            ?? Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+        ArgumentException.ThrowIfNullOrWhiteSpace(dashboardApiToken);
         await client.CreateAsync("services", service, JsonSerializer.SerializeToElement(
             new DcpServiceSpec("TCP", "Localhost"), DcpJsonContext.Default.DcpServiceSpec),
             null, cancellationToken).ConfigureAwait(false);
@@ -56,6 +60,9 @@ internal sealed class DcpDashboard
                 new("DASHBOARD__RESOURCESERVICECLIENT__APIKEY", apiKey),
                 new("DASHBOARD__FRONTEND__AUTHMODE", "BrowserToken"),
                 new("DASHBOARD__FRONTEND__BROWSERTOKEN", browserToken),
+                // Frontend API authentication is separate from the browser and resource-service credentials.
+                new("DASHBOARD__API__AUTHMODE", "ApiKey"),
+                new("DASHBOARD__API__PRIMARYAPIKEY", dashboardApiToken),
                 new("DASHBOARD__OTLP__AUTHMODE", "ApiKey"),
                 new("DASHBOARD__OTLP__PRIMARYAPIKEY", otlpToken),
                 new("ASPIRE_DASHBOARD_SUPPRESS_BROWSER_TOKEN_IN_OUTPUT", "true")
@@ -95,6 +102,7 @@ internal sealed class DcpDashboard
                     using var response = await http.GetAsync(new Uri(frontend, "health"), cancellationToken).ConfigureAwait(false);
                     if (response.IsSuccessStatusCode)
                     {
+                        ApiToken = dashboardApiToken;
                         Volatile.Write(ref _urls, new NativeCliDashboardUrls
                         {
                             DashboardHealthy = true,

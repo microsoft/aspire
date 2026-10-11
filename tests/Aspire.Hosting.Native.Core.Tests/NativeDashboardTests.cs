@@ -18,6 +18,24 @@ public class NativeDashboardTests
     private static Metadata Headers => new() { { "x-resource-service-api-key", ApiKey } };
 
     [Fact]
+    public async Task ShutdownCancelsActiveWatchesBeforeDashboardProcessCleanupAndRejectsReconnects()
+    {
+        using var context = new RuntimeRpcTestContext();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var host = await NativeDashboardHost.StartAsync(context.Server, "Native shutdown", ApiKey, 0, timeout.Token);
+        using var channel = GrpcChannel.ForAddress(host.Address);
+        var client = new ProtoService.DashboardServiceClient(channel);
+        using var watch = client.WatchResources(new(), Headers, cancellationToken: timeout.Token);
+        Assert.True(await watch.ResponseStream.MoveNext(timeout.Token));
+        var next = watch.ResponseStream.MoveNext(timeout.Token);
+        host.BeginShutdown();
+        await Assert.ThrowsAsync<RpcException>(() => next.WaitAsync(TimeSpan.FromSeconds(2)));
+        var unavailable = await Assert.ThrowsAsync<RpcException>(async () =>
+            await client.GetApplicationInformationAsync(new(), Headers, cancellationToken: timeout.Token));
+        Assert.Equal(StatusCode.Unavailable, unavailable.StatusCode);
+    }
+
+    [Fact]
     public async Task ResourceServiceAuthenticatesAndProjectsHealthUrlsCommandsAndLogs()
     {
         using var context = new RuntimeRpcTestContext();

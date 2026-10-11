@@ -102,6 +102,22 @@ assertion after CLI shutdown left its process group stopped; that failed run
 is excluded from the successful-run medians, not classified as passed.
 Results remain local in `artifacts/native-hosting/server-comparison-results.json`.
 
+The native auxiliary backchannel uses Hosting's existing discoverable,
+owner-only socket naming and request/response contracts separately from the
+CLI-owned `baseline.v2` launch backchannel. Native CLI boot supplies the guest
+AppHost file path for discovery; the RPC clients remain unchanged. The
+shared `NativeAuxiliarySmoke.mts` scenario exercises actual `aspire describe`,
+`logs`, `resource`, `wait`, and instance-scoped `stop`, along with independent
+connections, streamed snapshots/logs, cancellation, and Dashboard API-key
+authentication. It passes against both the published C# NativeAOT server and
+the independent Rust server. The native regression suite passes 130 tests,
+CLI launcher coverage passes 88 tests, and Rust passes 25 tests.
+Instance-scoped stop removes the server and its workloads,
+not the launcher CLI; the test separately cleans up its signal-waiting guest.
+Dashboard resource watches are canceled before DCP Dashboard deletion, with
+new resource-service requests rejected during shutdown, so a reconnect cannot
+extend the Dashboard's cleanup grace period.
+
 ## Architecture and dependency boundary
 
 ```text

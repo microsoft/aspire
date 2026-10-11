@@ -20,13 +20,15 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
 {
     private readonly WebApplication _application;
     private readonly NativeServerOptions _options;
+    private readonly CancellationTokenSource _requests;
     public Uri Address { get; }
 
-    private NativeDashboardHost(WebApplication application, Uri address, NativeServerOptions options)
+    private NativeDashboardHost(WebApplication application, Uri address, NativeServerOptions options, CancellationTokenSource requests)
     {
         _application = application;
         Address = address;
         _options = options;
+        _requests = requests;
     }
 
     public static Task<NativeDashboardHost> StartAsync(NativeApplicationServer server, string applicationName,
@@ -52,9 +54,20 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
         });
         builder.Services.AddSingleton(new NativeDashboardService(server, applicationName, options.Runtime));
         var application = builder.Build();
+        var requests = new CancellationTokenSource();
         var expected = Encoding.UTF8.GetBytes(apiKey);
         application.Use(async (context, next) =>
         {
+            if (requests.IsCancellationRequested)
+            {
+                context.Response.StatusCode = 503;
+                return;
+            }
+            // Resource-service watches normally survive revisions. They must not survive server
+            // shutdown: leaving them attached until the Dashboard exits consumes its entire grace
+            // period before DCP and the native server can finish their own cleanup.
+            using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, requests.Token);
+            context.RequestAborted = lifetime.Token;
             var supplied = context.Request.Headers["x-resource-service-api-key"];
             if (supplied.Count != 1 || supplied[0] is not { } value ||
                 !CryptographicOperations.FixedTimeEquals(expected, Encoding.UTF8.GetBytes(value)))
@@ -71,17 +84,21 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
             await application.StartAsync(cancellationToken).ConfigureAwait(false);
             var addresses = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!;
 
-            return new NativeDashboardHost(application, new Uri(addresses.Addresses.Single()), options);
+            return new NativeDashboardHost(application, new Uri(addresses.Addresses.Single()), options, requests);
         }
         catch
         {
             await application.DisposeAsync().ConfigureAwait(false);
+            requests.Dispose();
             throw;
         }
     }
 
+    internal void BeginShutdown() => _requests.Cancel();
+
     public async ValueTask DisposeAsync()
     {
+        BeginShutdown();
         using var timeout = new CancellationTokenSource(_options.DashboardShutdownTimeout);
         try
         {
@@ -90,6 +107,7 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
         finally
         {
             await _application.DisposeAsync().ConfigureAwait(false);
+            _requests.Dispose();
         }
     }
 }
