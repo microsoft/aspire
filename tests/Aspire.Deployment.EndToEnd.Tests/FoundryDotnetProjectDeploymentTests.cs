@@ -20,6 +20,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 public sealed class FoundryDotnetProjectDeploymentTests(ITestOutputHelper output)
 {
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/20401")]
     public async Task DeployEchoDotnetProjectAsFoundryHostedAgent()
     {
         var subscriptionId = DotnetProjectDeploymentHelpers.GetSubscriptionId();
