@@ -33,6 +33,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 {
     private const int HttpRouteHostnameLimit = 16;
     private const string HttpRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#httproutespec";
+    private const int GrpcRouteHostnameLimit = 16;
+    private const string GrpcRouteSpecDocumentationUrl = "https://gateway-api.sigs.k8s.io/reference/api-spec/main/spec/#grpcroutespec";
 
     /// <summary>
     /// Gets or sets the name of the Helm chart to be generated.
@@ -978,10 +980,15 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
 
             // Validate that every routed endpoint is flagged external before
-            // we materialize the Gateway and HTTPRoute objects.
+            // we materialize the Gateway, HTTPRoute, and GRPCRoute objects.
             foreach (var route in gatewayResource.Routes)
             {
                 EndpointRoutingValidation.ThrowIfEndpointNotExternal(route.Endpoint, "Gateway", gatewayResource.Name);
+            }
+
+            foreach (var grpcRoute in gatewayResource.GrpcRoutes)
+            {
+                EndpointRoutingValidation.ThrowIfEndpointNotExternal(grpcRoute.Endpoint, "Gateway", gatewayResource.Name);
             }
 
             await BuildGatewayObjects(gatewayResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
@@ -1110,9 +1117,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         // This whole method re-runs when the deployment-target step executes a second time (once for
         // "before-start", once in the publish/deploy DAG). GeneratedGateway is assigned so it replaces
-        // itself, but GeneratedHttpRoutes is appended to — without clearing, every route is emitted
-        // twice and the chart renders duplicate HTTPRoute objects with identical names.
+        // itself, but GeneratedHttpRoutes/GeneratedGrpcRoutes are appended to — without clearing, every
+        // route is emitted twice and the chart renders duplicate route objects with identical names.
         gatewayResource.GeneratedHttpRoutes.Clear();
+        gatewayResource.GeneratedGrpcRoutes.Clear();
 
         var gateway = new GatewayV1
         {
@@ -1123,14 +1131,22 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             gatewayResource.Name,
             cancellationToken).ConfigureAwait(false);
 
-        if (resolvedHostnames.Count > HttpRouteHostnameLimit &&
-            gatewayResource.Routes.Any(route => route.Host is null))
+        if (resolvedHostnames.Count > HttpRouteHostnameLimit && gatewayResource.Routes.Any(route => route.Host is null))
         {
             throw new InvalidOperationException(
                 $"Gateway '{gatewayResource.Name}' configures {resolvedHostnames.Count} hostnames that would be inherited by a hostless route, " +
                 $"but Kubernetes Gateway API HTTPRoute.spec.hostnames supports at most {HttpRouteHostnameLimit} entries. " +
                 $"Define explicit host-scoped routes with WithRoute(hostname, path, endpoint) so each HTTPRoute stays within the limit. " +
                 $"See the Kubernetes Gateway API documentation: {HttpRouteSpecDocumentationUrl}");
+        }
+
+        if (resolvedHostnames.Count > GrpcRouteHostnameLimit && gatewayResource.GrpcRoutes.Any(route => route.Host is null))
+        {
+            throw new InvalidOperationException(
+                $"Gateway '{gatewayResource.Name}' configures {resolvedHostnames.Count} hostnames that would be inherited by a hostless gRPC route, " +
+                $"but Kubernetes Gateway API GRPCRoute.spec.hostnames supports at most {GrpcRouteHostnameLimit} entries. " +
+                $"Define explicit host-scoped routes with WithGrpcRoute(hostname, endpoint) so each GRPCRoute stays within the limit. " +
+                $"See the Kubernetes Gateway API documentation: {GrpcRouteSpecDocumentationUrl}");
         }
 
         gateway.Spec.GatewayClassName = await ResolveExpressionAsync(gatewayResource.GatewayClassName, gatewayResource.Name, cancellationToken).ConfigureAwait(false);
@@ -1235,8 +1251,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var route in hostGroup)
             {
-                var backendRef = ResolveGatewayBackendRef(route.Endpoint, deploymentTargets, gatewayResource.Name, logger);
-                if (backendRef is null)
+                if (ResolveGatewayBackend(route.Endpoint, deploymentTargets, gatewayResource.Name, logger) is not { } backend)
                 {
                     continue;
                 }
@@ -1258,7 +1273,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                         Value = route.Path
                     }
                 });
-                rule.BackendRefs.Add(backendRef);
+                rule.BackendRefs.Add(new HttpRouteBackendRefV1 { Name = backend.ServiceName, Port = backend.Port });
                 httpRoute.Spec.Rules.Add(rule);
             }
 
@@ -1267,9 +1282,124 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 gatewayResource.GeneratedHttpRoutes.Add(httpRoute);
             }
         }
+
+        BuildGrpcRoutes(gatewayResource, gatewayName, resolvedHostnames, deploymentTargets, logger);
+        WarnOnHttpAndGrpcHostnameOverlap(gatewayResource, logger);
     }
 
-    private static HttpRouteBackendRefV1? ResolveGatewayBackendRef(
+    private static void BuildGrpcRoutes(
+        KubernetesGatewayResource gatewayResource,
+        string gatewayName,
+        List<string> resolvedHostnames,
+        Dictionary<IResource, KubernetesResource> deploymentTargets,
+        ILogger logger)
+    {
+        // GRPCRoutes are grouped by host exactly like HTTPRoutes, but use a "-grpcroute" suffix. Kubernetes
+        // names are scoped per kind so an HTTPRoute and GRPCRoute could share a name, but both land in the
+        // same templates/<gateway>/ folder and the file name is derived from metadata.name, so the suffix
+        // keeps the files from overwriting each other.
+        var routesByHost = gatewayResource.GrpcRoutes.GroupBy(r => r.Host ?? string.Empty);
+
+        foreach (var hostGroup in routesByHost)
+        {
+            string routeName;
+            if (string.IsNullOrEmpty(hostGroup.Key))
+            {
+                routeName = $"{gatewayName}-grpcroute";
+            }
+            else
+            {
+                routeName = $"{gatewayName}-{hostGroup.Key.Replace(".", "-").Replace("*", "wildcard").ToLowerInvariant()}-grpcroute";
+            }
+
+            var grpcRoute = new GrpcRouteV1
+            {
+                Metadata = { Name = routeName }
+            };
+
+            grpcRoute.Spec.ParentRefs.Add(new GrpcRouteParentRefV1 { Name = gatewayName });
+
+            if (!string.IsNullOrEmpty(hostGroup.Key))
+            {
+                grpcRoute.Spec.Hostnames.Add(hostGroup.Key);
+            }
+            else
+            {
+                grpcRoute.Spec.Hostnames.AddRange(resolvedHostnames);
+            }
+
+            foreach (var route in hostGroup)
+            {
+                if (ResolveGatewayBackend(route.Endpoint, deploymentTargets, gatewayResource.Name, logger) is not { } backend)
+                {
+                    continue;
+                }
+
+                var rule = new GrpcRouteRuleV1();
+
+                // A rule without matches matches every gRPC request, so only emit a method match when the
+                // caller narrowed the route. The CRD rejects a method match with neither service nor method.
+                if (route.Service is not null || route.Method is not null)
+                {
+                    rule.Matches.Add(new GrpcRouteMatchV1
+                    {
+                        Method = new GrpcMethodMatchV1
+                        {
+                            Type = route.MatchType switch
+                            {
+                                GrpcMethodMatchType.Exact => "Exact",
+                                GrpcMethodMatchType.RegularExpression => "RegularExpression",
+                                _ => throw new InvalidOperationException($"Unknown gRPC method match type '{route.MatchType}'.")
+                            },
+                            Service = route.Service,
+                            Method = route.Method
+                        }
+                    });
+                }
+
+                rule.BackendRefs.Add(new GrpcRouteBackendRefV1 { Name = backend.ServiceName, Port = backend.Port });
+                grpcRoute.Spec.Rules.Add(rule);
+            }
+
+            if (grpcRoute.Spec.Rules.Count > 0)
+            {
+                gatewayResource.GeneratedGrpcRoutes.Add(grpcRoute);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Warns when generated HTTPRoutes and GRPCRoutes on the same gateway can match the same hostname.
+    /// </summary>
+    /// <remarks>
+    /// The Gateway API allows implementations to reject one of an HTTPRoute/GRPCRoute pair whose hostnames intersect on the same listener (see https://gateway-api.sigs.k8s.io/reference/api-types/grpcroute/#cross-serving).
+    /// Some controllers accept it, so this is a warning rather than an error.
+    /// A route with no hostnames matches every host.
+    /// Wildcard hostnames are compared literally, so overlaps such as <c>*.example.com</c> and <c>api.example.com</c> are not reported.
+    /// </remarks>
+    private static void WarnOnHttpAndGrpcHostnameOverlap(KubernetesGatewayResource gatewayResource, ILogger logger)
+    {
+        if (gatewayResource.GeneratedHttpRoutes.Count == 0 || gatewayResource.GeneratedGrpcRoutes.Count == 0)
+        {
+            return;
+        }
+
+        var httpMatchesAllHosts = gatewayResource.GeneratedHttpRoutes.Any(r => r.Spec.Hostnames.Count == 0);
+        var grpcMatchesAllHosts = gatewayResource.GeneratedGrpcRoutes.Any(r => r.Spec.Hostnames.Count == 0);
+        var httpHostnames = gatewayResource.GeneratedHttpRoutes.SelectMany(r => r.Spec.Hostnames).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var grpcHostnames = gatewayResource.GeneratedGrpcRoutes.SelectMany(r => r.Spec.Hostnames);
+
+        if (httpMatchesAllHosts || grpcMatchesAllHosts || grpcHostnames.Any(httpHostnames.Contains))
+        {
+            logger.LogWarning(
+                "Gateway '{GatewayName}' has HTTP and gRPC routes that can match the same hostname. Some Gateway API implementations " +
+                "reject one of the routes in this case. Use separate hostnames for gRPC routes to avoid the conflict. " +
+                "See https://gateway-api.sigs.k8s.io/reference/api-types/grpcroute/#cross-serving",
+                gatewayResource.Name);
+        }
+    }
+
+    private static (string ServiceName, int Port)? ResolveGatewayBackend(
         EndpointReference endpointRef,
         Dictionary<IResource, KubernetesResource> deploymentTargets,
         string gatewayName,
@@ -1300,11 +1430,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             portNumber = 8080;
         }
 
-        return new HttpRouteBackendRefV1
-        {
-            Name = k8sResource.Service?.Metadata.Name ?? targetResource.Name.ToServiceName(),
-            Port = portNumber
-        };
+        return (k8sResource.Service?.Metadata.Name ?? targetResource.Name.ToServiceName(), portNumber);
     }
 
     /// <summary>
