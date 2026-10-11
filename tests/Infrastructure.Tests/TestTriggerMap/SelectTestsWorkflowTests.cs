@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.FileSystemGlobbing;
 using Xunit;
 using YamlDotNet.RepresentationModel;
 
@@ -15,6 +16,45 @@ namespace Infrastructure.Tests.TestTriggerMap;
 /// </summary>
 public sealed class SelectTestsWorkflowTests
 {
+    [Theory]
+    [InlineData("tests-outerloop.yml", "eng/testing/CITestsProperties.props", true)]
+    [InlineData("tests-quarantine.yml", "eng/testing/CITestsProperties.props", true)]
+    [InlineData("tests-outerloop.yml", ".github/workflows/specialized-test-runner.yml", true)]
+    [InlineData("tests-quarantine.yml", ".github/workflows/specialized-test-runner.yml", true)]
+    [InlineData("tests-outerloop.yml", ".github/workflows/filter-nonblocking-test-artifacts.sh", true)]
+    [InlineData("tests-quarantine.yml", ".github/workflows/filter-nonblocking-test-artifacts.sh", false)]
+    [InlineData("tests-outerloop.yml", "README.md", false)]
+    [InlineData("tests-quarantine.yml", "README.md", false)]
+    public void SpecializedWorkflowRunsForChangedInput(string workflow, string changedPath, bool expected)
+    {
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", workflow));
+        var yaml = new YamlStream();
+        yaml.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(Assert.Single(yaml.Documents).RootNode);
+        var triggers = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("on")]);
+        var pullRequest = Assert.IsType<YamlMappingNode>(triggers.Children[new YamlScalarNode("pull_request")]);
+        var paths = Assert.IsType<YamlSequenceNode>(pullRequest.Children[new YamlScalarNode("paths")]);
+
+        // These workflows currently use literal paths; this checks one-file
+        // eligibility, not full equivalence with GitHub's glob semantics.
+        // https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore
+        var matcher = new Matcher(StringComparison.Ordinal, preserveFilterOrder: true);
+        foreach (var node in paths)
+        {
+            var pattern = node.ToString();
+            if (pattern.StartsWith('!'))
+            {
+                matcher.AddExclude(pattern[1..]);
+            }
+            else
+            {
+                matcher.AddInclude(pattern);
+            }
+        }
+
+        Assert.Equal(expected, matcher.Match(changedPath).HasMatches);
+    }
+
     // The kill switch is a maintainer-only PR label, not a PR-body token. The action must consume it
     // as a plain boolean (forceAll) and must NOT re-introduce body scanning (a grep over an untrusted
     // PR description -- the injection surface this design deliberately removed).
@@ -119,30 +159,6 @@ public sealed class SelectTestsWorkflowTests
 
         Assert.Contains("/p:BuildBundleDepsOnly=true", command);
         Assert.Contains("/p:TargetRids=${{ matrix.targets.rids }}", command);
-    }
-
-    [Fact]
-    public void NativeDashboardInteractivityOptsIntoOuterloopTests()
-    {
-        var yaml = new YamlStream();
-        using var reader = new StringReader(File.ReadAllText(NativeDashboardValidationWorkflowPath));
-        yaml.Load(reader);
-
-        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
-        var jobs = (YamlMappingNode)root.Children[new YamlScalarNode("jobs")];
-        var validationJob = (YamlMappingNode)jobs.Children[new YamlScalarNode("validate")];
-        var steps = (YamlSequenceNode)validationJob.Children[new YamlScalarNode("steps")];
-        var interactiveTest = Assert.Single(
-            steps.Cast<YamlMappingNode>(),
-            step => step.Children.TryGetValue(new YamlScalarNode("name"), out var name) &&
-                    name.ToString() == "Test Native AOT Dashboard interactivity");
-        var command = interactiveTest.Children[new YamlScalarNode("run")].ToString();
-
-        Assert.Equal("${{ inputs.rid == 'win-x64' }}", interactiveTest.Children[new YamlScalarNode("if")].ToString());
-        Assert.Contains("/p:RunOuterloopTests=true --", command);
-        Assert.EndsWith(
-            "--filter-method \"*.NativeDashboard_LoadsInteractivePageWithoutBrowserErrors\" --filter-not-trait \"quarantined=true\"",
-            command.Trim());
     }
 
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
@@ -260,9 +276,6 @@ public sealed class SelectTestsWorkflowTests
 
     private static string BuildCliNativeArchivesWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml");
-
-    private static string NativeDashboardValidationWorkflowPath
-        => Path.Combine(RepoRoot.Path, ".github", "workflows", "native-dashboard-validation.yml");
 
     private static string ExtractCommentSelectionJob()
     {

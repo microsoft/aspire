@@ -649,6 +649,43 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    [Theory]
+    [InlineData("tests/Shared/AsyncTestHelpers.cs")]
+    [InlineData("tests/Shared/Telemetry/TelemetryTestHelpers.cs")]
+    public void NativeDashboardSharedHelpersSelectNativeValidationInEnforceMode(string path)
+    {
+        RunInTempRepo((temporaryRoot, propsPath, output) =>
+        {
+            var changed = WriteChangedFiles(temporaryRoot, path);
+            var jsonPath = Path.Combine(temporaryRoot, "selection.json");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var options = Options(RepoRoot.Path, propsPath, changedFilesPath: changed, enforce: true) with
+                {
+                    MapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml")
+                };
+
+                Assert.Equal(0, Selection.Run(options));
+                Assert.Equal("true", output()["run_native_dashboard_validation"]);
+
+                using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var selection = json.RootElement;
+                Assert.False(selection.GetProperty("selectsAll").GetBoolean());
+                Assert.Empty(selection.GetProperty("unattributedFiles").EnumerateArray());
+                Assert.Equal(
+                    ["job:native-dashboard-validation"],
+                    selection.GetProperty("jobs").EnumerateArray()
+                        .Select(job => job.GetProperty("name").GetString()));
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
+            }
+        });
+    }
+
     // Crash traceability hardening: the diagnostics writer must be best-effort. If the step summary
     // path is unwritable (the exact scenario where diagnostics matter), writing the block must NOT throw
     // a NEW exception that masks the ORIGINAL failure. The original (FileNotFoundException from the

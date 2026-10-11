@@ -546,6 +546,7 @@
   </Folder>
   <Folder Name="/tests/Dashboard/">
     <Project Path="tests/Aspire.Dashboard.Components.Tests/Aspire.Dashboard.Components.Tests.csproj" />
+    <Project Path="tests/Aspire.Dashboard.Playwright.Tests/Aspire.Dashboard.Playwright.Tests.csproj" />
     <Project Path="tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Hosting/">

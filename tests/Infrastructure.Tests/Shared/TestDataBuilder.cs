@@ -30,6 +30,7 @@ public static class TestDataBuilder
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
         bool enablePlaywrightInstall = false,
+        bool nonBlockingTestFailures = false,
         string? extraTestArgs = null,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
@@ -46,7 +47,8 @@ public static class TestDataBuilder
                 ["requiresNugets"] = requiresNugets,
                 ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
-                ["enablePlaywrightInstall"] = enablePlaywrightInstall
+                ["enablePlaywrightInstall"] = enablePlaywrightInstall,
+                ["nonBlockingTestFailures"] = nonBlockingTestFailures
             },
             ExtraTestArgs = extraTestArgs,
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
@@ -77,6 +79,7 @@ public static class TestDataBuilder
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
         bool enablePlaywrightInstall = false,
+        bool nonBlockingTestFailures = false,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
     {
@@ -93,7 +96,8 @@ public static class TestDataBuilder
                 ["requiresNugets"] = requiresNugets,
                 ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
-                ["enablePlaywrightInstall"] = enablePlaywrightInstall
+                ["enablePlaywrightInstall"] = enablePlaywrightInstall,
+                ["nonBlockingTestFailures"] = nonBlockingTestFailures
             },
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
             Runners = runners
@@ -193,6 +197,7 @@ public static class TestDataBuilder
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
         bool enablePlaywrightInstall = false,
+        bool nonBlockingTestFailures = false,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
     {
@@ -213,7 +218,8 @@ public static class TestDataBuilder
                 ["requiresNugets"] = requiresNugets,
                 ["requiresTestSdk"] = requiresTestSdk,
                 ["requiresCliArchive"] = requiresCliArchive,
-                ["enablePlaywrightInstall"] = enablePlaywrightInstall
+                ["enablePlaywrightInstall"] = enablePlaywrightInstall,
+                ["nonBlockingTestFailures"] = nonBlockingTestFailures
             },
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
             Runners = runners

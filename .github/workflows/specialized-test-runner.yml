@@ -22,8 +22,13 @@ on:
       enablePlaywrightInstall:
         required: true
         type: boolean
-      # When true, ignores test failures and checks if .trx files have nonzero test count
+      # When true, known test outcomes are non-blocking while infrastructure failures remain blocking.
       ignoreTestFailures:
+        required: false
+        type: boolean
+        default: false
+      # Allows valid zero-test results for trait-filtered project/OS lanes where no tests match.
+      allowZeroTests:
         required: false
         type: boolean
         default: false
@@ -160,7 +165,8 @@ jobs:
       os: ${{ matrix.tests.os }}
       mtpBaseArgs: ${{ matrix.tests.mtpBaseArgs }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
-      ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+      ignoreTestFailures: ${{ inputs.ignoreTestFailures || matrix.tests.properties.nonBlockingTestFailures }}
+      allowZeroTests: ${{ inputs.allowZeroTests }}
 
 
   results:

@@ -8,8 +8,8 @@
 // auto-close-on-green).
 //
 // Two failure kinds:
-//   - 'test-failures' : outerloop tests failed. Each failed run's comment lists
-//     the failing tests; a dev can split them into per-test issues later.
+//   - 'test-failures' : gating outerloop tests failed. Each failed run's comment
+//     lists the failing tests; a dev can split them into per-test issues later.
 //   - 'infra'         : the run broke before/around test execution (build/setup,
 //     missing TRX). Quarantine runs swallow test failures (ignoreTestFailures),
 //     so a *failed* quarantine run is always infra.

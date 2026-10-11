@@ -691,8 +691,28 @@ public sealed class TestTriggerMapTests
             ["test:Infrastructure.Tests", "job:native-dashboard-validation"]
         },
         {
-            "tests/Aspire.Dashboard.Tests/Integration/Playwright/NativeAotDashboardTests.cs",
+            "tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj",
             ["test:Aspire.Dashboard.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/NativeAotDashboardTests.cs",
+            ["test:Aspire.Dashboard.Playwright.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Tests/Integration/NativeAotDashboardTests.cs",
+            ["test:Aspire.Dashboard.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/Infrastructure/PlaywrightFixture.cs",
+            ["test:Aspire.Dashboard.Playwright.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Aspire.Dashboard.Playwright.Tests/Aspire.Dashboard.Playwright.Tests.csproj",
+            ["test:Aspire.Dashboard.Playwright.Tests", "job:native-dashboard-validation"]
+        },
+        {
+            "tests/Shared/Playwright/Playwright.targets",
+            ["test:Aspire.Dashboard.Playwright.Tests", "test:Aspire.Templates.Tests", "job:native-dashboard-validation"]
         },
         {
             "eng/scripts/get-aspire-cli-pr.ps1",
@@ -1608,34 +1628,32 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
-    public void EveryTestsSharedFileIsCsAttributedOrRoutedToAllOrExcluded()
+    public void EveryTestsSharedFileIsCsAttributedOrExplicitlyRoutedOrExcluded()
     {
         // tests/Shared has both link-compiled *.cs (Layer 1 attributes them precisely, so the run-all
         // fallback treats them as owned — they need no curated rule) and non-source build/fixture infra
-        // (props/targets/packages/Docker/Playwright/certs -> ALL). A tests/Shared file that is NEITHER a
-        // *.cs NOR matched by an ALL path rule NOR a doc (excluded by the prefilter) would silently select
-        // no targeted work: it is not under a project dir (so directory containment can't attribute a
-        // loose file there) and would force the run-all fallback. Pin the invariant so a new file type
-        // added under tests/Shared can't quietly expand to ALL. (.md files are dropped by the prefilter's
-        // **.md.)
-        var allGlobs = s_map.PathRules
-            .Where(r => r.Targets.Contains("ALL", StringComparer.Ordinal))
+        // (props/targets/packages/Docker/Playwright/certs -> explicit consumers or ALL). A tests/Shared
+        // file that is NEITHER a *.cs NOR matched by a path rule NOR a doc (excluded by the prefilter)
+        // would force the run-all fallback because it is not under a project directory. Pin the invariant
+        // so new shared inputs must declare whether they have precise consumers or truly affect every lane.
+        // (.md files are dropped by the prefilter's **.md.)
+        var routedGlobs = s_map.PathRules
             .SelectMany(r => r.Paths)
             .ToList();
 
-        bool RoutedToAll(string file) => allGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
+        bool IsRouted(string file) => routedGlobs.Any(g => TestTriggerMap.GlobMatches(g, file));
 
         var orphaned = s_trackedFiles
             .Where(f => f.StartsWith("tests/Shared/", StringComparison.Ordinal))
             .Where(f => !f.EndsWith(".cs", StringComparison.Ordinal))
             .Where(f => !f.EndsWith(".md", StringComparison.Ordinal))
-            .Where(f => !RoutedToAll(f))
+            .Where(f => !IsRouted(f))
             .Order(StringComparer.Ordinal)
             .ToList();
 
         Assert.True(orphaned.Count == 0,
-            $"tests/Shared files that are neither *.cs (Layer 1-attributed), *.md (prefiltered), nor routed " +
-            $"to ALL (they would silently select nothing): {string.Join(", ", orphaned)}");
+            $"tests/Shared files that are neither *.cs (Layer 1-attributed), *.md (prefiltered), nor " +
+            $"explicitly routed (they would force the run-all fallback): {string.Join(", ", orphaned)}");
     }
 
     [Fact]

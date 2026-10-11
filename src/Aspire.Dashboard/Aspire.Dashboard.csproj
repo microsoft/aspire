@@ -135,6 +135,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Dashboard.Playwright.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Components.Tests" />
     <InternalsVisibleTo Include="Aspire.Dashboard.Benchmarks" />

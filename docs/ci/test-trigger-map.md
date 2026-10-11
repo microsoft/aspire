@@ -231,6 +231,14 @@ Highlights:
   Dedicated package-input directories use broad `/**` rules when enumerating
   files or RIDs would let a newly added input silently miss its consumers.
 
+Native Dashboard validation is a custom job, not an MSBuild test-project
+selection. Its path rule explicitly covers the native browser fixture's shared
+timeout input (`tests/Shared/AsyncTestHelpers.cs`) and telemetry input
+(`tests/Shared/Telemetry/TelemetryTestHelpers.cs`). Layer 1 selects the managed
+consumers of those files but does not select the packaged native Dashboard job.
+Keep these direct runtime dependencies in the native path rule rather than
+deriving native validation from every change to the browser test project.
+
 ### Project rules (`affected_project_rules`)
 
 An affected **production/non-test** project → a target set, matched by
@@ -426,13 +434,14 @@ carry it forward. Never silently regenerate it.
   the kill switch err toward `ALL`; otherwise the selector relies on Layer 1 for
   `src` coverage and the convention backstop for non-MSBuild files.
 - **Independent workflow targets.** `deployment-e2e`,
-  `Aspire.Deployment.EndToEnd.Tests`, `Aspire.EndToEnd.Tests`, and
-  `Aspire.Oracle.EntityFrameworkCore.Tests` are not in the regular PR matrix
-  today; their rules give the *would-be* trigger paths. Their own schedules,
-  dispatches, or narrow PR workflow triggers decide whether they run. Comments
-  and job summaries list them separately from work the PR selector can actually
-  run. The API/ATS baseline regeneration workflows are independently scheduled
-  or dispatched and ignored as selector targets, as described in `ignore` above.
+  `Aspire.Dashboard.Playwright.Tests`, `Aspire.Deployment.EndToEnd.Tests`,
+  `Aspire.EndToEnd.Tests`, and `Aspire.Oracle.EntityFrameworkCore.Tests` are not
+  in the regular PR matrix today; their rules give the *would-be* trigger paths.
+  Their own schedules, dispatches, or narrow PR workflow triggers decide whether
+  they run. Comments and job summaries list them separately from work the PR
+  selector can actually run. The API/ATS baseline regeneration workflows are
+  independently scheduled or dispatched and ignored as selector targets, as
+  described in `ignore` above.
 - **Integration dirs with no test.** `src/Aspire.Hosting.Orleans`,
   `Aspire.Hosting.AppHost`, and `Aspire.Hosting.Tasks` have no dedicated test
   project. Their MSBuild files are owned by Layer 1, and their non-MSBuild files
