@@ -23,6 +23,51 @@ test.after(async () => {
   await rm(artifactsRoot, { recursive: true, force: true });
 });
 
+test("session mirror monitoring surfaces unavailable access before a canvas opens and across modes", async (t) => {
+  await resetTestHome({
+    mode: "health",
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+  globalThis.fetch = makeGitHubHealthMock();
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const server = await import(`./server.mjs?test=mirror-session-${Date.now()}`);
+  const monitor = server.startMirrorMonitoring(() => {});
+  t.after(() => monitor.stop());
+  await monitor.refresh();
+  assert.equal(monitor.getState().level, "unknown");
+  const entry = await server.startInstance("mirror-session-test", () => {});
+  t.after(() => server.stopInstance("mirror-session-test"));
+  const loaded = await (await fetch(new URL("api/state", entry.url))).json();
+  assert.equal(loaded.dashboard.mirror.provider, "mirror");
+  assert.equal(loaded.dashboard.mirror.state, "unknown");
+  assert.equal(loaded.dashboard.health.items.filter((item) => item.provider === "mirror").length, 1);
+  const review = await server.setDashboardMode("review");
+  assert.equal(review.dashboard.mode, "review");
+  assert.equal(review.dashboard.mirror.state, "unknown");
+  assert.equal(review.dashboard.mirror.provider, "mirror");
+  await server.stopInstance("mirror-session-test");
+  await monitor.refresh(true);
+  assert.equal(monitor.getState().level, "unknown");
+});
+
+test("a configured mirror watch remains unknown when its GitHub credential disappears", async (t) => {
+  await resetTestHome({
+    accounts: { "acct:github.com/octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  delete process.env.GH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+  const server = await import(`./server.mjs?test=mirror-logout-${Date.now()}`);
+  const monitor = server.startMirrorMonitoring(() => {});
+  t.after(() => monitor.stop());
+  await monitor.refresh();
+  assert.equal(monitor.getState().level, "unknown");
+  assert.match(monitor.getState().error, /GitHub authentication is unavailable/);
+});
+
 test("mutating POST rejects cross-site loopback requests before saving preferences", async (t) => {
   await resetTestHome();
   delete process.env.GH_TOKEN;
