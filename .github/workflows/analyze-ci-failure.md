@@ -700,7 +700,8 @@ safe-outputs:
         The agent must write:
           - /tmp/gh-aw/agent/analysis-result.json (run summary)
           - /tmp/gh-aw/agent/causes/*.json (one file per failure cause)
-        Emit exactly one `publish_data` item with run_id and pr_numbers.
+        Emit exactly one `publish_data` item with run_id. Include pr_numbers
+        only for pull-request scope.
       runs-on: ubuntu-latest
       needs: [safe_outputs]
       if: needs.detection.result == 'success' && needs.detection.outputs.detection_success == 'true' && needs.safe_outputs.result == 'success'
@@ -715,8 +716,7 @@ safe-outputs:
           required: true
           type: number
         pr_numbers:
-          description: "The unambiguous subject PR number, or an empty string."
-          required: true
+          description: "The unambiguous subject PR number for pull-request scope."
           type: string
       env:
         GH_TOKEN: ${{ github.token }}
@@ -1793,7 +1793,7 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 ## Important Rules
 
 1. **Always write the run summary** — every analysis must produce `/tmp/gh-aw/agent/analysis-result.json`. Write cause files in `/tmp/gh-aw/agent/causes/` for `flaky-test`, `infra-failure`, and `main-repository-breakage` causes (NOT for pull-request `code-issue`).
-2. **Always emit the `publish-data` safe output** — with `run_id` and `pr_numbers` so the publish-data job can push the data and post a comment.
+2. **Always emit the `publish-data` safe output** — include `run_id` for every scope and `pr_numbers` only for pull-request scope so the publish-data job can push the data and publish the result.
 3. **Never rerun when there are code issues** — only emit `rerun-failed-jobs` for pure infrastructure failures with `ENABLE_RERUN` set to `'true'`.
 4. **Be specific** — include actual error messages and job/test names in the JSON fields.
 5. **Use scope-appropriate history** — cross-reference PR files only for pull-request scope; for main scope, consider every candidate merge since the last successful main run.
