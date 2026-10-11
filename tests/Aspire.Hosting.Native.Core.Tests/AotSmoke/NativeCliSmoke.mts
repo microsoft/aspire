@@ -25,7 +25,9 @@ const cli = spawn(cliPath, ['run', '--apphost', 'apphost.mts', '--non-interactiv
     env: {
         ...process.env, ASPIRE_CLI_NATIVE_APPHOST_SERVER: serverPath, ASPIRE_NATIVE_CLI_RESULTS_PATH: resultsPath,
         ...(process.env.ASPIRE_NATIVE_DASHBOARD_DLL ? {
-            ASPIRE_NATIVE_DASHBOARD_PORT: '0', ASPIRE_NATIVE_DASHBOARD_API_KEY: dashboardKey
+            ASPIRE_NATIVE_DASHBOARD_PORT: '0', ASPIRE_NATIVE_DASHBOARD_API_KEY: dashboardKey,
+            ASPIRE_DASHBOARD_PATH: process.env.ASPIRE_NATIVE_DASHBOARD_DLL,
+            AppHost__BrowserToken: dashboardKey
         } : {})
     },
     stdio: ['ignore', 'pipe', 'pipe']
@@ -38,20 +40,22 @@ let dashboard: NativeDashboardSmoke | undefined;
 let browserWork: Promise<void> | undefined;
 let browserFailure: unknown;
 let serverPid: number | undefined;
+let dashboardPid: number | undefined;
 let buffered = '';
 function observeCliOutput(chunk: Buffer): void {
     // CLI diagnostics can arrive on either stream, for example:
     // [dbug] NativeAppHostServerProject: Native AppHost stdout:
-    // Native Dashboard resource service listening on http://127.0.0.1:50123/.
+    // DCP-owned Dashboard (1234) listening on http://127.0.0.1:50123/.
     // Retain a bounded suffix because a diagnostic line may span chunks.
     buffered += String(chunk);
     const pid = /Native\.Server\((\d+)\) started/.exec(buffered);
     if (pid) serverPid = Number(pid[1]);
-    const address = /Native Dashboard resource service listening on (http:\/\/127\.0\.0\.1:\d+\/)\./.exec(buffered);
+    const address = /DCP-owned Dashboard \((\d+)\) listening on (http:\/\/(?:127\.0\.0\.1|localhost):\d+\/)\./.exec(buffered);
     if (address && process.env.ASPIRE_NATIVE_DASHBOARD_DLL && !browserWork) {
-        const resourceService = address[1]!;
+        dashboardPid = Number(address[1]);
+        const frontend = address[2]!;
         browserWork = (async () => {
-            dashboard = await NativeDashboardSmoke.start(process.env.ASPIRE_NATIVE_DASHBOARD_DLL!, resourceService, dashboardKey);
+            dashboard = await NativeDashboardSmoke.attach(`${frontend}login?t=${dashboardKey}`);
             await dashboard.confirm();
             await dashboard.verifyResources();
         })().catch(error => { browserFailure = error; });
@@ -102,6 +106,9 @@ try {
     }
 }
 assert.ok(proof);
+assert.ok(serverPid, 'The real CLI must report its native server process identity.');
+assert.throws(() => process.kill(serverPid!, 0), (error: unknown) =>
+    error instanceof Error && 'code' in error && error.code === 'ESRCH');
 assert.ok(exitCode === 0 || exitCode === 130, `Unexpected CLI shutdown exit code: ${exitCode}.`);
 for (const endpoint of [proof.instances.cache, proof.instances.database]) {
     assert.ok(endpoint.instanceId);
@@ -109,6 +116,11 @@ for (const endpoint of [proof.instances.cache, proof.instances.database]) {
         { encoding: 'utf8' }).trim(), '');
 }
 assert.ok(proof.instances.relay.instanceId);
+if (process.env.ASPIRE_NATIVE_DASHBOARD_DLL) {
+    assert.ok(dashboardPid, 'DCP must report the actual Dashboard process identity.');
+    assert.throws(() => process.kill(dashboardPid!, 0), (error: unknown) =>
+        error instanceof Error && 'code' in error && error.code === 'ESRCH');
+}
 assert.throws(() => process.kill(Number(proof.instances.relay.instanceId), 0), (error: unknown) =>
     error instanceof Error && 'code' in error && error.code === 'ESRCH');
 console.log(JSON.stringify({

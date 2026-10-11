@@ -16,7 +16,7 @@ public class NativeCliControlTests
     public void CliReceivesOfflineSdkAndLanguageSpecWithoutChangingAtsDiscovery()
     {
         var server = new NativeApplicationServer();
-        using var client = new RpcTestClient(server, new NativeRpcControl(server, () => { }));
+        using var client = new RpcTestClient(server, NativeLanguageCatalog.LoadEmbedded());
         var spec = Result(client.Call("getRuntimeSpec", new JsonArray("typescript/nodejs")));
         Assert.Equal("typescript/nodejs", spec["language"]!.GetValue<string>());
         Assert.Equal("npx", spec["execute"]!["command"]!.GetValue<string>());
@@ -29,20 +29,15 @@ public class NativeCliControlTests
         Assert.Equal("NOT_SUPPORTED", Error(client.Call("getRuntimeSpec", new JsonArray("python"))));
     }
 
-    [Fact]
-    public void StopOccursOnlyAfterStopResponseHasBeenWritten()
+    [Theory]
+    [InlineData("getRuntimeState")]
+    [InlineData("requestStop")]
+    [InlineData("notifyCliReady")]
+    public void NativeSpecificControlMethodsAreNotPartOfTheBootstrapContract(string method)
     {
         var server = new NativeApplicationServer();
-        var stopped = false;
-        using var client = new RpcTestClient(server, new NativeRpcControl(server, () => stopped = true));
-        Assert.False(Result(client.Call("getRuntimeState", null))["ready"]!.GetValue<bool>());
-        Assert.Equal("OPERATION_REJECTED", Error(client.Call("notifyCliReady", null)));
-        Assert.True(Result(client.Call("requestStop", null)).GetValue<bool>());
-        Assert.False(stopped);
-        client.Connection.ResponseWritten(Encoding.UTF8.GetBytes("""{"jsonrpc":"2.0","id":1,"method":"getRuntimeState"}"""));
-        Assert.False(stopped);
-        client.Connection.ResponseWritten(Encoding.UTF8.GetBytes("""{"jsonrpc":"2.0","id":2,"method":"requestStop"}"""));
-        Assert.True(stopped);
+        using var client = new RpcTestClient(server, NativeLanguageCatalog.LoadEmbedded());
+        Assert.Equal("METHOD_NOT_FOUND", Error(client.Call(method, null)));
     }
 
     [Fact]

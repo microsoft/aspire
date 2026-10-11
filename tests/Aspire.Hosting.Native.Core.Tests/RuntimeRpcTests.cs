@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.Hosting.Native.Runtime;
 using Aspire.Hosting.Native.Core.Tests.TestServices;
 using static Aspire.Hosting.Native.Core.Tests.TestServices.RpcTestClient;
 
@@ -9,6 +10,26 @@ namespace Aspire.Hosting.Native.Core.Tests;
 
 public class RuntimeRpcTests
 {
+    [Fact]
+    public void RuntimeLogRetentionAndRequestCapacityUseConfiguredPolicies()
+    {
+        using var context = new RuntimeRpcTestContext(UnavailableWorkloadExecutor.Instance,
+            new NativeRuntimeOptions { RetainedResourceLogEntries = 2, MaximumPendingRequestsPerResource = 1 });
+        for (var index = 1; index <= 3; index++)
+        {
+            context.Integration.Invoke("appendResourceLog", Arguments(("context", context.Writer),
+                ("stream", JsonValue.Create("stdout")), ("message", JsonValue.Create($"entry-{index}"))));
+        }
+        var id = context.Read()["resources"]![0]!["resourceId"];
+        var logs = Result(context.Observer.Invoke("readResourceLogs", Arguments(("context", context.Reader),
+            ("resourceId", id), ("afterSequence", JsonValue.Create(0)))));
+        Assert.Equal(["entry-2", "entry-3"], logs["entries"]!.AsArray().Select(entry => entry!["message"]!.GetValue<string>()));
+        Assert.NotNull(Result(context.Integration.Invoke("requestConfirmation", Arguments(("context", context.Writer),
+            ("message", JsonValue.Create("Continue?"))))));
+        Assert.Equal("OPERATION_REJECTED", Error(context.Integration.Invoke("requestConfirmation", Arguments(("context", context.Writer),
+            ("message", JsonValue.Create("Another confirmation?"))))));
+    }
+
     [Fact]
     public async Task IndependentConnectionsPublishAndObserveWithoutBlockingDispatch()
     {

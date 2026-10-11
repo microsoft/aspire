@@ -7,8 +7,11 @@ using System.Text;
 namespace Aspire.Hosting.Native.Rpc;
 
 /// <summary>Reads bounded UTF-8 JSON-RPC frames without allocating an untrusted declared payload length.</summary>
-internal sealed class NativeRpcFraming(Stream stream)
+internal sealed class NativeRpcFraming(Stream stream, int maximumRequestBytes)
 {
+    public NativeRpcFraming(Stream stream) : this(stream, NativeRpcConnection.MaximumRequestBytes)
+    {
+    }
     private readonly byte[] _buffer = new byte[8192];
     private int _position;
     private int _length;
@@ -61,7 +64,7 @@ internal sealed class NativeRpcFraming(Stream stream)
             {
                 if (contentLength is not null ||
                     !int.TryParse(line.AsSpan(separator + 1).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var length) ||
-                    length > NativeRpcConnection.MaximumRequestBytes)
+                    length > maximumRequestBytes)
                 {
                     throw new InvalidDataException("The JSON-RPC frame length is invalid.");
                 }

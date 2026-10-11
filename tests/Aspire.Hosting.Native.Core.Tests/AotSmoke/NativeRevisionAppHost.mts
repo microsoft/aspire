@@ -27,7 +27,8 @@ process.once('message', configuration => {
 async function run(configuration: Revision): Promise<void> {
     assert.ok(process.send);
     const { client, server } = await connectNativeAppHost({
-        endpoint: { host: '127.0.0.1', port: configuration.port }, authenticationToken: configuration.token
+        endpoint: { host: '127.0.0.1', port: configuration.port }, authenticationToken: configuration.token,
+        authenticationTimeoutMilliseconds: 10_000
     });
     try {
         const workspace = configuration.workspaceInvitation

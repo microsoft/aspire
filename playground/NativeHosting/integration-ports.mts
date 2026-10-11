@@ -126,8 +126,19 @@ export async function postgresQuery(state: { containerId?: string | null }, conn
     ], { env: { ...process.env, PGPASSWORD: wrongPassword ? 'deliberately-wrong' : decodeURIComponent(uri.password) }, stdio: 'pipe' });
     const cancellation = token.onCancellationRequested(() => child.kill());
     const timer = setTimeout(() => child.kill(), statementTimeoutMs + 5000);
+    const maximumOutputBytes = 64 * 1024;
     let stdout = '';
-    child.stdout.on('data', chunk => { stdout += chunk.toString(); });
+    let outputBytes = 0;
+    let outputExceeded = false;
+    child.stdout.on('data', (chunk: Buffer) => {
+        outputBytes += chunk.length;
+        if (outputBytes > maximumOutputBytes) {
+            outputExceeded = true;
+            child.kill('SIGKILL');
+            return;
+        }
+        stdout += chunk.toString();
+    });
     // Don't forward protocol errors: psql diagnostics can include identities and
     // SQL. Return explicit failure with exit status, not a success-shaped default.
     let diagnostics = '';
@@ -137,6 +148,9 @@ export async function postgresQuery(state: { containerId?: string | null }, conn
             child.once('error', reject);
             child.once('close', fulfill);
         });
+        if (outputExceeded) {
+            throw new Error('PostgreSQL protocol output exceeded the bounded output limit.');
+        }
         if (code !== 0)
         {
             // Classify common startup failures without forwarding SQL, user names,

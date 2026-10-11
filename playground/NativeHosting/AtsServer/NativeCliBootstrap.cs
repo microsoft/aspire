@@ -104,7 +104,7 @@ internal static class NativeCliBootstrap
         }
     }
 
-    public static Process StartIntegrationHost(string socketPath)
+    public static Process StartIntegrationHost(string socketPath, AtsRegistry registry)
     {
         var entry = Environment.GetEnvironmentVariable("NATIVE_HOSTING_INTEGRATION_HOST")
             ?? throw new InvalidOperationException("NATIVE_HOSTING_INTEGRATION_HOST must identify the explicit ATS integration host.");
@@ -119,7 +119,9 @@ internal static class NativeCliBootstrap
         };
         start.ArgumentList.Add(entry);
         start.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
-        start.Environment["ASPIRE_INTEGRATION_HOST_REGISTRATION_ID"] = Guid.NewGuid().ToString("N");
+        var registrationId = Guid.NewGuid().ToString("N");
+        registry.AllowIntegrationHost(registrationId);
+        start.Environment["ASPIRE_INTEGRATION_HOST_REGISTRATION_ID"] = registrationId;
         return Process.Start(start) ?? throw new InvalidOperationException("Could not launch the native ATS integration host.");
     }
 

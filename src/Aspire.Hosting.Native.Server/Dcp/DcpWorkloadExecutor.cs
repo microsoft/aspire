@@ -2,15 +2,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using Aspire.Hosting.Native.Runtime;
+using Aspire.Hosting.Native.Server;
 
 namespace Aspire.Hosting.Native.Dcp;
 
 /// <summary>Projects standard native execution primitives to DCP-owned workloads.</summary>
-internal sealed class DcpWorkloadExecutor(DcpApiClient client, Task startup) : IWorkloadExecutor
+internal sealed class DcpWorkloadExecutor(DcpApiClient client, Task startup, NativeServerOptions options) : IWorkloadExecutor
 {
-    public DcpWorkloadExecutor(DcpApiClient client) : this(client, Task.CompletedTask)
+    public DcpWorkloadExecutor(DcpApiClient client) : this(client, Task.CompletedTask, new())
+    {
+    }
+
+    public DcpWorkloadExecutor(DcpApiClient client, Task startup) : this(client, startup, new())
     {
     }
 
@@ -20,68 +25,71 @@ internal sealed class DcpWorkloadExecutor(DcpApiClient client, Task startup) : I
         var name = "native-" + identity.ResourceId.ToString("N");
         var collection = plan is ContainerWorkload ? "containers" : "executables";
         var service = name + "-tcp";
-        var exposesPort = plan is ContainerWorkload || plan is ExecutableWorkload { PortEnvironmentVariable.Length: > 0 };
-        var lease = new Lease(client, collection, name, exposesPort ? service : null);
+        var exposesPort = plan is ContainerWorkload { TargetPort: > 0 } ||
+            plan is ExecutableWorkload { PortEnvironmentVariable.Length: > 0 };
+        var lease = new Lease(client, collection, name, exposesPort ? service : null, options);
         try
         {
-            var spec = new JsonObject
+            var spec = new DcpWorkloadSpec
             {
-                ["env"] = new JsonArray(plan.Environment.Select(variable => (JsonNode)new JsonObject
-                {
-                    ["name"] = variable.Name, ["value"] = variable.Value
-                }).ToArray()),
-                ["args"] = new JsonArray(plan.Arguments.Select(argument => (JsonNode?)JsonValue.Create(argument)).ToArray())
+                Env = plan.Environment.Select(variable => new DcpEnvironment(variable.Name, variable.Value)).ToArray(),
+                Args = plan.Arguments.ToArray()
             };
-            JsonObject? annotations = null;
+            Dictionary<string, string>? annotations = null;
             if (exposesPort)
             {
-                await client.CreateAsync("services", service, new JsonObject
+                await client.CreateAsync("services", service, JsonSerializer.SerializeToElement(
+                    new DcpServiceSpec("TCP", plan is ContainerWorkload ? "Proxyless" : "Localhost"),
+                    DcpJsonContext.Default.DcpServiceSpec), null, cancellationToken).ConfigureAwait(false);
+                annotations = new Dictionary<string, string>
                 {
-                    ["protocol"] = "TCP", ["addressAllocationMode"] = plan is ContainerWorkload ? "Proxyless" : "Localhost"
-                }, null, cancellationToken).ConfigureAwait(false);
-                annotations = new JsonObject
-                {
-                    ["service-producer"] = new JsonArray(new JsonObject
+                    ["service-producer"] = JsonSerializer.Serialize(new[]
                     {
-                        ["serviceName"] = service, ["address"] = "127.0.0.1",
-                        ["port"] = plan is ContainerWorkload containerPort ? JsonValue.Create(containerPort.TargetPort) : null
-                    }).ToJsonString()
+                        new DcpServiceProducer(service, System.Net.IPAddress.Loopback.ToString(),
+                            plan is ContainerWorkload containerPort ? containerPort.TargetPort : null)
+                    }, DcpJsonContext.Default.DcpServiceProducerArray)
                 };
             }
             if (plan is ContainerWorkload container)
             {
-                spec["image"] = container.Image;
-                spec["ports"] = new JsonArray(new JsonObject
+                spec = spec with
                 {
-                    ["containerPort"] = container.TargetPort, ["hostIP"] = "127.0.0.1", ["protocol"] = "TCP"
-                });
+                    Image = container.Image,
+                    Ports = exposesPort
+                        ? [new DcpContainerPort(container.TargetPort, System.Net.IPAddress.Loopback.ToString(), "TCP")]
+                        : null
+                };
             }
             else if (plan is ExecutableWorkload executable)
             {
-                spec["executablePath"] = executable.ExecutablePath;
-                spec["workingDirectory"] = executable.WorkingDirectory;
-                spec["executionType"] = "Process";
+                spec = spec with
+                {
+                    ExecutablePath = executable.ExecutablePath,
+                    WorkingDirectory = executable.WorkingDirectory,
+                    ExecutionType = "Process"
+                };
                 if (executable.PortEnvironmentVariable.Length > 0)
                 {
                     // DCP substitutes the allocation before launch, avoiding a
                     // reserve/release port race in the executable integration.
-                    spec["env"]!.AsArray().Add((JsonNode)new JsonObject
+                    spec = spec with
                     {
-                        ["name"] = executable.PortEnvironmentVariable,
-                        ["value"] = "{{- portForServing \"" + service + "\" -}}"
-                    });
+                        Env = [.. spec.Env, new DcpEnvironment(executable.PortEnvironmentVariable,
+                            "{{- portForServing \"" + service + "\" -}}")]
+                    };
                 }
             }
             else
             {
                 throw new NotSupportedException("The workload primitive is not implemented.");
             }
-            await client.CreateAsync(collection, name, spec, annotations, cancellationToken).ConfigureAwait(false);
+            await client.CreateAsync(collection, name, JsonSerializer.SerializeToElement(spec, DcpJsonContext.Default.DcpWorkloadSpec),
+                annotations, cancellationToken).ConfigureAwait(false);
             while (true)
             {
                 var resource = await client.GetAsync(collection, name, cancellationToken).ConfigureAwait(false)
                     ?? throw new InvalidOperationException("DCP removed the workload during startup.");
-                var state = resource["status"]?["state"]?.GetValue<string>();
+                var state = resource.Status?.State;
                 if (state is "Exited" or "Finished" or "FailedToStart")
                 {
                     throw new WorkloadStartupException("DCP could not start the workload.",
@@ -90,32 +98,33 @@ internal sealed class DcpWorkloadExecutor(DcpApiClient client, Task startup) : I
                 if (state == "Running")
                 {
                     var instanceId = plan is ContainerWorkload
-                        ? resource["status"]?["containerId"]?.GetValue<string>()
-                        : resource["status"]?["pid"]?.ToJsonString();
+                        ? resource.Status?.ContainerId
+                        : resource.Status?.Pid?.ToString(System.Globalization.CultureInfo.InvariantCulture);
                     if (string.IsNullOrEmpty(instanceId))
                     {
                         throw new InvalidOperationException("DCP did not report its running workload identity.");
                     }
                     if (!exposesPort)
                     {
-                        lease.Endpoint = new WorkloadEndpoint("127.0.0.1", 0, instanceId);
+                        lease.Endpoint = new WorkloadEndpoint(System.Net.IPAddress.Loopback.ToString(), 0, instanceId);
                         return lease;
                     }
                     var endpoint = await client.GetAsync("services", service, cancellationToken).ConfigureAwait(false);
-                    if (endpoint?["status"]?["effectivePort"] is JsonValue port && port.TryGetValue<int>(out var value) && value > 0)
+                    if (endpoint?.Status is { EffectivePort: > 0 and <= 65535 } status)
                     {
-                        var address = endpoint["status"]!["effectiveAddress"]!.GetValue<string>();
+                        var address = status.EffectiveAddress
+                            ?? throw new InvalidDataException("DCP did not report an allocated endpoint address.");
                         if (!address.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
                             (!System.Net.IPAddress.TryParse(address, out var host) || !System.Net.IPAddress.IsLoopback(host)))
                         {
                             throw new InvalidOperationException("DCP must allocate a loopback workload endpoint.");
                         }
-                        lease.Endpoint = new WorkloadEndpoint(address, value, instanceId);
+                        lease.Endpoint = new WorkloadEndpoint(address, status.EffectivePort.Value, instanceId);
 
                         return lease;
                     }
                 }
-                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(options.RetryInterval, cancellationToken).ConfigureAwait(false);
             }
         }
         catch
@@ -126,19 +135,20 @@ internal sealed class DcpWorkloadExecutor(DcpApiClient client, Task startup) : I
         }
     }
 
-    private sealed class Lease(DcpApiClient client, string collection, string name, string? service) : IWorkloadLease
+    private sealed class Lease(DcpApiClient client, string collection, string name, string? service,
+        NativeServerOptions options) : IWorkloadLease
     {
         private long _stdout;
         private long _stderr;
         private int _disposed;
-        public WorkloadEndpoint Endpoint { get; set; } = new("127.0.0.1", 0, "");
+        public WorkloadEndpoint Endpoint { get; set; } = new(System.Net.IPAddress.Loopback.ToString(), 0, "");
 
         public async Task<WorkloadStatus> ReadStatusAsync(CancellationToken cancellationToken)
         {
             var resource = await client.GetAsync(collection, name, cancellationToken).ConfigureAwait(false)
                 ?? throw new InvalidOperationException("The DCP workload disappeared before cleanup.");
-            var state = resource["status"]?["state"]?.GetValue<string>();
-            var exitCode = resource["status"]?["exitCode"]?.GetValue<int>();
+            var state = resource.Status?.State;
+            var exitCode = resource.Status?.ExitCode;
 
             return new WorkloadStatus(state == "Running", exitCode);
         }
@@ -160,7 +170,7 @@ internal sealed class DcpWorkloadExecutor(DcpApiClient client, Task startup) : I
             {
                 return;
             }
-            using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            using var cleanup = new CancellationTokenSource(options.CleanupTimeout);
             await client.DeleteAsync(collection, name, cleanup.Token).ConfigureAwait(false);
             if (service is not null)
             {

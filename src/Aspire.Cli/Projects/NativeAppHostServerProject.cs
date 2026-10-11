@@ -10,8 +10,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
 
-// Explicit development override for the NativeHosting exploration, not a
-// replacement for the managed AppHost server or its integration package loader.
+// Run-only boot override. Bootstrap and backchannel RPC contracts remain unchanged.
 internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDisposable
 {
     internal const string ExecutableEnvironmentVariable = "ASPIRE_CLI_NATIVE_APPHOST_SERVER";
@@ -26,12 +25,10 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
         {
             throw new PlatformNotSupportedException("The native AppHost exploration currently supports Unix sockets only.");
         }
-
         if (!Path.IsPathFullyQualified(executable) || !File.Exists(executable))
         {
             throw new ArgumentException($"{ExecutableEnvironmentVariable} must name an existing absolute executable path.");
         }
-
         AppDirectoryPath = appPath;
         _executable = executable;
         _processes = processes;
@@ -41,37 +38,28 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
     public string AppDirectoryPath { get; }
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
-    public Task<AppHostServerPrepareResult> PrepareAsync(
-        string sdkVersion,
-        IEnumerable<IntegrationReference> integrations,
-        string? requestedChannel = null,
-        string? packageSourceOverride = null,
-        CancellationToken cancellationToken = default)
+    public Task<AppHostServerPrepareResult> PrepareAsync(string sdkVersion, IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        // GuestAppHostProject always supplies Hosting and the language's codegen
-        // package. They are CLI metadata here, not assemblies to restore or load.
         if (integrations.Any(reference => reference.Source != IntegrationSource.Nuget ||
-            reference.Name is not ("Aspire.Hosting" or "Aspire.Hosting.CodeGeneration.TypeScript")))
+            reference.Name != "Aspire.Hosting" &&
+            !reference.Name.StartsWith("Aspire.Hosting.CodeGeneration.", StringComparison.Ordinal)))
         {
-            throw new NotSupportedException("The native exploration accepts only its offline TypeScript SDK and explicitly configured integration host, not managed or npm integration packages.");
+            throw new NotSupportedException("This server uses build-time SDKs; loading managed or npm integration packages is not configured.");
         }
 
         return Task.FromResult(new AppHostServerPrepareResult(true, null, NeedsCodeGeneration: true));
     }
 
-    public async Task<AppHostServerRunResult> RunAsync(
-        int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables,
-        string[]? additionalArgs,
-        bool debug,
+    public async Task<AppHostServerRunResult> RunAsync(int hostPid,
+        IReadOnlyDictionary<string, string>? environmentVariables, string[]? additionalArgs, bool debug,
         AppHostServerRunControl? runControl)
     {
         if (additionalArgs is { Length: > 0 })
         {
-            throw new NotSupportedException("The native AppHost exploration supports run, not managed server command-line modes.");
+            throw new NotSupportedException("The native AppHost exploration supports run, not publishing command-line modes.");
         }
-
         var startInfo = new ProcessStartInfo(_executable) { WorkingDirectory = AppDirectoryPath, UseShellExecute = false };
         if (environmentVariables is not null)
         {
@@ -80,16 +68,13 @@ internal sealed class NativeAppHostServerProject : IAppHostServerProject, IDispo
                 startInfo.Environment[key] = value;
             }
         }
-
         _directory ??= Directory.CreateTempSubdirectory("aspire-native-");
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(_directory.FullName, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
-
         var socketPath = Path.Combine(_directory.FullName, "apphost.sock");
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
-        startInfo.Environment["NATIVE_HOSTING_CLI"] = "1";
         var output = new OutputCollector();
         var execution = _processes.CreateExecution(startInfo, new ProcessInvocationOptions
         {

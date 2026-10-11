@@ -72,7 +72,10 @@ try {
     server.stdout.pipe(process.stderr);
     const match = /^Native AppHost server listening on 127\.0\.0\.1:(\d+)\.$/.exec(line);
     assert.ok(match);
-    const options = { endpoint: { host: '127.0.0.1' as const, port: Number(match[1]) }, authenticationToken: token };
+    const options = {
+        endpoint: { host: '127.0.0.1' as const, port: Number(match[1]) }, authenticationToken: token,
+        authenticationTimeoutMilliseconds: 10_000
+    };
     if (process.env.ASPIRE_NATIVE_DASHBOARD_DLL) {
         assert.ok(resourceService);
         dashboardUi = await NativeDashboardSmoke.start(process.env.ASPIRE_NATIVE_DASHBOARD_DLL, resourceService, dashboardKey);

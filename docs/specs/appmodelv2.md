@@ -556,6 +556,45 @@ Container ports are DCP-allocated loopback endpoints. Executable ports use DCP's
 Integration code owns probing and initialization, and must publish healthy only
 after a real check. Readiness dependencies wait for that health.
 
+The CLI boot override is scoped to guest `run`; SDK-only commands, scaffolding,
+and publishing retain the standard server selection. The native executable
+implements the existing `baseline.v2` CLI backchannel, including resource and
+AppHost-log streams, cancellation, readiness notification, and graceful stop.
+There is no native-specific CLI backchannel client or native shutdown budget.
+Server readiness is distinct from resource health.
+
+Known backchannel and DCP payloads use typed DTOs with JSON source-generated
+contexts. Language commands come from build-time language-provider metadata,
+not runtime TypeScript-specific branching. This build still includes only the
+TypeScript SDK; the registry does not imply other SDKs are already implemented.
+Caller-owned ATS configuration and evolving language metadata remain opaque
+payloads rather than being reinterpreted by the kernel.
+
+`ASPIRE_NATIVE_SERVER_OPTIONS_PATH` accepts a source-generated JSON options file
+for lifecycle budgets, retry/observation intervals, request/stream capacities,
+and resource/AppHost-log retention. Missing properties retain named defaults; unknown,
+null, and invalid values fail explicitly. For example:
+
+```json
+{
+  "controllerStartupTimeout": "00:01:00",
+  "cleanupTimeout": "00:01:00",
+  "maximumConcurrentRequests": 128,
+  "runtime": {
+    "workloadStartupTimeout": "00:03:00",
+    "observationInterval": "00:00:00.500",
+    "retainedResourceLogEntries": 256,
+    "maximumPendingRequestsPerResource": 64
+  }
+}
+```
+
+Generated native clients require an explicit authentication timeout. Container
+target ports are integration input, not server-selected constants; a target
+port of zero requests no endpoint. Host ports are allocated by DCP. Loopback
+binding, wire capability names, and protocol versions are intentional protocol
+and security requirements, not fixture defaults.
+
 An authenticated AppHost connection creates execution invitations. Each
 one-use, role-specific invitation grants either exclusive execution for one
 resource or application observation/action authority. The separate integration
@@ -572,6 +611,21 @@ replacement; replies retain their original generation authority. Unsupported
 file-upload and terminal execution methods remain explicitly unimplemented.
 The empty terminal inventory reflects that no native terminal resource exists.
 
+`ASPIRE_DASHBOARD_PATH` configures the actual Dashboard assembly, native
+executable, or managed bundle. The server submits it to DCP with a dynamically
+allocated frontend port, authenticated resource-service access, and browser-token
+authentication. `GetDashboardUrlsAsync` awaits frontend health and returns the
+existing `/login?t=...` contract. DCP owns launch and shutdown; the CLI only boots
+the server and reports its URL. Dashboard shutdown starts alongside workload
+shutdown, before disposing the resource-service adapter, so long-lived gRPC
+watches do not exhaust the CLI's ordinary shutdown budget.
+
+The latest local verification passed 119 native/legacy regression tests and the
+actual CLI, DCP-owned Dashboard, Chromium confirmation, workload command, and
+exact container/process cleanup scenario. The CLI exited with code zero. This
+run sampled 42,811,392 bytes of native-server resident memory, not combined
+memory across the CLI, DCP, integration, and Dashboard processes.
+
 Local macOS arm64 verification exercised the **same published server** through
 the existing `ASPIRE_CLI_NATIVE_APPHOST_SERVER` override with the real CLI, its
 offline-generated SDK, a separate integration process, DCP, and the actual
@@ -582,7 +636,7 @@ was checked against actual Docker container IDs and the executable PID, not only
 DCP object deletion. A separate socket harness also retired and replaced the
 generation while keeping the server alive.
 
-The full native unit/protocol suite passed **95 tests**, including the reviewed
+Before the CLI-boundary refactor, the full native unit/protocol suite passed **95 tests**, including the reviewed
 and accepted complete ATS contract snapshot. The executable with the gRPC adapter
 and workspace revision APIs measured **14,293,456 bytes**, and one resident-set sample while the CLI, DCP,
 integration worker, and actual Dashboard were running was **42,778,624 bytes**.
@@ -606,7 +660,7 @@ npm install --prefix artifacts/native-hosting/runtime-sdk --no-save --package-lo
   pg@8.16.3 @types/pg@8.15.5 @types/node@20.19.37 tsx playwright vscode-jsonrpc@8.2.1
 artifacts/native-hosting/runtime-sdk/node_modules/.bin/playwright install chromium
 node extension/node_modules/typescript/bin/tsc \
-  --strict --module NodeNext --target ES2022 --types node \
+  --strict --module NodeNext --moduleResolution NodeNext --skipLibCheck --target ES2022 --types node \
   --typeRoots artifacts/native-hosting/runtime-sdk/node_modules/@types \
   --rootDir artifacts/native-hosting/runtime-sdk --outDir artifacts/native-hosting/runtime-sdk/out \
   artifacts/native-hosting/runtime-sdk/NativeCliSmoke.mts \
@@ -614,30 +668,36 @@ node extension/node_modules/typescript/bin/tsc \
   artifacts/native-hosting/runtime-sdk/NativeRevisionAppHost.mts \
   artifacts/native-hosting/runtime-sdk/NativeIntegrationWorker.mts \
   artifacts/native-hosting/runtime-sdk/NativeTunnelFixture.mts
+mkdir -p artifacts/native-hosting/cli-fixture
+cp tests/PolyglotAppHosts/Aspire.Hosting.DevTunnels/TypeScript/package.json artifacts/native-hosting/cli-fixture/
+cp tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/CliAppHost/* artifacts/native-hosting/cli-fixture/
+ln -s "$PWD/artifacts/native-hosting/runtime-sdk/out" artifacts/native-hosting/cli-fixture/out
 DOTNET_ROOT="$PWD/.dotnet" PATH="$PWD/.dotnet:$PATH" \
 ASPIRE_NATIVE_DASHBOARD_DLL="$PWD/artifacts/bin/Aspire.Dashboard/Debug/net11.0/Aspire.Dashboard.dll" \
 ASPIRE_NATIVE_DCP_PATH="<absolute path to restored DCP tool>" \
 node artifacts/native-hosting/runtime-sdk/out/NativeCliSmoke.mjs \
   "$PWD/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire" \
   "$PWD/artifacts/native-hosting/native-server/Aspire.Hosting.Native.Server" \
-  "$PWD/artifacts/native-hosting/runtime-sdk"
+  "$PWD/artifacts/native-hosting/cli-fixture"
 ```
 
 Use the actual generated-output and application target-framework directories for
 the checked-out SDK; stale `artifacts/bin` outputs from another framework are not
 equivalent. `NativeRuntimeSmoke.mts` covers the socket-only observation/command
 boundary; `NativeWorkloadSmoke.mts` adds real workloads and retirement/replacement.
+The CLI fixture uses an existing normal TypeScript project manifest in a
+separate workspace. Its standard dependency installation must not prune the
+independent integration/browser harness dependencies.
 These local Node/browser/AOT harnesses are not yet CI gates. The regular .NET
 tests are solution projects whose references and linked proto supply Layer 1
 routing; no trigger-map edge claims that a local-only harness runs in PR CI.
+The native test project also references the playground ATS server and exercises
+parallel graph authoring and one-use host registration, bringing its compilation
+and those focused regressions into the solution-owned CI test graph.
 
 **Remaining boundaries:** the integration worker is a fixture, not production
 package registration/dispatch or three complete reusable integration APIs.
-The forwarding executable is not the live Dev Tunnels service. The Dashboard
-process is launched explicitly by the harness; the CLI still reports its native
-backchannel Dashboard URL as unavailable. Production wiring must preserve the
-existing ownership: the AppHost server configures the Dashboard as a DCP-managed
-executable, DCP owns its process lifecycle, and the CLI discovers/reports its URL. CLI file watching and guest reexecution,
+The forwarding executable is not the live Dev Tunnels service. CLI file watching and guest reexecution,
 deployment lowering, full interaction input/terminal/upload support, arbitrary
 package acquisition, and automated multi-platform AOT/E2E coverage remain work.
 Rust stays locally excluded and is only evidence for the earlier composition

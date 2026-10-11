@@ -27,9 +27,13 @@ internal sealed class RuntimeRpcTestContext : IDisposable
     {
     }
 
-    public RuntimeRpcTestContext(IWorkloadExecutor executor)
+    public RuntimeRpcTestContext(IWorkloadExecutor executor) : this(executor, new())
     {
-        _server = new(executor);
+    }
+
+    public RuntimeRpcTestContext(IWorkloadExecutor executor, NativeRuntimeOptions options)
+    {
+        _server = new(executor, options);
         Author = new(_server);
         Integration = new(_server);
         Observer = new(_server);

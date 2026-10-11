@@ -22,6 +22,19 @@ internal sealed class AtsRegistry : IAsyncDisposable
     private readonly ConcurrentDictionary<string, RpcPeer> _external = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<RpcPeer, AtsSession> _hosts = new();
     private readonly object _hostGate = new();
+    private readonly HashSet<string> _pendingHosts = new(StringComparer.Ordinal);
+
+    public void AllowIntegrationHost(string registrationId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationId);
+        lock (_hostGate)
+        {
+            if (!_pendingHosts.Add(registrationId))
+            {
+                throw new InvalidOperationException("Integration host registration is already pending.");
+            }
+        }
+    }
     private readonly ConcurrentDictionary<NativeResource, AtsSession> _controllers = new();
     private NativeBuilder? _builder;
     private readonly SemaphoreSlim _graphGate = new(1);
@@ -162,8 +175,20 @@ internal sealed class AtsRegistry : IAsyncDisposable
         return true;
     }
 
-    public async Task RegisterHostAsync(AtsSession session, CancellationToken token)
+    internal void ConsumeIntegrationHostRegistration(string registrationId)
     {
+        lock (_hostGate)
+        {
+            if (!_pendingHosts.Remove(registrationId))
+            {
+                throw new UnauthorizedAccessException("Integration host registration authority is invalid or already consumed.");
+            }
+        }
+    }
+
+    public async Task RegisterHostAsync(AtsSession session, string registrationId, CancellationToken token)
+    {
+        ConsumeIntegrationHostRegistration(registrationId);
         var peer = session.Peer;
         var capabilities = await peer.RequestAsync("getCapabilities", new JsonArray(), token);
         if (capabilities?["protocolVersion"]?.GetValue<int>() != 2 || capabilities["capabilities"] is not JsonArray exports)
@@ -487,7 +512,11 @@ internal sealed class AtsSession(AtsRegistry registry, string authToken)
 
         if (method == "registerAsIntegrationHost")
         {
-            await registry.RegisterHostAsync(this, token);
+            if (args.Count != 1 || args[0] is not JsonValue registration || !registration.TryGetValue<string>(out var registrationId))
+            {
+                throw new ArgumentException("An integration host registration authority is required.");
+            }
+            await registry.RegisterHostAsync(this, registrationId, token);
             IntegrationHost = true;
             return JsonValue.Create(true);
         }

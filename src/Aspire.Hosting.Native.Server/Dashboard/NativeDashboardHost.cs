@@ -5,6 +5,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Aspire.Hosting.Native.Api;
+using Aspire.Hosting.Native.Server;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -18,17 +19,24 @@ namespace Aspire.Hosting.Native.Dashboard;
 internal sealed class NativeDashboardHost : IAsyncDisposable
 {
     private readonly WebApplication _application;
+    private readonly NativeServerOptions _options;
     public Uri Address { get; }
 
-    private NativeDashboardHost(WebApplication application, Uri address)
+    private NativeDashboardHost(WebApplication application, Uri address, NativeServerOptions options)
     {
         _application = application;
         Address = address;
+        _options = options;
     }
 
-    public static async Task<NativeDashboardHost> StartAsync(NativeApplicationServer server, string applicationName,
+    public static Task<NativeDashboardHost> StartAsync(NativeApplicationServer server, string applicationName,
         string apiKey, int port, CancellationToken cancellationToken)
+        => StartAsync(server, applicationName, apiKey, port, new(), cancellationToken);
+
+    public static async Task<NativeDashboardHost> StartAsync(NativeApplicationServer server, string applicationName,
+        string apiKey, int port, NativeServerOptions options, CancellationToken cancellationToken)
     {
+        options.Validate();
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         ArgumentOutOfRangeException.ThrowIfNegative(port);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(port, 65535);
@@ -42,7 +50,7 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
             options.MaxReceiveMessageSize = 256 * 1024;
             options.MaxSendMessageSize = 4 * 1024 * 1024;
         });
-        builder.Services.AddSingleton(new NativeDashboardService(server, applicationName));
+        builder.Services.AddSingleton(new NativeDashboardService(server, applicationName, options.Runtime));
         var application = builder.Build();
         var expected = Encoding.UTF8.GetBytes(apiKey);
         application.Use(async (context, next) =>
@@ -63,7 +71,7 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
             await application.StartAsync(cancellationToken).ConfigureAwait(false);
             var addresses = application.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!;
 
-            return new NativeDashboardHost(application, new Uri(addresses.Addresses.Single()));
+            return new NativeDashboardHost(application, new Uri(addresses.Addresses.Single()), options);
         }
         catch
         {
@@ -74,7 +82,7 @@ internal sealed class NativeDashboardHost : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var timeout = new CancellationTokenSource(_options.DashboardShutdownTimeout);
         try
         {
             await _application.StopAsync(timeout.Token).ConfigureAwait(false);

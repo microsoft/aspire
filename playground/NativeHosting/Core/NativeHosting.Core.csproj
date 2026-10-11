@@ -10,5 +10,6 @@
   <ItemGroup>
     <Compile Include="../RpcPeer.cs" Link="RpcPeer.cs" />
     <Compile Include="../../../src/Shared/DcpKubeconfigData.cs" Link="DcpKubeconfigData.cs" />
+    <Compile Include="../../../src/Shared/DcpConnectionMaterial.cs" Link="DcpConnectionMaterial.cs" />
   </ItemGroup>
 </Project>

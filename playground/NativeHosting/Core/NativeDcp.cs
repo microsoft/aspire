@@ -4,9 +4,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Security;
-using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -22,8 +19,7 @@ internal sealed class NativeDcp : IAsyncDisposable
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("native-dcp-");
     private Process? _process;
     private HttpClient? _client;
-    private X509Certificate2? _ca;
-    private X509Certificate2? _clientCertificate;
+    private DcpConnectionMaterial? _connection;
 
     public async Task StartAsync(string executable, CancellationToken cancellationToken)
     {
@@ -49,95 +45,9 @@ internal sealed class NativeDcp : IAsyncDisposable
         _process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { Console.Error.WriteLine(e.Data); } };
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
-        while (!File.Exists(kubeconfig))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_process.HasExited)
-            {
-                throw new InvalidOperationException($"DCP exited during configuration ({_process.ExitCode}).");
-            }
-
-            await Task.Delay(100, cancellationToken);
-        }
-
-        // DCP creates the path before flushing all connection material. Read its
-        // generated scalar contract directly, with no kubectl/YAML runtime.
-        DcpKubeconfigData configuration;
-        for (var attempt = 0; ; attempt++)
-        {
-            configuration = DcpKubeconfigData.Parse(await File.ReadAllTextAsync(kubeconfig, cancellationToken));
-            if (configuration.Server is not null && configuration.CertificateAuthorityData is not null &&
-                (configuration.Token is not null || (configuration.ClientCertificateData is not null && configuration.ClientKeyData is not null)))
-            {
-                break;
-            }
-
-            if (attempt >= 49 || _process.HasExited)
-            {
-                throw new InvalidOperationException("DCP did not write complete connection material.");
-            }
-
-            await Task.Delay(100, cancellationToken);
-        }
-
-        if (!Uri.TryCreate(configuration.Server, UriKind.Absolute, out var server) || server.Scheme != Uri.UriSchemeHttps || !server.IsLoopback)
-        {
-            throw new InvalidOperationException("DCP must advertise a loopback HTTPS API.");
-        }
-
-        _ca = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(configuration.CertificateAuthorityData));
-        var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, certificate, chain, errors) =>
-            {
-                if (certificate is null || chain is null || (errors & SslPolicyErrors.RemoteCertificateNameMismatch) != 0)
-                {
-                    return false;
-                }
-
-                chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-                chain.ChainPolicy.CustomTrustStore.Add(_ca);
-                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                return chain.Build(certificate);
-            }
-        };
-        if (configuration.ClientCertificateData is not null && configuration.ClientKeyData is not null)
-        {
-            _clientCertificate = X509Certificate2.CreateFromPem(
-                Encoding.UTF8.GetString(Convert.FromBase64String(configuration.ClientCertificateData)),
-                Encoding.UTF8.GetString(Convert.FromBase64String(configuration.ClientKeyData)));
-            handler.ClientCertificates.Add(_clientCertificate);
-        }
-
-        _client = new HttpClient(handler) { BaseAddress = server, Timeout = TimeSpan.FromSeconds(20) };
-        if (configuration.Token is not null)
-        {
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", configuration.Token);
-        }
-        // The kubeconfig is written before the API listener is necessarily ready.
-        while (true)
-        {
-            try
-            {
-                using var response = await _client.GetAsync("/readyz", cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    break;
-                }
-
-                if (response.StatusCode != HttpStatusCode.ServiceUnavailable)
-                {
-                    throw new InvalidOperationException($"DCP readiness failed ({(int)response.StatusCode}).");
-                }
-            }
-            catch (HttpRequestException exception) when (!_process.HasExited &&
-                exception.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused })
-            {
-                Console.Error.WriteLine("Waiting for the DCP API listener.");
-            }
-
-            await Task.Delay(100, cancellationToken);
-        }
+        _connection = await DcpConnectionMaterial.WaitAsync(kubeconfig, () => _process.HasExited,
+            TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(100), Console.Error.WriteLine, cancellationToken);
+        _client = _connection.Client;
     }
 
     public async Task<JsonObject> CreateAsync(string collection, string name, JsonObject spec, JsonObject? annotations, CancellationToken cancellationToken)
@@ -291,9 +201,7 @@ internal sealed class NativeDcp : IAsyncDisposable
             }
 
             _process?.Dispose();
-            _client?.Dispose();
-            _ca?.Dispose();
-            _clientCertificate?.Dispose();
+            _connection?.Dispose();
             if (_directory.Exists)
             {
                 _directory.Delete(recursive: true);

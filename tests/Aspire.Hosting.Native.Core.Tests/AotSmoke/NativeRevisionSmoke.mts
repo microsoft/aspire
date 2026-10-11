@@ -155,7 +155,7 @@ try {
     const invitations = first as Committed;
     assert.ok(invitations.observerInvitation && invitations.redisInvitation && invitations.postgresInvitation && invitations.tunnelInvitation);
     const connection = await connectNativeAppHost({
-        endpoint: { host: '127.0.0.1', port }, authenticationToken: token
+        endpoint: { host: '127.0.0.1', port }, authenticationToken: token, authenticationTimeoutMilliseconds: 10_000
     });
     observerClient = connection.client;
     const observer = await connection.server.joinApplicationObserver(invitations.observerInvitation);

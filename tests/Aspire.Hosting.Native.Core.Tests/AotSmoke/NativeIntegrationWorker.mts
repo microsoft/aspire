@@ -81,7 +81,7 @@ async function run(configuration: Configuration): Promise<void> {
     assert.ok((configuration.port > 0 || configuration.socketPath) && configuration.token && configuration.password);
     const connection = await connectNativeAppHost({
         endpoint: configuration.socketPath ?? { host: '127.0.0.1', port: configuration.port },
-        authenticationToken: configuration.token
+        authenticationToken: configuration.token, authenticationTimeoutMilliseconds: 10_000
     });
     client = connection.client;
     const redis = await connection.server.joinResourceExecution(configuration.redisInvitation);

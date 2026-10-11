@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="NativeHosting.AtsServer" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.Tests" />
     <Compile Include="../../../src/Aspire.Hosting/Ats/AspireExportAttribute.cs" Link="Attributes/AspireExportAttribute.cs" />
     <Compile Include="../../../src/Aspire.Hosting/Ats/AspireDtoAttribute.cs" Link="Attributes/AspireDtoAttribute.cs" />
     <Compile Include="../../../src/Aspire.Hosting/Ats/AspireUnionAttribute.cs" Link="Attributes/AspireUnionAttribute.cs" />
@@ -18,6 +19,7 @@
     <Compile Include="../Core/NativeDcp.cs" Link="NativeDcp.cs" />
     <Compile Include="../RpcPeer.cs" Link="RpcPeer.cs" />
     <Compile Include="../../../src/Shared/DcpKubeconfigData.cs" Link="DcpKubeconfigData.cs" />
+    <Compile Include="../../../src/Shared/DcpConnectionMaterial.cs" Link="DcpConnectionMaterial.cs" />
     <ProjectReference Include="../../../src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" GlobalPropertiesToRemove="PublishAot;RuntimeIdentifier;SelfContained" />
   </ItemGroup>
 </Project>

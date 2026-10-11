@@ -8,7 +8,7 @@ using Aspire.Hosting.Native.Model;
 namespace Aspire.Hosting.Native.Runtime;
 
 /// <summary>Owns execution observations and requests independently of declaration storage and protocol DTOs.</summary>
-internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkloadExecutor executor) : IDisposable
+internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkloadExecutor executor, NativeRuntimeOptions options) : IDisposable
 {
     private readonly Lock _gate = new();
     private readonly Dictionary<Guid, RuntimeResource> _resources = declarations.Resources.ToDictionary(
@@ -20,7 +20,11 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
     private readonly List<Task> _retiredWorkloads = [];
     private readonly HashSet<Guid> _replacingWorkloads = [];
 
-    public RuntimeGeneration(ApplicationSnapshot declarations) : this(declarations, UnavailableWorkloadExecutor.Instance)
+    public RuntimeGeneration(ApplicationSnapshot declarations) : this(declarations, UnavailableWorkloadExecutor.Instance, new())
+    {
+    }
+
+    public RuntimeGeneration(ApplicationSnapshot declarations, IWorkloadExecutor executor) : this(declarations, executor, new())
     {
     }
 
@@ -139,10 +143,7 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
 
     internal async Task<RuntimeConfigurationRevision> WaitConfigurationAsync(Guid resourceId, long revision, int timeoutMilliseconds)
     {
-        if (timeoutMilliseconds is < 1 or > 30000)
-        {
-            throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(timeoutMilliseconds, 1);
         // Other publications share this wake signal. Re-check the desired revision
         // instead of treating an unrelated log/health update as configuration work.
         using var timeout = new CancellationTokenSource(timeoutMilliseconds);
@@ -212,7 +213,7 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
             {
                 throw new InvalidOperationException("The resource workload cannot start in the current state.");
             }
-            var workload = new ResourceWorkload(new WorkloadIdentity(GenerationId, resourceId), plan, executor,
+            var workload = new ResourceWorkload(new WorkloadIdentity(GenerationId, resourceId), plan, executor, options,
                 token => WaitForDependenciesAsync(resourceId, token),
                 (state, endpoint) => PublishWorkload(resourceId, state, endpoint),
                 (stream, message) => AppendWorkloadLog(resourceId, stream, message));
@@ -421,10 +422,7 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
 
     public async Task<RuntimeSnapshot> WaitForChangeAsync(long version, int timeoutMilliseconds)
     {
-        if (timeoutMilliseconds is < 1 or > 30000)
-        {
-            throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(timeoutMilliseconds, 1);
         Task changed;
         lock (_gate)
         {
@@ -566,7 +564,7 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
             {
                 throw new InvalidOperationException("The resource log stream is complete.");
             }
-            if (resource.Logs.Count == 256)
+            if (resource.Logs.Count >= options.RetainedResourceLogEntries)
             {
                 resource.Logs.Dequeue();
             }
@@ -612,10 +610,7 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
 
     internal async Task<ImmutableArray<RuntimeCommand>> WaitCommandsAsync(Guid resourceId, int timeoutMilliseconds)
     {
-        if (timeoutMilliseconds is < 1 or > 30000)
-        {
-            throw new ArgumentOutOfRangeException(nameof(timeoutMilliseconds));
-        }
+        ArgumentOutOfRangeException.ThrowIfLessThan(timeoutMilliseconds, 1);
         Task changed;
         lock (_gate)
         {
@@ -764,9 +759,9 @@ internal sealed class RuntimeGeneration(ApplicationSnapshot declarations, IWorkl
     }
 
     private static TaskCompletionSource CreateSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private static void EnsureRequestCapacity(RuntimeResource resource)
+    private void EnsureRequestCapacity(RuntimeResource resource)
     {
-        if (resource.PendingCommands.Count + resource.Interactions.Count >= 64)
+        if (resource.PendingCommands.Count + resource.Interactions.Count >= options.MaximumPendingRequestsPerResource)
         {
             throw new InvalidOperationException("The resource request limit was reached.");
         }

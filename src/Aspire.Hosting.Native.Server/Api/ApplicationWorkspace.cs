@@ -82,7 +82,7 @@ internal sealed class ApplicationWorkspace(RuntimeInvitations invitations) : ICa
             RuntimeGeneration runtime;
             if (_execution is null)
             {
-                runtime = new RuntimeGeneration(declarations, invitations.Executor);
+                runtime = new RuntimeGeneration(declarations, invitations.Executor, invitations.Options);
                 invitations.Track(runtime);
                 cleanup = Task.CompletedTask;
             }

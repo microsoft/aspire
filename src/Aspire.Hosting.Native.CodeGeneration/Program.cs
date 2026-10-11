@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Hosting.CodeGeneration.TypeScript;
 using Aspire.Hosting.Native.CodeGeneration;
@@ -144,6 +145,19 @@ var bundle = JsonSerializer.Serialize(new
 }, new JsonSerializerOptions { TypeInfoResolver = resolver, WriteIndented = true });
 await File.WriteAllTextAsync(Path.Combine(output, "contract.json"), bundle).ConfigureAwait(false);
 var sdk = new AtsTypeScriptCodeGenerator().GenerateDistributedApplication(context, includeManagedBootstrap: false);
+// Language commands belong to the existing language provider. Serialize them
+// during the build so the native executable needs neither that provider nor ATS
+// reflection at runtime. Unsupported modes are omitted rather than simulated.
+var languageSupportType = typeof(AtsTypeScriptCodeGenerator).Assembly.GetType(
+    "Aspire.Hosting.CodeGeneration.TypeScript.TypeScriptLanguageSupport", throwOnError: true)!;
+var languageSupport = (ILanguageSupport)Activator.CreateInstance(languageSupportType, nonPublic: true)!;
+var runtimeSpec = JsonSerializer.SerializeToNode(languageSupport.GetRuntimeSpec(),
+    new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!.AsObject();
+runtimeSpec.Remove("watchExecute");
+await File.WriteAllTextAsync(Path.Combine(output, "languages.json"), new JsonArray(new JsonObject
+{
+    ["runtimeSpec"] = runtimeSpec, ["sdkResourcePrefix"] = "NativeSdk."
+}).ToJsonString(new JsonSerializerOptions { WriteIndented = true })).ConfigureAwait(false);
 foreach (var (name, content) in sdk)
 {
     await File.WriteAllTextAsync(Path.Combine(output, name), content).ConfigureAwait(false);
@@ -164,15 +178,21 @@ await File.WriteAllTextAsync(Path.Combine(output, "native-client.mts"), $$"""
     export interface NativeConnectionOptions {
         endpoint: string | { host: '127.0.0.1'; port: number };
         authenticationToken: string;
+        authenticationTimeoutMilliseconds: number;
     }
 
     export async function connectNativeAppHost(options: NativeConnectionOptions):
         Promise<{ client: AspireClient; server: NativeApplicationServer }> {
+        if (!Number.isSafeInteger(options.authenticationTimeoutMilliseconds) ||
+            options.authenticationTimeoutMilliseconds < 1 || options.authenticationTimeoutMilliseconds > 2147483647) {
+            throw new RangeError('An explicit bounded authentication timeout is required.');
+        }
         const socket = typeof options.endpoint === 'string'
             ? createConnection(options.endpoint)
             : createConnection(options.endpoint);
         const connection = rpc.createMessageConnection(new rpc.StreamMessageReader(socket), new rpc.StreamMessageWriter(socket));
-        const timeout = setTimeout(() => socket.destroy(new Error('Native server authentication timed out.')), 10000);
+        const timeout = setTimeout(() => socket.destroy(new Error('Native server authentication timed out.')),
+            options.authenticationTimeoutMilliseconds);
         try {
             await new Promise<void>((resolve, reject) => {
                 socket.once('connect', resolve);

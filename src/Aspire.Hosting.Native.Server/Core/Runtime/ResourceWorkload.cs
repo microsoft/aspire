@@ -51,6 +51,7 @@ internal sealed class ResourceWorkload(
     WorkloadIdentity identity,
     WorkloadPlan plan,
     IWorkloadExecutor executor,
+    NativeRuntimeOptions options,
     Func<CancellationToken, Task> waitForDependencies,
     Action<string, WorkloadEndpoint?> publish,
     Action<string, string> log) : IDisposable
@@ -84,7 +85,7 @@ internal sealed class ResourceWorkload(
             // Dependency readiness has its own lifetime. Start this workload's
             // startup budget only after dependencies are ready.
             using var startup = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
-            startup.CancelAfter(TimeSpan.FromMinutes(2));
+            startup.CancelAfter(options.WorkloadStartupTimeout);
             lease = await executor.StartAsync(identity, plan, startup.Token).ConfigureAwait(false);
             publish("Running", lease.Endpoint);
             _ready.TrySetResult(lease.Endpoint);
@@ -100,7 +101,7 @@ internal sealed class ResourceWorkload(
                     publish(status.ExitCode == 0 ? "Stopped" : "Failed", null);
                     break;
                 }
-                await Task.Delay(250, _lifetime.Token).ConfigureAwait(false);
+                await Task.Delay(options.ObservationInterval, _lifetime.Token).ConfigureAwait(false);
             }
             operation.Succeeded = true;
         }

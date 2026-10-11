@@ -23,12 +23,13 @@ internal sealed class WorkloadTestExecutor : IWorkloadExecutor
         cancellationToken.ThrowIfCancellationRequested();
         Started.Enqueue(identity);
 
-        return Task.FromResult<IWorkloadLease>(new Lease(this, identity));
+        return Task.FromResult<IWorkloadLease>(new Lease(this, identity, plan));
     }
 
-    private sealed class Lease(WorkloadTestExecutor executor, WorkloadIdentity identity) : IWorkloadLease
+    private sealed class Lease(WorkloadTestExecutor executor, WorkloadIdentity identity, WorkloadPlan plan) : IWorkloadLease
     {
-        public WorkloadEndpoint Endpoint { get; } = new("127.0.0.1", 5050, "test-instance");
+        public WorkloadEndpoint Endpoint { get; } = new("127.0.0.1",
+            plan is ContainerWorkload { TargetPort: 0 } ? 0 : 5050, "test-instance");
         public Task<WorkloadStatus> ReadStatusAsync(CancellationToken cancellationToken) =>
             Task.FromResult(new WorkloadStatus(true, null));
         public Task<ImmutableArray<WorkloadLog>> ReadLogsAsync(CancellationToken cancellationToken) =>

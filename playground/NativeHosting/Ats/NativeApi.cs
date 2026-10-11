@@ -130,19 +130,31 @@ public sealed class NativeResource
 
     internal NativeBuilder Builder { get; }
     internal JsonObject Definition { get; }
-    internal string Name => RpcPeer.RequiredString(Definition, "name");
+    internal string Name
+    {
+        get
+        {
+            lock (Builder.Gate)
+            {
+                return RpcPeer.RequiredString(Definition, "name");
+            }
+        }
+    }
     internal JsonObject Identity => new() { ["owner"] = Builder.Owner, ["name"] = Name };
 
     private NativeResource Set(string collection, string name, object value)
     {
-        Builder.EnsureMutable();
-        if (Definition[collection] is not JsonObject values)
+        lock (Builder.Gate)
         {
-            Definition[collection] = values = new JsonObject();
-        }
+            Builder.EnsureMutable();
+            if (Definition[collection] is not JsonObject values)
+            {
+                Definition[collection] = values = new JsonObject();
+            }
 
-        values[name] = Builder.Expression(value);
-        return this;
+            values[name] = Builder.Expression(value);
+            return this;
+        }
     }
 
     /// <summary>Sets a literal or deferred environment value.</summary>
@@ -157,70 +169,88 @@ public sealed class NativeResource
     [AspireExport]
     public NativeResource WithAnnotation(string annotationId, string json)
     {
-        Builder.EnsureMutable();
-        var payload = Builder.Annotations.Validate(annotationId, json);
-        if (Definition["annotations"] is not JsonObject annotations)
+        lock (Builder.Gate)
         {
-            Definition["annotations"] = annotations = new JsonObject();
+            Builder.EnsureMutable();
+            var payload = Builder.Annotations.Validate(annotationId, json);
+            if (Definition["annotations"] is not JsonObject annotations)
+            {
+                Definition["annotations"] = annotations = new JsonObject();
+            }
+            annotations[annotationId] = payload;
+            return this;
         }
-        annotations[annotationId] = payload;
-        return this;
     }
 
     /// <summary>Reads portable annotation data; missing payloads fail explicitly.</summary>
     [AspireExport]
     public string GetAnnotation(string annotationId)
     {
-        Builder.Annotations.RequireDefined(annotationId);
-        return Definition["annotations"]?[annotationId]?.ToJsonString()
-            ?? throw new ArgumentException($"Resource '{Name}' has no annotation '{annotationId}'.");
+        lock (Builder.Gate)
+        {
+            Builder.Annotations.RequireDefined(annotationId);
+            return Definition["annotations"]?[annotationId]?.ToJsonString()
+                ?? throw new ArgumentException($"Resource '{Name}' has no annotation '{annotationId}'.");
+        }
     }
 
     /// <summary>Checks whether this resource has a payload for a registered annotation.</summary>
     [AspireExport]
     public bool HasAnnotation(string annotationId)
     {
-        Builder.Annotations.RequireDefined(annotationId);
-        return Definition["annotations"]?[annotationId] is not null;
+        lock (Builder.Gate)
+        {
+            Builder.Annotations.RequireDefined(annotationId);
+            return Definition["annotations"]?[annotationId] is not null;
+        }
     }
 
     /// <summary>Adds a literal or deferred process argument.</summary>
     [AspireExport]
     public NativeResource WithArgument([AspireUnion(typeof(string), typeof(NativeValue))] object value)
     {
-        Builder.EnsureMutable();
-        if (Definition["arguments"] is not JsonArray arguments)
+        lock (Builder.Gate)
         {
-            Definition["arguments"] = arguments = [];
-        }
+            Builder.EnsureMutable();
+            if (Definition["arguments"] is not JsonArray arguments)
+            {
+                Definition["arguments"] = arguments = [];
+            }
 
-        arguments.Add(Builder.Expression(value));
-        return this;
+            arguments.Add(Builder.Expression(value));
+            return this;
+        }
     }
 
     /// <summary>Waits for another resource to become ready.</summary>
     [AspireExport]
     public NativeResource WaitFor(NativeResource dependency)
     {
-        Builder.EnsureMutable();
-        Builder.EnsureSameGraph(dependency.Builder);
-        if (Definition["dependencies"] is not JsonArray dependencies)
+        lock (Builder.Gate)
         {
-            Definition["dependencies"] = dependencies = [];
-        }
+            Builder.EnsureMutable();
+            Builder.EnsureSameGraph(dependency.Builder);
+            if (Definition["dependencies"] is not JsonArray dependencies)
+            {
+                Definition["dependencies"] = dependencies = [];
+            }
 
-        dependencies.Add((JsonNode)dependency.Identity);
-        return this;
+            dependencies.Add((JsonNode)dependency.Identity);
+            return this;
+        }
     }
 
     /// <summary>Records a parent relationship without implicit readiness ordering.</summary>
     [AspireExport]
     public NativeResource WithParent(NativeResource parent)
     {
-        Builder.EnsureMutable();
-        Builder.EnsureSameGraph(parent.Builder);
-        Definition["parent"] = parent.Identity;
-        return this;
+        lock (Builder.Gate)
+        {
+            Builder.EnsureMutable();
+            Builder.EnsureSameGraph(parent.Builder);
+            Definition["parent"] = parent.Identity;
+            return this;
+        }
     }
 
     /// <summary>Returns a deferred endpoint property.</summary>
@@ -260,19 +290,25 @@ public sealed class NativeResource
 
     private NativeResource Hook(string field, Func<NativeResource, CancellationToken, Task<bool>> callback)
     {
-        Builder.EnsureMutable();
-        Definition[field] = Builder.RegisterCallback(this, (request, token) => callback(this, token), field);
-        return this;
+        lock (Builder.Gate)
+        {
+            Builder.EnsureMutable();
+            Definition[field] = Builder.RegisterCallback(this, (request, token) => callback(this, token), field);
+            return this;
+        }
     }
 
     /// <summary>Registers a controller for a run-only custom resource.</summary>
     [AspireExport]
     public NativeResource WithControl(Func<NativeResource, ControlRequest, CancellationToken, Task<bool>> callback)
     {
-        Builder.EnsureMutable();
-        Definition["controllerOwner"] = Builder.ControllerOwner;
-        Definition["control"] = Builder.RegisterCallback(this, (request, token) => callback(this, request, token), "control");
-        return this;
+        lock (Builder.Gate)
+        {
+            Builder.EnsureMutable();
+            Definition["controllerOwner"] = Builder.ControllerOwner;
+            Definition["control"] = Builder.RegisterCallback(this, (request, token) => callback(this, request, token), "control");
+            return this;
+        }
     }
 
     /// <summary>Resolves a connection property in an explicit execution context.</summary>
@@ -281,7 +317,10 @@ public sealed class NativeResource
     {
         var value = await Builder.InvokeAsync("resolve", new JsonObject
         {
-            ["resource"] = Identity, ["property"] = property, ["mode"] = mode, ["network"] = network
+            ["resource"] = Identity,
+            ["property"] = property,
+            ["mode"] = mode,
+            ["network"] = network
         }, cancellationToken);
         return value!.GetValue<string>();
     }
@@ -303,14 +342,20 @@ public sealed class NativeResource
     public async Task<ExecutableLogs> ReadLogs(long stdoutOffset, long stderrOffset, CancellationToken cancellationToken) =>
         (await Builder.InvokeAsync("readLogs", new JsonObject
         {
-            ["resource"] = Identity, ["stdoutOffset"] = stdoutOffset, ["stderrOffset"] = stderrOffset
+            ["resource"] = Identity,
+            ["stdoutOffset"] = stdoutOffset,
+            ["stderrOffset"] = stderrOffset
         }, cancellationToken))!.Deserialize(NativeJsonContext.Default.ExecutableLogs)!;
 
     /// <summary>Stops or restarts a compute or custom resource.</summary>
     [AspireExport]
     public async Task<bool> Command(string command, CancellationToken cancellationToken)
     {
-        var kind = RpcPeer.RequiredString(Definition, "kind");
+        string kind;
+        lock (Builder.Gate)
+        {
+            kind = RpcPeer.RequiredString(Definition, "kind");
+        }
         await Builder.InvokeAsync(kind == "custom" ? "command" : command,
             new JsonObject { ["resource"] = Identity, ["command"] = command }, cancellationToken);
         return true;
@@ -342,7 +387,12 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
             return result;
         }
 
-        foreach (var resource in _resources.Values)
+        NativeResource[] resources;
+        lock (Gate)
+        {
+            resources = _resources.Values.ToArray();
+        }
+        foreach (var resource in resources)
         {
             var state = (await InvokeAsync("status", new JsonObject { ["resource"] = resource.Identity }, cancellationToken))!.AsObject();
             // Parameters and synthetic children have no allocation dictionary.
@@ -379,6 +429,7 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     }
 
     private readonly NativeModel _model;
+    internal Lock Gate { get; } = new();
     private readonly Dictionary<string, NativeResource> _resources = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Func<ControlRequest, CancellationToken, Task<bool>>> _callbacks = new(StringComparer.Ordinal);
     private bool _sealed;
@@ -401,14 +452,20 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     [AspireExport]
     public bool DefineAnnotation(string annotationId, AnnotationFieldOptions[] fields)
     {
-        EnsureMutable();
-        return Annotations.Define(annotationId, fields);
+        lock (Gate)
+        {
+            EnsureMutable();
+            return Annotations.Define(annotationId, fields);
+        }
     }
 
     internal void Build()
     {
-        EnsureMutable();
-        _built = true;
+        lock (Gate)
+        {
+            EnsureMutable();
+            _built = true;
+        }
     }
 
     internal void EnsureMutable()
@@ -440,17 +497,20 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     [AspireExport]
     public NativeResource AddResource(string name, string kind, ResourceOptions options)
     {
-        EnsureMutable();
-        var definition = JsonSerializer.SerializeToNode(options, NativeJsonContext.Default.ResourceOptions)!.AsObject();
-        definition["name"] = name;
-        definition["kind"] = kind;
-        var resource = new NativeResource(this, definition);
-        if (!_resources.TryAdd(name, resource))
+        lock (Gate)
         {
-            throw new ArgumentException($"Duplicate resource '{name}'.");
-        }
+            EnsureMutable();
+            var definition = JsonSerializer.SerializeToNode(options, NativeJsonContext.Default.ResourceOptions)!.AsObject();
+            definition["name"] = name;
+            definition["kind"] = kind;
+            var resource = new NativeResource(this, definition);
+            if (!_resources.TryAdd(name, resource))
+            {
+                throw new ArgumentException($"Duplicate resource '{name}'.");
+            }
 
-        return resource;
+            return resource;
+        }
     }
 
     /// <summary>Creates a literal component of a structured value.</summary>
@@ -466,17 +526,22 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     [AspireExport]
     public async Task<bool> Run(CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_sealed)
+        JsonNode[] definitions;
+        lock (Gate)
         {
-            throw new InvalidOperationException("The ATS graph is already running.");
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_sealed)
+            {
+                throw new InvalidOperationException("The ATS graph is already running.");
+            }
+            _sealed = true;
+            definitions = _resources.Values.Select(resource => resource.Definition.DeepClone()).ToArray();
         }
-        _sealed = true;
         // Definitions are committed only after guest construction finishes. This
         // keeps callback registration and deferred references free of side effects.
-        foreach (var resource in _resources.Values)
+        foreach (var definition in definitions)
         {
-            await _model.InvokeAsync("define", new JsonObject { ["definition"] = resource.Definition.DeepClone() }, cancellationToken);
+            await _model.InvokeAsync("define", new JsonObject { ["definition"] = definition }, cancellationToken);
         }
 
         await _model.InvokeAsync("configure", new JsonObject { ["dcp"] = _dcp }, cancellationToken);
@@ -489,14 +554,17 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
     [AspireExport]
     public string Publish()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        return new JsonObject
+        lock (Gate)
         {
-            ["format"] = "native-model.v0",
-            ["annotationSchemas"] = Annotations.Describe(),
-            ["resources"] = new JsonArray(_resources.Values.Where(resource => resource.Definition["runOnly"]?.GetValue<bool>() != true)
-                .OrderBy(resource => resource.Name, StringComparer.Ordinal).Select(resource => (JsonNode)resource.Definition.DeepClone()).ToArray())
-        }.ToJsonString();
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return new JsonObject
+            {
+                ["format"] = "native-model.v0",
+                ["annotationSchemas"] = Annotations.Describe(),
+                ["resources"] = new JsonArray(_resources.Values.Where(resource => resource.Definition["runOnly"]?.GetValue<bool>() != true)
+                    .OrderBy(resource => resource.Name, StringComparer.Ordinal).Select(resource => (JsonNode)resource.Definition.DeepClone()).ToArray())
+            }.ToJsonString();
+        }
     }
 
     /// <summary>Reports native runtime evidence without loading integrations.</summary>
@@ -520,14 +588,20 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
 
     public async Task<JsonNode?> RequestAsync(string method, JsonObject args, CancellationToken cancellationToken)
     {
-        if (method != "invokeIntegration" || !_callbacks.TryGetValue(RpcPeer.RequiredString(args, "callback"), out var callback))
+        Func<ControlRequest, CancellationToken, Task<bool>> callback;
+        lock (Gate)
         {
-            throw new InvalidOperationException("Unknown ATS lifecycle callback.");
+            if (method != "invokeIntegration" || !_callbacks.TryGetValue(RpcPeer.RequiredString(args, "callback"), out var registered))
+            {
+                throw new InvalidOperationException("Unknown ATS lifecycle callback.");
+            }
+            callback = registered;
         }
 
         var request = new ControlRequest
         {
-            Command = args["command"]?.GetValue<string>(), Generation = args["generation"]?.GetValue<long>() ?? 0
+            Command = args["command"]?.GetValue<string>(),
+            Generation = args["generation"]?.GetValue<long>() ?? 0
         };
         var ready = await callback(request, cancellationToken);
         return new JsonObject { ["ready"] = ready };
@@ -535,10 +609,17 @@ public sealed class NativeBuilder : IAsyncDisposable, IRequestPeer
 
     public async ValueTask DisposeAsync()
     {
-        if (!_disposed)
+        lock (Gate)
         {
+            if (_disposed)
+            {
+                return;
+            }
             _disposed = true;
-            await _model.DisposeAsync();
+        }
+        await _model.DisposeAsync();
+        lock (Gate)
+        {
             _callbacks.Clear();
             _resources.Clear();
         }

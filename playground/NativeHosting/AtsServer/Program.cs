@@ -8,6 +8,10 @@ using NativeHosting;
 var authToken = Environment.GetEnvironmentVariable("ASPIRE_REMOTE_APPHOST_TOKEN")
     ?? throw new InvalidOperationException("ASPIRE_REMOTE_APPHOST_TOKEN is required.");
 await using var registry = new AtsRegistry();
+if (Environment.GetEnvironmentVariable("ASPIRE_INTEGRATION_HOST_REGISTRATION_ID") is { } registrationId)
+{
+    registry.AllowIntegrationHost(registrationId);
+}
 if (args is ["--stdio"])
 {
     var session = new AtsSession(registry, authToken);
@@ -49,7 +53,7 @@ using var signal = System.Runtime.InteropServices.PosixSignalRegistration.Create
     System.Runtime.InteropServices.PosixSignal.SIGTERM, context => { context.Cancel = true; shutdown.Cancel(); });
 var clients = new List<Task>();
 using var host = Environment.GetEnvironmentVariable("NATIVE_HOSTING_CLI") == "1"
-    ? NativeCliBootstrap.StartIntegrationHost(path)
+    ? NativeCliBootstrap.StartIntegrationHost(path, registry)
     : null;
 var hostOutput = host is null ? Task.CompletedTask : DrainAsync(host.StandardOutput);
 var hostError = host is null ? Task.CompletedTask : DrainAsync(host.StandardError);

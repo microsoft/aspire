@@ -18,29 +18,30 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         {
             return;
         }
-
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Assert.Throws<ArgumentException>(() => new NativeAppHostServerProject(workspace.Path,
             Path.Combine(workspace.Path, "missing"), new TestProcessExecutionFactory(), NullLogger.Instance));
     }
 
-    [Fact]
-    public async Task RejectsManagedIntegrationPackages()
+    [Theory]
+    [InlineData("Aspire.Hosting.CodeGeneration.TypeScript")]
+    [InlineData("Aspire.Hosting.CodeGeneration.Python")]
+    public async Task BootDoesNotChooseTheGuestLanguage(string codeGenerationPackage)
     {
         if (OperatingSystem.IsWindows())
         {
             return;
         }
-
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executable = Path.Combine(workspace.Path, "server");
         await File.WriteAllTextAsync(executable, "");
         using var project = new NativeAppHostServerProject(workspace.Path, executable, new TestProcessExecutionFactory(), NullLogger.Instance);
-        await Assert.ThrowsAsync<NotSupportedException>(() => project.PrepareAsync("13.6", [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.6")]));
         Assert.True((await project.PrepareAsync("13.6", [
             IntegrationReference.FromPackage("Aspire.Hosting", "13.6"),
-            IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.6")
+            IntegrationReference.FromPackage(codeGenerationPackage, "13.6")
         ])).NeedsCodeGeneration);
+        await Assert.ThrowsAsync<NotSupportedException>(() => project.PrepareAsync("13.6",
+            [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.6")]));
     }
 
     [Fact]
@@ -50,7 +51,6 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
         {
             return;
         }
-
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executable = Path.Combine(workspace.Path, "server");
         await File.WriteAllTextAsync(executable, "");
@@ -61,7 +61,6 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             Assert.Equal(executable, start.FileName);
             Assert.Equal(workspace.Path, start.WorkingDirectory);
             Assert.Equal("test-token", start.Environment["ASPIRE_REMOTE_APPHOST_TOKEN"]);
-            Assert.Equal("1", start.Environment["NATIVE_HOSTING_CLI"]);
             directory = Path.GetDirectoryName(start.Environment["REMOTE_APP_HOST_SOCKET_PATH"])!;
             if (!OperatingSystem.IsWindows())
             {
@@ -80,7 +79,6 @@ public class NativeAppHostServerProjectTests(ITestOutputHelper outputHelper)
             Assert.Equal(Path.Combine(directory!, "apphost.sock"), result.SocketPath);
             await result.Execution.DisposeAsync();
         }
-
         Assert.False(Directory.Exists(directory));
     }
 }

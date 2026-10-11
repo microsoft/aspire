@@ -17,7 +17,9 @@ const stopped = new Promise<void>(resolve => {
     process.once('SIGINT', resolve);
     process.once('SIGTERM', resolve);
 });
-const { client, server } = await connectNativeAppHost({ endpoint: socketPath, authenticationToken });
+const { client, server } = await connectNativeAppHost({
+    endpoint: socketPath, authenticationToken, authenticationTimeoutMilliseconds: 10_000
+});
 const session = await server.openApplication();
 const composition = await session.startGeneration();
 let worker: ReturnType<typeof fork> | undefined;

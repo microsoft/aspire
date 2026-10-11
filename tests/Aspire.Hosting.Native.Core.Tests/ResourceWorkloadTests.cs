@@ -12,6 +12,25 @@ namespace Aspire.Hosting.Native.Core.Tests;
 public class ResourceWorkloadTests
 {
     [Fact]
+    public async Task ContainersCanRunWithoutExposingAnEndpoint()
+    {
+        var executor = new WorkloadTestExecutor();
+        executor.ReleaseCleanup();
+        using var context = new RuntimeRpcTestContext(executor);
+        var endpoint = Result(await context.Integration.InvokeAsync("startContainer", Arguments(
+            ("context", context.Writer), ("container", new JsonObject
+            {
+                ["image"] = "example/background-worker:1", ["targetPort"] = 0,
+                ["environment"] = new JsonArray(), ["arguments"] = new JsonArray()
+            }))));
+        Assert.Equal(0, endpoint["port"]!.GetValue<int>());
+        Assert.Empty(context.Read()["resources"]![0]!["urls"]!.AsArray());
+        await context.Author.InvokeAsync("retireGeneration", Arguments(
+            ("context", context.Session), ("composition", context.Composition)));
+        Assert.Single(executor.Removed);
+    }
+
+    [Fact]
     public async Task RetirementRevokesAuthorityBeforeWaitingForCleanupAndBlocksReplacement()
     {
         var executor = new WorkloadTestExecutor();

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Native.Diagnostics;
 using Aspire.Hosting.Native.Api;
+using Aspire.Hosting.Native.Server;
 
 namespace Aspire.Hosting.Native.Rpc;
 
@@ -17,12 +18,12 @@ internal sealed class NativeRpcConnection : IDisposable
     public const int MaximumRequestBytes = 256 * 1024;
     private static readonly JsonObject s_contract = LoadContract();
     private readonly Lock _gate = new();
-    private readonly NativeHandles _handles = new(4096);
+    private readonly NativeHandles _handles;
+    private readonly NativeServerOptions _options;
     private readonly byte[] _token;
     private readonly NativeApplicationServer _server;
     private readonly bool _ownsServer;
-    private readonly NativeRpcControl? _control;
-    private bool _stopRequested;
+    private readonly NativeLanguageCatalog? _languages;
     private readonly CancellationTokenSource _lifetime = new();
     private bool _authenticated;
     private bool _disposed;
@@ -36,18 +37,32 @@ internal sealed class NativeRpcConnection : IDisposable
     {
     }
 
-    public NativeRpcConnection(string token, NativeApplicationServer server, NativeRpcControl? control)
-        : this(token, server, ownsServer: false, control)
+    public NativeRpcConnection(string token, NativeApplicationServer server, NativeLanguageCatalog? languages)
+        : this(token, server, ownsServer: false, languages)
     {
     }
 
-    private NativeRpcConnection(string token, NativeApplicationServer server, bool ownsServer, NativeRpcControl? control)
+    private NativeRpcConnection(string token, NativeApplicationServer server, bool ownsServer, NativeLanguageCatalog? languages)
+        : this(token, server, ownsServer, languages, new())
     {
+    }
+
+    public NativeRpcConnection(string token, NativeApplicationServer server, NativeLanguageCatalog? languages, NativeServerOptions options)
+        : this(token, server, ownsServer: false, languages, options)
+    {
+    }
+
+    private NativeRpcConnection(string token, NativeApplicationServer server, bool ownsServer, NativeLanguageCatalog? languages,
+        NativeServerOptions options)
+    {
+        options.Validate();
+        _options = options;
+        _handles = new(options.MaximumHandlesPerConnection);
         ArgumentException.ThrowIfNullOrEmpty(token);
         _token = Encoding.UTF8.GetBytes(token);
         _server = server;
         _ownsServer = ownsServer;
-        _control = control;
+        _languages = languages;
         if (_token.Length is < 32 or > 256)
         {
             throw new ArgumentException("RPC authentication tokens must contain 32 to 256 UTF-8 bytes.", nameof(token));
@@ -92,7 +107,7 @@ internal sealed class NativeRpcConnection : IDisposable
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (payload.Length > MaximumRequestBytes)
+            if (payload.Length > _options.MaximumRequestBytes)
             {
                 return EncodeError(null, -32600, "REQUEST_TOO_LARGE", "The request exceeds the size limit.");
             }
@@ -134,7 +149,7 @@ internal sealed class NativeRpcConnection : IDisposable
             // See https://github.com/microsoft/vs-streamjsonrpc/blob/main/doc/tracecontext.md.
             method = parsedMethod;
             notification = !request.ContainsKey("id");
-            if (_inFlight >= 64)
+            if (_inFlight >= _options.MaximumConcurrentRequests)
             {
                 return notification ? null : EncodeFailure(id, method, -32000, "RPC_BUSY", "The connection request limit was reached.");
             }
@@ -150,11 +165,12 @@ internal sealed class NativeRpcConnection : IDisposable
             var result = await invocation.WaitAsync(lifetime).ConfigureAwait(false);
             operation.Succeeded = true;
 
-            return notification ? null : Encode(new JsonObject
+            return notification ? null : Encode(new NativeRpcResponse
             {
-                ["jsonrpc"] = "2.0",
-                ["id"] = id?.DeepClone(),
-                ["result"] = result
+                Id = id?.DeepClone(),
+                Result = result is null
+                    ? JsonSerializer.SerializeToElement((string?)null, NativeRpcMessageJsonContext.Default.String)
+                    : JsonSerializer.SerializeToElement(result, NativeRpcMessageJsonContext.Default.JsonNode)
             });
         }
         catch (RpcFault fault)
@@ -234,39 +250,17 @@ internal sealed class NativeRpcConnection : IDisposable
         {
             throw new RpcFault("UNAUTHENTICATED", "Authenticate before using capabilities.");
         }
-        if (_control is not null && method is "getRuntimeSpec" or "generateCode" or "getRuntimeState" or "requestStop" or "notifyCliReady")
+        if (_languages is not null && method is "getRuntimeSpec" or "generateCode")
         {
-            if (method is "getRuntimeSpec" or "generateCode")
+            if (parameters is not JsonArray { Count: > 0 and <= 2 } bootstrapArgs ||
+                method == "getRuntimeSpec" && bootstrapArgs.Count != 1 ||
+                bootstrapArgs.Count == 2 && bootstrapArgs[1] is not null)
             {
-                if (parameters is not JsonArray { Count: > 0 and <= 2 } bootstrapArgs ||
-                    method == "getRuntimeSpec" && bootstrapArgs.Count != 1 ||
-                    bootstrapArgs.Count == 2 && bootstrapArgs[1] is not null)
-                {
-                    throw new RpcFault("INVALID_ARGUMENT", "The native bootstrap requires a language and does not support assembly filtering.");
-                }
-
-                return method == "getRuntimeSpec"
-                    ? NativeRpcControl.RuntimeSpec(RpcArguments.String(bootstrapArgs[0]))
-                    : NativeRpcControl.GeneratedSdk(RpcArguments.String(bootstrapArgs[0]));
+                throw new RpcFault("INVALID_ARGUMENT", "Bootstrap requires a language and does not support assembly filtering.");
             }
-            if (parameters is not null and not JsonArray { Count: 0 })
-            {
-                throw new RpcFault("INVALID_ARGUMENT", "Native control operations take no arguments.");
-            }
-            if (method == "getRuntimeState")
-            {
-                return _control.ReadRuntimeState();
-            }
-            if (method == "notifyCliReady" && !_control.ReadRuntimeState()["ready"]!.GetValue<bool>())
-            {
-                throw new InvalidOperationException("The application execution is not ready.");
-            }
-            if (method == "requestStop")
-            {
-                _stopRequested = true;
-            }
-
-            return JsonValue.Create(true);
+            return method == "getRuntimeSpec"
+                ? _languages.RuntimeSpec(RpcArguments.String(bootstrapArgs[0]))
+                : _languages.GeneratedSdk(RpcArguments.String(bootstrapArgs[0]));
         }
         if (method == "getCapabilities")
         {
@@ -298,25 +292,9 @@ internal sealed class NativeRpcConnection : IDisposable
         return await NativeDispatch.InvokeAsync(_handles, RpcArguments.String(arguments[0]), capabilityArguments).ConfigureAwait(false);
     }
 
-    internal void ResponseWritten(ReadOnlyMemory<byte> request)
+    private Activity? StartIncomingTrace(ReadOnlyMemory<byte> payload)
     {
-        lock (_gate)
-        {
-            if (_stopRequested)
-            {
-                using var document = JsonDocument.Parse(request);
-                if (document.RootElement.GetProperty("method").GetString() == "requestStop")
-                {
-                    _stopRequested = false;
-                    _control!.RequestStop();
-                }
-            }
-        }
-    }
-
-    private static Activity? StartIncomingTrace(ReadOnlyMemory<byte> payload)
-    {
-        if (payload.Length > MaximumRequestBytes || payload.Span.IndexOf("\"traceparent\""u8) < 0)
+        if (payload.Length > _options.MaximumRequestBytes || payload.Span.IndexOf("\"traceparent\""u8) < 0)
         {
             return null;
         }
@@ -373,7 +351,7 @@ internal sealed class NativeRpcConnection : IDisposable
     private static bool IsValidId(JsonNode? id) => id is null ||
         id is JsonValue value && (value.TryGetValue<string>(out _) || value.TryGetValue<long>(out _));
 
-    private static void ValidateUniqueProperties(JsonElement element)
+    internal static void ValidateUniqueProperties(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)
         {
@@ -396,16 +374,10 @@ internal sealed class NativeRpcConnection : IDisposable
         }
     }
 
-    private static byte[] EncodeError(JsonNode? id, int code, string classification, string message) => Encode(new JsonObject
+    private static byte[] EncodeError(JsonNode? id, int code, string classification, string message) => Encode(new NativeRpcResponse
     {
-        ["jsonrpc"] = "2.0",
-        ["id"] = id?.DeepClone(),
-        ["error"] = new JsonObject
-        {
-            ["code"] = code,
-            ["message"] = message,
-            ["data"] = new JsonObject { ["code"] = classification }
-        }
+        Id = id?.DeepClone(),
+        Error = new NativeRpcError(code, message, new NativeRpcErrorData(classification))
     });
 
     private static byte[] EncodeFailure(JsonNode? id, string method, int code, string classification, string message)
@@ -418,27 +390,17 @@ internal sealed class NativeRpcConnection : IDisposable
         // ATS application failures are result payloads, not transport errors:
         // {"result":{"$error":{"code":"HANDLE_NOT_FOUND","message":"..."}}}.
         // The existing SDK converts this shape into CapabilityError.
-        return Encode(new JsonObject
+        return Encode(new NativeRpcResponse
         {
-            ["jsonrpc"] = "2.0",
-            ["id"] = id?.DeepClone(),
-            ["result"] = new JsonObject
-            {
-                ["$error"] = new JsonObject { ["code"] = classification, ["message"] = message }
-            }
+            Id = id?.DeepClone(),
+            Result = JsonSerializer.SerializeToElement(
+                new NativeRpcCapabilityFailure(new NativeRpcCapabilityError(classification, message)),
+                NativeRpcMessageJsonContext.Default.NativeRpcCapabilityFailure)
         });
     }
 
-    private static byte[] Encode(JsonObject response)
-    {
-        using var buffer = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            response.WriteTo(writer);
-        }
-
-        return buffer.ToArray();
-    }
+    private static byte[] Encode(NativeRpcResponse response) =>
+        JsonSerializer.SerializeToUtf8Bytes(response, NativeRpcMessageJsonContext.Default.NativeRpcResponse);
 
     private static JsonObject LoadContract()
     {

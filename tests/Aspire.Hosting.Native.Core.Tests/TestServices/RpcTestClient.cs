@@ -22,8 +22,8 @@ internal sealed class RpcTestClient : IDisposable
     {
     }
 
-    public RpcTestClient(NativeApplicationServer server, NativeRpcControl control)
-        : this(new NativeRpcConnection(Token, server, control), authenticate: true)
+    public RpcTestClient(NativeApplicationServer server, NativeLanguageCatalog languages)
+        : this(new NativeRpcConnection(Token, server, languages), authenticate: true)
     {
     }
 

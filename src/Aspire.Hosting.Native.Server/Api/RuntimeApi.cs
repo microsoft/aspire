@@ -17,9 +17,14 @@ internal sealed class NativeApplicationServer
     {
     }
 
-    public NativeApplicationServer(IWorkloadExecutor executor)
+    public NativeApplicationServer(IWorkloadExecutor executor) : this(executor, new())
     {
-        _invitations = new(executor);
+    }
+
+    public NativeApplicationServer(IWorkloadExecutor executor, NativeRuntimeOptions options)
+    {
+        options.Validate();
+        _invitations = new(executor, options);
     }
 
     /// <summary>Opens an application session owned by this connection.</summary>
@@ -60,7 +65,7 @@ internal sealed class ApplicationExecution : ICapabilityLifetime
     {
         _composition = composition;
         _invitations = invitations;
-        Runtime = new RuntimeGeneration(composition.Model.Seal(), invitations.Executor);
+        Runtime = new RuntimeGeneration(composition.Model.Seal(), invitations.Executor, invitations.Options);
         invitations.Track(Runtime);
     }
 
@@ -123,7 +128,7 @@ internal sealed class ResourceExecution(RuntimeResourceOwner owner) : ICapabilit
         ArgumentNullException.ThrowIfNull(container);
         ValidateLaunch(container.Environment, container.Arguments);
         ArgumentException.ThrowIfNullOrWhiteSpace(container.Image);
-        if (container.Image.Length > 2048 || container.TargetPort is < 1 or > 65535)
+        if (container.Image.Length > 2048 || container.TargetPort is < 0 or > 65535)
         {
             throw new ArgumentException("Invalid container launch.");
         }
@@ -377,14 +382,20 @@ internal sealed class RuntimeInvitations
     private readonly List<ApplicationWorkspace> _workspaces = [];
     private ApplicationObserver? _observer;
     public IWorkloadExecutor Executor { get; }
+    public NativeRuntimeOptions Options { get; }
 
     public RuntimeInvitations() : this(UnavailableWorkloadExecutor.Instance)
     {
     }
 
-    public RuntimeInvitations(IWorkloadExecutor executor)
+    public RuntimeInvitations(IWorkloadExecutor executor) : this(executor, new())
+    {
+    }
+
+    public RuntimeInvitations(IWorkloadExecutor executor, NativeRuntimeOptions options)
     {
         Executor = executor;
+        Options = options;
     }
 
     public ApplicationWorkspace CreateWorkspace()

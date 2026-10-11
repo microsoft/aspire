@@ -4,13 +4,10 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Security;
-using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using Aspire.Shared;
+using Aspire.Hosting.Native.Server;
 
 namespace Aspire.Hosting.Native.Dcp;
 
@@ -21,8 +18,18 @@ internal sealed class DcpApiClient : IAsyncDisposable
     private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-native-dcp-");
     private Process? _process;
     private HttpClient? _client;
-    private X509Certificate2? _authority;
-    private X509Certificate2? _certificate;
+    private DcpConnectionMaterial? _connection;
+    private readonly NativeServerOptions _options;
+
+    public DcpApiClient() : this(new())
+    {
+    }
+
+    public DcpApiClient(NativeServerOptions options)
+    {
+        options.Validate();
+        _options = options;
+    }
 
     public async Task StartAsync(string executable, CancellationToken cancellationToken)
     {
@@ -47,97 +54,30 @@ internal sealed class DcpApiClient : IAsyncDisposable
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
-        DcpKubeconfigData configuration;
-        while (true)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_process.HasExited)
-            {
-                throw new InvalidOperationException("DCP exited before publishing its connection material.");
-            }
-            configuration = File.Exists(kubeconfig)
-                ? DcpKubeconfigData.Parse(await File.ReadAllTextAsync(kubeconfig, cancellationToken).ConfigureAwait(false))
-                : new DcpKubeconfigData(null, null, null, null, null);
-            if (configuration.Server is not null && configuration.CertificateAuthorityData is not null &&
-                (configuration.Token is not null || configuration.ClientCertificateData is not null && configuration.ClientKeyData is not null))
-            {
-                break;
-            }
-            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-        }
-        if (!Uri.TryCreate(configuration.Server, UriKind.Absolute, out var server) ||
-            server.Scheme != Uri.UriSchemeHttps || !server.IsLoopback)
-        {
-            throw new InvalidOperationException("DCP must advertise a loopback HTTPS endpoint.");
-        }
-        _authority = X509CertificateLoader.LoadCertificate(Convert.FromBase64String(configuration.CertificateAuthorityData));
-        var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (_, certificate, chain, errors) =>
-            {
-                if (certificate is null || chain is null || (errors & SslPolicyErrors.RemoteCertificateNameMismatch) != 0)
-                {
-                    return false;
-                }
-                chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-                chain.ChainPolicy.CustomTrustStore.Add(_authority);
-                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-
-                return chain.Build(certificate);
-            }
-        };
-        if (configuration.ClientCertificateData is not null && configuration.ClientKeyData is not null)
-        {
-            _certificate = X509Certificate2.CreateFromPem(
-                Encoding.UTF8.GetString(Convert.FromBase64String(configuration.ClientCertificateData)),
-                Encoding.UTF8.GetString(Convert.FromBase64String(configuration.ClientKeyData)));
-            handler.ClientCertificates.Add(_certificate);
-        }
-        _client = new HttpClient(handler) { BaseAddress = server, Timeout = TimeSpan.FromSeconds(20) };
-        if (configuration.Token is not null)
-        {
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", configuration.Token);
-        }
-        // DCP publishes kubeconfig before binding the HTTPS listener.
-        while (true)
-        {
-            try
-            {
-                using var response = await _client.GetAsync("/readyz", cancellationToken).ConfigureAwait(false);
-                if (response.IsSuccessStatusCode)
-                {
-                    return;
-                }
-                if (response.StatusCode != HttpStatusCode.ServiceUnavailable)
-                {
-                    throw new InvalidOperationException($"DCP readiness failed ({(int)response.StatusCode}).");
-                }
-            }
-            catch (HttpRequestException exception) when (!_process.HasExited &&
-                exception.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionRefused })
-            {
-                Console.Error.WriteLine("Waiting for the DCP API listener.");
-            }
-            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-        }
+        _connection = await DcpConnectionMaterial.WaitAsync(kubeconfig, () => _process.HasExited,
+            _options.ControllerRequestTimeout, _options.RetryInterval, Console.Error.WriteLine,
+            cancellationToken).ConfigureAwait(false);
+        _client = _connection.Client;
     }
 
-    public Task<JsonObject?> GetAsync(string collection, string name, CancellationToken cancellationToken) =>
-        SendAsync(HttpMethod.Get, Api + collection + "/" + name, null, cancellationToken);
+    public async Task<DcpResource?> GetAsync(string collection, string name, CancellationToken cancellationToken)
+    {
+        var response = await SendAsync(HttpMethod.Get, Api + collection + "/" + name, null, cancellationToken).ConfigureAwait(false);
 
-    public async Task CreateAsync(string collection, string name, JsonObject spec, JsonObject? annotations, CancellationToken cancellationToken)
+        return response?.Deserialize(DcpJsonContext.Default.DcpResource);
+    }
+
+    public async Task CreateAsync(string collection, string name, JsonElement spec, Dictionary<string, string>? annotations,
+        CancellationToken cancellationToken)
     {
         var kind = collection switch
         {
             "containers" => "Container", "executables" => "Executable", "services" => "Service",
             _ => throw new ArgumentException("Unsupported DCP resource collection.", nameof(collection))
         };
-        await SendAsync(HttpMethod.Post, Api + collection, new JsonObject
-        {
-            ["apiVersion"] = "usvc-dev.developer.microsoft.com/v1", ["kind"] = kind,
-            ["metadata"] = new JsonObject { ["name"] = name, ["annotations"] = annotations },
-            ["spec"] = spec
-        }, cancellationToken).ConfigureAwait(false);
+        var envelope = new DcpResourceEnvelope("usvc-dev.developer.microsoft.com/v1", kind, new DcpMetadata(name, annotations), spec);
+        await SendAsync(HttpMethod.Post, Api + collection,
+            JsonSerializer.SerializeToElement(envelope, DcpJsonContext.Default.DcpResourceEnvelope), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAsync(string collection, string name, CancellationToken cancellationToken)
@@ -145,14 +85,14 @@ internal sealed class DcpApiClient : IAsyncDisposable
         await SendAsync(HttpMethod.Delete, Api + collection + "/" + name, null, cancellationToken).ConfigureAwait(false);
         while (await GetAsync(collection, name, cancellationToken).ConfigureAwait(false) is not null)
         {
-            await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(_options.RetryInterval, cancellationToken).ConfigureAwait(false);
         }
     }
 
     public async Task<string[]> ReadLogsAsync(string collection, string name, string source, long offset, CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        timeout.CancelAfter(_options.ControllerLogReadTimeout);
         var path = $"{Api}{collection}/{name}/log?source={source}&follow=false&timestamps=false&line_numbers=false&limit=128&skip={offset}";
         using var response = await Client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
@@ -169,7 +109,7 @@ internal sealed class DcpApiClient : IAsyncDisposable
 
     private HttpClient Client => _client ?? throw new InvalidOperationException("DCP is not ready.");
 
-    private async Task<JsonObject?> SendAsync(HttpMethod method, string path, JsonObject? body, CancellationToken cancellationToken)
+    private async Task<JsonElement?> SendAsync(HttpMethod method, string path, JsonElement? body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);
         if (body is not null)
@@ -177,7 +117,7 @@ internal sealed class DcpApiClient : IAsyncDisposable
             using var bytes = new MemoryStream();
             using (var writer = new Utf8JsonWriter(bytes))
             {
-                body.WriteTo(writer);
+                body.Value.WriteTo(writer);
             }
             request.Content = new ByteArrayContent(bytes.ToArray());
             request.Content.Headers.ContentType = new MediaTypeHeaderValue(
@@ -193,14 +133,16 @@ internal sealed class DcpApiClient : IAsyncDisposable
             // DCP error payloads may echo environment variables or arguments.
             throw new InvalidOperationException($"DCP {method} failed ({(int)response.StatusCode}).");
         }
-        if (response.StatusCode == HttpStatusCode.NoContent || body?["status"]?.GetValue<string>() == "Stopping")
+        if (response.StatusCode == HttpStatusCode.NoContent || body is { } requestBody &&
+            requestBody.TryGetProperty("status", out var requestStatus) && requestStatus.GetString() == "Stopping")
         {
             return null;
         }
         var payload = await ReadBoundedBodyAsync(response, 1024 * 1024, cancellationToken).ConfigureAwait(false);
 
-        return JsonNode.Parse(payload, documentOptions: new JsonDocumentOptions { MaxDepth = 32 })?.AsObject()
-            ?? throw new InvalidDataException("DCP returned an empty response.");
+        using var document = JsonDocument.Parse(payload, new JsonDocumentOptions { MaxDepth = 32 });
+
+        return document.RootElement.Clone();
     }
 
     private static async Task<byte[]> ReadBoundedBodyAsync(HttpResponseMessage response, int limit, CancellationToken cancellationToken)
@@ -223,25 +165,24 @@ internal sealed class DcpApiClient : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var cleanup = new CancellationTokenSource(_options.CleanupTimeout);
         try
         {
             if (_client is not null && _process is { HasExited: false })
             {
                 // Use DCP's dependency-aware cleanup, not process exit or API
                 // disappearance as a proxy for Docker removal.
-                await SendAsync(HttpMethod.Patch, "admin/execution", new JsonObject
+                await SendAsync(HttpMethod.Patch, "admin/execution", JsonSerializer.SerializeToElement(
+                    new DcpExecutionRequest("CleaningResources", "Full"), DcpJsonContext.Default.DcpExecutionRequest),
+                    cleanup.Token).ConfigureAwait(false);
+                while ((await SendAsync(HttpMethod.Get, "admin/execution", null, cleanup.Token).ConfigureAwait(false))?
+                    .Deserialize(DcpJsonContext.Default.DcpExecutionResponse)?.Status != "CleanupComplete")
                 {
-                    ["status"] = "CleaningResources", ["shutdownResourceCleanup"] = "Full"
-                }, cleanup.Token).ConfigureAwait(false);
-                while ((await SendAsync(HttpMethod.Get, "admin/execution", null, cleanup.Token).ConfigureAwait(false))?["status"]?.GetValue<string>() != "CleanupComplete")
-                {
-                    await Task.Delay(100, cleanup.Token).ConfigureAwait(false);
+                    await Task.Delay(_options.RetryInterval, cleanup.Token).ConfigureAwait(false);
                 }
-                await SendAsync(HttpMethod.Patch, "admin/execution", new JsonObject
-                {
-                    ["status"] = "Stopping", ["shutdownResourceCleanup"] = "Full"
-                }, cleanup.Token).ConfigureAwait(false);
+                await SendAsync(HttpMethod.Patch, "admin/execution", JsonSerializer.SerializeToElement(
+                    new DcpExecutionRequest("Stopping", "Full"), DcpJsonContext.Default.DcpExecutionRequest),
+                    cleanup.Token).ConfigureAwait(false);
                 await _process.WaitForExitAsync(cleanup.Token).ConfigureAwait(false);
             }
         }
@@ -253,9 +194,7 @@ internal sealed class DcpApiClient : IAsyncDisposable
                 await _process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
             }
             _process?.Dispose();
-            _client?.Dispose();
-            _authority?.Dispose();
-            _certificate?.Dispose();
+            _connection?.Dispose();
             if (Directory.Exists(_directory.FullName))
             {
                 _directory.Delete(recursive: true);

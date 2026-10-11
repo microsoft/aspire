@@ -4,6 +4,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Aspire.Hosting.Native.Api;
+using Aspire.Hosting.Native.Server;
 
 namespace Aspire.Hosting.Native.Rpc;
 
@@ -13,8 +14,9 @@ internal sealed class NativeRpcListener : IDisposable
     private readonly Socket _listener;
     private readonly string _token;
     private readonly NativeApplicationServer _server;
-    private readonly NativeRpcControl? _control;
+    private readonly NativeLanguageCatalog? _languages;
     private readonly Action<string> _diagnostic;
+    private readonly NativeServerOptions _options;
     private int _running;
 
     public EndPoint EndPoint => _listener.LocalEndPoint!;
@@ -30,10 +32,18 @@ internal sealed class NativeRpcListener : IDisposable
     }
 
     public NativeRpcListener(EndPoint endPoint, string token, Action<string> diagnostic, NativeApplicationServer server,
-        NativeRpcControl? control)
+        NativeLanguageCatalog? languages)
+        : this(endPoint, token, diagnostic, server, languages, new())
     {
+    }
+
+    public NativeRpcListener(EndPoint endPoint, string token, Action<string> diagnostic, NativeApplicationServer server,
+        NativeLanguageCatalog? languages, NativeServerOptions options)
+    {
+        options.Validate();
+        _options = options;
         _server = server;
-        _control = control;
+        _languages = languages;
         if (endPoint is not UnixDomainSocketEndPoint &&
             (endPoint is not IPEndPoint ip || !IPAddress.IsLoopback(ip.Address)))
         {
@@ -47,7 +57,7 @@ internal sealed class NativeRpcListener : IDisposable
         try
         {
             _listener.Bind(endPoint);
-            _listener.Listen(32);
+            _listener.Listen(options.MaximumConnections);
         }
         catch
         {
@@ -71,7 +81,7 @@ internal sealed class NativeRpcListener : IDisposable
                 await Task.WhenAll(connections.Where(task => task.IsCompleted)).ConfigureAwait(false);
                 connections.RemoveAll(task => task.IsCompletedSuccessfully);
                 var socket = await _listener.AcceptAsync(lifetime.Token).ConfigureAwait(false);
-                if (connections.Count >= 32)
+                if (connections.Count >= _options.MaximumConnections)
                 {
                     _diagnostic("Native connection rejected: connection capacity reached.");
                     socket.Dispose();
@@ -92,8 +102,10 @@ internal sealed class NativeRpcListener : IDisposable
             }
             finally
             {
+                _diagnostic("Native connections drained; retiring workloads.");
                 _server.Close();
                 await _server.DrainAsync().ConfigureAwait(false);
+                _diagnostic("Native workloads drained.");
             }
         }
     }
@@ -101,11 +113,11 @@ internal sealed class NativeRpcListener : IDisposable
     private async Task RunConnectionAsync(Socket socket, CancellationToken cancellationToken)
     {
         using var stream = new NetworkStream(socket, ownsSocket: true);
-        using var connection = new NativeRpcConnection(_token, _server, _control);
+        using var connection = new NativeRpcConnection(_token, _server, _languages, _options);
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        lifetime.CancelAfter(TimeSpan.FromSeconds(10));
+        lifetime.CancelAfter(_options.AuthenticationTimeout);
         using var writes = new SemaphoreSlim(1);
-        var framing = new NativeRpcFraming(stream);
+        var framing = new NativeRpcFraming(stream, _options.MaximumRequestBytes);
         var requests = new List<Task>();
         try
         {
@@ -113,7 +125,7 @@ internal sealed class NativeRpcListener : IDisposable
             {
                 await Task.WhenAll(requests.Where(task => task.IsCompleted)).ConfigureAwait(false);
                 requests.RemoveAll(task => task.IsCompletedSuccessfully);
-                if (requests.Count >= 128)
+                if (requests.Count >= _options.MaximumConcurrentRequests)
                 {
                     throw new InvalidDataException("The connection response backlog exceeds the limit.");
                 }
@@ -153,7 +165,6 @@ internal sealed class NativeRpcListener : IDisposable
                 try
                 {
                     await NativeRpcFraming.WriteAsync(stream, response, lifetime.Token).ConfigureAwait(false);
-                    connection.ResponseWritten(payload);
                 }
                 finally
                 {

@@ -3,6 +3,7 @@
 
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.Native.Api;
+using Aspire.Hosting.Native.Runtime;
 using Grpc.Core;
 using Google.Protobuf.WellKnownTypes;
 using ProtoService = Aspire.DashboardService.Proto.V1.DashboardService;
@@ -10,7 +11,7 @@ using ProtoService = Aspire.DashboardService.Proto.V1.DashboardService;
 namespace Aspire.Hosting.Native.Dashboard;
 
 /// <summary>Maps scoped native observation capabilities onto the Dashboard gRPC wire contract.</summary>
-internal sealed class NativeDashboardService(NativeApplicationServer server, string applicationName)
+internal sealed class NativeDashboardService(NativeApplicationServer server, string applicationName, NativeRuntimeOptions options)
     : ProtoService.DashboardServiceBase
 {
     public override Task<ApplicationInformationResponse> GetApplicationInformation(
@@ -79,7 +80,7 @@ internal sealed class NativeDashboardService(NativeApplicationServer server, str
                 previousObserver = observer;
                 version = observations?.Version ?? -1;
             }
-            await Task.Delay(250, context.CancellationToken).ConfigureAwait(false);
+            await Task.Delay(options.ObservationInterval, context.CancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -126,7 +127,7 @@ internal sealed class NativeDashboardService(NativeApplicationServer server, str
             {
                 return;
             }
-            await Task.Delay(250, context.CancellationToken).ConfigureAwait(false);
+            await Task.Delay(options.ObservationInterval, context.CancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -263,7 +264,7 @@ internal sealed class NativeDashboardService(NativeApplicationServer server, str
                     {
                         await responseStream.WriteAsync(update, lifetime.Token).ConfigureAwait(false);
                     }
-                    await Task.Delay(250, lifetime.Token).ConfigureAwait(false);
+                    await Task.Delay(options.ObservationInterval, lifetime.Token).ConfigureAwait(false);
                 }
             }
             finally

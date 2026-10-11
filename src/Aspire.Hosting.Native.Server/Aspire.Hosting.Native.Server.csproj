@@ -19,10 +19,12 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Grpc.AspNetCore" />
     <Compile Include="../Shared/DcpKubeconfigData.cs" Link="Dcp/DcpKubeconfigData.cs" />
+    <Compile Include="../Shared/DcpConnectionMaterial.cs" Link="Dcp/DcpConnectionMaterial.cs" />
     <Protobuf Include="../Aspire.Hosting/Dashboard/proto/dashboard_service.proto" GrpcServices="Both" Access="Internal" />
     <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Native.Core.AotSmoke" />
     <EmbeddedResource Include="$(NativeGeneratedDirectory)contract.json" LogicalName="Aspire.Hosting.Native.Rpc.contract.json" />
+    <EmbeddedResource Include="$(NativeGeneratedDirectory)languages.json" LogicalName="NativeLanguages.json" />
     <EmbeddedResource Include="$(NativeGeneratedDirectory)aspire.mts" LogicalName="NativeSdk.aspire.mts" />
     <EmbeddedResource Include="$(NativeGeneratedDirectory)base.mts" LogicalName="NativeSdk.base.mts" />
     <EmbeddedResource Include="$(NativeGeneratedDirectory)transport.mts" LogicalName="NativeSdk.transport.mts" />

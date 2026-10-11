@@ -10,10 +10,28 @@ import { chromium, type Browser, type Page } from 'playwright';
 /** Runs the actual Dashboard against the published native resource-service endpoint. */
 export class NativeDashboardSmoke {
     private constructor(
-        private readonly process: ReturnType<typeof spawn>,
+        private readonly process: ReturnType<typeof spawn> | undefined,
         private readonly browser: Browser,
         readonly page: Page
     ) { }
+
+    static async attach(address: string): Promise<NativeDashboardSmoke> {
+        const browser = await chromium.launch({ headless: true });
+        try {
+            const page = await browser.newPage();
+            await page.goto(address);
+            try {
+                await page.getByRole('heading', { name: 'Resources', exact: true }).waitFor();
+            } catch (error) {
+                console.error(await page.locator('body').innerText());
+                throw error;
+            }
+            return new NativeDashboardSmoke(undefined, browser, page);
+        } catch (error) {
+            await browser.close();
+            throw error;
+        }
+    }
 
     static async start(dashboardDll: string, resourceService: string, apiKey: string): Promise<NativeDashboardSmoke> {
         const dashboard = spawn('dotnet', [dashboardDll], {
@@ -97,10 +115,11 @@ export class NativeDashboardSmoke {
         try {
             await this.browser.close();
         } finally {
-            if (this.process.exitCode === null && this.process.signalCode === null) {
-                const exit = once(this.process, 'exit');
-                this.process.kill('SIGTERM');
-                const deadline = setTimeout(() => this.process.kill('SIGKILL'), 10_000);
+            const process = this.process;
+            if (process && process.exitCode === null && process.signalCode === null) {
+                const exit = once(process, 'exit');
+                process.kill('SIGTERM');
+                const deadline = setTimeout(() => process.kill('SIGKILL'), 10_000);
                 try {
                     await exit;
                 } finally {

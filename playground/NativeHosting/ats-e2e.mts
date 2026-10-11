@@ -18,6 +18,7 @@ const work = await mkdtemp(join(tmpdir(), 'aspire-ats-'));
 const binary = resolve(process.env.NATIVE_HOSTING_ATS_BINARY ?? 'artifacts/native-hosting/ats-server/NativeHosting.AtsServer');
 const dcp = resolve(process.env.NATIVE_HOSTING_DCP ?? '/Users/davidfowler/.nuget/packages/microsoft.developercontrolplane.darwin-arm64/0.26.5/tools/dcp');
 const auth = randomUUID();
+const registrationId = randomUUID();
 const children: ChildProcessWithoutNullStreams[] = [];
 const results: Record<string, unknown> = {};
 const launch = (executable: string, args: string[], env: Record<string, string>) => {
@@ -56,7 +57,7 @@ function assertContainersRemoved(ids: (string | null)[]) {
 }
 try {
     const mockDirectory = await prepare('mock');
-    const mock = launch(binary, ['--stdio'], { ASPIRE_REMOTE_APPHOST_TOKEN: auth, NATIVE_HOSTING_DCP: dcp });
+    const mock = launch(binary, ['--stdio'], { ASPIRE_REMOTE_APPHOST_TOKEN: auth, NATIVE_HOSTING_DCP: dcp, ASPIRE_INTEGRATION_HOST_REGISTRATION_ID: registrationId });
     const connection = rpc.createMessageConnection(new rpc.StreamMessageReader(mock.child.stdout), new rpc.StreamMessageWriter(mock.child.stdin));
     if (!(mock.child.stdout instanceof Socket)) throw new Error('The mock requires a socket-backed process pipe.');
     const client = AspireClient.fromConnection(connection, mock.child.stdout, () => {});
@@ -83,7 +84,7 @@ try {
     // A mock guest and integration host share the same parent-owned stdio pipe.
     // Socket mode below separates them using the real integration-host runtime.
     const mockBuilder = await createNativeBuilder(client);
-    await connection.sendRequest('registerAsIntegrationHost', 'mock-ports');
+    await connection.sendRequest('registerAsIntegrationHost', registrationId);
     configureTunnel({
         executable: process.execPath, prefix: [join(directory, 'devtunnel-fixture.mts')],
         environment: { ASPIRE_TUNNEL_FIXTURE_DIR: join(mockDirectory, 'fixture') }, localFixture: true,
@@ -109,7 +110,8 @@ try {
 
     const socketPath = join(work, 'apphost.sock');
     const env = { REMOTE_APP_HOST_SOCKET_PATH: socketPath, ASPIRE_REMOTE_APPHOST_TOKEN: auth, NATIVE_HOSTING_DCP: dcp };
-    const server = launch(binary, [], env);
+    const hostRegistrationId = randomUUID();
+    const server = launch(binary, [], { ...env, ASPIRE_INTEGRATION_HOST_REGISTRATION_ID: hostRegistrationId });
     await waitFor(async () => {
         try { return (await stat(socketPath)).isSocket(); }
         catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
@@ -124,12 +126,12 @@ try {
     probe.onRequest('getCapabilities', () => ({
         protocolVersion: 2, capabilities: [{ id: 'NativeHosting.Ats/addRedis' }, { id: 'unknown/export' }],
     }));
-    await assert.rejects(probe.sendRequest('registerAsIntegrationHost', 'invalid-host'), /known and unique/);
+    await assert.rejects(probe.sendRequest('registerAsIntegrationHost', 'invalid-host'), /registration authority/);
     const hostDirectory = join(work, 'host');
     await mkdir(hostDirectory);
     await mkdir(join(hostDirectory, 'fixture'));
     const host = launch(process.execPath, [join(directory, 'ats-integration-host.mts')], {
-        ...env, ASPIRE_INTEGRATION_HOST_REGISTRATION_ID: randomUUID(),
+        ...env, ASPIRE_INTEGRATION_HOST_REGISTRATION_ID: hostRegistrationId,
         NATIVE_HOSTING_TUNNEL_FIXTURE: join(hostDirectory, 'fixture'),
         NATIVE_HOSTING_PORT_DATA_DIRECTORY: hostDirectory,
     });
