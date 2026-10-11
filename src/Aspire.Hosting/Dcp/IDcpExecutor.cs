@@ -14,4 +14,6 @@ internal interface IDcpExecutor
     Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken);
 
     Task StopResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken);
+
+    Task ResetResourceVolumesAsync(IResourceReference resourceReference, CancellationToken cancellationToken);
 }

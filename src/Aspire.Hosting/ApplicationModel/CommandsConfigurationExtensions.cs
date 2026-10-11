@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Text;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,11 @@ internal static class CommandsConfigurationExtensions
             },
             updateState: context =>
             {
+                if (IsVolumeResetInProgress(context.ResourceSnapshot))
+                {
+                    return ResourceCommandState.Disabled;
+                }
+
                 var state = context.ResourceSnapshot.State?.Text;
                 if (IsStarting(state) || IsBuilding(state) || IsRuntimeUnhealthy(state) || HasNoState(state))
                 {
@@ -68,6 +74,11 @@ internal static class CommandsConfigurationExtensions
             },
             updateState: context =>
             {
+                if (IsVolumeResetInProgress(context.ResourceSnapshot))
+                {
+                    return ResourceCommandState.Disabled;
+                }
+
                 var state = context.ResourceSnapshot.State?.Text;
                 if (IsStopping(state))
                 {
@@ -109,6 +120,11 @@ internal static class CommandsConfigurationExtensions
             },
             updateState: context =>
             {
+                if (IsVolumeResetInProgress(context.ResourceSnapshot))
+                {
+                    return ResourceCommandState.Disabled;
+                }
+
                 var state = context.ResourceSnapshot.State?.Text;
                 if (IsStarting(state) || IsStopping(state) || IsStopped(state) || IsWaiting(state) || IsBuilding(state) || IsRuntimeUnhealthy(state) || HasNoState(state))
                 {
@@ -131,6 +147,41 @@ internal static class CommandsConfigurationExtensions
             AddRebuildCommand(resource);
         }
 
+        if (resource.Annotations.OfType<ContainerMountAnnotation>().Any(m => m.Type == ContainerMountType.Volume))
+        {
+            resource.Annotations.Add(new ResourceCommandAnnotation(
+                name: KnownResourceCommands.ResetVolumesCommand,
+                displayName: CommandStrings.ResetVolumesName,
+                executeCommand: async context =>
+                {
+                    var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
+                    await orchestrator.ResetResourceVolumesAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                    return new ExecuteCommandResult
+                    {
+                        Success = true,
+                        Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceVolumesReset, resource.GetResolvedDisplayResourceName(context.ResourceName))
+                    };
+                },
+                updateState: context =>
+                {
+                    if (IsVolumeResetInProgress(context.ResourceSnapshot))
+                    {
+                        return ResourceCommandState.Disabled;
+                    }
+
+                    var state = context.ResourceSnapshot.State?.Text;
+                    return IsStarting(state) || IsStopping(state) || IsWaiting(state) || IsBuilding(state) || IsRuntimeUnhealthy(state) || HasNoState(state)
+                        ? ResourceCommandState.Disabled
+                        : ResourceCommandState.Enabled;
+                },
+                displayDescription: CommandStrings.ResetVolumesDescription,
+                arguments: null,
+                confirmationMessage: CommandStrings.ResetVolumesConfirmation,
+                iconName: "Delete",
+                iconVariant: IconVariant.Regular,
+                isHighlighted: false));
+        }
+
         // Treat "Unknown" as stopped so the command to start the resource is available when "Unknown".
         // There is a situation where a container can be stopped with this state: https://github.com/microsoft/aspire/issues/5977
         static bool IsStopped(string? state) => KnownResourceStates.TerminalStates.Contains(state) || state == KnownResourceStates.NotStarted || state == "Unknown";
@@ -141,6 +192,9 @@ internal static class CommandsConfigurationExtensions
         static bool IsRuntimeUnhealthy(string? state) => state == KnownResourceStates.RuntimeUnhealthy;
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
     }
+
+    private static bool IsVolumeResetInProgress(CustomResourceSnapshot snapshot)
+        => snapshot.Properties.FirstOrDefault(p => StringComparers.ResourcePropertyName.Equals(p.Name, KnownProperties.Container.VolumeResetState))?.Value is "Pending" or "Running";
 
     private static void AddRebuildCommand(IResource projectResource)
     {
@@ -163,6 +217,11 @@ internal static class CommandsConfigurationExtensions
             },
             updateState: context =>
             {
+                if (IsVolumeResetInProgress(context.ResourceSnapshot))
+                {
+                    return ResourceCommandState.Disabled;
+                }
+
                 var state = context.ResourceSnapshot.State?.Text;
                 return state is not null && KnownResourceStates.BuildableStates.Contains(state)
                     ? ResourceCommandState.Enabled

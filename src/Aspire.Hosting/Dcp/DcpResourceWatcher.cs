@@ -60,6 +60,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     // terminal notification can retry them. Unchanged watch replays are suppressed before reaching this path.
     private readonly ConcurrentDictionary<string, bool> _allLogsFlushed = new();
     private Task? _resourceWatchTask;
+    private readonly object _volumeResetWatchLock = new();
+    private Task? _volumeResetWatchTask;
 
     private readonly record struct LogInformationEntry(string ResourceName, bool? LogsAvailable, bool? HasSubscribers, bool ShouldStartStream);
     private readonly Channel<LogInformationEntry> _logInformationChannel = Channel.CreateUnbounded<LogInformationEntry>(
@@ -149,15 +151,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         var cancellationToken = _shutdownToken;
         var watchResourcesTask = Task.Run(async () =>
         {
-            using (_outputSemaphore)
-            {
-                await Task.WhenAll(
-                    Task.Run(() => WatchKubernetesResourceAsync<Executable>((t, r) => ProcessResourceChange(t, r, _resourceState.ExecutablesMap, Model.Dcp.ExecutableKind, (e, s) => _snapshotBuilder.ToSnapshot(e, s)))),
-                    Task.Run(() => WatchKubernetesResourceAsync<Container>((t, r) => ProcessResourceChange(t, r, _resourceState.ContainersMap, Model.Dcp.ContainerKind, (c, s) => _snapshotBuilder.ToSnapshot(c, s)))),
-                    Task.Run(() => WatchKubernetesResourceAsync<ContainerExec>((t, r) => ProcessResourceChange(t, r, _resourceState.ContainerExecsMap, Model.Dcp.ContainerExecKind, (c, s) => _snapshotBuilder.ToSnapshot(c, s)))),
-                    Task.Run(() => WatchKubernetesResourceAsync<Service>(ProcessServiceChange)),
-                    Task.Run(() => WatchKubernetesResourceAsync<Endpoint>(ProcessEndpointChange))).ConfigureAwait(false);
-            }
+            await Task.WhenAll(
+                Task.Run(() => WatchKubernetesResourceAsync<Executable>((t, r) => ProcessResourceChange(t, r, _resourceState.ExecutablesMap, Model.Dcp.ExecutableKind, (e, s) => _snapshotBuilder.ToSnapshot(e, s)))),
+                Task.Run(() => WatchKubernetesResourceAsync<Container>((t, r) => ProcessResourceChange(t, r, _resourceState.ContainersMap, Model.Dcp.ContainerKind, (c, s) => _snapshotBuilder.ToSnapshot(c, s)))),
+                Task.Run(() => WatchKubernetesResourceAsync<ContainerExec>((t, r) => ProcessResourceChange(t, r, _resourceState.ContainerExecsMap, Model.Dcp.ContainerExecKind, (c, s) => _snapshotBuilder.ToSnapshot(c, s)))),
+                Task.Run(() => WatchKubernetesResourceAsync<Service>(ProcessServiceChange)),
+                Task.Run(() => WatchKubernetesResourceAsync<Endpoint>(ProcessEndpointChange))).ConfigureAwait(false);
         });
 
         _loggerService.SetConsoleLogsService(this);
@@ -224,42 +223,77 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         });
 
         _resourceWatchTask = Task.WhenAll(watchResourcesTask, watchSubscribersTask, watchInformationChannelTask);
+    }
 
-        async Task WatchKubernetesResourceAsync<T>(Func<WatchEventType, T, Task> handler) where T : CustomResource, IKubernetesStaticMetadata
+    private async Task WatchKubernetesResourceAsync<T>(Func<WatchEventType, T, Task> handler) where T : CustomResource, IKubernetesStaticMetadata
+    {
+        var cancellationToken = _shutdownToken;
+        try
         {
-            try
+            _logger.LogDebug("Watching over DCP {ResourceType} resources.", typeof(T).Name);
+            await WatchResourceRetryPipeline.ExecuteAsync(async (pipelineCancellationToken) =>
             {
-                _logger.LogDebug("Watching over DCP {ResourceType} resources.", typeof(T).Name);
-                await WatchResourceRetryPipeline.ExecuteAsync(async (pipelineCancellationToken) =>
+                await foreach (var (eventType, resource) in _kubernetesService.WatchAsync<T>(cancellationToken: pipelineCancellationToken).ConfigureAwait<(global::k8s.WatchEventType, T)>(false))
                 {
-                    await foreach (var (eventType, resource) in _kubernetesService.WatchAsync<T>(cancellationToken: pipelineCancellationToken).ConfigureAwait<(global::k8s.WatchEventType, T)>(false))
-                    {
-                        await _outputSemaphore.WaitAsync(pipelineCancellationToken).ConfigureAwait(false);
+                    await _outputSemaphore.WaitAsync(pipelineCancellationToken).ConfigureAwait(false);
 
-                        try
-                        {
-                            await handler(eventType, resource).ConfigureAwait(false);
-                        }
-                        finally
-                        {
-                            _outputSemaphore.Release();
-                        }
+                    try
+                    {
+                        await handler(eventType, resource).ConfigureAwait(false);
                     }
-                }, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                // Shutdown requested.
-                _logger.LogDebug("Cancellation received while watching {ResourceType} resources.", typeof(T).Name);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogCritical(ex, "Watch task over Kubernetes {ResourceType} resources terminated unexpectedly.", typeof(T).Name);
-            }
-            finally
-            {
-                _logger.LogDebug("Stopped watching {ResourceType} resources.", typeof(T).Name);
-            }
+                    finally
+                    {
+                        _outputSemaphore.Release();
+                    }
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Shutdown requested.
+            _logger.LogDebug("Cancellation received while watching {ResourceType} resources.", typeof(T).Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogCritical(ex, "Watch task over Kubernetes {ResourceType} resources terminated unexpectedly.", typeof(T).Name);
+        }
+        finally
+        {
+            _logger.LogDebug("Stopped watching {ResourceType} resources.", typeof(T).Name);
+        }
+    }
+
+    public void WatchContainerVolumeResets()
+    {
+        lock (_volumeResetWatchLock)
+        {
+            // Start only after the API accepts an operation, so ordinary AppHosts remain
+            // compatible with runtimes that do not expose ContainerVolumeReset.
+            _volumeResetWatchTask ??= Task.Run(() => WatchKubernetesResourceAsync<ContainerVolumeReset>(ProcessContainerVolumeResetChange));
+        }
+    }
+
+    private async Task ProcessContainerVolumeResetChange(WatchEventType eventType, ContainerVolumeReset operation)
+    {
+        if (ProcessResourceChange(_resourceState.ContainerVolumeResetsMap, eventType, operation) == ResourceChangeResult.Ignored)
+        {
+            return;
+        }
+
+        if (_resourceState.ContainersMap.TryGetValue(operation.Spec.ContainerName, out var container) &&
+            container.Metadata.Uid == operation.Spec.ContainerUid &&
+            container.AppModelResourceName is { } resourceName &&
+            _resourceState.ApplicationModel.TryGetValue(resourceName, out var resource))
+        {
+            var status = GetResourceStatus(container);
+            await _executorEvents.PublishAsync(new OnResourceChangedContext(
+                _shutdownToken,
+                DcpExecutor.GetResourceType(container, resource),
+                resource,
+                container.Metadata.Name,
+                status,
+                status.State,
+                snapshot => _snapshotBuilder.ToSnapshot(container, snapshot))).ConfigureAwait(false);
         }
     }
 
@@ -269,6 +303,13 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         if (_resourceWatchTask is { } resourceTask)
         {
             tasks.Add(resourceTask);
+        }
+        lock (_volumeResetWatchLock)
+        {
+            if (_volumeResetWatchTask is { } resetTask)
+            {
+                tasks.Add(resetTask);
+            }
         }
 
         foreach (var (_, logStream) in _logStreams)
@@ -280,6 +321,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         try
         {
             await Task.WhenAll(tasks).WaitAsync(cancellationToken).ConfigureAwait(false);
+            _outputSemaphore.Dispose();
         }
         catch (OperationCanceledException)
         {

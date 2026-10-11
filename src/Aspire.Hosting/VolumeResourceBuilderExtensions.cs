@@ -28,6 +28,10 @@ public static class VolumeResourceBuilderExtensions
     /// AppHost and reuse their named storage on the next run; persistent resources can keep the
     /// compute instance alive and continue using the same storage. Cleaning the AppHost store can
     /// remove local project and executable data.
+    /// Use the dashboard's Reset volumes action or <c>aspire resource &lt;name&gt; reset-volumes</c>
+    /// to explicitly delete volume data. Running containers resume with empty storage, while
+    /// stopped containers remain stopped. Local projects and executables restart. Shared volumes cannot
+    /// be reset, and bind-mounted host directories are never modified.
     /// </remarks>
     /// <example>
     /// <code language="csharp">

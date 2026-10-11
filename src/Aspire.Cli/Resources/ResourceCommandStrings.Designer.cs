@@ -70,6 +70,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Confirm resource commands that require confirmation without prompting.
+        /// </summary>
+        internal static string YesOptionDescription {
+            get {
+                return ResourceManager.GetString("YesOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Available resource commands:.
         /// </summary>
         internal static string AvailableResourceCommands {

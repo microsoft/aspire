@@ -30,12 +30,15 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public ConcurrentQueue<CustomResource> CreatedResources { get; } = [];
     public ConcurrentQueue<string> DeletedResources { get; } = [];
+    public Func<ContainerVolumeReset, ContainerVolumeResetStatus?>? VolumeResetHandler { get; init; }
+    public bool CompleteVolumeResetStartup { get; init; } = true;
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private readonly Action<CustomResource>? _beforeCreate;
     private readonly Func<CustomResource, CancellationToken, Task>? _beforeCreateAsync;
+    private readonly Action<CustomResource>? _afterCreate;
     private readonly bool _allocateServiceAddresses;
     private readonly Action<Type, int>? _watchStarted;
     private readonly Func<WatchEventContext, CancellationToken, Task>? _beforeWatchEventAsync;
@@ -54,7 +57,8 @@ internal sealed class TestKubernetesService : IKubernetesService
         bool allocateServiceAddresses = true,
         Action<Type, int>? watchStarted = null,
         Func<WatchEventContext, CancellationToken, Task>? beforeWatchEventAsync = null,
-        Func<WatchEventContext, CancellationToken, Task>? afterWatchEventAsync = null)
+        Func<WatchEventContext, CancellationToken, Task>? afterWatchEventAsync = null,
+        Action<CustomResource>? afterCreate = null)
     {
         _startStream = startStreamWithFollow ??
             (startStream is not null
@@ -67,6 +71,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         _watchStarted = watchStarted;
         _beforeWatchEventAsync = beforeWatchEventAsync;
         _afterWatchEventAsync = afterWatchEventAsync;
+        _afterCreate = afterCreate;
     }
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken _ = default) where T : CustomResource, IKubernetesStaticMetadata
@@ -85,7 +90,10 @@ internal sealed class TestKubernetesService : IKubernetesService
         );
         if (res == null)
         {
-            throw new ArgumentException($"Resource '{namespaceParameter ?? ""}/{name}' not found");
+            throw new HttpOperationException($"Resource '{namespaceParameter ?? ""}/{name}' not found")
+            {
+                Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.NotFound }, "Not found")
+            };
         }
         return Task.FromResult(res);
     }
@@ -99,6 +107,27 @@ internal sealed class TestKubernetesService : IKubernetesService
         }
 
         var res = Copy(obj);
+
+        if (res is ContainerVolume volume)
+        {
+            volume.Status = new ContainerVolumeStatus { State = ContainerVolumeState.Ready };
+        }
+        if (res is ContainerVolumeReset reset)
+        {
+            reset.Status = VolumeResetHandler is not null
+                ? VolumeResetHandler(reset)
+                : reset.Status ?? new ContainerVolumeResetStatus { State = ContainerVolumeResetState.Succeeded };
+            if (CompleteVolumeResetStartup && reset.Status?.State == ContainerVolumeResetState.Succeeded)
+            {
+                var container = CreatedResources.OfType<Container>().Single(c => c.Metadata.Name == reset.Spec.ContainerName);
+                container.Status = new ContainerStatus
+                {
+                    State = container.Spec.Start is not false && container.Spec.Stop is not true ? ContainerState.Running : ContainerState.Exited,
+                    ContainerId = Guid.NewGuid().ToString()
+                };
+                PushResourceModified(container);
+            }
+        }
 
         // "Allocate" port for a service.
         if (_allocateServiceAddresses && res is Service svc)
@@ -150,6 +179,7 @@ internal sealed class TestKubernetesService : IKubernetesService
             }
         }
 
+        _afterCreate?.Invoke(res);
         return res;
     }
 
@@ -289,6 +319,10 @@ internal sealed class TestKubernetesService : IKubernetesService
             if (!_ignoreDeletes)
             {
                 DeletedResources.Enqueue(name);
+                if (resource is ContainerVolumeReset)
+                {
+                    PushResourceDeleted(resource);
+                }
             }
             return resource;
         }
@@ -304,7 +338,8 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task<List<T>> ListAsync<T>(string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         var res = CreatedResources.OfType<T>().Where(r =>
-            string.Equals(r.Metadata.NamespaceProperty ?? string.Empty, namespaceParameter ?? string.Empty)
+            string.Equals(r.Metadata.NamespaceProperty ?? string.Empty, namespaceParameter ?? string.Empty) &&
+            (r is not ContainerVolumeReset || !DeletedResources.Contains(r.Metadata.Name))
         );
         return Task.FromResult(res.ToList());
     }

@@ -97,4 +97,7 @@
   <data name="CommandSpecificHelpDefaultValue" xml:space="preserve">
     <value>Default: {0}.</value>
   </data>
+  <data name="YesOptionDescription" xml:space="preserve">
+    <value>Confirm resource commands that require confirmation without prompting</value>
+  </data>
 </root>

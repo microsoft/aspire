@@ -4,7 +4,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { executeResourceCommand, ResourceCommandRunner } from '../views/resourceCommandExecution';
 import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../data/AppHostDataRepository';
-import { resourceCommandLogOpenFailed } from '../loc/strings';
+import { resourceCommandLogOpenFailed, yesLabel } from '../loc/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 // Diagnostic log references are only offered as actions when they parse as absolute, and the opened
@@ -63,6 +63,36 @@ suite('executeResourceCommand', () => {
         assert.strictEqual(infoStub.calledOnce, true);
         assert.strictEqual(errorStub.called, false);
         assert.deepStrictEqual(rendered, []);
+    });
+
+    test('confirms destructive commands and places --yes before resource arguments', async () => {
+        const warning = 'Permanently delete volume data?';
+        const confirmation = sandbox.stub(vscode.window, 'showWarningMessage').resolves({ title: yesLabel });
+        const { runner, calls } = makeRunner({ stdout: '', stderr: '' });
+
+        await executeResourceCommand(runner, () => { }, {
+            resourceName: 'database',
+            commandName: 'reset-volumes',
+            confirmationMessage: warning,
+            additionalArgs: ['--', '--option', 'value'],
+        });
+
+        sinon.assert.calledOnceWithExactly(confirmation, warning, { modal: true }, { title: yesLabel });
+        assert.deepStrictEqual(calls, [['database', undefined, 'reset-volumes', ['--yes', '--', '--option', 'value']]]);
+    });
+
+    test('declining confirmation never executes a destructive command', async () => {
+        sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const { runner, calls } = makeRunner({ stdout: '', stderr: '' });
+
+        await assert.rejects(executeResourceCommand(runner, () => { }, {
+            resourceName: 'database',
+            commandName: 'reset-volumes',
+            confirmationMessage: 'Permanently delete volume data?',
+        }), vscode.CancellationError);
+
+        assert.deepStrictEqual(calls, []);
+        sinon.assert.notCalled(infoStub);
     });
 
     test('renders returned command output when stdout is non-empty', async () => {

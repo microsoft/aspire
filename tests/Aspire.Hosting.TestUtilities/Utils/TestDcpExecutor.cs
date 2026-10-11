@@ -49,6 +49,11 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 
     public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken) => Task.CompletedTask;
 
+    public Task ResetResourceVolumesAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException("Volume reset requires the real DCP executor.");
+    }
+
     private sealed class TestResourceReference(IResource modelResource, string dcpResourceName) : IResourceReference
     {
         public IResource ModelResource { get; } = modelResource;

@@ -30,10 +30,28 @@ internal class ResourceSnapshotBuilder
         var environment = GetEnvironmentVariables(container.Status?.EffectiveEnv ?? container.Spec.Env, container.Spec.Env);
         var state = container.Status?.State;
 
-        if (container.Spec.Start is false && (state == null || state == ContainerState.Pending))
+        if (container.Spec.Stop is true && state == ContainerState.NotFound)
+        {
+            // Reset removes the physical container without changing its lifecycle intent.
+            // An intentionally stopped target must still offer ordinary Start.
+            state = KnownResourceStates.Exited;
+        }
+        else if (container.Spec.Start is false && (state is null or ContainerState.Pending or ContainerState.NotFound))
         {
             state = KnownResourceStates.NotStarted;
         }
+
+        // Reset operations have their own lifecycle. Only active operations disable commands;
+        // terminal failures must not hide the unchanged container's normal lifecycle actions.
+        var activeReset = _resourceState.ContainerVolumeResetsMap.Values.FirstOrDefault(operation =>
+            operation.Spec.ContainerName == container.Metadata.Name &&
+            operation.Spec.ContainerUid == container.Metadata.Uid &&
+            operation.IsActive);
+        var properties = activeReset is not null
+            ? previous.Properties.SetResourceProperty(
+                KnownProperties.Container.VolumeResetState,
+                activeReset.Status?.State ?? ContainerVolumeResetState.Pending)
+            : previous.Properties.RemoveResourceProperty(KnownProperties.Container.VolumeResetState);
 
         var relationships = ImmutableArray<RelationshipSnapshot>.Empty;
 
@@ -52,7 +70,7 @@ internal class ResourceSnapshotBuilder
             State = state,
             // Map a container exit code of -1 (unknown) to null
             ExitCode = container.Status?.ExitCode is null or Conventions.UnknownExitCode ? null : container.Status.ExitCode,
-            Properties = previous.Properties.SetResourcePropertyRange([
+            Properties = properties.SetResourcePropertyRange([
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Image, container.Spec.Image),
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Id, containerId),
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Container, KnownProperties.Container.Command, container.Spec.Command),

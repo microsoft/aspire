@@ -13,6 +13,51 @@ namespace Aspire.Hosting.Tests;
 
 public class WithVolumeTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task ResetLocalVolume_DeletesOnlySelectedVolumeData()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration[AspireStore.AspireStorePathKeyName] = workspace.Path;
+        var resource = builder.AddExecutable("worker", "test-command", ".").Resource;
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var selected = VolumeMountPathResolver.GetOrCreateLocalPath(store, resource, "data");
+        var other = VolumeMountPathResolver.GetOrCreateLocalPath(store, resource, "other");
+        await File.WriteAllTextAsync(Path.Combine(selected, "marker.txt"), "delete");
+        await File.WriteAllTextAsync(Path.Combine(other, "marker.txt"), "keep");
+
+        VolumeMountPathResolver.ResetLocalPath(store, resource, "data");
+
+        Assert.Empty(Directory.EnumerateFileSystemEntries(selected));
+        Assert.Equal("keep", await File.ReadAllTextAsync(Path.Combine(other, "marker.txt")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [SkipOnPlatform(TestPlatforms.Windows, "Creating directory symbolic links requires elevated privileges on Windows.")]
+    public async Task ResetLocalVolume_RefusesSymbolicLinks(bool linkParent)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Configuration[AspireStore.AspireStorePathKeyName] = workspace.Path;
+        var resource = builder.AddExecutable("worker", "test-command", ".").Resource;
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+        var path = VolumeMountPathResolver.GetOrCreateLocalPath(store, resource, "data");
+        var target = Path.Combine(workspace.Path, "external");
+        Directory.CreateDirectory(target);
+        var marker = Path.Combine(target, "marker.txt");
+        await File.WriteAllTextAsync(marker, "keep");
+        var linkPath = linkParent ? Path.GetDirectoryName(path)! : path;
+        Directory.Delete(linkPath, recursive: true);
+        Directory.CreateSymbolicLink(linkPath, target);
+
+        Assert.Throws<IOException>(() => VolumeMountPathResolver.ResetLocalPath(store, resource, "data"));
+        Assert.Equal("keep", await File.ReadAllTextAsync(marker));
+    }
+
     [Theory]
     [InlineData(DistributedApplicationOperation.Run)]
     [InlineData(DistributedApplicationOperation.Publish)]
