@@ -40,11 +40,11 @@ internal sealed class UserSecretsDeploymentStateManager : DeploymentStateManager
         {
             // Use the shared manager which handles locking
             await _userSecretsManager.SaveStateAsync(state, cancellationToken).ConfigureAwait(false);
-            logger.LogInformation("Azure resource connection strings saved to user secrets.");
+            logger.LogDebug("Deployment state saved to {Path}", _userSecretsManager.FilePath);
         }
         catch (JsonException ex)
         {
-            logger.LogError(ex, "Failed to provision Azure resources because user secrets file is not well-formed JSON.");
+            logger.LogError(ex, "Failed to save deployment state because user secrets file is not well-formed JSON.");
             throw;
         }
         catch (Exception ex)

@@ -19,6 +19,8 @@ internal sealed class MockUserSecretsManager : IUserSecretsManager
 
     public Dictionary<string, string> Secrets { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    public Exception? SaveStateException { get; set; }
+
     public bool IsAvailable => _isAvailable;
 
     public string FilePath => "/mock/path/secrets.json";
@@ -48,6 +50,6 @@ internal sealed class MockUserSecretsManager : IUserSecretsManager
 
     public Task SaveStateAsync(JsonObject state, CancellationToken cancellationToken = default)
     {
-        return Task.CompletedTask;
+        return SaveStateException is null ? Task.CompletedTask : Task.FromException(SaveStateException);
     }
 }
