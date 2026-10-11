@@ -433,6 +433,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     /// <inheritdoc />
     public Dictionary<string, string> GenerateDistributedApplication(AtsContext context)
+        => GenerateDistributedApplication(context, includeManagedBootstrap: true);
+
+    internal Dictionary<string, string> GenerateDistributedApplication(AtsContext context, bool includeManagedBootstrap)
     {
         var files = new Dictionary<string, string>();
 
@@ -442,7 +445,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         files["integration-host.mts"] = EmbeddedResources.Read("integration-host.mts");
 
         // Generate the capability-based aspire.mts SDK
-        files["aspire.mts"] = GenerateAspireSdk(context);
+        files["aspire.mts"] = GenerateAspireSdk(context, includeManagedBootstrap);
 
         return files;
     }
@@ -450,7 +453,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// <summary>
     /// Generates the aspire.mts SDK file with capability-based API.
     /// </summary>
-    private string GenerateAspireSdk(AtsContext context)
+    private string GenerateAspireSdk(AtsContext context, bool includeManagedBootstrap)
     {
         using var stringWriter = new StringWriter(CultureInfo.InvariantCulture);
         _writer = stringWriter;
@@ -557,7 +560,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         GenerateAspireClient(clientMethods);
 
         // Generate connection helper
-        GenerateConnectionHelper();
+        GenerateConnectionHelper(includeManagedBootstrap);
 
         // Generate global error handling
         GenerateGlobalErrorHandling();
@@ -1924,7 +1927,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
     }
 
-    private void GenerateConnectionHelper()
+    private void GenerateConnectionHelper(bool includeManagedBootstrap)
     {
         var builderHandle = TypeScriptApiProjector.GetHandleTypeName(AtsConstants.BuilderTypeId);
 
@@ -1958,6 +1961,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 return client;
             }
 
+            """);
+        if (includeManagedBootstrap)
+        {
+            WriteLine($$"""
             /**
              * Creates a new distributed application builder.
              * This is the entry point for building Aspire applications.
@@ -1999,6 +2006,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 return new DistributedApplicationBuilderImpl(handle, client);
             }
 
+            """);
+        }
+        WriteLine("""
             // Re-export commonly used types
             export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
             export { refExpr, ReferenceExpression } from './base.mjs';

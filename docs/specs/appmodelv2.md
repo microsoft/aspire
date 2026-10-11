@@ -1,6 +1,6 @@
 # Aspire App Model v2: ATS-native integration authoring
 
-> **Status:** Design exploration alongside `playground/NativeHosting`. This is not a supported API contract.
+> **Status:** Design exploration with an ATS-native kernel, authenticated NativeAOT socket server, DCP execution, resource-preserving model revisions, and a Dashboard gRPC adapter. Local fixtures run through `aspire run` and the actual Dashboard. This is not a supported API contract or a general-purpose replacement AppHost server.
 > **Audience:** Contributors exploring a minimal NativeAOT hosting core and integrations authored in C#, TypeScript, and other languages.
 > **Baseline:** [Aspire Resource Model: Concepts, Design, and Authoring Guidance](appmodel.md).
 > **Related:** [Polyglot integrations](polyglot-integrations.md#single-runtime-representation).
@@ -26,6 +26,40 @@ second CLR model to synchronize with an ATS model.
 The desired guest experience remains ordinary application composition with
 `Add`/`With` methods and build/run lifetime. Preserving useful guest APIs does not
 require preserving the implementation-facing integration API one for one.
+
+### Design test: imagine the core is implemented in Rust
+
+This is a reasoning exercise, not a proposal to rewrite the implementation.
+Could a Rust server implement the same contract without understanding .NET
+services, CLR inheritance, DI, reflection, or framework context objects? If not,
+the contract is carrying implementation machinery rather than model semantics.
+
+The language-neutral core owns entities and identities, schemas and structured
+values, relationships and dependencies, scoped authority, invocation and callback
+lifetimes, execution observations, and interaction state machines. Requests name
+capabilities, carry copied data and opaque handles, and receive explicit results
+or classified failures. A handle denotes granted operations on an entity or
+scope, not an instruction to instantiate a CLR class.
+
+C# attributes, binding facades, dictionaries and locks are implementation/tooling
+choices. C# `Task` and `CancellationToken` are language projections of asynchronous
+completion and cancellation protocols, not concepts a remote server must
+instantiate. A resource type expresses schema and capability applicability, not
+CLR assignability. The first generated IDs follow existing ATS naming conventions;
+their strings are opaque protocol identifiers, not runtime type-loading requests.
+
+There is no service-provider concept in the authoring contract. Callback contexts
+directly carry their authorized resource-execution and interaction capabilities.
+No API fetches a notification service, resolves a logger, or imports a server
+service instance. Model/runtime behavior is defined independently of the C#
+bindings so a different implementation could satisfy the same protocol tests.
+
+A local-only independent Rust reference implements the eight composition
+capabilities to vet the C# NativeAOT implementation with the same ATS bundle and
+generated TypeScript consumer. It is not a shipping implementation, repository
+dependency, or proposed second host. It is kept outside commits and the PR.
+This comparison covers composition only, not execution, Dashboard services,
+callbacks, or diagnostics parity.
 
 ## Architecture and dependency boundary
 
@@ -58,6 +92,640 @@ Metadata scanning and SDK generation can execute outside the native process.
 Application containers and executables declared through the model are owned by
 the core's DCP execution boundary. Integration-host workers belong to their
 host's supervised process scope. These are different ownership domains.
+
+### Primary API: native host exports
+
+**ATS is the primary API contract, not a projection added after designing a
+managed API.** AppHosts and integrations in C#, TypeScript, and other languages
+consume projections of that contract. Native implementation classes are not an
+alternative supported authoring surface. Existing AppHost composition calls
+remain the goal; integration implementations change to use the new core exports.
+
+Use the existing ATS export vocabulary (`AspireExport`, `AspireDto`, unions,
+handles and callbacks). Do not invent a second native IDL or independently
+maintain C# and TypeScript signatures. Initially, explicit exports on small C#
+facades are the authoritative declarations. Offline tooling normalizes them into
+one ATS contract bundle. The facades contain real bindings to tested server
+components, not throwing declaration stubs or implementations copied from the
+playground. Their internal constructors receive explicitly wired services;
+those services and their constructors are not exported.
+
+The symbolic kernel remains independent of export attributes and tooling.
+Facades sit at the ATS boundary and translate projected inputs into kernel and
+runtime operations. Export attributes must have a small shared definition source
+usable without referencing `Aspire.Hosting`. The nonshipping
+`Aspire.Hosting.Ats.Abstractions` project now compiles the existing attribute
+sources once for native consumers; it does not change their shipped definitions
+in managed Hosting. Do not make per-project copies of attribute classes the
+production solution. Scanner, analyzer, generator, and contract-inspection dependencies are
+build/tool dependencies, not runtime dependencies.
+
+```mermaid
+flowchart LR
+    Declarations["Explicit ATS exports<br/>facades + DTOs + docs"]
+    Validation["Offline scan + validation"]
+    Bundle["Normalized ATS contract bundle"]
+    Dispatch["Generated native dispatch<br/>handle codecs + JSON serializers"]
+    Projections["Generated client projections<br/>C# / TypeScript / other languages"]
+    Server["AppHost server<br/>statically bound services"]
+    Consumers["AppHost + integration host"]
+    Declarations --> Validation --> Bundle
+    Bundle --> Dispatch --> Server
+    Bundle --> Projections --> Consumers
+    Consumers <-->|"authenticated ATS calls + callbacks"| Server
+```
+
+#### Export authoring and delivery process
+
+1. **Design the consumer call first.** Show C# and TypeScript use from an AppHost
+   or integration callback. Specify the receiver, applicability, lifecycle phase,
+   ownership, cancellation, result, failure classifications, and documentation.
+   A conceptual API must have the same semantics in every language.
+2. **Declare a narrow export.** Use a purpose-built facade/handle and explicit
+   exported members. DTOs carry copied data; handles carry live authority;
+   callbacks carry registered behavior. Do not export service providers,
+   framework loggers, mutable service instances, or arbitrary CLR objects.
+   A live handle or callback is not hidden inside a DTO.
+3. **Bind it to a tested component.** The facade delegates to the model,
+   notification, logging, command, or interaction component. Validation at this
+   boundary includes session/generation, owner, receiver applicability and mode,
+   not just JSON shape. Inputs cannot supply their own permission or owner.
+4. **Generate one contract bundle at build time.** Scan and validate capability
+   IDs, receiver/member collisions, DTO shapes, callback signatures and docs.
+   Produce deterministic metadata and implementation bindings from those
+   declarations. Core exports bind to native implementations; integration
+   exports route to authenticated registered providers using validated metadata,
+   not a compiled list of integration names.
+5. **Generate both sides from that bundle.** Emit static native dispatch, typed
+   handle/callback marshalling, and source-generated JSON serializers; generate
+   language client projections and reference documentation from the same data.
+   Unsupported shapes are build errors. No hand-maintained dispatch switch,
+   reflective invocation, runtime scanning, or generated-text surgery.
+6. **Package and advertise the actual surface.** Ship matching native bindings
+   and contract metadata together. The existing CLI code-generation RPCs use
+   that metadata outside the native process. Runtime negotiation advertises the
+   implemented core surface and available integration providers, not APIs merely
+   planned in this spec. Bootstrap is a contract-aware generator input, not a
+   hard-coded managed Hosting helper.
+7. **Gate the API before use.** Inspect generated signatures/docs, compile C#
+   and TypeScript consumers, exercise real RPC calls against the published native
+   server, and measure dependency, binary-size and working-set changes. An export
+   is not delivered merely because its underlying service has unit tests.
+
+An export change updates its declaration, implementation, generated-contract
+expectations and consumer tests together. Generated artifacts are outputs, not
+independent sources to patch. Release API baselines remain release artifacts;
+ordinary development does not manually edit `api/*.cs` or ATS release baselines.
+There must also be a focused check that an export is neither advertised without
+an implementation nor implemented without its generated contract entry.
+
+#### Acquiring the primary APIs
+
+The authenticated bootstrap returns a session-scoped composition handle.
+Composition exports create typed resources, configure structured values and
+relationships, and register behavior. Runtime callbacks receive purpose-built
+context handles. They directly carry only the resource runtime, command, interaction,
+and cancellation capabilities that their owner is allowed to use. This replaces
+`GetService<T>()`, exported `IServiceProvider`, and direct access to server objects.
+
+| API family | Primary receiver | Responsibilities |
+|---|---|---|
+| Composition | Composition/resource handles | Entities, configuration, annotations, references, lifecycle registration |
+| Resource observations | Owner-scoped resource-runtime handle | Publish state/health/endpoints/outputs; inspect or wait through separately authorized views |
+| Resource logs | Owner-scoped resource-runtime handle | Write bounded, resource-attributed console-log entries |
+| Commands | Resource/controller registration and invocation contexts | Register typed operations, route invocation, enforce concurrency and cancellation |
+| Interactions | Authorized interaction handle | Confirmation, inputs, validation callbacks, notifications and progress |
+
+Read authority is not write authority. Model inspection and subscriptions use
+separate applicable views; knowing a resource name or holding a read handle
+does not permit publishing its state or executing its commands. Acquiring a
+runtime writer requires registered controller/executor ownership. Retirement
+revokes its handles, callbacks, subscriptions and outstanding operations.
+Resource observations are run-time APIs, not a way to mutate sealed declarations
+or resolve publish-time expressions early.
+
+The following shows **proposed generated runtime calls**, not an implemented
+runtime SDK. `context` is a controller callback context issued by the server. DTO and
+member names remain provisional, but ownership is deliberately absent from the
+payload: it comes from the server-issued receiver.
+
+```csharp
+await context.Resource.ReportState(
+    new ResourceStateUpdate { State = ResourceExecutionState.Running },
+    cancellationToken);
+await context.Resource.WriteLog(
+    new ResourceLogEntry
+    {
+        Message = "Tunnel forwarding is active.",
+        Stream = ResourceLogStream.Stdout
+    },
+    cancellationToken);
+```
+
+```typescript
+await context.resource.reportState(
+    { state: ResourceExecutionState.Running },
+    cancellationToken);
+await context.resource.writeLog(
+    { message: "Tunnel forwarding is active.", stream: ResourceLogStream.Stdout },
+    cancellationToken);
+```
+
+Both versions perform ATS calls to the same server-owned services. A C#
+integration does not bypass RPC by importing the native implementation assembly.
+Language-specific fluent helpers can compose these exports but cannot introduce
+different authority, defaulting, failure, or lifecycle behavior.
+
+#### Versioning and acceptance
+
+Treat capability IDs, receiver/type IDs, parameter names, DTO field meanings,
+enum values, callback shapes and documented semantics as the external contract.
+CLR method names and assembly layout are not wire authority. Keep established
+IDs stable; distinguish wire-protocol negotiation from API contract compatibility.
+Negotiate required capabilities before composition or provider registration and
+report unsupported requirements explicitly. An absent export is not a successful
+no-op, and caller-supplied metadata cannot manufacture an implemented capability.
+
+Before accepting an export, require component behavior tests, deterministic
+contract/SDK snapshots, generated consumer compilation, and real native RPC
+round trips. Cover invalid payloads and receiver types, forged/foreign/stale
+handles, unauthorized owners, cancellation, callback reentrancy and retirement.
+Long-lived subscriptions need bounded delivery and disposal coverage. Dashboard
+APIs additionally need integration-to-service-to-gRPC-client round trips.
+Diagnostics must correlate the invocation without recording payloads or secrets.
+
+The playground proves offline ATS scanning, TypeScript generation and static
+native dispatch are feasible. Its linked attribute sources, declaration stubs,
+method-name special cases, integration allow-list, and bootstrap text rewriting
+are exploration mechanisms, not the production export process. The production composition slice now has real export bindings, build-time ATS
+generation, a generated TypeScript projection, an authenticated socket listener,
+resource notifications/logs, commands, and confirmation interactions.
+Generated C# projections and general runtime callback contexts remain pending.
+Each slice must pass the same generation and native round-trip
+gates before integrations depend on it.
+
+### Production component boundaries
+
+This is the general AppHost v2 architecture. Its three application-authoring
+roles are the **AppHost**, the **integration host**, and the **AppHost server**
+(the new NativeAOT runtime). The AppHost composes the application; the integration
+host implements integration capabilities; the AppHost server owns the shared
+model and orchestration. AppHost composition in C#, TypeScript, or another
+supported language uses the same ATS model and runtime.
+
+The playground supplies evidence, not production implementations to copy.
+The new host composes narrow components inside one
+`Aspire.Hosting.Native.Server` project. `Core/`, `Api/`, `Rpc/`, `Dcp/`, and
+`Dashboard/` are folders, not separate projects or processes. It does not adapt
+managed Hosting signatures or carry two application models.
+
+```mermaid
+flowchart TB
+    Tools["External ATS tooling<br/>scanner + SDK / dispatch generation"]
+    CLI["Aspire CLI"]
+    AppHost["AppHost<br/>generated ATS SDK<br/>C# / TypeScript / other languages"]
+    IntegrationHost["Integration host<br/>generated core projection"]
+    subgraph Native["AppHost server: NativeAOT"]
+        Root["Composition root<br/>configuration + supervision"]
+        Transport["RPC transport<br/>authentication + framing + cancellation"]
+        ATS["ATS runtime<br/>routing + handles + callbacks"]
+        Catalog["Contract catalog<br/>types + schemas + applicability"]
+        Session["Session / generation ownership"]
+        Model["Symbolic model kernel"]
+        Planner["Execution planner"]
+        Executor["Application executor<br/>lifecycle + controllers + cleanup"]
+        Notifications["ResourceNotificationService equivalent<br/>state + health + outputs + subscriptions"]
+        Logs["ResourceLoggerService equivalent<br/>resource console logs + bounded history"]
+        Commands["Resource command service<br/>registration + invocation + cancellation"]
+        Interactions["Interaction service<br/>prompts + validation + progress + responses"]
+        DashboardService["Dashboard gRPC adapter<br/>resource-service protocol + authentication"]
+        Adapter["DCP adapter<br/>typed HTTPS + source-generated JSON"]
+    end
+    Dashboard["Dashboard process<br/>resource-service client + OTLP ingestion"]
+    DCP["DCP process"]
+    Workloads["Containers / executables"]
+    Tools -.->|"bundled contract artifacts"| Root
+    CLI --> Root
+    Root --> ATS
+    AppHost <--> Transport
+    IntegrationHost <--> Transport
+    Transport --> ATS
+    ATS --> Catalog
+    ATS --> Session
+    ATS --> Model
+    ATS --> Notifications
+    ATS --> Logs
+    ATS --> Commands
+    ATS <--> Interactions
+    Catalog --> Model
+    Session --> Model
+    Model -->|"immutable declarations"| Planner
+    Planner --> Executor
+    Executor --> Notifications
+    Executor --> Logs
+    Commands --> Executor
+    Executor --> Adapter
+    Adapter --> DCP --> Workloads
+    Notifications --> DashboardService
+    Logs --> DashboardService
+    DashboardService --> Commands
+    DashboardService <--> Interactions
+    DashboardService <-->|"resource gRPC: watches, commands, interactions"| Dashboard
+    Workloads -->|"application telemetry: OTLP"| Dashboard
+```
+
+These are component boundaries, not a requirement for one assembly or interface
+per box. Runtime components live in folders inside one native server project.
+Keep code generation in its separate build-time project so compiler and scanner
+dependencies do not enter the executable; do not create a general plugin framework
+in anticipation.
+
+| Component | Owns | Does not own |
+|---|---|---|
+| Composition root | Configuration and process lifetime; explicit wiring | Service-specific integration behavior |
+| RPC transport | Authenticated connections, framing, correlated I/O, cancellation | Resource semantics or reflection dispatch |
+| ATS runtime | Capability routing, authoritative handle views, callback ownership | A second resource graph or integration CLR objects |
+| Contract catalog | Type/schema registration and capability applicability | Permission derived from a caller-supplied type string |
+| Session coordinator | AppHost ownership, generation fencing, awaited cleanup before replacement | Workload state stored in the declaration graph |
+| Symbolic model | Entities, declarations, relationships, schemas, structured values, sealing | Allocated ports, processes, resolved secrets, service clients |
+| Planner | Validated declaration-to-execution plan | Network/process I/O or graph mutation |
+| Executor | Dependency scheduling, lifecycle callbacks, owned controllers and cleanup | Code generation or public API compatibility |
+| DCP adapter | Typed requests, watches, TLS, allocation and administrative cleanup | Redis/PostgreSQL/Dev Tunnels authoring |
+| Resource notification service | Current execution state, health, outputs, resource snapshots, subscriptions and readiness waits | Mutable declarations, integration business logic, or gRPC DTOs |
+| Resource logger service | Resource-scoped console-log publication, bounded history and ordered subscriptions | Host diagnostic events or application OTLP ingestion |
+| Resource command service | Validated registration, owner routing, concurrency and cancellation | Workload lifecycle implementation or UI-only permission checks |
+| Interaction service | Pending interactions, input/validation callbacks, progress and completion ownership | UI rendering or ownership of caller-supplied terminals |
+| Dashboard gRPC adapter | Existing resource-service protocol, authentication, DTO mapping and stream lifetime | Resource-state storage, integration service clients or interaction business rules |
+| Dashboard process | Resource UI and application OTLP ingestion | Authoritative model, resource observations or integration execution |
+| External ATS tooling | Metadata, language projections, native static dispatch and serializers | Assemblies loaded into the native core |
+
+The external toolchain must produce contract artifacts as a normal build input.
+It must not edit generated TypeScript by searching for managed bootstrap text.
+Core calls use generated static dispatch; integration capabilities are described
+and routed by validated metadata, not compiled integration-specific allow-lists.
+The CLI control plane can keep its `generateCode`/runtime negotiation RPCs
+without recreating managed Hosting's exported implementation signatures.
+
+Resource notifications, resource console logs, commands, and interactions are
+first-class AppHost-server services. Integration hosts use generated ATS
+projections to publish observations/logs, register commands, and request
+interactions. They do not reference managed `IResource`, `ILogger`, dependency
+injection containers, or Dashboard protobuf types in the core contract. The
+integration host may adapt its local logging abstractions to the resource-log
+projection. DCP observations enter the same authoritative services through the
+executor, not a parallel Dashboard-only state path.
+
+The Dashboard protocol is an external contract to retain, not a managed Hosting
+compatibility layer. Its gRPC adapter reads these services and routes commands
+and interaction responses back to their owners. The Dashboard stays a separate
+process. Resource console logs travel through the resource-service gRPC protocol;
+application telemetry travels to Dashboard OTLP ingestion. Neither is the same
+as the AppHost server's own operational diagnostics.
+
+### Diagnostics across component boundaries
+
+Every component needs direct tests and observable failure/lifetime boundaries.
+The AppHost, integration host, and AppHost server propagate W3C trace context
+across RPC requests and callbacks. Session, generation, invocation, resource,
+controller, subscription, and interaction identities correlate structured
+events and spans. Operation/outcome classifications are bounded metric dimensions;
+identities, names and user-supplied values are not.
+
+Kernel operations emit BCL `ActivitySource` spans, `Meter` measurements, and a
+typed event feed that works independently of trace sampling. The typed feed
+avoids reflective `DiagnosticSource.Write` payload discovery. Its subscribers
+are trusted, nonblocking, nonthrowing diagnostic sinks, not integration callbacks;
+they must not reenter host APIs or perform synchronous I/O. Cross-process
+propagation and exporters are still pending.
+
+Failures retain their original exceptions for callers. Operational diagnostics
+record classifications rather than configuration, authentication tokens,
+interaction values, or raw exception messages. Tests must cover transport
+disconnects, callback reentrancy, generation retirement, subscription overflow,
+command cancellation, and interaction cancellation with correlated evidence.
+Measure native size, dependencies and working set as each adapter is introduced;
+do not attribute kernel-smoke measurements to the complete AppHost server.
+
+### First production slice
+
+`src/Aspire.Hosting.Native.Server/Core` owns generation-scoped resource identities,
+case-insensitive name uniqueness, acyclic readiness dependencies, synchronized
+composition, and immutable declaration snapshots. Sealing rejects further
+composition. Retirement revokes model access; stale generation retirement cannot
+dispose its replacement. Type identities are namespaced strings at this layer,
+not evidence that a schema exists or that a capability is authorized.
+
+`tests/Aspire.Hosting.Native.Core.Tests` exercises these invariants directly,
+including concurrent declarations and AppHost ownership. Both projects are in
+`Aspire.slnx`; their project-reference edge supplies CI routing without a manual
+trigger-map rule. Core source uses only BCL APIs. Build-time contract compilation
+also checks `Core/` and `Api/` against BCL and ATS-annotation references, without
+ASP.NET Core, DCP, managed Hosting, or integration-client references. The complete
+server includes the gRPC dependencies used by `Dashboard/`.
+
+The declaration owner remains synchronous because it owns only in-memory data.
+The execution coordinator now retires capabilities immediately, cancels owned
+workloads, and awaits their cleanup before accepting a replacement generation.
+Do not equate declaration `Dispose` with completed workload cleanup.
+Values, general integration registration, and execution annotations remain
+separate work beyond the implemented standard container/executable primitives.
+
+Kernel validation on macOS arm64 passed 36 focused MTP tests and a
+published NativeAOT smoke executable that exercises composition, sealing, and
+generation replacement, including diagnostic spans, typed events and metrics:
+
+```bash
+dotnet test --project tests/Aspire.Hosting.Native.Core.Tests/Aspire.Hosting.Native.Core.Tests.csproj \
+  --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet publish tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/Aspire.Hosting.Native.Core.AotSmoke.csproj \
+  -r osx-arm64 -c Release -o artifacts/native-hosting/production-kernel-smoke -v:q
+artifacts/native-hosting/production-kernel-smoke/Aspire.Hosting.Native.Core.AotSmoke
+```
+
+The smoke application now references the consolidated server, including its
+Dashboard gRPC dependencies, and the small ATS attribute assembly.
+Scanner, Roslyn, TypeSystem, TypeScript generation, Semver and managed Hosting
+assemblies remain absent from its runtime dependencies. It is a validation harness, not the
+new native host or a complete host-size measurement. The unit-test project builds the harness
+through a project reference; native publication/execution is an explicit local
+check, not yet an automated CI gate.
+
+The generated composition/RPC slice connects ATS contracts to this kernel.
+Runtime observations, logs, commands, confirmations, framed socket transport,
+standard workload execution, and the DCP and Dashboard adapters are implemented.
+Redis/PostgreSQL/Dev Tunnels migrate only through generated
+core projections. A first real host is complete only when it runs through
+`aspire run`, reexecutes AppHost composition safely, removes its owned workloads, and records
+native binary/working-set measurements without using the playground server.
+Dashboard gRPC, integration-originated resource notifications and console logs,
+commands, and interaction request/response round trips are also required for
+this first working host, not optional follow-up presentation features. These
+services are implemented in runtime and adapter folders, not by introducing
+managed Hosting services or protobuf types into the kernel.
+
+### Implemented native RPC capability slice
+
+`Aspire.Hosting.Native.Server/Api` retains the eight composition exports over the kernel:
+`createSession`, `startGeneration`, `retireGeneration`, `addResource`, `waitFor`,
+`inspectResource`, `inspect`, and `seal`. It also adds runtime notification,
+logger, execution, command, and confirmation
+capabilities, plus workspace revisions and configuration application, for a total of 45 generated exports. The facades are
+internal server bindings; integrations do not link to them for direct calls.
+Resource snapshots contain copied IDs and declarations, not live authority.
+
+`Aspire.Hosting.Native.CodeGeneration` uses the existing ATS scanner outside the
+native process. It embeds the server's exact `Core/` and `Api/` sources and uses
+Roslyn to compile them with the server assembly identity for reflection-based
+scanning. This avoids a circular project reference: the server needs generated
+dispatch before it can compile. Compiler and scanner dependencies are build-time
+only, and generated TypeScript is not rewritten to change identities.
+ATS type IDs now use the consolidated `Aspire.Hosting.Native.Server` assembly;
+the static `createSession` export also uses that assembly prefix. Instance
+capability namespaces remain unchanged. Regenerate clients rather than mixing
+SDK artifacts from the former split projects with this server.
+A normal server-project build emits static dispatch, a
+source-generated JSON context, a normalized contract bundle and the existing
+TypeScript generator's client projections. Unsupported signature shapes fail
+the build. The generator has an explicit option to omit managed bootstrap
+helpers; native generation does not rewrite generated TypeScript text.
+
+`Aspire.Hosting.Native.Server/Rpc` processes authenticated JSON-RPC with the existing
+`invokeCapability` parameter shape and ATS `$error` results. It validates exact
+arguments and server-issued receiver types, bounds request size/depth and handle
+count, rejects duplicate JSON keys, and owns handles per connection. Capacity is
+checked before a handle-producing operation mutates the model. Retirement
+revokes and releases generation handles; a foreign connection cannot reuse them
+or turn a snapshot ID into authority. Connection disposal retires owned sessions.
+The processor resolves authoritative handles under the connection gate and awaits
+asynchronous workload, observation, command, and interaction completion outside
+it. Replies on another request can therefore unblock pending work on the same
+connection. The CLI bootstrap accepts bounded W3C trace-context fields and
+propagates them into typed diagnostics without recording payloads or tokens.
+
+The smoke executable's `--rpc` mode is a line-delimited subprocess test transport,
+not the production network listener. The checked-in `NativeRpcSmoke.mts` consumer
+uses actual generated wrappers against that published native process. It exercises
+resource creation, dependency composition, copied snapshots, sealing, retired
+handles and repeated generation replacement. Protocol tests and a complete
+contract snapshot cover the same boundary in the native test project.
+
+On macOS arm64, the published RPC smoke measured **2,995,728 bytes**, versus
+**2,099,952 bytes** for the preceding kernel/diagnostics smoke. Three resident-set
+samples after 101 generation replacements were **14,172,160 bytes** each.
+These are fixture measurements, not the working set or footprint of the future
+complete AppHost server; Dashboard, DCP, execution and network transport are absent.
+
+Reproduce the native process/SDK boundary after installing the normal repository
+SDK and having Node, TypeScript, Node typings and `vscode-jsonrpc` available. This
+example reuses an existing `extension/node_modules` installation:
+
+```bash
+dotnet test --project tests/Aspire.Hosting.Native.Core.Tests/Aspire.Hosting.Native.Core.Tests.csproj \
+  --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet publish tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/Aspire.Hosting.Native.Core.AotSmoke.csproj \
+  -r osx-arm64 -c Release -o artifacts/native-hosting/production-rpc-smoke -v:q
+mkdir -p artifacts/native-hosting/production-rpc-sdk
+cp artifacts/obj/Aspire.Hosting.Native.Server/Debug/native-ats/*.mts artifacts/native-hosting/production-rpc-sdk/
+cp artifacts/obj/Aspire.Hosting.Native.Server/Debug/native-ats/contract.json artifacts/native-hosting/production-rpc-sdk/
+cp tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/NativeRpcSmoke.mts artifacts/native-hosting/production-rpc-sdk/
+ln -sfn "$PWD/extension/node_modules" artifacts/native-hosting/production-rpc-sdk/node_modules
+node extension/node_modules/typescript/bin/tsc \
+  --strict --module NodeNext --target ES2022 --types node \
+  --typeRoots extension/node_modules/@types \
+  --rootDir artifacts/native-hosting/production-rpc-sdk \
+  --outDir artifacts/native-hosting/production-rpc-sdk/out \
+  artifacts/native-hosting/production-rpc-sdk/*.mts
+node artifacts/native-hosting/production-rpc-sdk/out/NativeRpcSmoke.mjs \
+  "$PWD/artifacts/native-hosting/production-rpc-smoke/Aspire.Hosting.Native.Core.AotSmoke"
+```
+
+### Implemented socket, workload, and Dashboard slice
+
+`Aspire.Hosting.Native.Server` explicitly composes the RPC listener, optional
+DCP executor, and optional Dashboard adapter. The kernel still has no Hosting,
+ASP.NET Core, protobuf, Kubernetes client, or integration-client dependency.
+The `Dashboard/` adapter uses ASP.NET Core gRPC and the existing Dashboard proto
+inside the same server process and executable.
+Publishing with NativeAOT succeeds without AOT-analysis warnings.
+
+The server publishes its RPC socket independently of DCP startup. SDK retrieval
+and authentication can proceed while DCP initializes; workload launch awaits
+successful DCP readiness. `ASPIRE_NATIVE_DCP_PATH` selects the existing DCP tool.
+Container ports are DCP-allocated loopback endpoints. Executable ports use DCP's
+`portForServing` environment substitution, not reserve/release allocation.
+Integration code owns probing and initialization, and must publish healthy only
+after a real check. Readiness dependencies wait for that health.
+
+An authenticated AppHost connection creates execution invitations. Each
+one-use, role-specific invitation grants either exclusive execution for one
+resource or application observation/action authority. The separate integration
+process starts Redis and PostgreSQL, initializes and queries them through their
+allocated endpoints, starts an explicitly local forwarding executable, publishes
+health and logs, services a Redis command, and requests user confirmation.
+Writer disconnect fails the resource and cancels its pending work.
+
+The Dashboard adapter uses `x-resource-service-api-key` authentication on a
+loopback HTTP/2 endpoint. It projects resources, URLs, health, commands, console
+logs, and confirmation interactions using the same native observation
+capabilities. Resource watches publish generation deletions and adopt a
+replacement; replies retain their original generation authority. Unsupported
+file-upload and terminal execution methods remain explicitly unimplemented.
+The empty terminal inventory reflects that no native terminal resource exists.
+
+Local macOS arm64 verification exercised the **same published server** through
+the existing `ASPIRE_CLI_NATIVE_APPHOST_SERVER` override with the real CLI, its
+offline-generated SDK, a separate integration process, DCP, and the actual
+Dashboard process in Chromium. The Dashboard displayed all three running
+resources, and clicking its confirmation button completed the integration's
+pending operation. The Redis command returned the initialized value. Shutdown
+was checked against actual Docker container IDs and the executable PID, not only
+DCP object deletion. A separate socket harness also retired and replaced the
+generation while keeping the server alive.
+
+The full native unit/protocol suite passed **95 tests**, including the reviewed
+and accepted complete ATS contract snapshot. The executable with the gRPC adapter
+and workspace revision APIs measured **14,293,456 bytes**, and one resident-set sample while the CLI, DCP,
+integration worker, and actual Dashboard were running was **42,778,624 bytes**.
+The resident set is for the native server alone, not all distributed processes.
+These are local fixture measurements, not release benchmarks.
+
+Reproduce using the repository-restored SDK, Docker, Node, and an existing
+TypeScript compiler. Install fixture dependencies only under ignored artifacts:
+
+```bash
+dotnet build src/Aspire.Cli/Aspire.Cli.csproj -v:q
+dotnet build src/Aspire.Dashboard/Aspire.Dashboard.csproj -v:q
+dotnet publish src/Aspire.Hosting.Native.Server/Aspire.Hosting.Native.Server.csproj \
+  -r osx-arm64 -c Release -o artifacts/native-hosting/native-server -v:q
+mkdir -p artifacts/native-hosting/runtime-sdk
+cp artifacts/obj/Aspire.Hosting.Native.Server/Release/native-ats/*.mts artifacts/native-hosting/runtime-sdk/
+cp artifacts/obj/Aspire.Hosting.Native.Server/Release/native-ats/contract.json artifacts/native-hosting/runtime-sdk/
+cp tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/*.mts artifacts/native-hosting/runtime-sdk/
+cp tests/Aspire.Hosting.Native.Core.Tests/AotSmoke/CliAppHost/* artifacts/native-hosting/runtime-sdk/
+npm install --prefix artifacts/native-hosting/runtime-sdk --no-save --package-lock=false \
+  pg@8.16.3 @types/pg@8.15.5 @types/node@20.19.37 tsx playwright vscode-jsonrpc@8.2.1
+artifacts/native-hosting/runtime-sdk/node_modules/.bin/playwright install chromium
+node extension/node_modules/typescript/bin/tsc \
+  --strict --module NodeNext --target ES2022 --types node \
+  --typeRoots artifacts/native-hosting/runtime-sdk/node_modules/@types \
+  --rootDir artifacts/native-hosting/runtime-sdk --outDir artifacts/native-hosting/runtime-sdk/out \
+  artifacts/native-hosting/runtime-sdk/NativeCliSmoke.mts \
+  artifacts/native-hosting/runtime-sdk/NativeRevisionSmoke.mts \
+  artifacts/native-hosting/runtime-sdk/NativeRevisionAppHost.mts \
+  artifacts/native-hosting/runtime-sdk/NativeIntegrationWorker.mts \
+  artifacts/native-hosting/runtime-sdk/NativeTunnelFixture.mts
+DOTNET_ROOT="$PWD/.dotnet" PATH="$PWD/.dotnet:$PATH" \
+ASPIRE_NATIVE_DASHBOARD_DLL="$PWD/artifacts/bin/Aspire.Dashboard/Debug/net11.0/Aspire.Dashboard.dll" \
+ASPIRE_NATIVE_DCP_PATH="<absolute path to restored DCP tool>" \
+node artifacts/native-hosting/runtime-sdk/out/NativeCliSmoke.mjs \
+  "$PWD/artifacts/bin/Aspire.Cli/Debug/net11.0/aspire" \
+  "$PWD/artifacts/native-hosting/native-server/Aspire.Hosting.Native.Server" \
+  "$PWD/artifacts/native-hosting/runtime-sdk"
+```
+
+Use the actual generated-output and application target-framework directories for
+the checked-out SDK; stale `artifacts/bin` outputs from another framework are not
+equivalent. `NativeRuntimeSmoke.mts` covers the socket-only observation/command
+boundary; `NativeWorkloadSmoke.mts` adds real workloads and retirement/replacement.
+These local Node/browser/AOT harnesses are not yet CI gates. The regular .NET
+tests are solution projects whose references and linked proto supply Layer 1
+routing; no trigger-map edge claims that a local-only harness runs in PR CI.
+
+**Remaining boundaries:** the integration worker is a fixture, not production
+package registration/dispatch or three complete reusable integration APIs.
+The forwarding executable is not the live Dev Tunnels service. The Dashboard
+process is launched explicitly by the harness; the CLI still reports its native
+backchannel Dashboard URL as unavailable. Production wiring must preserve the
+existing ownership: the AppHost server configures the Dashboard as a DCP-managed
+executable, DCP owns its process lifecycle, and the CLI discovers/reports its URL. CLI file watching and guest reexecution,
+deployment lowering, full interaction input/terminal/upload support, arbitrary
+package acquisition, and automated multi-platform AOT/E2E coverage remain work.
+Rust stays locally excluded and is only evidence for the earlier composition
+contract; it is neither shipped nor wired into production dependencies or CI.
+
+### Implemented resource-preserving revision slice
+
+`ApplicationWorkspace` is server-owned rather than connection-owned. An AppHost
+creates it once and delegates a one-use workspace invitation to its replacement
+process. Disconnecting an AppHost discards only its uncommitted staging model;
+it does not stop the workspace's runtime or disconnect the integration host.
+Explicit retirement or server shutdown still cancels and awaits owned workloads.
+
+Each `beginRevision` produces an isolated composition. `commitRevision` seals
+and applies the complete desired graph. Matching resource names
+(case-insensitive) and exact type IDs retain runtime IDs, integration ownership,
+workloads, logs, commands, and pending interactions. Declaration and authoring
+execution handles from previous revisions are revoked; retained integration and
+observer handles remain valid. New, retyped, or removed-and-readded resources
+receive new runtime IDs. Removed resources lose authority immediately, and
+commit awaits their actual workload cleanup before accepting another revision.
+
+For example, a replacement AppHost uses the generated SDK:
+
+```typescript
+const workspace = await server.joinApplicationWorkspace(workspaceInvitation);
+const revision = await workspace.beginRevision();
+const cache = await revision.addResource('cache', 'native.testing/Redis');
+await cache.setResourceConfiguration({
+    properties: [{ name: 'proofValue', value: 'reloaded-value' }]
+});
+await workspace.commitRevision(revision);
+const execution = await workspace.getApplicationExecution();
+const nextInvitation = await workspace.inviteApplicationWorkspace();
+```
+
+The fixture configuration contract is a bounded, sorted array of string
+properties, not the complete schema/value/secret model. Configuration and
+readiness-dependency changes increment a resource's desired configuration
+revision and mark it pending/unhealthy. Its integration waits through
+`waitResourceConfiguration`, reads only its declared dependency observations,
+and acknowledges the current revision as succeeded or failed. Healthy publication
+and command invocation are blocked until the current configuration succeeds.
+Failure does not silently become success or retire the resource; another changed
+desired configuration can request a retry.
+
+The integration decides whether a change can be applied in place or needs
+`restartContainer`/`restartExecutable`. Restart preserves the resource's owner
+and runtime ID, cancels old resource commands/interactions, awaits the old
+lease's actual removal, and starts the replacement without overlapping leases.
+Transitive readiness dependents become configuration-pending so they can
+re-resolve endpoints. A commit attempted during replacement is rejected before
+mutating the running graph; its sealed staged revision can be retried after the
+replacement finishes. There is no rollback promise for external side effects.
+A commit cleanup failure is explicit and fences further revisions until workspace
+retirement. In-flight calls whose resources are removed return `HANDLE_NOT_FOUND`,
+not an invalid-argument error or successful empty result.
+
+`NativeRevisionSmoke.mts` exercises eight separate AppHost process executions
+against the published AOT server, separate integration worker, real DCP, and
+actual Dashboard. Invalid/aborted and disconnected staging leave the running
+graph unchanged. Identical revisions retain the Redis/PostgreSQL container IDs,
+relay PID, and initialized data. A Redis SET applies in place; a subsequent
+launch-configuration change replaces Redis, invalidates the relay's dependency,
+and restarts that relay against the new endpoint while PostgreSQL and its data
+remain unchanged. Runtime IDs stay stable and the Dashboard remains connected.
+Removing the relay and retiring the workspace are checked against actual PIDs
+and Docker inventory. Unit/protocol tests additionally cover additions, type
+replacement, pending commands/confirmations, cleanup failure, and Dashboard
+UID/creation-time continuity.
+
+After preparing the SDK and compiling both revision fixtures with the preceding
+commands:
+
+```bash
+DOTNET_ROOT="$PWD/.dotnet" PATH="$PWD/.dotnet:$PATH" \
+ASPIRE_NATIVE_DASHBOARD_DLL="$PWD/artifacts/bin/Aspire.Dashboard/Debug/net11.0/Aspire.Dashboard.dll" \
+ASPIRE_NATIVE_DCP_PATH="<absolute path to restored DCP tool>" \
+node artifacts/native-hosting/runtime-sdk/out/NativeRevisionSmoke.mjs \
+  "$PWD/artifacts/native-hosting/native-server/Aspire.Hosting.Native.Server"
+```
+
+This is the RPC/application-lifetime mechanism for warm guest reload, not a CLI
+file watcher or automatic integration migration. General structured values and
+secret propagation, integration crash recovery, durable workspace recovery, and
+production integration registration remain unfinished. Dashboard process
+ownership is unchanged: production launch belongs to DCP; this browser fixture
+still explicitly launches it.
 
 ## Resources and resource types
 
@@ -437,8 +1105,57 @@ resource uses the same name.
 Commands need typed inputs/results, cancellation, and provider-side concurrency
 control. A disabled UI command is not a concurrency guarantee.
 
-Dashboard presentation metadata is part of the design, but the current native
-proof of concept does not implement the Dashboard protocol.
+The server-owned resource notification service is the equivalent of today's
+`ResourceNotificationService`. It holds execution observations separately from
+declarations and supports both resource-state subscriptions and readiness waits.
+An initial snapshot and registration for subsequent ordered updates must be
+atomic, so a concurrent publication cannot disappear between the two. Reconnects
+receive a new snapshot; retired resources produce explicit deletions. Bounded
+subscription queues must surface overflow and force resynchronization instead
+of silently losing state or blocking all publishers behind a slow Dashboard.
+
+The server-owned resource logger service is the equivalent of today's
+`ResourceLoggerService`. It accepts resource-scoped, preformatted console-log
+entries through ATS and executor-owned workload readers. Each entry retains
+ordering and stdout/stderr attribution. Bounded retention, tail-then-follow
+subscription, follow cancellation, and slow-subscriber behavior are explicit
+parts of the contract. The existing Dashboard console-log request has no resume
+cursor, so the adapter must not promise lossless cursor-based reconnects.
+Eviction and subscriber overflow must be observable, not silent.
+
+Resource names are Dashboard-facing presentation identities, not write authority.
+An update or log publication must resolve an authorized resource/owner handle
+and generation before entering either service. The same fencing applies to
+commands, controller-provided endpoints, and interaction ownership. A replacement
+resource with the same name cannot inherit pending operations from its predecessor.
+
+The Dashboard gRPC adapter must implement application information, resource
+watches, resource console-log watches, command execution, and bidirectional
+interaction watches against these services. Preserve authentication, TLS and
+secret-aware presentation at that boundary. Validate the selected gRPC/protobuf
+stack by native publication and real protocol round trips before adopting it;
+do not hand-write HTTP/2 or suppress trimming warnings to manufacture support.
+Keep protocol dependencies out of the symbolic kernel and measure their cost in
+the complete native server.
+
+The interaction service owns confirmations, input dialogs, notifications, and
+progress independently of a Dashboard stream. Input loading and validation use
+owned ATS callbacks, not delegate-bearing DTOs. Waiting for a response or callback
+must not hold a global ATS dispatch gate. Cancellation, Dashboard disconnect,
+generation retirement, duplicate responses, and multiple clients require an
+explicit policy and exactly-once terminal completion. Availability is explicit;
+an unavailable UI must not manufacture a successful user response. Terminal
+prompts borrow caller-owned terminals, so completing a prompt does not dispose
+the terminal. File-upload and terminal RPC support must be explicitly scoped and
+advertised before presenting those actions in generated projections or the UI.
+
+Focused tests cover publication/snapshot races, bounded-history tails,
+subscription overflow, cancellation, stale-owner rejection and callback
+reentrancy. Protocol tests use the real Dashboard client contract; the first
+native-server end-to-end gate must show an integration updating resource
+state/health/endpoints, emitting a console log, receiving a resource command,
+and completing a validated input or confirmation through Dashboard. The
+production kernel does not yet implement these services or the Dashboard protocol.
 
 ## Custom-resource example: Talking Clock
 
@@ -479,7 +1196,7 @@ guide the model so local execution does not discard information needed later.
 Model generation, guest process lifetime, and integration-host process lifetime
 are separate scopes.
 
-The first reload policy is full graph replacement:
+The legacy `CompositionSession` reload policy remains full graph replacement:
 
 1. Fence new mutations from the retiring guest.
 2. Stop and await its controllers and owned behavior.
@@ -492,9 +1209,12 @@ clients, callbacks, and controller state cannot remain active accidentally.
 Host loss must invalidate its behavior and surface a failure rather than leave
 resources reporting healthy indefinitely.
 
-Retaining and reconciling workloads across reload is a separate future policy.
-It needs stable identities, desired-state comparison, and controller
-reconciliation semantics; it is not implied by keeping the host process alive.
+The newer server-owned workspace supports resource-preserving revisions as
+described in [the implemented revision slice](#implemented-resource-preserving-revision-slice).
+Composition-revision lifetime is separate from execution lifetime. The RPC
+mechanism retains compatible resources and delegates configuration application
+and restart decisions to integration owners; it does not infer reconciliation
+merely because a host process stays alive.
 
 ## Comparison with the original guide
 
@@ -531,7 +1251,7 @@ for executable samples and reproduction commands.
 | Resources | Fixed primitive handles and bounded production-type views | Integration-defined schemas and validated capability catalogs |
 | Values | Deferred parameters, endpoint properties, concatenation | Typed extensible providers and complete sensitivity semantics |
 | Lifecycle | Health/setup callbacks and owned custom-resource controller updates | General registration composition and recovery policy |
-| Reload | Explicit guest replacement with stale-handle rejection | CLI watch integration and optional warm reconciliation |
+| Reload | Server-owned workspaces, staged revisions, retained workloads/owners, configuration acknowledgements, integration-controlled restart | CLI file watching/reexecution, structured-value reconciliation and recovery |
 | Publishing | Symbolic primitive model output | Publisher contracts and deployment targets |
 
 The production-signature compatibility adapter is an experiment, not the

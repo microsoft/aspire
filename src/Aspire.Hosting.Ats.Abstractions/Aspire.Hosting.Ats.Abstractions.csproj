@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Aspire.Hosting/Ats/AspireExportAttribute.cs" Link="AspireExportAttribute.cs" />
+    <Compile Include="../Aspire.Hosting/Ats/AspireDtoAttribute.cs" Link="AspireDtoAttribute.cs" />
+    <Compile Include="../Aspire.Hosting/Ats/AspireExportIgnoreAttribute.cs" Link="AspireExportIgnoreAttribute.cs" />
+  </ItemGroup>
+</Project>

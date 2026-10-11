@@ -30,6 +30,14 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public async Task GenerateDistributedApplication_WithoutManagedBootstrap()
+    {
+        var context = new AtsContext { Capabilities = [], HandleTypes = [], DtoTypes = [], EnumTypes = [] };
+        var files = _generator.GenerateDistributedApplication(context, includeManagedBootstrap: false);
+        await Verify(files["aspire.mts"].TrimEnd(), extension: "ts").UseFileName("AtsWithoutManagedBootstrap");
+    }
+
+    [Fact]
     public void EmbeddedResource_PackageJson_IsAvailableWithExpectedStructure()
     {
         // The package.json under Resources/ is the single source of truth for
