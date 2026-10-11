@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Configures aspire.dev's own public AppHost diagnostics; not documentation of an Aspire product feature",
+  "mergedAt": "2026-10-07T19:42:46Z",
+  "number": 1840,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "Share Azure diagnostics and enable App Service end-to-end TLS"
+}

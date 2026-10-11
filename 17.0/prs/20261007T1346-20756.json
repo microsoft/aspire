@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Terminal hosts are now hidden by default, removing TerminalOptions.ShowTerminalHost (breaking change)",
+  "mergedAt": "2026-10-07T13:46:10Z",
+  "number": 20756,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Hide terminal hosts by default without a visibility option"
+}

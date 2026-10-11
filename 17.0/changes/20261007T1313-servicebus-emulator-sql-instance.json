@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@thomhurst"
+  ],
+  "description": "The Azure Service Bus emulator's companion SQL Server instance can now be customized or replaced. New `WithSqlServer` overloads on the emulator builder let you configure the auto-created SQL Server resource using the regular SQL Server integration APIs, or reuse an existing SQL Server resource instead of creating a dedicated one.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗄️",
+  "firstMergedAt": "2026-10-07T13:13:17Z",
+  "lastMergedAt": "2026-10-07T13:13:17Z",
+  "name": "Choose the Service Bus emulator's SQL Server instance",
+  "owner": "eerhardt",
+  "prs": [
+    17885
+  ]
+}

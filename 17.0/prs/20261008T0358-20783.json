@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixed dashboard selection of resources by shortened GUID instance ID",
+  "mergedAt": "2026-10-08T03:58:35Z",
+  "number": 20783,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Fix dashboard selection of shortened resource instance IDs"
+}

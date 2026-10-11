@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency version bump",
+  "mergedAt": "2026-10-07T18:05:14Z",
+  "number": 20789,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "Bump source-map-js from 1.2.1 to 1.2.2 in /extension"
+}

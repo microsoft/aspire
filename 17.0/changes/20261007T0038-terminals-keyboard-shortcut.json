@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard's Terminals page now has a keyboard shortcut (**E**) to open it, matching its navigation availability. Shortcut help also places Page navigation before Panels and aligns category card heights for a cleaner layout.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-10-07T00:38:02Z",
+  "lastMergedAt": "2026-10-07T00:38:02Z",
+  "name": "Add Terminals keyboard shortcut and improve shortcut help",
+  "owner": "JamesNK",
+  "prs": [
+    20748
+  ]
+}

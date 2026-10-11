@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Added SQL syntax highlighting to the dashboard text visualizer",
+  "mergedAt": "2026-10-08T01:04:13Z",
+  "number": 20754,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Add SQL highlighting to the dashboard text visualizer"
+}

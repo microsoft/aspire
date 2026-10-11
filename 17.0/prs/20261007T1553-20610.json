@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/engineering-only change enforcing actionlint for handwritten workflows, not user-facing",
+  "mergedAt": "2026-10-07T15:53:06Z",
+  "number": 20610,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "ci: enforce actionlint for handwritten workflows"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Fixed Mongo Express connection for single-member replica sets",
+  "mergedAt": "2026-10-07T00:15:38Z",
+  "number": 20571,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Use a direct connection for Mongo Express with single-member replica sets"
+}

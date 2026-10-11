@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Disables a flaky outerloop deployment test (ActiveIssue), test-only change",
+  "mergedAt": "2026-10-08T03:57:28Z",
+  "number": 20779,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "Disable sandbox .NET deployment test after endpoint authentication failure"
+}

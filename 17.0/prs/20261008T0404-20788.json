@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test diagnostics and process-cleanup improvements for Git-based tests, not user-facing",
+  "mergedAt": "2026-10-08T04:04:15Z",
+  "number": 20788,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "Improve Git test diagnostics and process cleanup"
+}

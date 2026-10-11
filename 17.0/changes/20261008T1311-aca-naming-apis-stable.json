@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Consumers of Azure Container Apps resource naming can now call `WithUniqueResourceNaming()` and `WithCompactResourceNaming()` without suppressing experimental-API diagnostics. The APIs, signatures, and opt-in defaults are unchanged.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-10-08T13:11:22Z",
+  "lastMergedAt": "2026-10-08T13:11:22Z",
+  "name": "Graduate Azure Container Apps resource naming APIs to stable",
+  "owner": "mitchdenny",
+  "prs": [
+    20806
+  ]
+}

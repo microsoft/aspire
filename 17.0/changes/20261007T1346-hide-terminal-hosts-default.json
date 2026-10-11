@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Terminal hosts are now always hidden by default instead of being controlled by a separate `TerminalOptions.ShowTerminalHost` AppHost option, which has been removed. Use the dashboard's **Show hidden resources** control to reveal them without restarting the AppHost.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🙈",
+  "firstMergedAt": "2026-10-07T13:46:10Z",
+  "lastMergedAt": "2026-10-07T13:46:10Z",
+  "name": "Hide terminal hosts by default",
+  "owner": "mitchdenny",
+  "prs": [
+    20756
+  ]
+}

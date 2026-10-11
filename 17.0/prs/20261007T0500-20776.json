@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Regenerates generated resource Designer.cs files only, no user-facing change",
+  "mergedAt": "2026-10-07T05:00:06Z",
+  "number": 20776,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "Regenerate strongly typed string resource classes"
+}

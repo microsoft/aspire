@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`AddMongoDB(\"mongo\").WithReplicaSet().WithMongoExpress()` previously left Mongo Express crashing after about 30 seconds because it tried to connect to the replica set's `localhost` member address instead of the server's container-network address. Mongo Express is now configured through a direct connection URL for single-member replica sets, so the two APIs work together without manual connection-string overrides.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-10-07T00:15:38Z",
+  "lastMergedAt": "2026-10-07T00:15:38Z",
+  "name": "Fix Mongo Express connection with single-member replica sets",
+  "owner": "sebastienros",
+  "prs": [
+    20571
+  ]
+}

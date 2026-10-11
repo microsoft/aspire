@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Consumers can now use the existing HTTP probe APIs (`WithHttpProbe` and related types) without suppressing the `ASPIREPROBES001` experimental-API warning. This is an attribute-only graduation; signatures, defaults, and runtime behavior are unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-10-08T13:13:31Z",
+  "lastMergedAt": "2026-10-08T13:13:31Z",
+  "name": "Graduate HTTP probe APIs to stable",
+  "owner": "mitchdenny",
+  "prs": [
+    20813
+  ]
+}

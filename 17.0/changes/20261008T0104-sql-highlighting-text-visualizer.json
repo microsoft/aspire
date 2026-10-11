@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The dashboard's text visualizer now applies syntax highlighting to SQL content, making query text easier to read alongside the existing JSON and XML highlighting.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🖍️",
+  "firstMergedAt": "2026-10-08T01:04:13Z",
+  "lastMergedAt": "2026-10-08T01:04:13Z",
+  "name": "Add SQL highlighting to the dashboard text visualizer",
+  "owner": "JamesNK",
+  "prs": [
+    20754
+  ]
+}

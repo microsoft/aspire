@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Dashboard record counts now use locale-aware digit grouping",
+  "mergedAt": "2026-10-08T00:08:53Z",
+  "number": 20753,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Format dashboard record counts for the active culture"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Graduates Azure Container Apps resource naming APIs from experimental to stable",
+  "mergedAt": "2026-10-08T13:11:22Z",
+  "number": 20806,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Graduate Azure Container Apps resource naming APIs to stable"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Consumers can now use Aspire's filesystem services and temporary-file abstractions (`IFileSystemService`, `ITempFileSystemService`, `TempDirectory`, `TempFile`) without suppressing the `ASPIREFILESYSTEM001` experimental-API warning. APIs, signatures, and behavior are unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-10-08T13:11:53Z",
+  "lastMergedAt": "2026-10-08T13:11:53Z",
+  "name": "Graduate filesystem APIs to stable",
+  "owner": "mitchdenny",
+  "prs": [
+    20808
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dev tunnel resources now report ready much more promptly by observing the tunnel host's console output directly, instead of relying solely on slower service-based reconciliation. Lifecycle events like stops, disconnects, reconnects, and host takeovers now update port resources and URL availability correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-10-07T18:50:35Z",
+  "lastMergedAt": "2026-10-07T18:50:35Z",
+  "name": "Faster dev tunnel readiness and lifecycle tracking",
+  "owner": "DamianEdwards",
+  "prs": [
+    20658
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Faster dev tunnel readiness via console-output observation and improved lifecycle tracking",
+  "mergedAt": "2026-10-07T18:50:35Z",
+  "number": 20658,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Improve dev tunnel startup and lifecycle tracking"
+}

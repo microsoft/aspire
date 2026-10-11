@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Selecting a replicated resource by its shortened GUID instance ID (for example `dotnet-cli-6a764b7d`) could incorrectly reset the Traces, Structured logs, or Metrics resource selector to `(All)`. Resource lookup now also resolves shortened instance IDs, so selection stays consistent across these pages.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎯",
+  "firstMergedAt": "2026-10-08T03:58:35Z",
+  "lastMergedAt": "2026-10-08T03:58:35Z",
+  "name": "Fix dashboard selection of shortened resource instance IDs",
+  "owner": "JamesNK",
+  "prs": [
+    20783
+  ]
+}

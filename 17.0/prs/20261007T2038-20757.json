@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Bot dependency version bump",
+  "mergedAt": "2026-10-07T20:38:21Z",
+  "number": 20757,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "excluded",
+  "title": "Bump proxy-addr from 2.0.7 to 2.0.8 in /extension"
+}

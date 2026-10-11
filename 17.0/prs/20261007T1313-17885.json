@@ -1,0 +1,9 @@
+{
+  "author": "thomhurst",
+  "comment": "New WithSqlServer overloads for the Service Bus emulator's SQL Server instance",
+  "mergedAt": "2026-10-07T13:13:17Z",
+  "number": 17885,
+  "runDate": "2026-10-11T00:14:00Z",
+  "status": "included",
+  "title": "Allow choosing the Service Bus emulator SQL instance"
+}
