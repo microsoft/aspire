@@ -29,7 +29,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// no image build, no registry round-trip, and no reliance on the mounted host
 /// Docker daemon for image movement — the single biggest reliability win for a
 /// per-PR test. The KinD cluster is still created via
-/// <see cref="KubernetesDeployTestHelpers.CreateKindClusterWithRegistryAsync"/>
+/// <see cref="KubernetesDeployTestHelpers.CreateKindClusterWithRegistryAsync(Hex1bTerminalAutomator, SequenceCounter, string)"/>
 /// (the registry sits idle) because that helper also performs the critical
 /// internal-kubeconfig networking fix that lets the helper container reach the
 /// cluster's API server.
