@@ -203,7 +203,7 @@ public partial class TemplateTestsBase
             await Task.Delay(500);
 
             // _testOutput.WriteLine($"Checking for rows again");
-            var rowsLocator = dashboardPageWrapper.Page.Locator("//tr[@class='fluent-data-grid-row hover resource-row']");
+            var rowsLocator = dashboardPageWrapper.Page.Locator(".main-grid tr.resource-row");
             var allRows = await rowsLocator.AllAsync();
             // _testOutput.WriteLine($"found rows#: {allRows.Count}");
             if (allRows.Count == 0)
@@ -215,7 +215,7 @@ public partial class TemplateTestsBase
             foreach (var rowLoc in allRows)
             {
                 // get the cells
-                var cellLocs = await rowLoc.Locator("//td[@role='gridcell']").AllAsync();
+                var cellLocs = await rowLoc.Locator("[role='gridcell']").AllAsync();
 
                 // is the resource name expected?
                 var resourceNameCell = cellLocs[0];
@@ -354,25 +354,13 @@ public partial class TemplateTestsBase
 
     public static TheoryData<string, string, TestSdk, TestTargetFramework, string?> TestDataForNewAndBuildTemplateTests(string templateName, string extraArgs) => new()
         {
-            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net8, TestTargetFramework.Net9, "The current .NET SDK does not support targeting .NET 9.0" },
 
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net9, null },
-            { templateName, extraArgs, TestSdk.Net9, TestTargetFramework.Net10, "The current .NET SDK does not support targeting .NET 10.0" },
-
-            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net10, TestTargetFramework.Net11, "The current .NET SDK does not support targeting .NET 11.0" },
 
-            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net11, TestTargetFramework.Net11, null },
 
-            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net8, null },
-            { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net9, null },
             { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net10, null },
             { templateName, extraArgs, TestSdk.Net11WithAllSupportedRuntimes, TestTargetFramework.Net11, null },
         };

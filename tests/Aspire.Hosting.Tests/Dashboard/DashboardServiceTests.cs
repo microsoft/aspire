@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 using System.Diagnostics;
 using System.IO.Pipelines;
 using System.Text;
@@ -12,7 +10,6 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Tests.Utils.Grpc;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Google.Protobuf;

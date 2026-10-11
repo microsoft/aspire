@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipelines;
 using System.Text;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Hex1b;
@@ -14,7 +13,6 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 
 #pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.
-#pragma warning disable ASPIREFILESYSTEM001 // Use the hosting temporary directory abstraction.
 
 namespace Aspire.Hosting.Tests.Terminals;
 

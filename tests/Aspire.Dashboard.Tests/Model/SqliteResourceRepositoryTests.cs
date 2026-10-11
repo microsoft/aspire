@@ -241,6 +241,46 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
+    public async Task ConsoleLogs_ExceedingLimitRemovesOldestAcrossResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        {
+            using var repositoryContext = CreateRepository(workspace.Path, maxConsoleLogCount: 3);
+            var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
+            await writer.AddConsoleLogsAsync("api", [
+                new ConsoleLogLine { LineNumber = 1, Text = "api-first" },
+                new ConsoleLogLine { LineNumber = 2, Text = "api-second" }
+            ]);
+            await writer.AddConsoleLogsAsync("worker", [
+                new ConsoleLogLine { LineNumber = 1, Text = "worker-first" }
+            ]);
+            await writer.AddConsoleLogsAsync("worker", [
+                new ConsoleLogLine { LineNumber = 2, Text = "worker-second" }
+            ]);
+        }
+
+        using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
+        var apiLogs = new List<global::Aspire.Dashboard.Model.ResourceLogLine>();
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("api", CancellationToken.None))
+        {
+            apiLogs.AddRange(batch);
+        }
+        Assert.Collection(
+            apiLogs,
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "api-second", false), line));
+
+        var workerLogs = new List<global::Aspire.Dashboard.Model.ResourceLogLine>();
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("worker", CancellationToken.None))
+        {
+            workerLogs.AddRange(batch);
+        }
+        Assert.Collection(
+            workerLogs,
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "worker-first", false), line),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "worker-second", false), line));
+    }
+
+    [Fact]
     public async Task Resources_LargeBatchRoundTrips()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -753,7 +793,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
-    public void Schema_SpanKindAndStatusLookupsExist()
+    public void Schema_TelemetryEnumLookupsExist()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -793,6 +833,16 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         }
 
         command.CommandText = """
+            SELECT aggregation_temporality || ':' || aggregation_temporality_name
+            FROM telemetry_metric_aggregation_temporalities
+            ORDER BY aggregation_temporality;
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(["0:Unspecified", "1:Delta", "2:Cumulative"], ReadValues(reader));
+        }
+
+        command.CommandText = """
             SELECT "table" || ':' || "from" || ':' || "to"
             FROM pragma_foreign_key_list('telemetry_spans')
             WHERE "from" IN ('kind', 'status')
@@ -805,6 +855,18 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
                 "telemetry_span_kinds:kind:kind",
                 "telemetry_span_statuses:status:status"
             ], ReadValues(reader));
+        }
+
+        command.CommandText = """
+            SELECT "table" || ':' || "from" || ':' || "to"
+            FROM pragma_foreign_key_list('telemetry_metric_instruments')
+            WHERE "from" = 'aggregation_temporality';
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(
+                ["telemetry_metric_aggregation_temporalities:aggregation_temporality:aggregation_temporality"],
+                ReadValues(reader));
         }
 
         static List<string> ReadValues(SqliteDataReader reader)
@@ -878,12 +940,14 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
     private static SqliteRepositoryTestContext<SqliteResourceRepository> CreateRepository(
         string workspacePath,
-        bool readOnly = false)
+        bool readOnly = false,
+        int? maxConsoleLogCount = null)
     {
         return SqliteRepositoryTestHelpers.CreateResourceRepository(
             GetDatabasePath(workspacePath),
             new MockKnownPropertyLookup(),
-            readOnly);
+            readOnly,
+            maxConsoleLogCount: maxConsoleLogCount);
     }
 
     private static Resource CreateResource(string name, string displayName)

@@ -70,6 +70,11 @@ internal static class CliPathHelper
         return Path.Combine(aspireHomeDirectory.FullName, StagingNuGetPackagesFolderName);
     }
 
+    internal static string EnsureTrailingSlash(string path)
+        => Path.EndsInDirectorySeparator(path)
+            ? path
+            : path + Path.DirectorySeparatorChar;
+
     /// <summary>
     /// Returns a stable lowercase hex cache key derived from <paramref name="feedUrl"/>,
     /// truncated to <paramref name="length"/> characters. Returns <see langword="null"/> when
@@ -347,7 +352,9 @@ internal static class CliPathHelper
         var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var socketPath = BackchannelConstants.ComputeCliSocketPath(homeDirectory, socketPrefix);
         var socketDirectory = Path.GetDirectoryName(socketPath)!;
-        Directory.CreateDirectory(socketDirectory);
+        // CliPathHelper chooses CLI socket paths; SocketPermissionHelper shares permission
+        // enforcement and path validation with hosting consumers that also accept configured paths.
+        SocketPermissionHelper.CreateDirectory(socketDirectory, repairExisting: true);
 
         if (Interlocked.CompareExchange(ref s_socketDirectorySwept, 1, 0) == 0)
         {

@@ -4,7 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ContainerRegistry>localhost:5001</ContainerRegistry>
     <ContainerRepository>api-gateway</ContainerRepository>
-    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:8.0</ContainerBaseImage>
+    <ContainerBaseImage>mcr.microsoft.com/dotnet/aspnet:10.0</ContainerBaseImage>
   </PropertyGroup>
 
   <ItemGroup>

@@ -3,7 +3,10 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
@@ -92,9 +95,6 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     private ResiliencePipeline? _resiliencePipeline;
     private bool _disposed;
 
-    public TimeSpan MaxRetryDuration { get; set; } = TimeSpan.FromSeconds(20);
-    public TimeSpan KubernetesInitializationTimeout { get; set; } = TimeSpan.FromSeconds(60);
-
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
     {
@@ -126,37 +126,75 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
             cancellationToken);
     }
 
-    public Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default)
+    public async Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         var resourceType = GetResourceFor<T>();
         var namespaceParameter = obj.Namespace();
+        var name = obj.Metadata.Name;
+        var recoveryTimeout = dcpOptions.Value.KubernetesCreateRecoveryTimeout;
 
-        return ExecuteWithRetry(
-           DcpApiOperationType.Create,
-           T.ObjectKind,
-           async (kubernetes, operationCancellationToken) =>
-           {
-               var response = string.IsNullOrEmpty(namespaceParameter)
-                ? await kubernetes.CustomObjects.CreateClusterCustomObjectWithHttpMessagesAsync(
-                    obj,
-                    GroupVersion.Group,
-                    GroupVersion.Version,
-                    resourceType,
-                    cancellationToken: operationCancellationToken).ConfigureAwait(false)
-                : await kubernetes.CustomObjects.CreateNamespacedCustomObjectWithHttpMessagesAsync(
-                    obj,
-                    GroupVersion.Group,
-                    GroupVersion.Version,
-                    namespaceParameter,
-                    resourceType,
-                    cancellationToken: operationCancellationToken).ConfigureAwait(false);
+        // A timed-out write can still commit. Confirm ambiguous creates before retrying the same object.
+        // Kubernetes explicitly allows operations to complete after a timeout:
+        // https://github.com/kubernetes/apimachinery/blob/master/pkg/api/errors/errors.go
+        return await new ResiliencePipelineBuilder()
+            .AddTimeout(new TimeoutStrategyOptions
+            {
+                Timeout = recoveryTimeout,
+            })
+            .Build()
+            .ExecuteAsync(async recoveryCancellationToken =>
+            {
+                var hasAmbiguousCreate = false;
+                var retryDelay = s_initialRetryDelay;
 
-               return KubernetesJson.Deserialize<T>(response.Body.ToString());
-           },
-           RetryOnConnectivityErrors,
-           cancellationToken);
+                while (true)
+                {
+                    DateTimeOffset? retryAfter = null;
+                    try
+                    {
+                        return await CreateOnceAsync(obj, resourceType, namespaceParameter, recoveryCancellationToken).ConfigureAwait(false);
+                    }
+                    catch (KubernetesClientInitializationException)
+                    {
+                        retryDelay = await DelayCreateRetryAsync(null, retryDelay, recoveryTimeout, recoveryCancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+                    catch (HttpOperationException ex) when (hasAmbiguousCreate && IsAlreadyExists(ex))
+                    {
+                        // A previous ambiguous create may have committed after its confirmation returned 404.
+                        retryAfter = GetCreateRetryAfter(ex, recoveryTimeout);
+                    }
+                    catch (Exception ex) when (RetryOnTransientCreateErrors(ex))
+                    {
+                        hasAmbiguousCreate = true;
+                        retryAfter = GetCreateRetryAfter(ex, recoveryTimeout);
+                    }
+
+                    try
+                    {
+                        // GET bypasses Tilt's publication lock. A retried POST can block behind the original
+                        // create's watcher notification before it can check whether the object already exists.
+                        // https://github.com/tilt-dev/tilt-apiserver/blob/v0.19.1/pkg/storage/filepath/jsonfile_rest.go
+                        return await GetAsync<T>(name, namespaceParameter, recoveryCancellationToken).ConfigureAwait(false);
+                    }
+                    catch (HttpOperationException ex) when (ex.Response.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        // Creation is unconfirmed; retry the same named object.
+                    }
+                    catch (Exception ex) when (RetryOnTransientCreateErrors(ex))
+                    {
+                        if (GetCreateRetryAfter(ex, recoveryTimeout) is { } confirmationRetryAfter &&
+                            (retryAfter is null || confirmationRetryAfter > retryAfter.Value))
+                        {
+                            retryAfter = confirmationRetryAfter;
+                        }
+                    }
+
+                    retryDelay = await DelayCreateRetryAsync(retryAfter, retryDelay, recoveryTimeout, recoveryCancellationToken).ConfigureAwait(false);
+                }
+            }, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default)
@@ -299,7 +337,8 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 #pragma warning restore CS0618 // Type or member is obsolete
                 },
                 RetryOnConnectivityAndConflictErrors,
-                restartCancellationToken);
+                restartCancellationToken,
+                timeoutEachAttempt: true);
         };
 
         await foreach (var item in PeriodicRestartAsyncEnumerable.CreateAsync(innerWatchFactory, restartInterval: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false))
@@ -433,7 +472,12 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
         await retryPipeline.ExecuteAsync(async cancellationContext =>
         {
-            return await _kubernetes!.GetExecutionDocumentAsync(cancellationContext).ConfigureAwait(false);
+            return await ExecuteWithRetry(
+                DcpApiOperationType.ResourceCleanup,
+                DcpExecutionResourceType,
+                (kubernetes, operationCancellationToken) => kubernetes.GetExecutionDocumentAsync(operationCancellationToken),
+                RetryOnConnectivityErrors,
+                cancellationContext).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
     }
 
@@ -454,50 +498,78 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         return kindWithResource.Resource;
     }
 
+    private async Task<T> CreateOnceAsync<T>(
+        T obj,
+        string resourceType,
+        string? namespaceParameter,
+        CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata
+    {
+        var requestStarted = false;
+        try
+        {
+            return await ExecuteWithRetry(
+                DcpApiOperationType.Create,
+                T.ObjectKind,
+                async (kubernetes, operationCancellationToken) =>
+                {
+                    requestStarted = true;
+                    var response = string.IsNullOrEmpty(namespaceParameter)
+                        ? await kubernetes.CustomObjects.CreateClusterCustomObjectWithHttpMessagesAsync(
+                            obj,
+                            GroupVersion.Group,
+                            GroupVersion.Version,
+                            resourceType,
+                            cancellationToken: operationCancellationToken).ConfigureAwait(false)
+                        : await kubernetes.CustomObjects.CreateNamespacedCustomObjectWithHttpMessagesAsync(
+                            obj,
+                            GroupVersion.Group,
+                            GroupVersion.Version,
+                            namespaceParameter,
+                            resourceType,
+                            cancellationToken: operationCancellationToken).ConfigureAwait(false);
+
+                    return KubernetesJson.Deserialize<T>(response.Body.ToString());
+                },
+                // The caller must confirm an ambiguous write before another POST.
+                _ => false,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!requestStarted && RetryOnTransientCreateErrors(ex))
+        {
+            // Client setup can time out before sending a POST; there is no write to confirm in that case.
+            throw new KubernetesClientInitializationException(ex);
+        }
+    }
+
     private async Task<TResult> ExecuteWithRetry<TResult>(
         DcpApiOperationType operationType,
         string resourceType,
         Func<DcpKubernetesClient, CancellationToken, Task<TResult>> operation,
         Func<Exception, bool> isRetryable,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool timeoutEachAttempt = false)
     {
         using var activity = ProfilingTelemetry.StartDcpKubernetesApi(configuration, operationType, resourceType);
         var retryCount = 0;
 
         try
         {
-            async ValueTask EnsureKubernetesClientAsync(CancellationToken cancellationToken)
+            var resiliencePipeline = CreateKubernetesCallResiliencePipeline(
+                isRetryable,
+                activity,
+                () => retryCount++,
+                timeoutEachAttempt);
+            return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
             {
+                // Client setup and the API operation share one deadline. A parsed kubeconfig alone
+                // does not confirm that DCP can process requests.
                 var clientReady = await EnsureKubernetesAsync(cancellationToken).ConfigureAwait(false);
                 if (clientReady.Initialized)
                 {
                     activity.AddKubernetesClientReady(clientReady.WaitMilliseconds, clientReady.Initialized);
                 }
-            }
 
-            if (_kubernetes is null)
-            {
-                // The first DCP request must also wait for DCP to create its kubeconfig. Give that initialization
-                // its own budget so slower hosts do not consume the shorter already-running API retry budget.
-                var initializationPipeline = CreateKubernetesCallResiliencePipeline(
-                    KubernetesInitializationTimeout,
-                    RetryOnConnectivityErrors,
-                    activity,
-                    () => retryCount++);
-                await initializationPipeline.ExecuteAsync(EnsureKubernetesClientAsync, cancellationToken).ConfigureAwait(false);
-            }
-
-            // A parsed kubeconfig does not guarantee that DCP can process requests yet. Keep using the startup
-            // budget until an API operation succeeds, then fail steady-state API calls on the normal budget.
-            var retryDuration = Volatile.Read(ref _kubernetesApiReady)
-                ? MaxRetryDuration
-                : KubernetesInitializationTimeout;
-
-            var resiliencePipeline = CreateKubernetesCallResiliencePipeline(retryDuration, isRetryable, activity, () => retryCount++);
-            return await resiliencePipeline.ExecuteAsync(async (cancellationToken) =>
-            {
-                // Keep connection establishment inside the retry loop so kubeconfig read failures remain retryable.
-                await EnsureKubernetesClientAsync(cancellationToken).ConfigureAwait(false);
                 var result = await operation(_kubernetes!, cancellationToken).ConfigureAwait(false);
                 Volatile.Write(ref _kubernetesApiReady, true);
 
@@ -511,43 +583,130 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     }
 
     private static bool RetryOnConnectivityErrors(Exception ex) => ex is HttpRequestException || ex is KubeConfigException;
+    private static bool RetryOnTransientCreateErrors(Exception ex) =>
+        RetryOnConnectivityErrors(ex) ||
+        ex is TimeoutRejectedException ||
+        ex is HttpOperationException { Response.StatusCode: HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout or HttpStatusCode.TooManyRequests };
+
+    private static bool IsAlreadyExists(HttpOperationException exception)
+    {
+        if (exception.Response.StatusCode != HttpStatusCode.Conflict)
+        {
+            return false;
+        }
+
+        // Kubernetes distinguishes {"kind":"Status","reason":"AlreadyExists","code":409}
+        // from other conflicts, which must retain their normal failure behavior.
+        try
+        {
+            using var status = JsonDocument.Parse(exception.Response.Content);
+
+            return status.RootElement.ValueKind is JsonValueKind.Object &&
+                status.RootElement.TryGetProperty("reason", out var reason) &&
+                reason.ValueKind is JsonValueKind.String &&
+                reason.GetString() is "AlreadyExists";
+        }
+        catch (JsonException)
+        {
+            // An unrecognized error body is not proof of an existing object; propagate the HTTP failure.
+            return false;
+        }
+    }
+
+    private static DateTimeOffset? GetCreateRetryAfter(Exception exception, TimeSpan recoveryTimeout)
+    {
+        // Retry-After is either a delay in seconds ("5") or an HTTP date
+        // ("Mon, 05 Oct 2026 18:00:00 GMT"). Keep a deadline so confirmation time counts toward the wait.
+        // Malformed hints fall back to exponential backoff.
+        // https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3
+        if (exception is HttpOperationException operationException &&
+            operationException.Response.Headers.TryGetValue("Retry-After", out var values) &&
+            RetryConditionHeaderValue.TryParse(values.FirstOrDefault(), out var retryAfter))
+        {
+            if (retryAfter.Date is { } date)
+            {
+                return date;
+            }
+
+            // A delay beyond the recovery budget cannot lead to another attempt. Capping it also prevents
+            // very large delta-seconds values from overflowing DateTimeOffset.
+            var delay = retryAfter.Delta!.Value;
+
+            return DateTimeOffset.UtcNow + (delay > recoveryTimeout ? recoveryTimeout : delay);
+        }
+
+        return null;
+    }
+
+    private static async Task<TimeSpan> DelayCreateRetryAsync(
+        DateTimeOffset? retryAfter,
+        TimeSpan retryDelay,
+        TimeSpan recoveryTimeout,
+        CancellationToken cancellationToken)
+    {
+        // Full jitter avoids synchronizing concurrent creates; Retry-After is a server-imposed minimum.
+        // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+        var delay = retryAfter is { } deadline
+            ? TimeSpan.FromTicks(Math.Max((deadline - DateTimeOffset.UtcNow).Ticks, 0))
+            : TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * retryDelay.TotalMilliseconds);
+        // A longer delay cannot lead to another attempt, and may exceed Task.Delay's supported range.
+        await Task.Delay(delay > recoveryTimeout ? recoveryTimeout : delay, cancellationToken).ConfigureAwait(false);
+
+        return TimeSpan.FromMilliseconds(Math.Min(retryDelay.TotalMilliseconds * 2, 5000));
+    }
+
     private static bool RetryOnConnectivityAndConflictErrors(Exception ex) =>
         ex is HttpRequestException ||
         ex is KubeConfigException ||
         (ex is HttpOperationException hoe && hoe.Response.StatusCode == System.Net.HttpStatusCode.Conflict);
 
-    private static ResiliencePipeline CreateKubernetesCallResiliencePipeline(
-        TimeSpan retryDuration,
+    private ResiliencePipeline CreateKubernetesCallResiliencePipeline(
         Func<Exception, bool> isRetryable,
         ProfilingTelemetry.ActivityScope activity,
-        Action recordRetry)
+        Action recordRetry,
+        bool timeoutEachAttempt = false)
     {
-        var resiliencePipeline = new ResiliencePipelineBuilder()
-            .AddTimeout(new TimeoutStrategyOptions
+        var timeoutOptions = new TimeoutStrategyOptions
+        {
+            // Select once per operation or watch connection attempt. Confirming readiness elsewhere
+            // must not shorten an in-flight deadline, but the next connection attempt uses the new budget.
+            TimeoutGenerator = _ =>
             {
-                Timeout = retryDuration,
-                OnTimeout = (_) =>
-                {
-                    activity.AddKubernetesApiTimeout();
-                    return ValueTask.CompletedTask;
-                }
-            })
-            .AddRetry(new RetryStrategyOptions()
+                var options = dcpOptions.Value;
+                var timeout = Volatile.Read(ref _kubernetesApiReady)
+                    ? options.KubernetesApiTimeout
+                    : options.KubernetesApiTimeout + options.KubernetesInitializationAdditionalTimeout;
+
+                return new ValueTask<TimeSpan>(timeout);
+            },
+            OnTimeout = (_) =>
             {
-                ShouldHandle = new PredicateBuilder().Handle(isRetryable),
-                BackoffType = DelayBackoffType.Exponential,
-                MaxRetryAttempts = int.MaxValue,
-                Delay = s_initialRetryDelay,
-                MaxDelay = TimeSpan.FromSeconds(5),
-                OnRetry = (retry) =>
-                {
-                    recordRetry();
-                    activity.AddKubernetesApiRetry(retry.AttemptNumber, retry.RetryDelay, retry.Outcome.Exception);
-                    return ValueTask.CompletedTask;
-                }
-            })
-            .Build();
-        return resiliencePipeline;
+                activity.AddKubernetesApiTimeout();
+                return ValueTask.CompletedTask;
+            }
+        };
+        var retryOptions = new RetryStrategyOptions
+        {
+            ShouldHandle = timeoutEachAttempt
+                ? new PredicateBuilder().Handle(isRetryable).Handle<TimeoutRejectedException>()
+                : new PredicateBuilder().Handle(isRetryable),
+            BackoffType = DelayBackoffType.Exponential,
+            MaxRetryAttempts = int.MaxValue,
+            Delay = s_initialRetryDelay,
+            MaxDelay = TimeSpan.FromSeconds(5),
+            OnRetry = (retry) =>
+            {
+                recordRetry();
+                activity.AddKubernetesApiRetry(retry.AttemptNumber, retry.RetryDelay, retry.Outcome.Exception);
+                return ValueTask.CompletedTask;
+            }
+        };
+
+        // Regular API calls have one total retry budget. Watches instead retry a stalled connection
+        // after each timeout until their outer periodic-restart token is canceled.
+        return timeoutEachAttempt
+            ? new ResiliencePipelineBuilder().AddRetry(retryOptions).AddTimeout(timeoutOptions).Build()
+            : new ResiliencePipelineBuilder().AddTimeout(timeoutOptions).AddRetry(retryOptions).Build();
     }
 
     private ResiliencePipeline CreateReadKubeconfigResiliencePipeline()
@@ -668,4 +827,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
     }
 
     private readonly record struct KubernetesClientReady(long WaitMilliseconds, bool Initialized);
+
+    private sealed class KubernetesClientInitializationException(Exception innerException)
+        : Exception("The DCP Kubernetes client could not be initialized before sending the create request.", innerException);
 }

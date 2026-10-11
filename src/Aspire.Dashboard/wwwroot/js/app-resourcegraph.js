@@ -140,6 +140,9 @@ class ResourceGraph {
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
         this.nodeElementsG = this.baseGroup.append("g").attr("class", "nodes");
+        // Selection updates can arrive before the first resource snapshot.
+        this.linkElements = this.linkElementsG.selectAll(".resource-link");
+        this.nodeElements = this.nodeElementsG.selectAll(".resource-group");
 
         this.initializeButtons();
     }
@@ -639,17 +642,16 @@ class ResourceGraph {
             event.currentTarget.id);
     };
 
-    openResourceContextMenu = async (id, clientX, clientY, trigger, focusElementId) => {
+    openResourceContextMenu = (id, clientX, clientY, trigger, focusElementId) => {
         this.contextMenuTrigger?.setAttribute("aria-expanded", "false");
         this.contextMenuTrigger = trigger;
         this.contextMenuChanged(true);
 
-        try {
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId);
-        } catch (error) {
-            this.contextMenuChanged(false);
-            throw error;
-        }
+        return this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId)
+            .catch(error => {
+                this.contextMenuChanged(false);
+                throw error;
+            });
     };
 
     contextMenuChanged = (open) => {

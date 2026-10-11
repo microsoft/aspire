@@ -7,8 +7,8 @@
     <_AspireIntermediatePath>$(IntermediateOutputPath)Aspire\</_AspireIntermediatePath>
     <_GeneratedClassNameFixupRegex>(((?&lt;=\.)|^)(?=\d)|\W)</_GeneratedClassNameFixupRegex>
 
-    <!-- Use net8.0 when running on .NET Core, net472 when running on .NET Framework -->
-    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net8.0</_AspireTasksTfm>
+    <!-- Use net10.0 when running on .NET Core, net472 when running on .NET Framework -->
+    <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' == 'Core'">net10.0</_AspireTasksTfm>
     <_AspireTasksTfm Condition="'$(MSBuildRuntimeType)' != 'Core'">net472</_AspireTasksTfm>
     <_AspireTasksAssembly Condition="'$(_AspireTasksAssembly)' == ''">$(MSBuildThisFileDirectory)..\tools\$(_AspireTasksTfm)\Aspire.Hosting.Tasks.dll</_AspireTasksAssembly>
   </PropertyGroup>
@@ -678,7 +678,6 @@ namespace Projects%3B
       <_AspireTerminalHostPathInferredFromDir Condition=" '$(AspireTerminalHostPath)' == '' and '$(AspireTerminalHostDir)' != '' ">true</_AspireTerminalHostPathInferredFromDir>
       <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
       <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
-      <AspireTerminalHostPath Condition=" '$(_AspireTerminalHostPathInferredFromDir)' == 'true' and $([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
     </PropertyGroup>
 
     <ItemGroup>

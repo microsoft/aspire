@@ -8,6 +8,7 @@ fluentDropdownStyleSheet.replaceSync(`
         background-color: var(--colorNeutralBackground1);
         border: 1px solid var(--colorNeutralStroke1);
         box-shadow: none !important;
+        min-width: var(--aspire-dropdown-min-width, 160px);
     }
 
     .control:hover {
@@ -138,90 +139,6 @@ document.addEventListener("click", function (e) {
     }
 });
 
-let isScrolledToContent = false;
-let lastScrollHeight = null;
-
-window.getIsScrolledToContent = function () {
-    return isScrolledToContent;
-}
-
-window.setIsScrolledToContent = function (value) {
-    if (isScrolledToContent != value) {
-        isScrolledToContent = value;
-        console.log(`isScrolledToContent=${isScrolledToContent}`);
-    }
-}
-
-window.resetContinuousScrollPosition = function () {
-    // Reset to scrolling to the end of the content after switching.
-    setIsScrolledToContent(false);
-}
-
-window.initializeContinuousScroll = function () {
-    // Reset to scrolling to the end of the content when initializing.
-    // This needs to be called because the value is remembered across Aspire pages because the browser isn't reloading.
-    resetContinuousScrollPosition();
-
-    const container = document.querySelector('.continuous-scroll-overflow');
-    if (container == null) {
-        return;
-    }
-
-    // The scroll event is used to detect when the user scrolls to view content.
-    container.addEventListener('scroll', () => {
-        var atBottom = isScrolledToBottom(container);
-        if (atBottom === null) {
-            return;
-        }
-        setIsScrolledToContent(!atBottom);
-   }, { passive: true });
-
-    // The ResizeObserver reports changes in the grid size.
-    // This ensures that the logs are scrolled to the bottom when there are new logs
-    // unless the user has scrolled to view content.
-    const observer = new ResizeObserver(function () {
-        lastScrollHeight = container.scrollHeight;
-
-        if (lastScrollHeight == container.clientHeight) {
-            // There is no scrollbar. This could be because there's no content, or the content might have been cleared.
-            // Reset to default behavior: scroll to bottom
-            setIsScrolledToContent(false);
-            return;
-        }
-
-        var isScrolledToContent = getIsScrolledToContent();
-        if (!isScrolledToContent) {
-            container.scrollTop = lastScrollHeight;
-            return;
-        }
-    });
-    for (const child of container.children) {
-        observer.observe(child);
-    }
-};
-
-function isScrolledToBottom(container) {
-    lastScrollHeight = lastScrollHeight || container.scrollHeight
-
-    // There can be a race between resizing and scrolling events.
-    // Use the last scroll height from the resize event to figure out if we've scrolled to the bottom.
-    if (!getIsScrolledToContent()) {
-        if (lastScrollHeight != container.scrollHeight) {
-            console.log(`lastScrollHeight ${lastScrollHeight} doesn't equal container scrollHeight ${container.scrollHeight}.`);
-
-            // Unknown because the container size changed.
-            return null;
-        }
-    }
-
-    const marginOfError = 5;
-    const containerScrollBottom = lastScrollHeight - container.clientHeight;
-    const difference = containerScrollBottom - container.scrollTop;
-
-    var atBottom = difference < marginOfError;
-    return atBottom;
-}
-
 window.buttonOpenLink = function (element) {
     const url = element.getAttribute("data-url");
     const target = element.getAttribute("data-target");
@@ -246,13 +163,33 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
         delete button.dataset.copyTimeout;
     }
 
+    // An earlier clipboard request may still be pending when the same button is clicked again.
+    const request = Symbol();
+    button.copyRequest = request;
     const copyIcon = button.querySelector('.copy-icon');
     const checkmarkIcon = button.querySelector('.checkmark-icon');
-
+    const copyStatus = button.nextElementSibling?.classList.contains('terminal-copy-status')
+        ? button.nextElementSibling : null;
+    if (copyStatus) {
+        copyStatus.textContent = '';
+    }
     const anchoredTooltip = document.querySelector(`fluent-tooltip[anchor="${id}"]`);
     const tooltipDiv = anchoredTooltip ? anchoredTooltip.children[0] : null;
+    if (tooltipDiv) {
+        tooltipDiv.innerText = precopy;
+    }
+    if (copyIcon && checkmarkIcon) {
+        copyIcon.style.display = '';
+        checkmarkIcon.style.display = 'none';
+    }
     navigator.clipboard.writeText(text)
         .then(() => {
+            if (button.copyRequest !== request) {
+                return;
+            }
+            if (copyStatus) {
+                copyStatus.textContent = postcopy;
+            }
             if (tooltipDiv) {
                 tooltipDiv.innerText = postcopy;
             }
@@ -261,23 +198,38 @@ window.copyTextToClipboard = function (id, text, precopy, postcopy) {
                 checkmarkIcon.style.display = '';
             }
         })
-        .catch(() => {
-            if (tooltipDiv) {
-                tooltipDiv.innerText = 'Could not access clipboard';
+        .catch(error => {
+            if (button.copyRequest !== request) {
+                return;
             }
+            if (copyStatus) {
+                copyStatus.textContent = button.getAttribute('data-copyfailed');
+            }
+            if (tooltipDiv) {
+                tooltipDiv.innerText = button.getAttribute('data-copyfailed') || 'Could not access clipboard';
+            } else {
+                console.warn("Dashboard clipboard copy failed.", error);
+            }
+        })
+        .finally(() => {
+            if (button.copyRequest !== request) {
+                return;
+            }
+            button.dataset.copyTimeout = setTimeout(function () {
+                if (copyStatus) {
+                    copyStatus.textContent = '';
+                }
+                if (tooltipDiv) {
+                    tooltipDiv.innerText = precopy;
+                }
+
+                if (copyIcon && checkmarkIcon) {
+                    copyIcon.style.display = '';
+                    checkmarkIcon.style.display = 'none';
+                }
+                delete button.dataset.copyTimeout;
+            }, 1500);
         });
-
-    button.dataset.copyTimeout = setTimeout(function () {
-        if (tooltipDiv) {
-            tooltipDiv.innerText = precopy;
-        }
-
-        if (copyIcon && checkmarkIcon) {
-            copyIcon.style.display = '';
-            checkmarkIcon.style.display = 'none';
-        }
-        delete button.dataset.copyTimeout;
-    }, 1500);
 };
 
 window.copyText = function (text) {
@@ -390,6 +342,8 @@ window.registerGlobalKeydownListener = function (shortcutManager) {
                     return 230;
                 case "m": // go to metrics
                     return 240;
+                case "e": // go to terminals
+                    return 250;
             }
         }
 

@@ -186,7 +186,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private async Task UpdateInstrumentDataAsync(OtlpInstrumentData instrument)
     {
         // Only update data in plotly
-        await _instrumentViewModel.UpdateDataAsync(instrument.Summary, instrument.Dimensions);
+        await _instrumentViewModel.UpdateDataAsync(instrument.Summary, instrument.Dimensions, instrument.HasOverflow);
     }
 
     private async Task ShowCountChangedAsync(bool showCount)

@@ -19,6 +19,13 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         active ? new Icons.Filled.Size24.SlideText()
                   : new Icons.Regular.Size24.SlideText();
 
+    internal static Icon TerminalsIcon(bool active = false) =>
+        active ? new Icons.Filled.Size20.WindowConsole()
+                  : new Icons.Regular.Size20.WindowConsole();
+
+    [Parameter]
+    public bool HasResourceTerminals { get; set; }
+
     internal static Icon StructuredLogsIcon(bool active = false) =>
         active ? new Icons.Filled.Size24.SlideTextSparkle()
                   : new Icons.Regular.Size24.SlideTextSparkle();

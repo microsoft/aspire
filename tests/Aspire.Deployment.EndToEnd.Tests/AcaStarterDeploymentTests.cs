@@ -122,7 +122,6 @@ builder.Build().Run();
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
             if (useDotnetProject)
             {
-                content = "#pragma warning disable ASPIREDOTNETPROJECT001\n" + content;
                 foreach (var (suffix, resource) in new[] { ("ApiService", "apiservice"), ("Web", "webfrontend") })
                 {
                     content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,

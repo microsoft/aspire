@@ -22,7 +22,7 @@ public class TemplateAppFixture : IAsyncLifetime
     public string Id { get; init; }
     public string TemplateName { get; set; }
 
-    public TemplateAppFixture(IMessageSink diagnosticMessageSink, string templateName, string? dotnetNewArgs = null, string config = "Debug", TestTargetFramework tfm = TestTargetFramework.Net9)
+    public TemplateAppFixture(IMessageSink diagnosticMessageSink, string templateName, string? dotnetNewArgs = null, string config = "Debug", TestTargetFramework tfm = TestTargetFramework.Net10)
     {
         _diagnosticMessageSink = diagnosticMessageSink;
         _testOutput = new TestOutputWrapper(messageSink: _diagnosticMessageSink);

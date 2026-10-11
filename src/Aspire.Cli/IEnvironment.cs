@@ -25,6 +25,11 @@ public interface IEnvironment
     IEnumerable<(string Name, string? Value)> GetEnvironmentVariables();
 
     /// <summary>
+    /// Gets the runtime identifier for the current OS and architecture.
+    /// </summary>
+    string RuntimeIdentifier { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the current OS is Windows.
     /// </summary>
     [SupportedOSPlatformGuard("windows")]

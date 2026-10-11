@@ -804,7 +804,6 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             builder.ExecutionContext,
             hostedAgent,
-            advisorAgent.Resource,
             NullLogger<FoundryExtensionsTests>.Instance,
             cts.Token);
 
@@ -833,7 +832,6 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             builder.ExecutionContext,
             hostedAgent,
-            advisorAgent.Resource,
             NullLogger<FoundryExtensionsTests>.Instance,
             cts.Token);
 
@@ -874,7 +872,6 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             builder.ExecutionContext,
             hostedAgent,
-            advisorAgent.Resource,
             NullLogger<FoundryExtensionsTests>.Instance,
             cts.Token);
 
@@ -915,7 +912,6 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             builder.ExecutionContext,
             hostedAgent,
-            advisorAgent.Resource,
             NullLogger<FoundryExtensionsTests>.Instance,
             cts.Token);
 
@@ -951,7 +947,6 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
             await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
                 builder.ExecutionContext,
                 hostedAgent,
-                advisorAgent.Resource,
                 NullLogger<FoundryExtensionsTests>.Instance,
                 default));
 

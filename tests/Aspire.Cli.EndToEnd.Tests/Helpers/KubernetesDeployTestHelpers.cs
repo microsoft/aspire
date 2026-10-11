@@ -65,10 +65,21 @@ internal static class KubernetesDeployTestHelpers
     /// Creates a KinD cluster with a local Docker registry at localhost:5001.
     /// Follows the KinD local registry guide pattern.
     /// </summary>
-    internal static async Task CreateKindClusterWithRegistryAsync(
+    internal static Task CreateKindClusterWithRegistryAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         string clusterName)
+        => auto.CreateKindClusterWithRegistryAsync(counter, clusterName, nodeImage: null);
+
+    /// <summary>
+    /// Creates a KinD cluster with a local registry and an explicitly selected node image.
+    /// A null image uses KinD's default.
+    /// </summary>
+    internal static async Task CreateKindClusterWithRegistryAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string clusterName,
+        string? nodeImage)
     {
         // Delete any leftover cluster with the same name
         await auto.TypeAsync($"kind delete cluster --name={clusterName} 2>/dev/null || true");
@@ -88,7 +99,8 @@ internal static class KubernetesDeployTestHelpers
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Create the cluster (no containerd config patches — registry is configured post-creation via hosts.toml)
-        await auto.TypeAsync($"kind create cluster --name={clusterName} --wait=120s");
+        var imageArgument = nodeImage is null ? string.Empty : $" --image={nodeImage}";
+        await auto.TypeAsync($"kind create cluster --name={clusterName} --wait=120s{imageArgument}");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 

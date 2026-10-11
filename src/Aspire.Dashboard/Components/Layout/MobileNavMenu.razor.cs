@@ -23,6 +23,9 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required bool IsNavMenuOpen { get; set; }
 
+    [Parameter]
+    public bool HasResourceTerminals { get; set; }
+
     [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }
 
@@ -34,12 +37,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     [Parameter, EditorRequired]
     public required bool IsAgentHelpEnabled { get; set; }
-
-    [Parameter, EditorRequired]
-    public required bool IsTerminalDockEnabled { get; set; }
-
-    [Parameter, EditorRequired]
-    public required Func<Task> ToggleTerminalDockAsync { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> LaunchNotificationsAsync { get; set; }
@@ -55,12 +52,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.TerminalStrings> TerminalLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.StructuredLogs> StructuredLogsLoc { get; init; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -164,10 +155,11 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
                 ActiveIcon: DesktopNavMenu.ConsoleLogsIcon(active: true),
                 LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.ConsoleLogsUrl())
             );
+
         }
 
         yield return new MobileNavMenuEntry(
-            StructuredLogsLoc[nameof(Resources.StructuredLogs.StructuredLogsHeader)],
+            Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)],
             () => NavigateToAsync(DashboardUrls.StructuredLogsUrl()),
             DesktopNavMenu.StructuredLogsIcon(),
             ActiveIcon: DesktopNavMenu.StructuredLogsIcon(active: true),
@@ -190,6 +182,17 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
             LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.MetricsUrl())
         );
 
+        if (DashboardClient.IsEnabled && HasResourceTerminals)
+        {
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.NavMenuTerminalsTab)],
+                () => NavigateToAsync(DashboardUrls.TerminalsUrl()),
+                DesktopNavMenu.TerminalsIcon(),
+                ActiveIcon: DesktopNavMenu.TerminalsIcon(active: true),
+                LinkMatchRegex: GetNonIndexPageRegex(DashboardUrls.TerminalsUrl())
+            );
+        }
+
         yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)],
             async () =>
@@ -211,15 +214,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
                 Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
                 LaunchAIAgentsAsync,
                 new Icons.Regular.Size24.BotSparkle()
-            );
-        }
-
-        if (IsTerminalDockEnabled)
-        {
-            yield return new MobileNavMenuEntry(
-                TerminalLoc[nameof(Resources.TerminalStrings.TerminalTitle)],
-                ToggleTerminalDockAsync,
-                new Icons.Regular.Size20.WindowConsole()
             );
         }
 

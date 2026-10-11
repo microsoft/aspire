@@ -128,6 +128,15 @@ fluent-dropdown > [slot="control"] {
     align-self: center;
 }
 
+fluent-dropdown > button[slot="control"] {
+    /* Prevent the selected text from expanding a FluentField grid track past the dropdown width. */
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Fluent's placeholder state follows option selection, which can be empty even when a combobox has custom text. */
 fluent-dropdown[type="combobox"]:not([disabled]) > input[slot="control"]:not(:placeholder-shown) {
     color: var(--colorNeutralForeground1);
@@ -516,8 +525,7 @@ fluent-dropdown fluent-option:focus-visible {
     outline: none;
 }
 
-fluent-text-input[appearance="outline"]:focus-within::part(root),
-.terminal-container:focus-within::after {
+fluent-text-input[appearance="outline"]:focus-within::part(root) {
     border-color: var(--colorStrokeFocus1);
     outline: var(--strokeWidthThick) solid var(--colorStrokeFocus1);
     outline-offset: calc(-1 * var(--strokeWidthThick));
@@ -646,6 +654,16 @@ body {
     overflow: hidden;
 }
 
+.aspire-menu-button {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.aspire-menu-button > .aspire-menu-container {
+    position: absolute;
+}
+
 :is(.aspire-menu-container, [cell-type="columnheader"] > fluent-menu) {
     --colorNeutralBackground1Hover: var(--aspire-menu-item-hover-background);
 }
@@ -667,6 +685,8 @@ body {
     grid-template-columns: minmax(32px, auto) 0 minmax(0, 1fr) minmax(32px, auto);
     height: 28px;
     min-height: 28px;
+    box-sizing: border-box;
+    inline-size: calc(100% - 8px);
     margin-inline: 4px;
     padding: 0;
     border-radius: var(--aspire-control-radius);

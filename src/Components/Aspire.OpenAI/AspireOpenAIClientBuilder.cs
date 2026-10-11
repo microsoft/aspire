@@ -61,7 +61,7 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
         string? deploymentName = null;
 
         var configuration = HostBuilder.Configuration;
-        if (configuration.GetConnectionString(ConnectionName) is string connectionString)
+        if (configuration.TryGetConnectionString(ConnectionName, out var connectionString))
         {
             // Some hosting solutions require named deployments, while others identify the target directly by model name.
             var connectionBuilder = new DbConnectionStringBuilder { ConnectionString = connectionString };

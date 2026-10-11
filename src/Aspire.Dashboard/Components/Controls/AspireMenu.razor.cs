@@ -19,7 +19,9 @@ public partial class AspireMenu : FluentComponentBase
     private FluentMenu? _menu;
     private IReadOnlyList<MenuButtonItem>? _renderedItems;
     private bool _refreshMenuAfterRender;
+    private bool _reopenInProgress;
     private bool? _appliedOpen;
+    private string? _pendingSecondaryActionFocusId;
     private int _cursorLeft;
     private int _cursorTop;
 
@@ -98,14 +100,29 @@ public partial class AspireMenu : FluentComponentBase
                 {
                     // Trigger identifies either the button anchor or the cursor anchor. The parameterless
                     // path leaves placement to Fluent's CSS anchor positioning and viewport fallbacks.
+                    if (_reopenInProgress)
+                    {
+                        await _menu.CloseMenuAsync();
+                    }
                     await _menu.OpenMenuAsync();
                 }
                 else
                 {
+                    _reopenInProgress = false;
                     await _menu.CloseMenuAsync();
                 }
 
                 _appliedOpen = Open;
+            }
+        }
+
+        if (_pendingSecondaryActionFocusId is { } focusId)
+        {
+            _pendingSecondaryActionFocusId = null;
+            if (Open)
+            {
+                // Reopening the menu can focus its first item, so restore the action after it opens.
+                await JS.InvokeVoidAsync("focusElement", focusId);
             }
         }
     }
@@ -127,27 +144,15 @@ public partial class AspireMenu : FluentComponentBase
                 .AddStyle("min-width", "64px")
                 .Build();
 
-            // Escape and light-dismiss can close the browser popover without raising OpenedChanged.
-            // Treat every cursor request as a new open/position request even when Open is still true.
+            // Escape and light-dismiss update the browser popover before their asynchronous
+            // OpenedChanged notification reaches this component. Treat every cursor request as a
+            // new open/position request even when Open is still true.
+            _reopenInProgress = Open;
             _refreshMenuAfterRender = true;
             await SetOpenAsync(true);
 
             StateHasChanged();
         }
-    }
-
-    private Task HandleItemClicked(MenuButtonItem item)
-    {
-        return item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio
-            ? Task.CompletedTask
-            : HandleItemActivatedAsync(item);
-    }
-
-    private Task HandleItemCheckedChanged(MenuButtonItem item, bool? isChecked)
-    {
-        return isChecked is true && item.Role is MenuItemRole.Checkbox or MenuItemRole.Radio
-            ? HandleItemActivatedAsync(item)
-            : Task.CompletedTask;
     }
 
     private async Task HandleItemActivatedAsync(MenuButtonItem item)
@@ -174,18 +179,27 @@ public partial class AspireMenu : FluentComponentBase
             await onSecondaryActionClick();
         }
 
+        _pendingSecondaryActionFocusId = $"{item.Id}-secondary-action";
         if (OnSecondaryActionComplete.HasDelegate)
         {
             await OnSecondaryActionComplete.InvokeAsync();
-        }
-        else
-        {
-            StateHasChanged();
         }
     }
 
     private async Task OnOpenChanged(bool open)
     {
+        // Fluent reports native popover toggles through asynchronous JS callbacks. During a deliberate
+        // close-and-reopen, ignore the reset's close notification until the following open is confirmed.
+        if (_reopenInProgress)
+        {
+            if (!open)
+            {
+                return;
+            }
+
+            _reopenInProgress = false;
+        }
+
         _appliedOpen = open;
         await SetOpenAsync(open);
     }

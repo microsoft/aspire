@@ -8,6 +8,8 @@ using System.Globalization;
 using Aspire.Dashboard.Utils;
 using Microsoft.Data.Sqlite;
 
+[module: DapperAot]
+
 namespace Aspire.Dashboard.ServiceClient;
 
 /// <summary>
@@ -17,7 +19,7 @@ public sealed class DashboardSqliteDatabase : IDisposable
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 18;
+    internal const int SchemaVersion = 25;
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 

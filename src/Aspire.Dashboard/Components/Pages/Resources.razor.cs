@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
@@ -121,6 +122,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly List<MenuButtonItem> _resourcesMenuItems = new();
     private DotNetObjectReference<ResourcesInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
+    private bool _graphInitializing;
     private bool _graphInitialized;
     private AspirePageContentLayout? _contentLayout;
     private TotalItemsFooter _totalItemsFooter = default!;
@@ -175,10 +177,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     internal bool AreAllStatesVisible => PageViewModel.ResourceStatesToVisibility.Values.All(value => value);
     internal bool AreAllHealthStatesVisible => PageViewModel.ResourceHealthStatusesToVisibility.Values.All(value => value);
 
-    private readonly GridSort<ResourceGridViewModel> _nameSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _stateSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource.State).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _startTimeSort = GridSort<ResourceGridViewModel>.ByDescending(p => p.Resource.StartTimeStamp).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _typeSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource.ResourceType).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _startTimeSort = EnumerableGridSort<ResourceGridViewModel>.ByDescending(item => item.Resource.StartTimeStamp).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceType).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
 
     protected override async Task OnInitializedAsync()
     {
@@ -302,9 +304,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     }
 
                     UpdateMaxHighlightedCount();
-                    await UpdateResourceGraphResourcesAsync();
                     await InvokeAsync(async () =>
                     {
+                        await UpdateResourceGraphResourcesAsync();
                         await _dataGrid.SafeRefreshDataAsync();
                         if (selectedResourceHasChanged)
                         {
@@ -361,61 +363,111 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<ResourceGridViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
+        if (_isDisposing)
         {
-            StateHasChanged();
+            return;
         }
 
-        if (firstRender)
+        try
         {
-            var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
-            await JS.InvokeVoidAsync("focusElement", initialFocusElementId, true);
-        }
-
-        if (_pendingFocusElementId is { } pendingFocusElementId)
-        {
-            _pendingFocusElementId = null;
-            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
-        }
-
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
-        {
-            // Before any awaits, set a flag to indicate the graph is initialized. This prevents the graph being initialized multiple times.
-            _graphInitialized = true;
-
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-resourcegraph.js");
-
-            _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
-
-            // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
-            // SVG path data here (the same way resource/state icons are) so the JS can render them.
-            var graphIcons = new
+            if (firstRender)
             {
-                menu = new
-                {
-                    path = ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                    labelFormat = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value
-                }
-            };
+                var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
+                await JS.InvokeVoidAsync("focusElement", initialFocusElementId, true);
+            }
 
-            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
-            await UpdateResourceGraphResourcesAsync();
-            await UpdateResourceGraphSelectedAsync();
+            if (_pendingFocusElementId is { } pendingFocusElementId)
+            {
+                _pendingFocusElementId = null;
+                await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
+            }
+
+            if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized && !_graphInitializing)
+            {
+                // Prevent reentrant renders from initializing the graph again while import is pending.
+                _graphInitializing = true;
+                try
+                {
+                    _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", $"/{Assets["js/app-resourcegraph.js"]}");
+
+                    _resourcesInteropReference = DotNetObjectReference.Create(new ResourcesInterop(this));
+
+                    // Static icons used by the graph that aren't tied to a specific resource. Converted to raw
+                    // SVG path data here (the same way resource/state icons are) so the JS can render them.
+                    var graphIcons = new GraphIconsDto(new GraphMenuIconDto(
+                        Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
+                        LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value));
+
+                    await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+                    _graphInitialized = true;
+                    await UpdateResourceGraphResourcesAsync();
+                    await UpdateResourceGraphSelectedAsync();
+                }
+                finally
+                {
+                    _graphInitializing = false;
+                }
+            }
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Resources page rendering stopped because the circuit disconnected.");
+        }
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Resources page rendering stopped because the page was disposed.");
         }
     }
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (PageViewModel.SelectedViewKind != ResourceViewKind.Graph || _jsModule == null)
+        if (PageViewModel.SelectedViewKind != ResourceViewKind.Graph)
         {
             return;
         }
 
+        await InvokeResourceGraphAsync("updateResourcesGraph", GetResourceGraphResources());
+    }
+
+    private async Task InvokeResourceGraphAsync(string identifier, params object?[] args)
+    {
+        if (!_graphInitialized || _jsModule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _jsModule.InvokeVoidAsync(identifier, args);
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Resource graph call '{Identifier}' stopped because the circuit disconnected.", identifier);
+        }
+        catch (ObjectDisposedException ex) when (_isDisposing)
+        {
+            Logger.LogDebug(ex, "Resource graph call '{Identifier}' stopped because the page was disposed.", identifier);
+        }
+    }
+
+    private List<ResourceDto> GetResourceGraphResources()
+    {
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
-        await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
+        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
+    }
+
+    private Task ExportResourceGraphAsync()
+    {
+        return TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = DialogService,
+            ValueDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidButton)],
+            MarkdownDescription = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphExportMermaidDescription)],
+            // Map the current model even while the graph's asynchronous initialization is pending.
+            Value = ResourceGraphMermaidExporter.Export(GetResourceGraphResources()),
+            DownloadFileName = "resources.mmd",
+            FixedFormat = DashboardUIHelpers.PlaintextFormat
+        });
     }
 
     private class ResourcesInterop(Resources resources)
@@ -457,13 +509,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         // Get filtered and ordered resources.
         var filteredResources = GetFilteredResources()
-            .Select(r => new ResourceGridViewModel { Resource = r })
-            .AsQueryable();
-        filteredResources = request.SortByColumn is null
+            .Select(r => new ResourceGridViewModel { Resource = r });
+        filteredResources = request.SortColumns.Count == 0
             ? filteredResources
                 .OrderBy(p => p.Resource.ResourceType)
                 .ThenBy(p => p.Resource, ResourceViewModelNameComparer.Instance)
-            : request.ApplySorting(filteredResources);
+            : EnumerableGridItemsProvider.ApplySorting(filteredResources, request);
 
         // Rearrange resources based on parent information.
         // This must happen after resources are ordered so nested resources are in the right order.
@@ -473,15 +524,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .ToList();
 
         // Paging visible resources.
-        var query = orderedResources
-            .Skip(request.StartIndex)
-            .Take(request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount)
-            .ToList();
+        var result = EnumerableGridItemsProvider.GetPage(orderedResources,
+            request with { Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount });
 
         _totalItemsCount = orderedResources.Count;
-        _totalItemsFooter.UpdateDisplayedCount(query.Count);
+        _totalItemsFooter.UpdateDisplayedCount(result.Items.Count);
 
-        return ValueTask.FromResult(GridItemsProviderResult.From(query, orderedResources.Count));
+        return ValueTask.FromResult(result);
     }
 
     private Task OnDataGridSortChangedAsync(DataGridSortEventArgs<ResourceGridViewModel> _)
@@ -491,25 +540,28 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         _resourcesMenuItems.Clear();
 
-        if (HasCollapsedResources())
+        if (HasAnyChildResources())
         {
-            _resourcesMenuItems.Add(new MenuButtonItem
+            if (HasCollapsedResources())
             {
-                IsDisabled = false,
-                OnClick = _onToggleCollapseAllCallback.InvokeAsync,
-                Text = Loc[nameof(Dashboard.Resources.Resources.ResourceExpandAllChildren)],
-                Icon = new Icons.Regular.Size16.Eye()
-            });
-        }
-        else
-        {
-            _resourcesMenuItems.Add(new MenuButtonItem
+                _resourcesMenuItems.Add(new MenuButtonItem
+                {
+                    IsDisabled = false,
+                    OnClick = _onToggleCollapseAllCallback.InvokeAsync,
+                    Text = Loc[nameof(Dashboard.Resources.Resources.ResourceExpandAllChildren)],
+                    Icon = new Icons.Regular.Size16.Eye()
+                });
+            }
+            else
             {
-                IsDisabled = false,
-                OnClick = _onToggleCollapseAllCallback.InvokeAsync,
-                Text = Loc[nameof(Dashboard.Resources.Resources.ResourceCollapseAllChildren)],
-                Icon = new Icons.Regular.Size16.EyeOff()
-            });
+                _resourcesMenuItems.Add(new MenuButtonItem
+                {
+                    IsDisabled = false,
+                    OnClick = _onToggleCollapseAllCallback.InvokeAsync,
+                    Text = Loc[nameof(Dashboard.Resources.Resources.ResourceCollapseAllChildren)],
+                    Icon = new Icons.Regular.Size16.EyeOff()
+                });
+            }
         }
 
         if (_showResourceTypeColumn)
@@ -658,6 +710,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 EventCallback.Factory.Create<CommandViewModel>(this, (command) => ExecuteResourceCommandAsync(resource, command)),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
                 showViewDetails: true,
+                showTerminalItem: true,
                 showConsoleLogsItem: true,
                 showUrls: true);
 
@@ -846,13 +899,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return _resourceByName.Values.Any(r => !string.IsNullOrEmpty(r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)));
     }
 
-    private bool HasViewOptionsMenu()
-    {
-        // Show the menu if there are any child resources (for collapse/expand)
-        // OR if there are any hidden resources (for show/hide hidden resources)
-        return HasAnyChildResources() || _resourceByName.Values.Any(r => r.IsResourceHidden(showHiddenResources: false));
-    }
-
     private Task OnTabChangeAsync(FluentTab? newTab)
     {
         if (_isDisposing)
@@ -911,12 +957,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             : requestedViewKind;
     }
 
-    private async Task UpdateResourceGraphSelectedAsync()
+    private Task UpdateResourceGraphSelectedAsync()
     {
-        if (_jsModule != null)
-        {
-            await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
-        }
+        return InvokeResourceGraphAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
     }
 
     public sealed class ResourcesViewModel
@@ -1021,10 +1064,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task ContextMenuOpenChangedAsync(bool open)
     {
         _contextMenuOpen = open;
-        if (_jsModule is not null)
-        {
-            await _jsModule.InvokeVoidAsync("updateResourcesGraphContextMenu", open);
-        }
+        await InvokeResourceGraphAsync("updateResourcesGraphContextMenu", open);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1035,8 +1075,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         var properties = new List<ComponentTelemetryProperty>
         {
-            new(TelemetryPropertyKeys.ResourceView, new AspireTelemetryProperty(PageViewModel.SelectedViewKind.ToString(), AspireTelemetryPropertyType.UserSetting)),
-            new(TelemetryPropertyKeys.ResourceTypes, new AspireTelemetryProperty(_resourceByName.Values.Select(r => TelemetryPropertyValues.GetResourceTypeTelemetryValue(r.ResourceType, r.SupportsDetailedTelemetry)).OrderBy(t => t).ToList()))
+            new(TelemetryPropertyKeys.ResourceView, new AspireTelemetryProperty(PageViewModel.SelectedViewKind.ToString(), AspireTelemetryPropertyType.UserSetting))
         };
 
         TelemetryContext.UpdateTelemetryProperties(properties.ToArray(), Logger);

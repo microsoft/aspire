@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001, ASPIREPROJECTS001
+#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,7 @@ internal static class DotnetProjectBuildCoordinator
     private const string DebugSessionPortConfigurationKey = "DEBUG_SESSION_PORT";
     private const string DebugSessionInfoConfigurationKey = "DEBUG_SESSION_INFO";
     private const string AspireStorePathConfigurationKey = "Aspire:Store:Path";
+    private const string RestoreProjectsIndividuallyConfigurationKey = "Aspire:Dotnet:RestoreProjectsIndividually";
 
     public static CoordinatorState? Prepare(
         IDistributedApplicationBuilder builder,
@@ -476,11 +478,13 @@ internal static class DotnetProjectBuildCoordinator
             }
 
             var buildSteps = CreateBuildSteps(buildEntries);
+            var restoreProjectsIndividually = _builder.Configuration.GetValue<bool>(RestoreProjectsIndividuallyConfigurationKey);
             var applicationLifetime = services.GetRequiredService<IHostApplicationLifetime>();
             var primaryBuildResource = PrimaryBuildResource!;
             var originalPrimaryProjectPaths = primaryBuildResource.ProjectPaths;
             var originalPrimaryWorkingDirectory = primaryBuildResource.WorkingDirectory;
             var originalPrimaryBuildConfiguration = primaryBuildResource.BuildConfiguration;
+            var originalPrimaryRestoreProjectsIndividually = primaryBuildResource.RestoreProjectsIndividually;
             var rollbackActions = new Stack<Action>();
 
             try
@@ -489,7 +493,8 @@ internal static class DotnetProjectBuildCoordinator
                     primaryBuildResource.ConfigureTraversalBuild(
                         originalPrimaryProjectPaths,
                         originalPrimaryWorkingDirectory,
-                        originalPrimaryBuildConfiguration));
+                        originalPrimaryBuildConfiguration,
+                        originalPrimaryRestoreProjectsIndividually));
 
                 var buildResources = new List<DotnetProjectBuildResource>(buildSteps.Count);
                 for (var index = 0; index < buildSteps.Count; index++)
@@ -514,7 +519,8 @@ internal static class DotnetProjectBuildCoordinator
                         buildResource.ConfigureTraversalBuild(
                             step.Projects.Select(entry => entry.Metadata.ProjectPath),
                             step.WorkingDirectory,
-                            step.Configuration);
+                            step.Configuration,
+                            restoreProjectsIndividually);
                         rollbackActions.Push(ValidateMaterializedBuildCallbacks(buildResource, step.Projects));
                     }
                     else

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using Aspire.Hosting.Terminals;
 using Hex1b.Input;
 
 #pragma warning disable ASPIRETERMINAL001 // Test consumer of the experimental AppHost terminal API.

@@ -129,6 +129,23 @@ dotnet test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Te
 
 ## CI/CD
 
+### Polyglot provisioning SDK scenarios
+
+These TypeScript deployment scenarios exercise opt-in `Aspire.Hosting.Azure.Provisioning.*`
+packages from the current build and check the deployed Azure configuration, not just generated Bicep:
+
+| Scenario | Live Azure assertions |
+|----------|-----------------------|
+| `TypeScriptAzureProvisioningDeploymentTests.DeployAppConfigurationWithProvisioningOverrides` | The App Configuration root proxy sets one-day soft-delete retention, disables local authentication, and writes a custom tag. |
+| `TypeScriptAzureProvisioningDeploymentTests.DeployNetworkAndPrivateDnsWithProvisioningOverrides` | Network root proxies set the VNet flow timeout and VNet/NSG tags while preserving its subnet. A Private DNS factory creates a globally located zone, then its root lookup sets the name and tag. |
+| `TypeScriptAzureContainerAppJobDeploymentTests` | An identifier-based Container App job proxy customizes the nested configuration's replica timeout and retry limit, while the existing manual/scheduled trigger assertions remain in place. |
+
+The first two scenarios do not create compute resources. They run in the dedicated deployment
+workflow, which discovers test classes automatically, rather than ordinary PR test jobs.
+Local execution requires Linux, Azure authentication, and a current-source local-hive archive
+selected with `ASPIRE_E2E_ARCHIVE`; released packages do not contain these new proxies.
+Use the class names above as the deployment workflow's `test_filter`.
+
 ### Project V2 deployment scenarios
 
 These separately sharded classes exercise conventional `.csproj` workloads registered with

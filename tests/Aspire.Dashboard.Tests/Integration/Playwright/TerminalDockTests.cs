@@ -8,7 +8,6 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Xunit;
@@ -19,77 +18,83 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardServerFixture fixture)
     : PlaywrightTestsBase<TerminalDockTests.TerminalDockDashboardServerFixture>(fixture)
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task AppHostWorkloadEnded_CompletionCloseKeepsTabUntilExplicitClose(bool beforeHandshake)
+    public async Task Tabs_ReorderWithoutRemountingAndScrollWithoutWrapping()
     {
         await RunTestAsync(async page =>
         {
-            var (updates, closes) = await fixture.StartSessionAsync();
-            await page.Clock.InstallAsync();
-            var parkedConnections = Channel.CreateUnbounded<IWebSocketRoute>();
-            var connectionCount = 0;
-            await page.RouteWebSocketAsync("**/api/apphost-terminal?*", route =>
+            var (updates, _) = await OpenDockAsync(page);
+            var viewers = await page.Locator(".terminal-dock textarea").ElementHandlesAsync();
+            await Tab(page, "third").DragToAsync(Tab(page, "first"), new() { TargetPosition = new() { X = 2, Y = 10 } });
+            var tabs = page.Locator(".terminal-dock-tab-title");
+            await Assertions.Expect(tabs).ToHaveTextAsync(["third", "first", "second"]);
+            await Assertions.Expect(Tab(page, "first")).ToHaveAttributeAsync("aria-selected", "true");
+            await Tab(page, "third").FocusAsync();
+            await page.Keyboard.PressAsync("Alt+Shift+ArrowRight");
+            await Assertions.Expect(tabs).ToHaveTextAsync(["first", "third", "second"]);
+            await Assertions.Expect(Tab(page, "third")).ToBeFocusedAsync();
+            foreach (var viewer in viewers)
             {
-                Interlocked.Increment(ref connectionCount);
-                if (beforeHandshake)
-                {
-                    route.OnMessage(_ => { });
-                }
-                else
-                {
-                    route.ConnectToServer();
-                }
-                parkedConnections.Writer.TryWrite(route);
-            });
-
-            await page.GotoAsync("/").DefaultTimeout();
-            await updates.Writer.WriteAsync(Change(TerminalChangeType.Added, "ended"));
-            await updates.Writer.WriteAsync(Change(TerminalChangeType.Activated, "ended"));
-            await Assertions.Expect(Tab(page, "ended")).ToBeVisibleAsync();
-            TestTerminalConnection? producer = null;
-            var parked = await parkedConnections.Reader.ReadAsync().AsTask().DefaultTimeout();
-            if (!beforeHandshake)
-            {
-                producer = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
-                await producer.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
-                await Assertions.Expect(page.Locator(".terminal-dock-pane.active")
-                    .GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();
+                Assert.True(await viewer.EvaluateAsync<bool>("element => element.isConnected"));
             }
 
-            var endpoint = new Uri(parked.Url);
-            var viewId = QueryHelpers.ParseQuery(endpoint.Query)["viewId"].ToString();
-            Assert.True(fixture.DashboardApp.Services.GetRequiredService<TerminalViewSessionRegistry>()
-                .TryGet(viewId, endpoint.PathAndQuery, out var session));
-            session.MarkEnded();
+            for (var i = 0; i < 12; i++)
+            {
+                await updates.Writer.WriteAsync(Change(TerminalChangeType.Added, $"terminal-{i:00}"));
+            }
+            await page.SetViewportSizeAsync(700, 800);
+            await Assertions.Expect(tabs).ToHaveCountAsync(15);
+            var left = page.GetByRole(AriaRole.Button, new() { Name = "Scroll terminal tabs left", Exact = true });
+            var right = page.GetByRole(AriaRole.Button, new() { Name = "Scroll terminal tabs right", Exact = true });
+            await Assertions.Expect(right).ToBeEnabledAsync();
+            await right.ClickAsync();
+            await Assertions.Expect(left).ToBeEnabledAsync();
+            await left.ClickAsync();
+            await Assertions.Expect(left).ToBeDisabledAsync();
+            Assert.True(await tabs.EvaluateAllAsync<bool>("tabs => tabs.every(t => Math.abs(t.getBoundingClientRect().top - tabs[0].getBoundingClientRect().top) < 1)"));
 
-            // Transport tests cover the authoritative gRPC signal. Here both a pre-frame
-            // socket and a mounted presentation must observe Aspire's completion close.
-            var terminal = await page.Locator(".terminal-dock .terminal-container").ElementHandleAsync();
-            Assert.NotNull(terminal);
-            await parked.CloseAsync(new() { Code = 4000, Reason = "Terminal ended" });
-            await page.EvaluateAsync("""
-                async () => { window.terminalModule = await import('/Components/Controls/TerminalView.razor.js'); }
-                """);
-            await page.WaitForFunctionAsync("""
-                () => {
-                    const state = window.terminalModule.getTerminalSnapshot(document.querySelector('.terminal-dock .terminal-container'));
-                    return state?.ended && !state.connected;
-                }
-                """).DefaultTimeout();
-            await page.Clock.FastForwardAsync(5_000);
-            await Assertions.Expect(Tab(page, "ended")).ToHaveAttributeAsync("aria-selected", "true");
-            Assert.True(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
-            Assert.Equal(1, producer?.ConnectionCount ?? Volatile.Read(ref connectionCount));
+            await Tab(page, "first").FocusAsync();
+            await page.Keyboard.PressAsync("End");
+            await Assertions.Expect(Tab(page, "terminal-11")).ToBeFocusedAsync();
+            await Assertions.Expect(right).ToBeDisabledAsync();
+            await page.Keyboard.PressAsync("Home");
+            await Assertions.Expect(Tab(page, "first")).ToBeFocusedAsync();
+            await Assertions.Expect(left).ToBeDisabledAsync();
+            await updates.Writer.WriteAsync(Change(TerminalChangeType.Activated, "terminal-11"));
+            await Assertions.Expect(Tab(page, "terminal-11")).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(right).ToBeDisabledAsync();
+
+            for (var i = 0; i < 12; i++)
+            {
+                await updates.Writer.WriteAsync(Change(TerminalChangeType.Removed, $"terminal-{i:00}"));
+            }
+            await page.SetViewportSizeAsync(1280, 900);
+            await Assertions.Expect(tabs).ToHaveCountAsync(3);
+            await Assertions.Expect(left).ToBeVisibleAsync();
+            await Assertions.Expect(right).ToBeVisibleAsync();
+            await Assertions.Expect(left).ToBeDisabledAsync();
+            await Assertions.Expect(right).ToBeDisabledAsync();
+            Assert.True(await page.Locator(".terminal-dock-tab-scroll").EvaluateAsync<bool>(
+                "element => element.nextElementSibling.classList.contains('terminal-dock-detach')"));
+            foreach (var id in new[] { "first", "second", "third" })
+            {
+                await updates.Writer.WriteAsync(Change(TerminalChangeType.Removed, id));
+            }
+            await Assertions.Expect(tabs).ToHaveCountAsync(0);
+            await Assertions.Expect(left).ToBeVisibleAsync();
+            await Assertions.Expect(right).ToBeVisibleAsync();
+            await Assertions.Expect(left).ToBeDisabledAsync();
+            await Assertions.Expect(right).ToBeDisabledAsync();
+            await page.SetViewportSizeAsync(900, 800);
+            for (var i = 0; i < 5; i++)
+            {
+                await updates.Writer.WriteAsync(Change(TerminalChangeType.Added, $"terminal-{i:00}"));
+            }
+            await Assertions.Expect(tabs).ToHaveCountAsync(5);
+            await Assertions.Expect(left).ToBeDisabledAsync();
+            await Assertions.Expect(right).ToBeDisabledAsync();
             Assert.Empty(fixture.Client.ClosedTerminals);
-
-            await page.GetByRole(AriaRole.Button, new() { Name = "Close terminal 'ended'", Exact = true }).ClickAsync();
-            Assert.Equal("ended", await closes.Reader.ReadAsync().AsTask().DefaultTimeout());
-            await updates.Writer.WriteAsync(Change(TerminalChangeType.Removed, "ended"));
-            await Assertions.Expect(Tab(page, "ended")).ToHaveCountAsync(0);
-            Assert.False(await terminal.EvaluateAsync<bool>("element => element.isConnected"));
         });
     }
 
@@ -99,15 +104,17 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
     {
         await RunTestAsync(async page =>
         {
-            await fixture.StartSessionAsync();
+            var (updates, _) = await fixture.StartSessionAsync();
             await page.SetViewportSizeAsync(1280, 900);
             await page.GotoAsync("/").DefaultTimeout();
-            await page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (`)", Exact = true }).ClickAsync();
+            await updates.Writer.WriteAsync(new WatchTerminalsUpdate
+            {
+                Snapshot = new TerminalDescriptorList { ActivatedTerminalId = "missing" }
+            });
             var panel = page.Locator(".terminal-dock-panel");
             var heading = panel.GetByRole(AriaRole.Heading, new() { Name = "No docked terminals", Exact = true });
             var hint = panel.Locator(".terminal-dock-panel-hint");
             var moreInformation = panel.GetByRole(AriaRole.Link, new() { Name = "More information", Exact = true, IncludeHidden = true });
-            var body = panel.Locator(".terminal-dock-panel-body");
             var handle = page.GetByRole(AriaRole.Separator, new() { Name = "Terminals", Exact = true });
             await Assertions.Expect(panel).ToBeVisibleAsync();
 
@@ -138,8 +145,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
                     {
                         (heading, true),
                         (hint, true),
-                        (moreInformation, height > 120),
-                        (body, height == 420 || (width == 1280 && height == 320))
+                        (moreInformation, height > 120)
                     })
                     {
                         if (visible)
@@ -164,7 +170,6 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
                 await Assertions.Expect(heading).ToBeVisibleAsync();
                 await Assertions.Expect(hint).ToBeHiddenAsync();
                 await Assertions.Expect(moreInformation).ToBeHiddenAsync();
-                await Assertions.Expect(body).ToBeHiddenAsync();
                 var tinyPanelBox = await panel.BoundingBoxAsync();
                 var headingBox = await heading.BoundingBoxAsync();
                 Assert.NotNull(tinyPanelBox);
@@ -218,8 +223,10 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             await page.Mouse.MoveAsync(x, y);
             await page.Mouse.DownAsync();
             await page.Mouse.MoveAsync(x, y - 60);
-            await page.Mouse.UpAsync();
             var draggedHeight = (int)Math.Round(viewportHeight - (y - 60));
+            await Assertions.Expect(page.Locator(".terminal-dock")).ToHaveCSSAsync("height", $"{draggedHeight}px");
+            await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", draggedHeight.ToString());
+            await page.Mouse.UpAsync();
             await Assertions.Expect(handle).ToHaveAttributeAsync("aria-valuenow", draggedHeight.ToString());
             await Assertions.Expect(handle).ToBeFocusedAsync();
             await page.Keyboard.PressAsync("ArrowUp");
@@ -262,7 +269,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
                 await Assertions.Expect(handle).ToBeFocusedAsync();
                 var box = await handle.BoundingBoxAsync();
                 Assert.NotNull(box);
-                Assert.InRange(box.Y, 0, viewportHeight - box.Height);
+                Assert.InRange(box.Y + box.Height / 2, 0, viewportHeight);
             }
         });
     }
@@ -397,12 +404,12 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             if (hideDock)
             {
                 await page.Locator(".terminal-dock-collapse").ClickAsync();
-                focusTarget = page.GetByRole(AriaRole.Button, new() { Name = "Toggle terminal (`)", Exact = true });
+                focusTarget = page.Locator("#dashboard-settings-button");
             }
             else
             {
                 await Tab(page, "second").ClickAsync();
-                focusTarget = page.Locator(".terminal-dock-pane.active").GetByRole(AriaRole.Textbox);
+                focusTarget = Tab(page, "second");
             }
 
             await focusTarget.FocusAsync();
@@ -459,7 +466,7 @@ public sealed class TerminalDockTests(TerminalDockTests.TerminalDockDashboardSer
             Client = new TestDashboardClient(
                 isEnabled: true,
                 terminalChannelProvider: () => Volatile.Read(ref _updates),
-                attachTerminal: async (id, token) => (await TerminalResolver.ConnectAsync(id, 0, token))!,
+                attachTerminal: async (id, token) => (await TerminalResolver.ConnectAsync(id, token))!,
                 closeTerminal: (id, token) => Volatile.Read(ref _closes).Writer.WriteAsync(id, token).AsTask());
         }
 

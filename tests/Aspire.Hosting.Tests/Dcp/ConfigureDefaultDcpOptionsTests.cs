@@ -9,6 +9,228 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class ConfigureDefaultDcpOptionsTests
 {
     [Fact]
+    public void ExplicitEmptyInvocationOverrideClearsLegacyDispatcherArguments()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["ASPIRE_TERMINAL_HOST_PATH"] = "/native/Aspire.TerminalHost",
+            ["ASPIRE_TERMINAL_HOST_INVOCATION_ARGS"] = string.Empty,
+            ["DcpPublisher:TerminalHostInvocationArgs"] = "terminalhost"
+        });
+
+        Assert.Equal("/native/Aspire.TerminalHost", options.TerminalHostPath);
+        Assert.Equal(string.Empty, options.TerminalHostInvocationArgs);
+    }
+
+    [Fact]
+    public void KubernetesApiTimeoutDefaultsToFortySecondsWithTwentyAdditionalInitializationSeconds()
+    {
+        var options = ConfigureWithDcpPublisher([]);
+
+        Assert.Equal(TimeSpan.FromSeconds(20), options.KubernetesInitializationAdditionalTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(40), options.KubernetesApiTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(60), options.KubernetesApiTimeout + options.KubernetesInitializationAdditionalTimeout);
+    }
+
+    [Fact]
+    public void KubernetesApiTimeoutsCanBeConfigured()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesInitializationAdditionalTimeout"] = "00:00:30",
+            ["DcpPublisher:KubernetesApiTimeout"] = "00:00:50",
+        });
+
+        Assert.Equal(TimeSpan.FromSeconds(30), options.KubernetesInitializationAdditionalTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(50), options.KubernetesApiTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(80), options.KubernetesApiTimeout + options.KubernetesInitializationAdditionalTimeout);
+    }
+
+    [Fact]
+    public void KubernetesApiTimeoutOverrideAlsoIncreasesInitializationBudget()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesApiTimeout"] = "00:00:50",
+        });
+
+        Assert.Equal(TimeSpan.FromSeconds(20), options.KubernetesInitializationAdditionalTimeout);
+        Assert.Equal(TimeSpan.FromSeconds(70), options.KubernetesApiTimeout + options.KubernetesInitializationAdditionalTimeout);
+    }
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("-00:00:01")]
+    [InlineData("00:00:00.999")]
+    [InlineData("00:10:00.001")]
+    [InlineData("00:00:00.010")]
+    [InlineData("1.00:00:00")]
+    public void KubernetesApiTimeoutMustBeWithinSupportedRange(string configuredTimeout)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesApiTimeout"] = configuredTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Equal("Property KubernetesApiTimeout: The Kubernetes API timeout must be between one second and ten minutes.", Assert.Single(result.Failures!));
+    }
+
+    [Theory]
+    [InlineData("00:00:01", 1000)]
+    [InlineData("00:10:00", 600000)]
+    public void KubernetesApiTimeoutAcceptsSupportedBoundaries(string configuredTimeout, int expectedMilliseconds)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesInitializationAdditionalTimeout"] = "00:00:00",
+            ["DcpPublisher:KubernetesApiTimeout"] = configuredTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(TimeSpan.Zero, options.KubernetesInitializationAdditionalTimeout);
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), options.KubernetesApiTimeout);
+    }
+
+    [Theory]
+    [InlineData("00:00:40", "00:00:00", 40000)]
+    [InlineData("00:00:40", "00:09:20", 600000)]
+    [InlineData("00:00:01", "00:09:59", 600000)]
+    public void KubernetesInitializationAdditionalTimeoutAcceptsSupportedBoundaries(string apiTimeout, string additionalTimeout, int expectedMilliseconds)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesApiTimeout"] = apiTimeout,
+            ["DcpPublisher:KubernetesInitializationAdditionalTimeout"] = additionalTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), options.KubernetesApiTimeout + options.KubernetesInitializationAdditionalTimeout);
+    }
+
+    [Theory]
+    [InlineData("-00:00:00.001")]
+    [InlineData("-00:00:01")]
+    public void KubernetesInitializationAdditionalTimeoutMustBeNonNegative(string configuredTimeout)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesInitializationAdditionalTimeout"] = configuredTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Equal("Property KubernetesInitializationAdditionalTimeout: The Kubernetes additional initialization timeout must be non-negative.", Assert.Single(result.Failures!));
+    }
+
+    [Theory]
+    [InlineData("00:00:40", "00:09:20.001")]
+    [InlineData("00:10:00", "00:00:00.001")]
+    [InlineData("00:00:01", "00:10:00")]
+    public void KubernetesInitializationBudgetMustNotExceedTenMinutes(string apiTimeout, string additionalTimeout)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesApiTimeout"] = apiTimeout,
+            ["DcpPublisher:KubernetesInitializationAdditionalTimeout"] = additionalTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Equal("Property KubernetesInitializationAdditionalTimeout: The combined Kubernetes API and additional initialization timeouts must not exceed ten minutes.", Assert.Single(result.Failures!));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void KubernetesInitializationBudgetValidationDoesNotOverflow(bool apiTimeoutAlsoOverflows)
+    {
+        var options = ConfigureWithDcpPublisher([]);
+        options.KubernetesInitializationAdditionalTimeout = TimeSpan.MaxValue;
+        if (apiTimeoutAlsoOverflows)
+        {
+            options.KubernetesApiTimeout = TimeSpan.MaxValue;
+        }
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Equal(apiTimeoutAlsoOverflows
+            ? "Property KubernetesApiTimeout: The Kubernetes API timeout must be between one second and ten minutes."
+            : "Property KubernetesInitializationAdditionalTimeout: The combined Kubernetes API and additional initialization timeouts must not exceed ten minutes.",
+            Assert.Single(result.Failures!));
+    }
+
+    [Fact]
+    public void KubernetesCreateRecoveryTimeoutDefaultsToTwoMinutes()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(2), ConfigureWithDcpPublisher([]).KubernetesCreateRecoveryTimeout);
+    }
+
+    [Fact]
+    public void KubernetesCreateRecoveryTimeoutCanBeConfigured()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesCreateRecoveryTimeout"] = "00:03:00",
+        });
+
+        Assert.Equal(TimeSpan.FromMinutes(3), options.KubernetesCreateRecoveryTimeout);
+    }
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("-00:00:01")]
+    [InlineData("00:00:00.999")]
+    [InlineData("00:10:00.001")]
+    [InlineData("00:00:00.010")]
+    [InlineData("1.00:00:00")]
+    public void KubernetesCreateRecoveryTimeoutMustBeWithinSupportedRange(string configuredTimeout)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesCreateRecoveryTimeout"] = configuredTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Equal("Property KubernetesCreateRecoveryTimeout: The Kubernetes create recovery timeout must be between one second and ten minutes.", Assert.Single(result.Failures!));
+    }
+
+    [Theory]
+    [InlineData("00:00:01", 1000)]
+    [InlineData("00:10:00", 600000)]
+    public void KubernetesCreateRecoveryTimeoutAcceptsSupportedBoundaries(string configuredTimeout, int expectedMilliseconds)
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:KubernetesCreateRecoveryTimeout"] = configuredTimeout,
+        });
+        var validator = new ValidateDcpOptions(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish));
+
+        var result = validator.Validate(null, options);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), options.KubernetesCreateRecoveryTimeout);
+    }
+
+    [Fact]
     public void TerminalHostFallsBackToAspireManagedDashboardPath()
     {
         // The CLI bundle launcher (PrebuiltAppHostServer/DotNetAppHostProject) sets

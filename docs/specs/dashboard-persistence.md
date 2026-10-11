@@ -227,7 +227,17 @@ Summary tables and indexes let trace list queries avoid reconstructing every tra
 
 `telemetry_metric_instruments` identifies instruments by resource, scope, and name and stores type, temporality, monotonicity, unit, and description.
 
-Metric dimensions are normalized into an attribute set and stable non-cryptographic hash. Points store timestamps, point type, repeated-value count, integer or floating-point values, and histogram data. Histogram bucket counts and explicit bounds are compact binary values rather than JSON. Exemplars and their filtered attributes are separate rows correlated to trace and span IDs.
+Metric dimensions use normalized attribute sets and stable non-cryptographic hashes. Points store intervals, repeated-value counts, numeric values, and compact binary histogram buckets and bounds. Exemplars and their filtered attributes are separate rows linked to points, traces, and spans.
+
+Metric and exemplar timestamps use signed Unix nanoseconds, preserving precision through persistence and export independently of display conversions. Timestamps outside the supported range, ending in April 2262, are logged and rejected; rejecting an exemplar does not discard its parent measurement.
+
+Histograms retain the producer's aggregation start separately from the normalized chart interval. Export uses producer timestamps to preserve OTLP semantics. Aggregation identities distinguish cumulative resets and independent delta intervals across persistence, rollup, and database reopening:
+
+- Cumulative rollups retain the latest snapshot for each aggregation and preserve reset boundaries rather than combining unrelated observations.
+- Delta intervals remain independent and are combined within chart windows, including when the producer omits a start timestamp.
+- Duplicate histogram deliveries update the existing interval before retention, preserving associated exemplars without consuming additional retained-point slots.
+
+Cumulative bucket layouts must remain stable within an aggregation. Charts combine differing layouts only at shared bucket boundaries, without estimating missing distributions. When percentiles cannot be calculated, the Dashboard warns and shows unavailable values rather than zero; counts and exemplars remain accessible in graph and table views.
 
 Indexes support instrument lookup, dimension matching, time-window queries, retention, and exemplar lookup.
 
@@ -285,8 +295,8 @@ The Dashboard applies these default ingestion limits:
 
 | Configuration key | Default | Scope and behavior |
 |-------------------|---------|--------------------|
-| `Dashboard:TelemetryLimits:MaxLogCount` | 10,000 | Structured logs per database |
-| `Dashboard:TelemetryLimits:MaxTraceCount` | 10,000 | Traces per database |
+| `Dashboard:TelemetryLimits:MaxLogCount` | 100,000 | Structured logs per database |
+| `Dashboard:TelemetryLimits:MaxTraceCount` | 100,000 | Traces per database |
 | `Dashboard:TelemetryLimits:MaxMetricsCount` | 50,000 | Metric points per dimension |
 | `Dashboard:TelemetryLimits:MaxAttributeCount` | 128 | Attributes per telemetry item |
 | `Dashboard:TelemetryLimits:MaxAttributeLength` | Unlimited | Attribute value length |
@@ -295,7 +305,9 @@ The Dashboard applies these default ingestion limits:
 
 The oldest logs, traces, and metric points are removed when their limits are exceeded. Fixed limits of 10,000 also apply to resource views per resource, scopes per database, instruments per resource, and dimensions per instrument; additional identities are rejected.
 
-Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 10,000, but persisted console logs are unbounded. Historical runs can therefore omit uncaptured logs or contain many captured logs.
+The `AddHistogramMetricsAtCapacity` benchmark in [TelemetryRepositoryMetricsBenchmarks](../../benchmarks/Aspire.Dashboard.Benchmarks/TelemetryRepositoryMetricsBenchmarks.cs) measures steady-state ingestion with one or five dimensions already at the default retention limit. Each invocation adds one cumulative histogram point per dimension with four replayed exemplars, exercising eviction and cascading exemplar deletes. Payload construction and history population are outside the measured operation.
+
+Console logs are persisted only after their stream is viewed or exported. The frontend keeps up to `Dashboard:Frontend:MaxConsoleLogCount` entries in memory, which defaults to 100,000. The same limit applies across all console logs in the database, with the oldest entries removed when the limit is exceeded. Historical runs can therefore omit uncaptured logs.
 
 ### Database file size
 

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
+using YamlDotNet.RepresentationModel;
 
 namespace Infrastructure.Tests;
 
@@ -23,6 +24,105 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     public void Dispose() => _workspace.Dispose();
 
     [Theory]
+    [InlineData("Aspire.TerminalHost", "Debug", false, false, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", false, true, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, false, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, true, false)]
+    [InlineData("Aspire.TerminalHost", "Release", false, true, true)]
+    [InlineData("Aspire.TerminalHost", "Release", true, true, true)]
+    [InlineData("Aspire.Dashboard", "Debug", false, false, false)]
+    [InlineData("Aspire.Dashboard", "Debug", false, true, false)]
+    [InlineData("Aspire.Dashboard", "Debug", true, false, false)]
+    [InlineData("Aspire.Dashboard", "Debug", true, true, false)]
+    [InlineData("Aspire.Dashboard", "Release", false, true, true)]
+    [InlineData("Aspire.Dashboard", "Release", true, true, true)]
+    public async Task TerminalPipelineUsesConfigurationOptimizationDefaults(
+        string projectName, string configuration, bool publishing, bool native, bool optimized)
+    {
+        var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
+        var result = await RunDotNetAsync(
+            ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
+             $"-p:_IsPublishing={publishing}", $"-p:PublishAot={native}",
+             "-getProperty:Optimize,ServerGarbageCollection"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(optimized ? "true" : "false", properties.GetProperty("Optimize").GetString());
+        Assert.Equal(projectName == "Aspire.Dashboard" ? "true" : string.Empty, properties.GetProperty("ServerGarbageCollection").GetString());
+    }
+
+    [Fact]
+    public async Task NativeArchivesUseReleaseWithOptimizedComponentsWhileLocalBundlesDefaultToDebug()
+    {
+        var yaml = new YamlStream();
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml"));
+        yaml.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var triggers = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("on")]);
+        var workflowCall = Assert.IsType<YamlMappingNode>(triggers.Children[new YamlScalarNode("workflow_call")]);
+        var inputs = Assert.IsType<YamlMappingNode>(workflowCall.Children[new YamlScalarNode("inputs")]);
+        var configurationInput = Assert.IsType<YamlMappingNode>(inputs.Children[new YamlScalarNode("configuration")]);
+        var configuration = configurationInput.Children[new YamlScalarNode("default")].ToString();
+        Assert.Equal("Release", configuration);
+
+        var bundle = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-getProperty:Configuration"]);
+        Assert.True(bundle.ExitCode == 0, bundle.Output);
+        Assert.Equal("Debug", bundle.StandardOutput.Trim());
+
+        foreach (var projectName in new[] { "Aspire.Cli", "Aspire.Dashboard", "Aspire.TerminalHost" })
+        {
+            var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
+            var result = await RunDotNetAsync(
+                ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
+                 "-p:_IsPublishing=true", "-p:RuntimeIdentifier=osx-arm64", "-getProperty:Optimize,PublishAot"]);
+            Assert.True(result.ExitCode == 0, result.Output);
+
+            using var document = JsonDocument.Parse(result.StandardOutput);
+            var properties = document.RootElement.GetProperty("Properties");
+            Assert.Equal("true", properties.GetProperty("PublishAot").GetString());
+            Assert.Equal("true", properties.GetProperty("Optimize").GetString());
+        }
+    }
+
+    [Theory]
+    [InlineData("Debug", false, true)]
+    [InlineData("Debug", true, false)]
+    [InlineData("Custom", true, false)]
+    [InlineData("Release", true, true)]
+    public async Task CiBundlesRequireRelease(string configuration, bool ci, bool succeeds)
+    {
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-t:_ShowBanner",
+             $"-p:Configuration={configuration}", $"-p:ContinuousIntegrationBuild={ci}",
+             $"-p:ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
+
+        Assert.Equal(succeeds, result.ExitCode == 0);
+        if (!succeeds)
+        {
+            Assert.Contains("CI native bundles must use Configuration=Release.", result.Output);
+        }
+    }
+
+    [Fact]
+    public async Task RepositoryTerminalHostMetadataMatchesItsTargetFramework()
+    {
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "src", "Aspire.TerminalHost", "Aspire.TerminalHost.csproj"),
+             "-nologo", "-p:Configuration=Debug", "-getProperty:TargetFramework,AspireTerminalHostDir"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.StandardOutput);
+        var properties = document.RootElement.GetProperty("Properties");
+        var framework = properties.GetProperty("TargetFramework").GetString();
+        Assert.Equal("net11.0", framework);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(RepoRoot.Path, "artifacts", "bin", "Aspire.TerminalHost", "Debug", framework!)),
+            Path.GetFullPath(properties.GetProperty("AspireTerminalHostDir").GetString()!).TrimEnd(Path.DirectorySeparatorChar));
+    }
+
+    [Theory]
     [InlineData("win-x64", false)]
     [InlineData("win-x64", true)]
     [InlineData("win-arm64", false)]
@@ -35,7 +135,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var result = await RunDotNetAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles", "-getItem:NativeCopyLocalItems,ResolvedFileToPublish"]);
         Assert.True(result.ExitCode == 0, result.Output);
 
-        using var document = JsonDocument.Parse(result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput);
         var items = document.RootElement.GetProperty("Items");
         var published = items.GetProperty("ResolvedFileToPublish").EnumerateArray().ToArray();
         var expected = GetNativePaths(rid).Append("other/OpenConsole.exe").Order(StringComparer.Ordinal).ToArray();
@@ -77,24 +177,48 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     [InlineData("osx-x64", null)]
     [InlineData("osx-arm64", null)]
     [InlineData("win-x64", "arm64/OpenConsole.exe")]
+    [InlineData("win-x64", "conpty.dll")]
+    [InlineData("win-x64", "x64/OpenConsole.exe")]
     [InlineData("win-arm64", "hex1bpty.exe")]
+    [InlineData("win-arm64", "conpty.dll")]
+    [InlineData("win-arm64", "arm64/OpenConsole.exe")]
     public async Task BundlePreservesPtyLayoutAndRejectsMissingSidecars(string rid, string? missingSidecar)
     {
         var artifacts = Path.Combine(_workspace.Path, "artifacts");
         var publish = Path.Combine(artifacts, "bin", "Aspire.Managed", "Release", "net10.0", rid, "publish");
         var executable = rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-managed.exe" : "aspire-managed";
-        var files = new List<string> { executable, "wwwroot/index.html" };
-        if (rid.StartsWith("win-", StringComparison.Ordinal))
-        {
-            files.AddRange(GetNativePaths(rid));
-        }
-
-        foreach (var file in files.Append("Aspire.Dashboard.exe").Append("Aspire.TerminalHost.exe"))
+        var files = new List<string> { executable };
+        foreach (var file in files.Append("Aspire.TerminalHost.exe"))
         {
             if (file != missingSidecar)
             {
                 WriteFile(Path.Combine(publish, file), file);
             }
+        }
+
+        var terminalPublish = Path.Combine(artifacts, "bin", "Aspire.TerminalHost", "Release", "net11.0", rid, "publish");
+        var terminalFiles = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
+        foreach (var file in terminalFiles)
+        {
+            if (file != missingSidecar)
+            {
+                WriteFile(Path.Combine(terminalPublish, file), file);
+            }
+        }
+
+        var dashboardPublish = Path.Combine(artifacts, "bin", "Aspire.Dashboard", rid, "Release", "net11.0", rid, "publish");
+        var dashboardFiles = new[]
+        {
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard",
+            "wwwroot/index.html",
+            "wwwroot/_framework/blazor.web.js",
+            rid.StartsWith("win-", StringComparison.Ordinal)
+                ? "e_sqlite3.dll"
+                : rid.StartsWith("osx-", StringComparison.Ordinal) ? "libe_sqlite3.dylib" : "libe_sqlite3.so"
+        };
+        foreach (var file in dashboardFiles)
+        {
+            WriteFile(Path.Combine(dashboardPublish, file), file);
         }
 
         var packageRid = rid switch
@@ -112,11 +236,26 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         WriteFile(Path.Combine(packages, $"microsoft.developercontrolplane.{packageRid}", "1.0.0", "tools", "dcp"), "dcp");
         var layout = Path.Combine(_workspace.Path, "layout");
         var testAssembly = typeof(Hex1bNativePublishingTests).Assembly.Location;
-        var result = await RunDotNetAsync(
+        List<string> arguments =
             ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
-             "--output", layout, "--artifacts", artifacts, "--rid", rid],
+             "--output", layout, "--artifacts", artifacts, "--rid", rid, "--configuration", "Release"];
+        // Layout assembly now requires the native tray payload for desktop RIDs, even
+        // when the scenario focuses on the managed bundle's PTY sidecars.
+        if (rid.StartsWith("win-", StringComparison.Ordinal))
+        {
+            var tray = Path.Combine(_workspace.Path, "windows-tray");
+            WindowsTrayTestPayload.Create(tray, rid);
+            arguments.AddRange(["--tray-windows", tray]);
+        }
+        else if (rid.StartsWith("osx-", StringComparison.Ordinal))
+        {
+            arguments.AddRange(["--tray-app", MacTrayTestPayload.Create(_workspace.Path)]);
+        }
+
+        var result = await RunDotNetAsync(
+            [.. arguments],
             packages);
         if (missingSidecar is not null)
         {
@@ -127,12 +266,38 @@ public sealed class Hex1bNativePublishingTests : IDisposable
 
         Assert.True(result.ExitCode == 0, result.Output);
 
+        string[] windowsPtyFiles = rid switch
+        {
+            "win-x64" => ["hex1bpty.exe", "conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"],
+            "win-arm64" => ["hex1bpty.exe", "conpty.dll", "arm64/OpenConsole.exe"],
+            _ => []
+        };
         var managed = Path.Combine(layout, "managed");
-        Assert.Equal(files.Order(StringComparer.Ordinal), Directory.GetFiles(managed, "*", SearchOption.AllDirectories)
+        Assert.Equal(files.Concat(windowsPtyFiles).Order(StringComparer.Ordinal), Directory.GetFiles(managed, "*", SearchOption.AllDirectories)
             .Select(path => Path.GetRelativePath(managed, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
         foreach (var file in files)
         {
             Assert.True(File.ReadAllBytes(Path.Combine(publish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(managed, file))), file);
+        }
+        foreach (var file in windowsPtyFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(managed, file)));
+        }
+
+        var terminal = Path.Combine(layout, "terminalhost");
+        Assert.Equal(terminalFiles.Order(StringComparer.Ordinal), Directory.GetFiles(terminal, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(terminal, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in terminalFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(terminal, file)));
+        }
+
+        var dashboard = Path.Combine(layout, "dashboard");
+        Assert.Equal(dashboardFiles.Order(StringComparer.Ordinal), Directory.GetFiles(dashboard, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(dashboard, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in dashboardFiles)
+        {
+            Assert.True(File.ReadAllBytes(Path.Combine(dashboardPublish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(dashboard, file))), file);
         }
     }
 
@@ -155,7 +320,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
              "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
              typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
-             "--output", layout, "--artifacts", Path.Combine(_workspace.Path, "missing-artifacts"), "--rid", rid]);
+             "--output", layout, "--artifacts", Path.Combine(_workspace.Path, "missing-artifacts"), "--rid", rid, "--configuration", "Release"]);
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Equal(existingOutput, Directory.Exists(layout));
@@ -185,7 +350,7 @@ public sealed class Hex1bNativePublishingTests : IDisposable
     }
 
     [Fact]
-    public void WindowsManagedSigningIncludesPtyHelperAndPreservesMicrosoftSidecars()
+    public void WindowsTerminalSigningIncludesPtyHelperAndPreservesMicrosoftSidecars()
     {
         var signingProps = XDocument.Load(Path.Combine(RepoRoot.Path, "eng", "Signing.props"));
         var helperCertificate = Assert.Single(signingProps.Descendants("FileSignInfo"),
@@ -195,15 +360,39 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         var windowsManagedFiles = signingProps.Descendants("ItemsToSign")
             .Where(item => (string?)item.Attribute("Condition") == "$([System.OperatingSystem]::IsWindows())")
             .Select(item => (string?)item.Attribute("Include"))
-            .Where(path => path?.StartsWith("$(ArtifactsBinDir)Aspire.Managed", StringComparison.Ordinal) is true)
+            .Where(path => path?.StartsWith("$(ArtifactsBinDir)Aspire.TerminalHost", StringComparison.Ordinal) is true)
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(
             [
-                @"$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe",
-                @"$(ArtifactsBinDir)Aspire.Managed\**\publish\hex1bpty.exe"
+                @"$(ArtifactsBinDir)Aspire.TerminalHost\**\publish\Aspire.TerminalHost.exe",
+                @"$(ArtifactsBinDir)Aspire.TerminalHost\**\publish\hex1bpty.exe"
             ],
             windowsManagedFiles);
+    }
+
+    [Fact]
+    public async Task MacOSNativeBundleDebugSymbolsAreRemovedBeforeSigning()
+    {
+        var pipeline = await File.ReadAllTextAsync(Path.Combine(
+            RepoRoot.Path, "eng", "pipelines", "templates", "build_sign_native.yml"));
+
+        var prepareDashboardIndex = pipeline.IndexOf("displayName: 🟣Prepare Native AOT Dashboard", StringComparison.Ordinal);
+        var removeSymbolsIndex = pipeline.IndexOf("displayName: 🟣Remove Native AOT bundle debug symbols", StringComparison.Ordinal);
+        var signManagedIndex = pipeline.IndexOf("displayName: 🟣Sign bundle components", StringComparison.Ordinal);
+        var buildNativeIndex = pipeline.IndexOf("displayName: 🟣Build native packages", StringComparison.Ordinal);
+
+        Assert.True(prepareDashboardIndex >= 0);
+        Assert.True(prepareDashboardIndex < removeSymbolsIndex);
+        Assert.True(removeSymbolsIndex < signManagedIndex);
+        Assert.True(signManagedIndex < buildNativeIndex);
+        var cleanupStart = pipeline.LastIndexOf("          - ${{ if ", removeSymbolsIndex, StringComparison.Ordinal);
+        Assert.True(cleanupStart >= 0);
+        var cleanup = pipeline[cleanupStart..removeSymbolsIndex];
+        Assert.Contains("Aspire.Dashboard.dSYM", cleanup);
+        Assert.Contains("Aspire.TerminalHost.dSYM", cleanup);
+        Assert.Contains("Remove-Item", cleanup);
+        Assert.Contains("eq(parameters.agentOs, 'macos')", cleanup);
     }
 
     private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)
@@ -292,7 +481,8 @@ public sealed class Hex1bNativePublishingTests : IDisposable
         File.WriteAllText(path, contents);
     }
 
-    private async Task<(int ExitCode, string Output)> RunDotNetAsync(string[] arguments, string? packages = null)
+    private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
+        string[] arguments, string? packages = null)
     {
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
@@ -324,8 +514,10 @@ public sealed class Hex1bNativePublishingTests : IDisposable
             throw;
         }
 
-        var output = await stdout + await stderr;
+        var standardOutput = await stdout;
+        var standardError = await stderr;
+        var output = standardOutput + standardError;
         _output.WriteLine(output);
-        return (process.ExitCode, output);
+        return (process.ExitCode, standardOutput, standardError, output);
     }
 }

@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests.Shared.Telemetry;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
@@ -22,6 +23,50 @@ public class ChartDataCalculatorTests
 
     // Identity function for time conversion — tests use UTC directly.
     private static DateTimeOffset ToLocal(DateTimeOffset dt) => dt;
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddExemplars_SubTickTimestamps_PreserveDistinctSamplesAndDeduplicateRetries(bool histogram)
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(capacity: 100, []);
+        var sampleTime = s_startTime.UtcDateTime;
+        var first = TelemetryTestHelpers.CreateExemplar(sampleTime, 1);
+        first.TimeUnixNano += 10;
+        var second = first.Clone();
+        second.TimeUnixNano += 10;
+        if (histogram)
+        {
+            var point = HistogramTestHelpers.CreatePoint(sampleTime, sampleTime.AddSeconds(1), [3, 0], [100]);
+            point.Exemplars.AddRange([first, second, first.Clone()]);
+            dimension.AddHistogramValue(point, OtlpAggregationTemporality.Cumulative, context);
+            dimension.AddHistogramValue(point, OtlpAggregationTemporality.Cumulative, context);
+            var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(5));
+            var data = calculator.CalculateHistogramValues([dimension], s_startTime, time => time.ToOffset(TimeSpan.FromHours(2)), "ms");
+            Assert.Equal([first.TimeUnixNano, second.TimeUnixNano], data.Exemplars.Select(exemplar => exemplar.TimeUnixNano));
+            Assert.All(data.Exemplars, exemplar =>
+            {
+                Assert.Equal(s_startTime, exemplar.Start);
+                Assert.Equal(TimeSpan.Zero, exemplar.Start.Offset);
+            });
+        }
+        else
+        {
+            var point = new NumberDataPoint
+            {
+                StartTimeUnixNano = first.TimeUnixNano - 10,
+                TimeUnixNano = first.TimeUnixNano + 1_000_000_000,
+                AsInt = 1
+            };
+            point.Exemplars.AddRange([first, second, first.Clone()]);
+            dimension.AddPointValue(point, context);
+            dimension.AddPointValue(point, context);
+        }
+        var value = Assert.Single(dimension.Values);
+        Assert.Equal([first.TimeUnixNano, second.TimeUnixNano], value.Exemplars.Select(exemplar => exemplar.TimeUnixNano));
+        Assert.All(value.Exemplars, exemplar => Assert.Equal(sampleTime, exemplar.Start));
+    }
 
     [Fact]
     public void CalcOffset_ReturnsCorrectOffset()
@@ -312,7 +357,7 @@ public class ChartDataCalculatorTests
         histogramPoint.ExplicitBounds.AddRange([10.0, 50.0, 100.0]);
         histogramPoint.BucketCounts.AddRange([50UL, 40UL, 10UL, 0UL]);
 
-        dimension.AddHistogramValue(histogramPoint, context);
+        dimension.AddHistogramValue(histogramPoint, OtlpAggregationTemporality.Cumulative, context);
 
         var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(50));
         var data = calculator.CalculateHistogramValues([dimension], s_startTime, ToLocal, "ms");
@@ -334,6 +379,51 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void CalculateHistogramValues_NoDimensions_AllNullValuesAndDifferences()
+    {
+        var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([], s_startTime, ToLocal, "ms");
+
+        Assert.False(data.HasIncompatibleHistogramBounds);
+        Assert.Equal(3, data.Traces.Count);
+        Assert.All(data.Traces, trace =>
+        {
+            Assert.Equal([null, null, null, null, null, null, null], trace.Values);
+            Assert.Equal(trace.Values, trace.DiffValues);
+        });
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative, false)]
+    [InlineData(OtlpAggregationTemporality.Cumulative, true)]
+    [InlineData(OtlpAggregationTemporality.Delta, false)]
+    [InlineData(OtlpAggregationTemporality.Delta, true)]
+    public void CalculateHistogramValues_StackedDifferences_PreservesMissingIntervals(OtlpAggregationTemporality temporality, bool sameBucket)
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddMilliseconds(-500);
+        dimension.AddHistogramValue(
+            HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), sameBucket ? [100, 0, 0, 0] : [50, 40, 10, 0], [10, 50, 100]),
+            temporality, CreateContext());
+        var calculator = new ChartDataCalculator(pointCount: 5, duration: TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([dimension], s_startTime, ToLocal, "ms");
+
+        Assert.False(data.HasIncompatibleHistogramBounds);
+        Assert.Collection(data.Traces,
+            trace => AssertTrace(trace, percentile: 50, value: 10, difference: 10),
+            trace => AssertTrace(trace, percentile: 90, value: sameBucket ? 10 : 50, difference: sameBucket ? 0 : 40),
+            trace => AssertTrace(trace, percentile: 99, value: sameBucket ? 10 : 100, difference: sameBucket ? 0 : 50));
+
+        void AssertTrace(ChartTrace trace, int percentile, double value, double difference)
+        {
+            var hasLastValue = temporality == OtlpAggregationTemporality.Cumulative;
+            Assert.Equal(percentile, trace.Percentile);
+            Assert.Equal([null, null, null, null, null, value, hasLastValue ? value : null], trace.Values);
+            Assert.Equal([null, null, null, null, null, difference, hasLastValue ? difference : null], trace.DiffValues);
+        }
+    }
+
+    [Fact]
     public void TryCalculateHistogramPoints_StaggeredDimensionChanges_CombinesObservationDeltas()
     {
         var context = CreateContext();
@@ -343,8 +433,8 @@ public class ChartDataCalculatorTests
 
         for (var minute = 1; minute <= 3; minute++)
         {
-            stableDimension.AddHistogramValue(CreateHistogramPoint(start, minute, 10, [10, 0, 0]), context);
-            changingDimension.AddHistogramValue(CreateHistogramPoint(start, minute, checked((ulong)(15 + (minute * 5))), [0, 0, checked((ulong)(15 + (minute * 5)))]), context);
+            stableDimension.AddHistogramValue(CreateHistogramPoint(start, minute, 10, [10, 0, 0]), OtlpAggregationTemporality.Cumulative, context);
+            changingDimension.AddHistogramValue(CreateHistogramPoint(start, minute, checked((ulong)(15 + (minute * 5))), [0, 0, checked((ulong)(15 + (minute * 5)))]), OtlpAggregationTemporality.Cumulative, context);
         }
 
         var traces = new Dictionary<int, ChartTrace>
@@ -359,14 +449,14 @@ public class ChartDataCalculatorTests
             start,
             traces,
             exemplars,
-            ToLocal);
+            out _);
         var secondResult = ChartDataCalculator.TryCalculateHistogramPoints(
             [stableDimension, changingDimension],
             start.AddMinutes(1),
             start.AddMinutes(1),
             traces,
             exemplars,
-            ToLocal);
+            out _);
 
         Assert.True(firstResult);
         Assert.True(secondResult);
@@ -403,7 +493,7 @@ public class ChartDataCalculatorTests
         histogramPoint.ExplicitBounds.AddRange([50.0]);
         histogramPoint.BucketCounts.AddRange([5UL, 5UL]);
 
-        dimension.AddHistogramValue(histogramPoint, context);
+        dimension.AddHistogramValue(histogramPoint, OtlpAggregationTemporality.Cumulative, context);
 
         var calculator = new ChartDataCalculator(pointCount: 10, duration: TimeSpan.FromSeconds(100));
         var data = calculator.CalculateHistogramValues([dimension], s_startTime, ToLocal, "ms");
@@ -413,6 +503,339 @@ public class ChartDataCalculatorTests
             Assert.True(data.XValues[i] > data.XValues[i - 1],
                 $"xValues[{i}] ({data.XValues[i]}) should be after xValues[{i - 1}] ({data.XValues[i - 1]})");
         }
+    }
+
+    [Fact]
+    public void HistogramBuckets_DifferentLayouts_MergesOnlyAtSharedBoundaries()
+    {
+        ulong[]? counts = [1, 5, 0];
+        double[]? bounds = [10, 100];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [1, 2, 2, 0], [10, 50, 100], []));
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([10d, 100d], bounds);
+        Assert.Equal([2ul, 9ul, 0ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_DifferentLayouts_PreservesOverflowCounts()
+    {
+        ulong[]? counts = [1, 2, 3];
+        double[]? bounds = [10, 100];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [4, 5, 6, 7], [10, 50, 100], []));
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([10d, 100d], bounds);
+        Assert.Equal([5ul, 13ul, 10ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_FirstContribution_SubtractsPreviousCountsWithoutChangingSource()
+    {
+        ulong[] incoming = [3, 5, 7];
+        ulong[] previous = [1, 2, 3];
+        ulong[]? counts = null;
+        double[]? bounds = null;
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, incoming, [10, 100], previous));
+
+        Assert.NotNull(counts);
+        Assert.Equal([2ul, 3ul, 4ul], counts);
+        Assert.Equal([3ul, 5ul, 7ul], incoming);
+        Assert.Equal([1ul, 2ul, 3ul], previous);
+    }
+
+    [Fact]
+    public void HistogramBuckets_CommonBoundsAreSubsetOfIncoming_ReusesIncomingBounds()
+    {
+        ulong[]? counts = [1, 2, 3, 4];
+        double[]? bounds = [10, 50, 100];
+        double[] incomingBounds = [10, 100];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [5, 6, 7], incomingBounds, []));
+
+        Assert.Same(incomingBounds, bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([6ul, 11ul, 11ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_PartiallySharedBounds_CombinesCumulativeDifferences()
+    {
+        ulong[]? counts = [1, 2, 3, 4];
+        double[]? bounds = [10, 50, 100];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [5, 6, 7, 8], [10, 75, 100], [1, 2, 3, 4]));
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Equal([10d, 100d], bounds);
+        Assert.Equal([5ul, 13ul, 8ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_NoSharedBounds_CombinesIntoOverflowBucket()
+    {
+        ulong[]? counts = [1, 2];
+        double[]? bounds = [10];
+        Assert.True(HistogramBuckets.Add(ref counts, ref bounds, [3, 4], [20], []));
+
+        Assert.NotNull(bounds);
+        Assert.NotNull(counts);
+        Assert.Empty(bounds);
+        Assert.Equal([10ul], counts);
+    }
+
+    [Fact]
+    public void HistogramBuckets_UnchangedDifferentLayout_DoesNotReduceAccumulatorBounds()
+    {
+        ulong[] originalCounts = [1, 2, 3];
+        double[] originalBounds = [10, 100];
+        ulong[]? counts = originalCounts;
+        double[]? bounds = originalBounds;
+        Assert.False(HistogramBuckets.Add(ref counts, ref bounds, [4, 5, 6], [20, 200], [4, 5, 6]));
+
+        Assert.Same(originalCounts, counts);
+        Assert.Same(originalBounds, bounds);
+        Assert.Equal([1ul, 2ul, 3ul], originalCounts);
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative)]
+    [InlineData(OtlpAggregationTemporality.Delta)]
+    public void CalculateHistogramValues_EqualBucketLengthsWithDifferentBounds_UsesSharedBounds(OtlpAggregationTemporality temporality)
+    {
+        var first = new DimensionScope(100, []);
+        var second = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [10, 0, 0], [10, 100]),
+            temporality, CreateContext());
+        second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [0, 10, 0], [50, 100]),
+            temporality, CreateContext());
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([first, second], s_startTime, ToLocal, "ms");
+        Assert.False(data.HasIncompatibleHistogramBounds);
+        Assert.All(data.Traces, trace => Assert.All(trace.Values.OfType<double>(), value => Assert.Equal(100, value)));
+        Assert.All(data.Traces, trace => Assert.Contains(100d, trace.Values));
+        Assert.False(calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count").HasIncompatibleHistogramBounds);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddHistogramValue_InvalidPoint_RejectsBeforeExtendingSnapshot(bool nonFiniteSum)
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        var valid = HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [10, 0], [100]);
+        dimension.AddHistogramValue(valid, OtlpAggregationTemporality.Cumulative, context);
+        var previous = Assert.IsType<HistogramValue>(Assert.Single(dimension.Values));
+        var invalid = nonFiniteSum
+            ? HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(200), [10, 0], [100])
+            : HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(200), [1], []);
+        if (nonFiniteSum)
+        {
+            invalid.Sum = double.NaN;
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => dimension.AddHistogramValue(invalid, OtlpAggregationTemporality.Cumulative, context));
+
+        Assert.Equal(nonFiniteSum
+            ? "Histogram data point sum must be finite."
+            : "Histogram data point has bucket counts without any explicit bounds.", exception.Message);
+        Assert.Same(previous, Assert.Single(dimension.Values));
+        Assert.Equal(time.AddMilliseconds(100), previous.End);
+        Assert.Equal(10UL, previous.Count);
+        valid.TimeUnixNano = ToNanos(s_startTime.AddMilliseconds(300));
+        dimension.AddHistogramValue(valid, OtlpAggregationTemporality.Cumulative, context);
+        Assert.Same(previous, Assert.Single(dimension.Values));
+        Assert.Equal(time.AddMilliseconds(300), previous.End);
+    }
+
+    [Theory]
+    [InlineData(15ul, false)]
+    [InlineData(20ul, false)]
+    [InlineData(25ul, false)]
+    [InlineData(15ul, true)]
+    public void AddHistogramValue_StaleCumulativePoint_RejectsBeforeMutatingAggregation(ulong staleCount, bool changedStart)
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [10, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(200), [20, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        var previous = Assert.IsType<HistogramValue>(dimension.Values[1]);
+        var stale = HistogramTestHelpers.CreatePoint(
+            changedStart ? time.AddSeconds(-1) : time, time.AddMilliseconds(150), [staleCount, 0], [100]);
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => dimension.AddHistogramValue(stale, OtlpAggregationTemporality.Cumulative, context));
+
+        Assert.Equal("Cumulative histogram point timestamp is earlier than the previous point.", exception.Message);
+        Assert.Equal(2, dimension.Values.Count);
+        Assert.Equal(time.AddMilliseconds(200), previous.End);
+        Assert.Equal(20ul, previous.Count);
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(300), [25, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        Assert.Equal(
+            [(time, time.AddMilliseconds(100), 10ul),
+             (time.AddMilliseconds(100), time.AddMilliseconds(200), 20ul),
+             (time.AddMilliseconds(200), time.AddMilliseconds(300), 25ul)],
+            dimension.Values.Cast<HistogramValue>().Select(value => (value.Start, value.End, value.Count)));
+        Assert.All(dimension.Values.Cast<HistogramValue>(), value => Assert.Equal(previous.AggregationId, value.AggregationId));
+
+        var traces = new Dictionary<int, ChartTrace>
+        {
+            [50] = new() { Name = "P50", Percentile = 50 },
+            [90] = new() { Name = "P90", Percentile = 90 },
+            [99] = new() { Name = "P99", Percentile = 99 }
+        };
+        Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime, s_startTime.AddSeconds(1),
+            traces, [], out var incompatibleBounds));
+        Assert.False(incompatibleBounds);
+        Assert.All(traces.Values, trace => Assert.Equal([100d], trace.Values));
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
+        Assert.Equal(25, count);
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative)]
+    [InlineData(OtlpAggregationTemporality.Delta)]
+    public void CalculateHistogramValues_NoSharedBounds_ReportsUnavailablePercentilesAndRetainsCount(OtlpAggregationTemporality temporality)
+    {
+        var first = new DimensionScope(100, []);
+        var second = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [3, 0], [10]),
+            temporality, CreateContext());
+        second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [5, 0], [20]),
+            temporality, CreateContext());
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateHistogramValues([first, second], s_startTime, ToLocal, "ms");
+        Assert.True(data.HasIncompatibleHistogramBounds);
+        Assert.All(data.Traces, trace =>
+        {
+            Assert.Equal([null, null, null, null, null, null, null], trace.Values);
+            Assert.Equal(trace.Values, trace.DiffValues);
+        });
+        Assert.True(ChartDataCalculator.TryCalculatePoint([first, second], time, time.AddSeconds(1), out var count));
+        Assert.Equal(8, count);
+        var countData = calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count");
+        Assert.True(countData.HasIncompatibleHistogramBounds);
+        Assert.Contains(8d, Assert.Single(countData.Traces).Values);
+
+        var filteredData = calculator.CalculateChartValues([first], s_startTime, ToLocal, "Count");
+        Assert.False(filteredData.HasIncompatibleHistogramBounds);
+        Assert.Contains(3d, Assert.Single(filteredData.Traces).Values);
+        Assert.False(calculator.CalculateChartValues([first, second], s_startTime.AddMinutes(1), ToLocal, "Count").HasIncompatibleHistogramBounds);
+    }
+
+    [Theory]
+    [InlineData(OtlpAggregationTemporality.Cumulative)]
+    [InlineData(OtlpAggregationTemporality.Delta)]
+    public void CalculateChartValues_UnchangedIncompatibleHistogram_DoesNotWarn(OtlpAggregationTemporality temporality)
+    {
+        var first = new DimensionScope(100, []);
+        var second = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        first.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [3, 0], [10]),
+            temporality, CreateContext());
+        second.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [0, 0], [20]),
+            temporality, CreateContext());
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        Assert.False(calculator.CalculateChartValues([first, second], s_startTime, ToLocal, "Count").HasIncompatibleHistogramBounds);
+    }
+
+    [Fact]
+    public void CalculateChartValues_PairwiseSharedButNoCommonHistogramBounds_Warns()
+    {
+        var dimensions = new List<DimensionScope>();
+        double[][] layouts = [[10, 100], [10, 200], [100, 200]];
+        var time = s_startTime.UtcDateTime.AddSeconds(-1);
+        foreach (var layout in layouts)
+        {
+            var dimension = new DimensionScope(100, []);
+            dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddMilliseconds(100), [1, 0, 0], layout),
+                OtlpAggregationTemporality.Delta, CreateContext());
+            dimensions.Add(dimension);
+        }
+
+        var calculator = new ChartDataCalculator(5, TimeSpan.FromSeconds(10));
+        var data = calculator.CalculateChartValues(dimensions, s_startTime, ToLocal, "Count");
+        Assert.True(data.HasIncompatibleHistogramBounds);
+        Assert.Contains(3d, Assert.Single(data.Traces).Values);
+    }
+
+    [Fact]
+    public void TryCalculateHistogramPoints_DeltaBoundary_BelongsToOneWindow()
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [10, 0, 0], [10, 100]),
+            OtlpAggregationTemporality.Delta, CreateContext());
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time.AddSeconds(1), time.AddSeconds(2), [0, 10, 0], [10, 100]),
+            OtlpAggregationTemporality.Delta, CreateContext());
+        var traces = new Dictionary<int, ChartTrace> { [50] = new() { Name = "P50", Percentile = 50 } };
+
+        Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime, s_startTime.AddSeconds(1),
+            traces, [], out _));
+        Assert.True(ChartDataCalculator.TryCalculateHistogramPoints([dimension], s_startTime.AddSeconds(1), s_startTime.AddSeconds(2),
+            traces, [], out _));
+        Assert.Equal([10d, 100d], traces[50].Values);
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
+        Assert.Equal(10, count);
+    }
+
+    [Theory]
+    [InlineData(-1, 1d)]
+    [InlineData(0, 100d)]
+    [InlineData(1, 100d)]
+    public void TryCalculatePoint_CumulativeResetBoundary_SelectsCorrectSnapshot(int boundaryOffsetTicks, double expectedCount)
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        var boundary = time.AddSeconds(1).AddTicks(boundaryOffsetTicks);
+        var context = CreateContext();
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, boundary, [100, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(boundary, time.AddSeconds(2), [1, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime, s_startTime.AddSeconds(1), out var count));
+        Assert.Equal(expectedCount, count);
+        Assert.True(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime.AddSeconds(1), s_startTime.AddSeconds(2), out count));
+        Assert.Equal(1, count);
+        Assert.False(ChartDataCalculator.TryCalculatePoint([dimension], s_startTime.AddSeconds(-1), s_startTime, out count));
+        Assert.Equal(0, count);
+    }
+
+    [Theory]
+    [InlineData(false, 200d)]
+    [InlineData(true, 1d)]
+    public void CalculateChartValues_CumulativeBoundary_DoesNotSelectFollowingInterval(bool reset, double nextCount)
+    {
+        var dimension = new DimensionScope(100, []);
+        var time = s_startTime.UtcDateTime;
+        var context = CreateContext();
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(time, time.AddSeconds(1), [100, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        dimension.AddHistogramValue(HistogramTestHelpers.CreatePoint(reset ? time.AddSeconds(1) : time,
+            time.AddSeconds(2), reset ? [1, 0] : [200, 0], [100]),
+            OtlpAggregationTemporality.Cumulative, context);
+        var calculator = new ChartDataCalculator(pointCount: 1, duration: TimeSpan.FromSeconds(1));
+
+        var data = calculator.CalculateChartValues([dimension], s_startTime.AddSeconds(1), ToLocal, "Count");
+
+        var trace = Assert.Single(data.Traces);
+        Assert.Equal([null, 100d, nextCount], trace.Values);
+        Assert.Equal(trace.Values, trace.DiffValues);
+        Assert.Equal([s_startTime, s_startTime.AddSeconds(1), s_startTime.AddSeconds(2)], data.XValues);
     }
 
     [Fact]

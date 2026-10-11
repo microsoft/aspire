@@ -266,7 +266,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is ConnectionStringReference cs)
         {
-            return ProcessValue(cs.Resource.ConnectionStringExpression, secretType: secretType, parent: parent);
+            return ProcessValue(cs.ConnectionStringExpression, secretType: secretType, parent: parent);
         }
 
         if (value is IResourceWithConnectionString csrs)
@@ -551,7 +551,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
         ]);
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     protected void AddProbes(ContainerAppContainer containerAppContainer)
     {
         if (!Resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
@@ -603,7 +602,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             }
         }
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     protected enum SecretType
     {

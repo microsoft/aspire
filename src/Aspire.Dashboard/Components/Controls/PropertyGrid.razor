@@ -6,7 +6,7 @@
 <div class="property-grid">
     <FluentDataGrid HeaderCellAsButtonWithMenu="true"
                     ResizeType="DataGridResizeType.Discrete"
-                    Items="@Items"
+                    ItemsProvider="@EnumerableGridItemsProvider.Create(() => Items)"
                     ItemKey="@ItemKey"
                     ResizableColumns="true"
                     Style="width:100%"
@@ -33,9 +33,9 @@
                        IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
                        TextVisualizerTitle="@context.Name"
                        ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
+                       TextVisualizerFormat="@context.TextVisualizerFormat"
                        ComponentMetadata="@GetComponentMetadata(context)"/>
             @ExtraValueContent(context)
         </AspireTemplateColumn>
     </FluentDataGrid>
 </div>
-

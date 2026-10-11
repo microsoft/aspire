@@ -34,10 +34,10 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     /// The IDE advertises the launch configuration types it can handle; a resource whose type is not
     /// advertised is started as a plain process instead.
     /// <para>
-    /// Exception: when the active debug session does not
-    /// advertise any launch configuration types at all (for example Visual Studio, which does not send a
-    /// capability list), <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly
-    /// supported rather than falling back to plain process execution.
+    /// Exception: when the active debug session does not provide a usable launch configuration capability list
+    /// (for example Visual Studio, which does not send one), <see cref="KnownLaunchConfigurationTypes.Project"/>
+    /// is treated as implicitly supported for non-file-based project resources. File-based C# apps require the
+    /// IDE to advertise explicit project support.
     /// </para>
     /// </remarks>
     public string LaunchConfigurationType { get; }

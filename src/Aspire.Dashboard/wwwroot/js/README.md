@@ -18,8 +18,9 @@ If we ever want to show more chart types than those, we'll need to change the bu
 
 ## Hex1b web terminal
 
-`hex1b-web-terminal/` vendors `@hex1b/web-terminal` **0.168.0**,
-paired with the Hex1b NuGet package **0.168.0**. The client and server use the evolving
+`hex1b-web-terminal/` vendors the published `@hex1b/web-terminal` **0.172.0** release,
+paired with the Hex1b, Hex1b.McpServer, and Hex1b.Tool NuGet packages and the
+repository-local `hex1b` tool at the same version. The client and server use the evolving
 HWT1 presentation transport and must be updated together. Do not substitute a
 different client based only on a similar version number.
 
@@ -31,9 +32,12 @@ npm run update-terminal-assets
 npm test
 ```
 
-`update-terminal-assets` copies the package and then verifies that every emitted
-file matches the installed package byte-for-byte, including metadata/licenses,
-and that no stale files remain in `dist/`. To rerun that acquisition-only check
+`update-terminal-assets` first requires the installed distribution to contain
+exactly one JavaScript file, `dist/index.js`, before replacing checked-in assets.
+It minifies the bundle and copies the runtime assets, then verifies that every emitted
+font/license file matches the installed package byte-for-byte, that the minified
+bundle matches reproducible Terser output, and that no stale files remain.
+To rerun that acquisition-only check
 without copying, use `npm run verify-terminal-assets` after `npm ci`. This check
 intentionally requires `node_modules`; ordinary regression tests do not.
 
@@ -41,15 +45,32 @@ Review and commit the manifest, lockfile, and generated asset changes together.
 This is a manual acquisition step: ordinary .NET builds use the checked-in files
 and do not run npm or download frontend packages.
 
-The update script copies the **complete `dist/` tree**, preserving relative ES
-module, module-worker, source-map, declaration, and font paths. It also retains
-the package metadata, README, and MIT license. The bundled Cascadia Mono NF font
-has its own SIL Open Font License and provenance under
-`dist/fonts/cascadia-mono-nf/`. Do not flatten, selectively bundle, or edit these
-vendored files. `TerminalView.razor.js` imports only the public `dist/index.js`
-entry point, not the package's internal protocol/renderer modules.
+The published package contains one unminified runtime bundle. The acquisition
+script minifies it with the pinned Terser dependency in module mode, producing
+`dist/index.min.js` with the public API and both workers. It does not rebuild
+upstream source or split the workers. Only **four files** are vendored: this
+minified bundle, the package's MIT license, the unmodified Cascadia Mono NF
+WOFF2 font and its SIL Open Font License (including copyright notice).
+Declarations, maps, package metadata and package/font READMEs are not deployed.
+Version provenance remains in the bundle header and the Dashboard's manifest
+and lockfile.
 
-The terminal uses `renderer: "auto"`: WebGPU is preferred, with the package's
+The font comes from Microsoft's [Cascadia Code v2407.24 release](https://github.com/microsoft/cascadia-code/releases/tag/v2407.24),
+path `woff2/CascadiaMonoNF.woff2`. Its relative path under
+`dist/fonts/cascadia-mono-nf/` is preserved. Do not hand-edit generated assets.
+`TerminalView.razor.js` imports only the minified public entry point.
+
+The matching NuGet packages are available through the approved `dotnet-public` feed;
+no additional package source is required.
+
+Desktop and Android Firefox terminals use `renderer: "webgl2"` until the
+[WebGPU performance issue](https://bugzilla.mozilla.org/show_bug.cgi?id=1870699)
+is resolved, even when WebGPU is available. Detection recognizes the `Firefox/`
+user-agent token and applies to every shared terminal mount, including automatic
+retries and explicit reconnects. Firefox on iOS (`FxiOS/`) uses WebKit rather
+than Gecko and retains automatic renderer selection.
+
+Other browsers use `renderer: "auto"`: WebGPU is preferred, with the package's
 WebGL2 compatibility backend used when WebGPU's secure context, API, adapter,
 device acquisition, or presentation context is unavailable. Shader, font,
 validation and unexpected initialization failures remain errors; runtime GPU
@@ -70,12 +91,153 @@ and `/api/terminal` and `/api/apphost-terminal` WebSockets in the deployment CSP
 localized error if mounting fails.
 
 The component import and socket endpoint resolve beneath `NavigationManager.BaseUri`.
-The package import, worker entry, and bundled font resolve relative to their
-modules, so deployments under a PathBase retain the prefix throughout the
-asset tree. No blob worker, eval, CDN, or cross-origin font permission is
+Both module workers load that same `dist/index.min.js` URL using the fragments
+`#hex1b-terminal-worker` and `#hex1b-link-detection-worker`; the path and query
+string are preserved. The bundled font resolves relative to the module, so
+deployments under a PathBase retain the prefix throughout the asset tree.
+No blob worker, eval, CDN, or cross-origin font permission is
 needed. The dashboard's existing `script-src 'self'` also allows same-origin
 workers through the CSP worker-source fallback; its production
 `default-src 'self'` covers the font and same-origin connections.
+
+### Terminal palettes
+
+The terminal offers explicit Aspire light and Aspire dark palettes using Aspire variants
+of **Hex1b Light** and **Hex1b Dark**: light lavender `#d5d0df` and dark
+purple-neutral `#312e3c` backgrounds, with richer chromatic ANSI slots. These
+increase OKLCH chroma by up to 25% in dark mode and 10% in light mode, preserving
+hue and reducing chroma to fit sRGB rather than clipping channels. Lightness is
+adjusted where needed; the rounded colors provide at least 5:1 normal and 6:1
+bright chromatic text contrast against the default background. These targets do
+not cover arbitrary foreground/background pairs or dim text.
+Default foreground, neutral ANSI slots and selection colors retain the Hex1b
+defaults. Colors are precomputed constants, not runtime transformations.
+The frame uses the active palette background; the overlay track uses Hex1b's
+foreground/background blend. Mounting passes both palettes and `colorMode`;
+palette changes call `setColorMode` on the existing client, including changes that
+occur while mounting or while a dock pane is hidden.
+
+Unused space around the terminal grid has a subtle diagonal hatch: 1px lines every
+8px, using the active palette foreground at 10% opacity over a base that mixes
+92% palette background with 8% black.
+The grid and its padding remain solid, including transparent default cells.
+A 0.5px pinstripe at the padding's outer edge blends 10% foreground with the
+background to distinguish the terminal boundary without changing its dimensions.
+Forced-colors mode suppresses the decorative pattern and uses a system-color edge.
+
+Plain-text HTTP/HTTPS URLs use Hex1b's per-view link detection with dashed
+underlines to distinguish them from explicit OSC 8 links, and open in a new
+tab on Ctrl/Cmd-click with `noopener,noreferrer`. Explicit OSC 8 links retain
+Hex1b's default HTTP/HTTPS/mailto allowlist. Plain clicks and drags retain terminal
+input and selection behavior; links also work in read-only views. Remote file
+paths and custom URI schemes are not enabled.
+
+The **Terminal palette** dropdown to the right of the footer's dimensions selector
+selects **Dark** or **Light** independently of the site. **Dark** is the default,
+including for the former **Follow Dashboard** preference. Site theme changes do
+not change the selected terminal palette. This non-sensitive
+preference is stored in browser local storage and applies to all terminal surfaces,
+including detached windows. Changes update existing clients without reconnecting;
+other windows observe storage events. The terminal frame and overlay track follow
+the selected palette, while toolbars, dock tabs, headers and popups retain the site
+theme. The dropdown also remains available on surfaces without a dimensions
+selector and in read-only views because palette changes do not affect the workload.
+Failed saves show a dismissible error rather than applying an unpersisted preference.
+
+Hex1b preserves default and indexed ANSI colors through the negotiated
+`indexed-v1` HWT extension, so existing content and retained scrollback recolor
+without reconnecting, resizing, clearing selection or taking focus. Explicit RGB
+colors and image pixels remain unchanged. Matching client/server package versions
+are required; legacy RGBA frames cannot be recolored.
+
+Both GPU backends paint opaque selection foreground/background from the active
+palette. The adapter does not tint the transparent selection geometry with CSS.
+Aspire palettes are supplied through `lightModePalette` and
+`darkModePalette` at mount and can be updated through `setPalette`, independently of
+the Dashboard controls and scrollbar styling.
+
+### Terminal metadata
+
+Workload-reported titles (OSC 0/2), working directories (OSC 7) and progress
+(OSC 9;4) flow through the public client callbacks to the Dashboard title bar.
+The resource view, detached window and interaction dialog share the same
+title/directory/progress presentation. Dock panes are chromeless and omit this
+header; their tabs retain the titles captured when they were created.
+Titles and directory URIs
+are treated as untrusted text, not HTML or navigable links. The decoded directory
+is displayed at the right of the title bar as a copy button. Clicking anywhere
+on the path copies the full value using the Dashboard's shared client-side
+clipboard handler; the copy icon appears on hover or keyboard focus without
+changing the layout.
+Titles use the same borderless, hover-icon copy interaction, including the fallback
+resource name when no workload title is present. Both buttons copy the full text.
+Long paths omit whole middle segments to retain leading and trailing context, while
+the clipboard retains the full decoded path. Cleared titles fall
+back to the surface's original name. Progress supports determinate,
+indeterminate, error and warning states, and is hidden when disconnected.
+It appears before the title, reserving a stable percentage width only for
+determinate states. Error and warning labels appear in the progress tooltip
+and accessible name rather than as inline text.
+These values require the application or shell to emit the corresponding OSC
+sequences; the Dashboard does not infer them from output.
+
+### Scrollbar and retained command marks
+
+The pinned client has no public option for suppressing its legacy "rows above
+live" status and "Return to live" button. The adapter installs a small
+shadow-DOM style/observer shim for those two elements only, leaving errors and
+selection feedback intact. The observer is disconnected on reconnect/disposal.
+Remove the shim when the upstream client offers a history-chrome option.
+The overlay scrollbar and keyboard navigation still provide history navigation.
+
+The terminal uses Hex1b's default Canvas2D **overlay** scrollbar, not a native
+HTML scrollbar or a reserved gutter. The mount requests 3 CSS pixels of internal
+padding on every side. `createDefaultScrollbarRenderer` keeps the
+upstream capsule thumb, marker drawing, gestures, hit testing and auto-hide.
+The renderer draws fixed-size circular markers behind the thumb, moving nearby
+marks aside so dense history does not obscure it. Painting and hit testing share
+the displaced geometry, including marker clicks, hover previews and wheel scrolling.
+The rounded track has a shared transparent-edge shadow around displaced marks;
+thumb motion is smooth between terminal rows, and the thumb has no focus outline.
+A scoped shadow-DOM override hides the track's DOM focus outline
+after pointer input, restoring the upstream `:focus-visible` outline on keyboard
+input without changing actual focus. The modality listeners are removed on disposal.
+The track uses Hex1b's active-palette foreground/background blend at 35% opacity. The thumb
+uses that palette's foreground, so it remains contrasting in either theme.
+Markers use the selected terminal palette's purple and red ANSI colors at full
+opacity, with system colors in forced-color mode. The track remains
+translucent in both themes.
+
+Tooltip colors are resolved in the Dashboard theme; marker colors follow the terminal palette. Dashboard theme
+changes and the `forced-colors` and `prefers-contrast` media queries recreate the
+snapshotted painter and replace the complete overlay configuration. Forced
+colors use resolved system colors, and increased contrast makes the track
+opaque. Hex1b owns reduced-motion behavior. Theme observers and media listeners
+are removed when the view is disposed.
+
+Marker hover previews decorate `renderDefaultScrollbarTooltip` with Aspire's
+popup background, border, radius, shadow and UI typography. Their colors are
+resolved in the same outer Dashboard theme scope as the markers, with system
+colors in forced-color mode. Hex1b still owns safe text rendering, detail loading,
+positioning and tooltip lifetime.
+
+The existing HMP-to-HWT mirror has its own 10,000-row scrollback capacity.
+Hex1b now negotiates retained text and OSC 133 command-mark checkpoints by
+default, restoring producer-backed history and marks on late attachment and
+reconnect when both peers support them. Hex1b 0.172 retains command marks for the
+lifetime of their backing text by default, rather than evicting them after 200
+entries. Explicit producer capacity and transport limits still apply. The built-in scrollbar exposes mark
+navigation without a Dashboard mode chooser or custom tooltip UI. Marks follow
+retained content and disappear on eviction; unavailable marker rows are not row
+zero. Browser-owned bookmarks remain per-view and do not survive reconnect.
+
+### View lifecycle
+
+Resource rows use **Terminal** as their output shortcut when a live terminal is
+defined; other resources and historical runs retain **Console logs**. Both actions
+remain available in the resource menu, including on mobile. Resource graph and
+details menus also offer Terminal, while the Terminal page keeps Console logs as
+the alternate output view. Links preserve the selected resource replica.
 
 Each reconnect aborts the previous mount and creates a new client. Mounting is
 deferred while initially hidden; once connected, changing the Console/Terminal
@@ -87,6 +249,10 @@ take resize ownership. Public font-size limits are 8–32 pixels.
 Opening an interactive terminal or activating its view focuses its keyboard input
 once it is ready. Inactive dock panes do not take focus, and an asynchronous mount
 does not take focus back from a control the user selected while it was loading.
+The terminal's inset focus outline adds a subtle brand-purple tint to a muted
+neutral base independently of textbox and button focus colors. Increased contrast
+restores the stronger control focus color, and forced-colors mode uses the system
+highlight color.
 Mouse clicks on the font stepper, Fit button, or a dimensions option return focus
 to terminal input; keyboard activation keeps focus on the control for repeated
 adjustments. Opening the dimensions picker keeps focus until an option is chosen.
@@ -95,9 +261,13 @@ banner. Diagnostics include the exception, selection status, document focus, and
 clipboard permissions policy, never clipboard or selected text. These failures can
 include pending selection resolution before the browser clipboard API is called;
 they do not necessarily mean clipboard permission was denied.
-Hex1b 0.168.0 also displays its own inspection status inside its shadow root.
+Error status callbacks from a still-connected terminal are also logged with
+`console.log` without an Aspire banner or clearing an existing sizing/palette error.
+Fatal renderer and transport errors disconnect before reporting status and retain
+the connection-failure banner and retry behavior.
+Hex1b also displays its own inspection status inside its shadow root.
 Its public API does not currently expose an option to suppress that native message.
-Other terminal status and sizing errors offer **Dismiss**, which clears the local
+Sizing and palette errors offer **Dismiss**, which clears the local
 error and returns focus without reconnecting or discarding terminal history.
 Only connection/initialization failures offer **Reconnect terminal**.
 
@@ -128,20 +298,24 @@ Ctrl/Cmd+click opens server-authoritative OSC 8 hyperlinks using the package's
 built-in routing, including links in history and read-only views. Only absolute
 HTTP, HTTPS and mailto destinations are allowed, and tabs use
 `noopener,noreferrer`. Plain clicks and drags retain selection/application
-behavior; Shift and Alt reserve selection gestures. Aspire does not add its own
-opener, custom-scheme support, or plain-text URL detection. HMP state replay
+behavior; Shift and Alt reserve selection gestures. Aspire also enables Hex1b's
+per-view plain-text HTTP/HTTPS URL detector with dashed underlines and a
+Ctrl/Cmd-click action that opens a new tab with `noopener,noreferrer`.
+Remote file paths and custom URI schemes are not enabled. HMP state replay
 preserves link destinations when a browser attaches or reconnects. See
 [the hyperlink PR](https://github.com/mitchdenny/hex1b/pull/489) and
 [the replay fix](https://github.com/mitchdenny/hex1b/pull/493).
 
 The public API supports auto/fixed sizing, primary requests, keyboard and mouse
 input, paste/copy, selection, and producer-backed history. It exposes workload
-title, progress, and shell-integration state with change callbacks; the dashboard
-does not yet consume these and still labels the terminal with the resource name.
-It has no terminal theme setter, search API, or clear-buffer API. Terminal
-colors and content are server-authoritative; inspection UI uses the package's
-theme defaults/tokens. The previous terminal hardcoded dark xterm colors rather
-than offering a theme control. Search, filtering, clearing the log display, and
+title, working directory, progress, and shell-integration state with change
+callbacks. The dashboard consumes title, directory and progress updates for its
+metadata headers, falling back to the resource name when no workload title is
+present. Dock panes omit the header and retain their creation-time tab titles.
+The terminal palette selector uses `setColorMode` to switch between Dark and
+Light independently of the Dashboard theme, recoloring default and indexed
+colors while preserving explicit RGB colors and image pixels. There is no
+terminal search API or clear-buffer API. Search, filtering, clearing the log display, and
 downloads belong to the separate Blazor `LogViewer`, which does not use xterm
 and is unchanged by this migration.
 
@@ -158,7 +332,7 @@ run in CI through `Infrastructure.Tests` using the existing `NodeCommand`
 helper. They verify focused shadow-DOM input isolation from dashboard shortcuts,
 cancellation, reconnect generations, visibility, role-gated sizing, failure
 state, PathBase asset URLs, deployment asset presence, and exact version parity
-between `Directory.Packages.props`, the npm manifest/lockfile, and the vendored
-package. Complete installed-package byte comparison belongs to the separate
+between `Directory.Packages.props`, the npm manifest/lockfile, and the minified
+bundle header. Reproducible minification and installed font/license byte comparison belong to the separate
 acquisition verification command above. Neither suite substitutes for a browser
 WebGPU/WebGL2 rendering test or multi-peer server/CLI integration tests.

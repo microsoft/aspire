@@ -8,7 +8,7 @@
 # Security:
 # - Uses OIDC (Workload Identity Federation) for Azure authentication
 # - No stored Azure secrets
-# - Only microsoft org members can trigger via PR command
+# - Only users with repository write access can trigger via PR command
 #
 name: Deployment E2E Tests
 
@@ -47,8 +47,13 @@ jobs:
       - name: Post starting comment
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
         run: |
-          PR_NUMBER="${{ inputs.pr_number }}"
+          if [[ ! "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid pull request number: $PR_NUMBER"
+            exit 1
+          fi
+
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           gh pr comment "${PR_NUMBER}" --repo "${{ github.repository }}" --body \
@@ -68,7 +73,7 @@ jobs:
     outputs:
       matrix: ${{ steps.filter.outputs.matrix }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/enumerate-tests
         id: enumerate
@@ -113,10 +118,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -178,7 +183,7 @@ jobs:
           echo "Package count: $(find "$ARTIFACT_DIR/packages" -name "*.nupkg" | wc -l)"
 
       - name: Upload CLI artifacts
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: aspire-cli-artifacts
           path: ${{ github.workspace }}/cli-artifacts/
@@ -205,7 +210,7 @@ jobs:
     env:
       ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/preload-azure-cli-requests
 
@@ -466,10 +471,10 @@ jobs:
       ASPIRE_DEPLOYMENT_TEST_CONNECTOR_NAMESPACE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
 
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -580,19 +585,17 @@ jobs:
           Azure__Location: westus3
           GH_TOKEN: ${{ github.token }}
         run: |
-          # --ignore-exit-code 8: MTP returns exit code 8 ("zero tests ran") when the single
-          # matrix test is dynamically skipped (e.g. on a transient Azure regional-capacity error),
-          # which would otherwise be treated as a failure below. Treating 8 as success — the repo
-          # convention baked into MtpBaseArgs (eng/Testing.props) — keeps a skipped deploy green.
-          ./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
-            -c Release \
-            --results-directory ${{ github.workspace }}/testresults \
-            -- \
-            --report-trx --report-trx-filename "${{ matrix.shortname }}.trx" \
-            --filter-not-trait "quarantined=true" \
-            --ignore-exit-code 8 \
-            ${{ matrix.extraTestArgs }} \
-            || echo "test_failed=true" >> $GITHUB_OUTPUT
+          # MTP returns exit code 8 ("zero tests ran") when the single matrix test is dynamically
+          # skipped — e.g. the opt-in Connector Namespace scenario
+          # (ASPIRE_DEPLOYMENT_TEST_ENABLE_CONNECTOR_NAMESPACE=false) or a transient Azure
+          # regional-capacity skip — so 8 must be treated as success to keep a skipped deploy green.
+          # The MTP `--ignore-exit-code 8` flag cannot do that here: it only remaps the exit code of
+          # the test module itself, while `dotnet test` computes its own exit code from the
+          # aggregated run and still reports 8. So the exit code is classified explicitly instead.
+          bash .github/workflows/run-deployment-test.sh \
+            "${{ github.workspace }}/testresults" \
+            "${{ matrix.shortname }}" \
+            ${{ matrix.extraTestArgs }}
 
       - name: Collect Aspire CLI logs
         if: always()
@@ -608,7 +611,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: deployment-test-results-${{ matrix.shortname }}
           path: |
@@ -617,7 +620,7 @@ jobs:
 
       - name: Upload recordings
         if: always()
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: deployment-test-recordings-${{ matrix.shortname }}
           path: |
@@ -643,7 +646,7 @@ jobs:
       contents: read   # checkout to require the local .js modules
       issues: write
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           persist-credentials: false

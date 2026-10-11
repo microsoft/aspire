@@ -9,7 +9,6 @@
     <div class="terminal-dock fluent-multi-splitter @(_isVisible ? "visible" : "collapsed")"
          id="@_elementIdPrefix"
          orientation="vertical"
-         data-theme="dark"
          style="height: @(_heightPx)px;"
          inert="@(!_isVisible)"
          aria-hidden="@(_isVisible ? "false" : "true")"
@@ -34,39 +33,68 @@
                Keep selection and removal driven by AppHost updates, with separate tab/close buttons and mounted panes. *@
             @if (_terminals.Count > 0)
             {
-                <div class="terminal-dock-tablist aspire-tab-list" role="tablist" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]">
-                    @foreach (var terminal in _terminals)
-                    {
-                        <div class="terminal-dock-tab aspire-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
-                             @key="terminal.TerminalId">
-                            <button type="button"
-                                    role="tab"
-                                    class="terminal-dock-tab-select"
-                                    id="@GetTabId(terminal.TerminalId)"
-                                    aria-controls="@GetPaneId(terminal.TerminalId)"
-                                    aria-selected="@(IsPaneActive(terminal.TerminalId) ? "true" : "false")"
-                                    tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
-                                    @onclick="@(() => Activate(terminal.TerminalId))">
-                                <span class="terminal-dock-tab-title">@terminal.Title</span>
-                            </button>
-                            <FluentButton Appearance="ButtonAppearance.Transparent"
-                                          IconOnly="true"
-                                          Class="aspire-icon-button terminal-dock-tab-close"
-                                          Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
-                                          aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
-                                          tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
-                                          OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
-                                <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
-                            </FluentButton>
-                        </div>
-                    }
+                <div class="terminal-dock-tabs">
+                    <div class="terminal-dock-tablist aspire-tab-list" role="tablist" aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockTabs)]">
+                        @foreach (var terminal in _terminals)
+                        {
+                            <div class="terminal-dock-tab aspire-tab @(IsPaneActive(terminal.TerminalId) ? "active" : string.Empty)"
+                                 data-terminal-id="@terminal.TerminalId"
+                                 @key="terminal.TerminalId">
+                                <button type="button"
+                                        role="tab"
+                                        class="terminal-dock-tab-select"
+                                        draggable="true"
+                                        aria-describedby="@($"{_elementIdPrefix}-reorder-help")"
+                                        aria-keyshortcuts="Alt+Shift+ArrowLeft Alt+Shift+ArrowRight"
+                                        id="@GetTabId(terminal.TerminalId)"
+                                        aria-controls="@GetPaneId(terminal.TerminalId)"
+                                        aria-selected="@(IsPaneActive(terminal.TerminalId) ? "true" : "false")"
+                                        tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                        @onclick="@(() => Activate(terminal.TerminalId))">
+                                    <span class="terminal-dock-tab-title">@terminal.Title</span>
+                                </button>
+                                <FluentButton Appearance="ButtonAppearance.Transparent"
+                                              IconOnly="true"
+                                              Class="aspire-icon-button terminal-dock-tab-close"
+                                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                              aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockCloseTab), terminal.Title]"
+                                              tabindex="@(IsPaneActive(terminal.TerminalId) ? 0 : -1)"
+                                              OnClick="@(() => CloseTerminalAsync(terminal.TerminalId, terminal.Title))">
+                                    <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Color="Color.Default" />
+                                </FluentButton>
+                            </div>
+                        }
+                    </div>
                 </div>
+                <span id="@($"{_elementIdPrefix}-reorder-help")" hidden>@Loc[nameof(Resources.TerminalStrings.TerminalDockReorderHelp)]</span>
             }
             <div class="terminal-dock-filler"></div>
             @if (_popupBlocked)
             {
                 <span class="terminal-dock-popup-blocked">@Loc[nameof(Resources.TerminalStrings.TerminalDockDetachBlocked)]</span>
             }
+            <div class="terminal-dock-tab-scroll">
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              IconOnly="true"
+                              Class="aspire-icon-button"
+                              Disabled="true"
+                              aria-disabled="true"
+                              data-tab-scroll="-1"
+                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]"
+                              aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollLeft)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.ChevronLeft())" Color="Color.Default" />
+                </FluentButton>
+                <FluentButton Appearance="ButtonAppearance.Transparent"
+                              IconOnly="true"
+                              Class="aspire-icon-button"
+                              Disabled="true"
+                              aria-disabled="true"
+                              data-tab-scroll="1"
+                              Title="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]"
+                              aria-label="@Loc[nameof(Resources.TerminalStrings.TerminalDockScrollRight)]">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.ChevronRight())" Color="Color.Default" />
+                </FluentButton>
+            </div>
             <TerminalWindowButton @ref="_windowButton"
                                   Class="terminal-dock-detach"
                                   Label="@Loc[nameof(Resources.TerminalStrings.TerminalDockDetach)]"
@@ -145,23 +173,7 @@
                     <div class="terminal-dock-panel-card">
                         <FluentIcon Class="terminal-dock-panel-icon" Value="@(new Icons.Regular.Size20.WindowConsole())" Width="24px" Color="Color.Default" />
                         <h3 class="terminal-dock-panel-heading">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHeading)]</h3>
-                        <p class="terminal-dock-panel-body">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelBody)]</p>
-                        @if (_resourceTerminalLinks.Length > 0)
-                        {
-                            <p class="terminal-dock-panel-body terminal-dock-resource-links">
-                                @Loc[nameof(Resources.TerminalStrings.TerminalDockResourceTerminals)]@(" ")
-                                @for (var i = 0; i < _resourceTerminalLinks.Length; i++)
-                                {
-                                    if (i > 0)
-                                    {
-                                        <text>, </text>
-                                    }
-                                    var link = _resourceTerminalLinks[i];
-                                    <a class="aspire-link-button" href="@link.Url">@link.Name</a>
-                                }
-                            </p>
-                        }
-                        <a class="aspire-link-button terminal-dock-panel-more-info" href="https://aka.ms/aspire/dashboard-terminal" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.TerminalStrings.TerminalDockMoreInformation)]</a>
+                        <a class="terminal-dock-panel-more-info" href="https://aka.ms/aspire/dashboard-terminal" target="_blank" rel="noopener noreferrer">@Loc[nameof(Resources.TerminalStrings.TerminalDockMoreInformation)]</a>
                         <p class="terminal-dock-panel-hint">@Loc[nameof(Resources.TerminalStrings.TerminalDockPanelHint)]</p>
                     </div>
                 </div>

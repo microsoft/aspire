@@ -5,7 +5,6 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.Reflection;
 using System.Threading.Channels;
-using Aspire.Hosting.Terminals;
 using Aspire.Hosting.Tests.Dcp;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -26,6 +25,25 @@ namespace Aspire.Hosting.Tests.Terminals;
 [Trait("Partition", "2")]
 public class TerminalServiceTests
 {
+    [Theory]
+    [InlineData(typeof(TerminalService))]
+    [InlineData(typeof(AspireTerminal))]
+    [InlineData(typeof(AspireTerminalKey))]
+    [InlineData(typeof(TerminalLaunchOptions))]
+    [InlineData(typeof(TerminalOwner))]
+    [InlineData(typeof(TerminalPlacement))]
+    public void PublicTerminalTypes_UseApplicationModelNamespace(Type type)
+    {
+        Assert.Equal(typeof(ResourceNotificationService).Namespace, type.Namespace);
+    }
+
+    [Fact]
+    public void HostingAssembly_HasNoTerminalsNamespace()
+    {
+        Assert.All(typeof(TerminalService).Assembly.GetTypes(),
+            type => Assert.NotEqual("Aspire.Hosting.Terminals", type.Namespace));
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(8)]

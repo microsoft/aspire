@@ -242,15 +242,14 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
 
+            // Headless browsers can skip every intermediate compositor frame under load. Capture the native
+            // smooth-scroll request, then dispatch scrollend explicitly so the content-growth behavior is deterministic.
             await page.EvaluateAsync("""
                 () => {
                     const region = document.getElementById('scroll-region');
-                    const initialBottom = region.scrollHeight - region.clientHeight;
-                    window.__grewDuringScroll = false;
-                    region.addEventListener('scroll', () => {
-                        window.__grewDuringScroll = region.scrollTop > 0 && region.scrollTop < initialBottom;
-                        region.querySelector('.scroll-content').style.height = '4000px';
-                    }, { once: true });
+                    region.scrollTo = options => {
+                        window.__scrollToBottomRequest = options;
+                    };
                     document.querySelector('.scroll-to-bottom').addEventListener('click', event => {
                         window.__hiddenOnClick = event.currentTarget.hidden;
                     }, { once: true });
@@ -259,10 +258,24 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
             await bottomButton.ClickAsync();
             Assert.True(await page.EvaluateAsync<bool>("() => window.__hiddenOnClick"));
+            Assert.True(await page.EvaluateAsync<bool>("""
+                () => {
+                    const region = document.getElementById('scroll-region');
+                    return window.__scrollToBottomRequest.behavior === 'smooth' &&
+                        window.__scrollToBottomRequest.top === region.scrollHeight;
+                }
+                """));
+            await page.EvaluateAsync("""
+                () => {
+                    const region = document.getElementById('scroll-region');
+                    region.querySelector('.scroll-content').style.height = '4000px';
+                    region.dispatchEvent(new Event('scrollend'));
+                }
+                """);
             await page.WaitForFunctionAsync("""
                 () => {
                     const region = document.getElementById('scroll-region');
-                    return window.__grewDuringScroll && region.scrollHeight >= 4000 &&
+                    return region.scrollHeight >= 4000 &&
                         Math.abs(region.scrollHeight - region.clientHeight - region.scrollTop) < 1;
                 }
                 """).DefaultTimeout();
@@ -458,7 +471,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await page.Locator("#scroll-owner").EvaluateAsync("owner => owner.scrollTop = 40");
             await page.WaitForFunctionAsync("""
                 expectedBottom => Math.abs(document.querySelector('.scroll-buttons').getBoundingClientRect().bottom - expectedBottom) < 1
-                """, originalBounds.Y + originalBounds.Height - 40).DefaultTimeout();
+                """, (double)(originalBounds.Y + originalBounds.Height - 40)).DefaultTimeout();
             Assert.Equal(originalBounds.Y, (await page.Locator(".scroll-buttons").BoundingBoxAsync())!.Y);
             Assert.Equal(originalRegionBounds.Y - 40, (await region.BoundingBoxAsync())!.Y);
             Assert.Equal(0, await region.EvaluateAsync<int>("element => element.scrollTop"));
@@ -473,7 +486,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
             await page.WaitForFunctionAsync("""
                 expectedBottom => Math.abs(document.querySelector('.scroll-buttons').getBoundingClientRect().bottom - expectedBottom) < 1
-                """, originalBounds.Y + originalBounds.Height).DefaultTimeout();
+                """, (double)(originalBounds.Y + originalBounds.Height)).DefaultTimeout();
             Assert.Equal(originalRegionBounds.Y, (await region.BoundingBoxAsync())!.Y);
             Assert.Equal(0, await region.EvaluateAsync<int>("element => element.scrollTop"));
         });
@@ -500,16 +513,20 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                     wrapper.style.cssText = 'width:400px;height:300px;overflow:visible;';
                     owner.appendChild(wrapper);
                     wrapper.appendChild(region);
+                    window.dispatchEvent(new Event('resize'));
                 }
                 """, overflow);
 
             var bottomButton = page.Locator(".scroll-to-bottom");
             await Assertions.Expect(bottomButton).ToBeVisibleAsync();
             var root = page.Locator(".scroll-buttons");
+            await page.WaitForFunctionAsync("""
+                () => document.querySelector('.scroll-buttons').style.left === '100px'
+                """).DefaultTimeout();
             var bounds = (await root.BoundingBoxAsync())!;
-            Assert.Equal(110, bounds.X + bounds.Width / 2);
+            Assert.Equal(100, bounds.X + bounds.Width / 2);
             Assert.Equal(122, bounds.Y);
-            Assert.Equal(176, bounds.Height);
+            Assert.Equal(156, bounds.Height);
 
             // Keep the region in the viewport, but move it past the horizontal clip edge.
             await page.EvaluateAsync("""

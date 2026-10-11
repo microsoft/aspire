@@ -117,9 +117,62 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="TerminalProgress" xml:space="preserve">
+    <value>Terminal progress</value>
+  </data>
+  <data name="TerminalPalette" xml:space="preserve">
+    <value>Terminal palette</value>
+  </data>
+  <data name="TerminalPaletteLabel" xml:space="preserve">
+    <value>Palette</value>
+  </data>
+  <data name="TerminalPaletteLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="TerminalPaletteDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="TerminalSizeLabel" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="TerminalPaletteSaveFailed" xml:space="preserve">
+    <value>Unable to save the terminal palette. Check that browser storage is available and try again.</value>
+  </data>
+  <data name="TerminalCopyWorkingDirectory" xml:space="preserve">
+    <value>Copy working directory: {0}</value>
+    <comment>{0} is the working directory path.</comment>
+  </data>
+  <data name="TerminalCopyTitle" xml:space="preserve">
+    <value>Copy terminal title: {0}</value>
+    <comment>{0} is the terminal title.</comment>
+  </data>
+  <data name="TerminalCopyFailed" xml:space="preserve">
+    <value>Could not copy to clipboard.</value>
+  </data>
+  <data name="TerminalProgressError" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="TerminalProgressWarning" xml:space="preserve">
+    <value>Warning</value>
+  </data>
   <data name="TerminalTitle" xml:space="preserve">
     <value>Terminal</value>
     <comment>Default terminal title when no resource name is available.</comment>
+  </data>
+  <data name="TerminalsPageTitle" xml:space="preserve">
+    <value>Terminals</value>
+  </data>
+  <data name="TerminalsHeader" xml:space="preserve">
+    <value>Terminals</value>
+  </data>
+  <data name="TerminalsSelectResourceToolbar" xml:space="preserve">
+    <value>Select resource</value>
+  </data>
+  <data name="TerminalsSettings" xml:space="preserve">
+    <value>View options</value>
+  </data>
+  <data name="TerminalsSelectAResource" xml:space="preserve">
+    <value>Select a resource to view its terminal</value>
   </data>
   <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
     <value>Decrease font size</value>
@@ -153,7 +206,7 @@
     <value>Terminal dimensions</value>
   </data>
   <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
-    <value>Fit</value>
+    <value>Fit terminal to available space</value>
   </data>
   <data name="TerminalToolbarOpenInWindow" xml:space="preserve">
     <value>Open in new window</value>
@@ -164,8 +217,8 @@
   <data name="TerminalToolbarOpenInWindowFailed" xml:space="preserve">
     <value>Unable to open the terminal window. Reload the dashboard and try again.</value>
   </data>
-  <data name="TerminalFocusControlsHint" xml:space="preserve">
-    <value>F6: Focus terminal controls</value>
+  <data name="TerminalFocusControlsDescription" xml:space="preserve">
+    <value>Focus terminal controls</value>
   </data>
   <data name="MainLayoutToggleTerminalDock" xml:space="preserve">
     <value>Toggle terminal (`)</value>
@@ -173,6 +226,15 @@
   <data name="TerminalDockCloseTab" xml:space="preserve">
     <value>Close terminal '{0}'</value>
     <comment>{0} is the terminal's display title.</comment>
+  </data>
+  <data name="TerminalDockScrollLeft" xml:space="preserve">
+    <value>Scroll terminal tabs left</value>
+  </data>
+  <data name="TerminalDockScrollRight" xml:space="preserve">
+    <value>Scroll terminal tabs right</value>
+  </data>
+  <data name="TerminalDockReorderHelp" xml:space="preserve">
+    <value>Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</value>
   </data>
   <data name="TerminalDockCloseTimedOutTitle" xml:space="preserve">
     <value>Terminal close timed out</value>
@@ -212,18 +274,11 @@
   <data name="TerminalDockTabs" xml:space="preserve">
     <value>Terminals</value>
   </data>
-  <data name="TerminalDockPanelBody" xml:space="preserve">
-    <value>App host code can open terminals here. Resource terminals are shown separately on their resource pages.</value>
-  </data>
   <data name="TerminalDockPanelHeading" xml:space="preserve">
     <value>No docked terminals</value>
   </data>
   <data name="TerminalDockPanelHint" xml:space="preserve">
     <value>Press the backtick key (`) to hide this panel.</value>
-  </data>
-  <data name="TerminalDockResourceTerminals" xml:space="preserve">
-    <value>Resource terminals:</value>
-    <comment>Label before a comma-separated list of links to resource terminal pages in the empty terminal dock.</comment>
   </data>
   <data name="TerminalDockMoreInformation" xml:space="preserve">
     <value>More information</value>

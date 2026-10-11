@@ -14,14 +14,14 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 
 internal sealed class TestTerminalConnectionResolver : ITerminalConnectionResolver, IAsyncDisposable
 {
-    private readonly ConcurrentDictionary<(string ResourceName, int ReplicaIndex), Lazy<TestTerminalConnection>> _producers = new();
+    private readonly ConcurrentDictionary<string, Lazy<TestTerminalConnection>> _producers = new(StringComparer.Ordinal);
     private readonly Channel<TestTerminalConnection> _connections = Channel.CreateUnbounded<TestTerminalConnection>();
 
-    public async Task<Stream?> ConnectAsync(string resourceName, int replicaIndex, CancellationToken cancellationToken)
+    public async Task<Stream?> ConnectAsync(string resourceName, CancellationToken cancellationToken)
     {
         // All viewers of a replica share its real producer, including a separate primary
         // peer. HMP handshakes and HWT projection remain owned by Hex1b, not this fixture.
-        var producer = _producers.GetOrAdd((resourceName, replicaIndex), _ => new(() => new TestTerminalConnection())).Value;
+        var producer = _producers.GetOrAdd(resourceName, _ => new(() => new TestTerminalConnection())).Value;
         var stream = producer.Connect();
         await _connections.Writer.WriteAsync(producer, cancellationToken);
         return stream;

@@ -1,6 +1,8 @@
 # Polyglot Dockerfile for Java AppHost E2E tests.
 # Extends the shared polyglot base with the JDK required by Java AppHosts.
 
+# DisableDockerDetector "Extends a locally built aspire-e2e-polyglot-base image; the GitHub image workflow and local CLI E2E helper build it first from the separately scanned Dockerfile.e2e-polyglot-base."
+
 FROM aspire-e2e-polyglot-base
 
 ARG UBUNTU_APT_MIRROR=

@@ -2,6 +2,17 @@
 -- The .NET Foundation licenses this file to you under the MIT license.
 -- IMPORTANT: Increment DashboardSqliteDatabase.SchemaVersion when changing the database schema.
 
+CREATE TABLE IF NOT EXISTS telemetry_metric_aggregation_temporalities (
+    aggregation_temporality INTEGER PRIMARY KEY,
+    aggregation_temporality_name TEXT NOT NULL UNIQUE
+) STRICT;
+
+INSERT OR IGNORE INTO telemetry_metric_aggregation_temporalities (aggregation_temporality, aggregation_temporality_name)
+VALUES
+    (0, 'Unspecified'),
+    (1, 'Delta'),
+    (2, 'Cumulative');
+
 CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     instrument_id INTEGER PRIMARY KEY AUTOINCREMENT,
     resource_id INTEGER NOT NULL REFERENCES telemetry_resources(resource_id) ON DELETE CASCADE,
@@ -11,7 +22,7 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     description TEXT NOT NULL,
     unit TEXT NOT NULL,
     instrument_type INTEGER NOT NULL,
-    aggregation_temporality INTEGER NOT NULL,
+    aggregation_temporality INTEGER NOT NULL REFERENCES telemetry_metric_aggregation_temporalities(aggregation_temporality),
     is_monotonic INTEGER NOT NULL,
     UNIQUE (resource_id, scope_id, instrument_name)
 ) STRICT;
@@ -34,13 +45,15 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_points (
     point_id INTEGER PRIMARY KEY AUTOINCREMENT,
     dimension_id INTEGER NOT NULL REFERENCES telemetry_metric_dimensions(dimension_id) ON DELETE CASCADE,
     point_type INTEGER NOT NULL,
-    start_time_ticks INTEGER NOT NULL,
-    end_time_ticks INTEGER NOT NULL,
+    start_time_unix_nano INTEGER NOT NULL,
+    end_time_unix_nano INTEGER NOT NULL,
     repeat_count INTEGER NOT NULL,
     integer_value INTEGER NULL,
     double_value REAL NULL,
     histogram_sum REAL NULL,
     histogram_count INTEGER NULL,
+    histogram_aggregation_start_unix_nano INTEGER NULL,
+    histogram_aggregation_id INTEGER NULL,
     bucket_counts BLOB NULL,
     explicit_bounds BLOB NULL,
     flags INTEGER NOT NULL
@@ -49,7 +62,7 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_points (
 CREATE TABLE IF NOT EXISTS telemetry_metric_exemplars (
     exemplar_id INTEGER PRIMARY KEY AUTOINCREMENT,
     point_id INTEGER NOT NULL REFERENCES telemetry_metric_points(point_id) ON DELETE CASCADE,
-    start_time_ticks INTEGER NOT NULL,
+    time_unix_nano INTEGER NOT NULL,
     exemplar_value REAL NOT NULL,
     span_id TEXT NOT NULL,
     trace_id TEXT NOT NULL
@@ -72,10 +85,13 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_metric_dimensions_hash
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_dimension_order
     ON telemetry_metric_points(dimension_id, point_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_time
-    ON telemetry_metric_points(dimension_id, start_time_ticks, end_time_ticks);
+    ON telemetry_metric_points(dimension_id, start_time_unix_nano, end_time_unix_nano);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_end_time
-    ON telemetry_metric_points(dimension_id, end_time_ticks, start_time_ticks, point_id);
+    ON telemetry_metric_points(dimension_id, end_time_unix_nano, start_time_unix_nano, point_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_metric_points_histogram_identity
+    ON telemetry_metric_points(dimension_id, start_time_unix_nano, histogram_aggregation_id)
+    WHERE point_type = 3;
 -- Exemplar identity intentionally omits span/trace IDs and filtered attributes. Distinct exemplars that share a
 -- point, timestamp, and value can be collapsed, but that combination is unlikely to occur in real-world telemetry.
 CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_metric_exemplars_identity
-    ON telemetry_metric_exemplars(point_id, start_time_ticks, exemplar_value);
+    ON telemetry_metric_exemplars(point_id, time_unix_nano, exemplar_value);

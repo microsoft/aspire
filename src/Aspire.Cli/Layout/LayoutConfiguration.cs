@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Shared;
+using Semver;
 
 namespace Aspire.Cli.Layout;
 
@@ -11,11 +12,17 @@ namespace Aspire.Cli.Layout;
 public enum LayoutComponent
 {
     /// <summary>CLI executable.</summary>
-    Cli,
+    Cli = 0,
     /// <summary>Developer Control Plane.</summary>
-    Dcp,
-    /// <summary>Unified managed binary (dashboard, server, nuget).</summary>
-    Managed
+    Dcp = 1,
+    /// <summary>Managed server and compatibility forwarders.</summary>
+    Managed = 2,
+    /// <summary>Dashboard executable and static assets.</summary>
+    Dashboard = 3,
+    /// <summary>Optional native tray executable.</summary>
+    Tray = 4,
+    /// <summary>Standalone terminal host and native dependencies.</summary>
+    TerminalHost = 5
 }
 
 /// <summary>
@@ -63,7 +70,10 @@ public sealed class LayoutConfiguration
         {
             LayoutComponent.Cli => Components.Cli,
             LayoutComponent.Dcp => Components.Dcp,
+            LayoutComponent.Dashboard => Components.Dashboard,
             LayoutComponent.Managed => Components.Managed,
+            LayoutComponent.Tray => Components.Tray,
+            LayoutComponent.TerminalHost => Components.TerminalHost,
             _ => null
         };
 
@@ -74,6 +84,12 @@ public sealed class LayoutConfiguration
     /// Gets the path to the DCP directory.
     /// </summary>
     public string? GetDcpPath() => GetComponentPath(LayoutComponent.Dcp);
+
+    /// <summary>
+    /// Gets the path to the optional native tray executable.
+    /// </summary>
+    /// <returns>The executable path, or <see langword="null"/> when the layout has no tray.</returns>
+    public string? GetTrayPath() => GetComponentPath(LayoutComponent.Tray);
 
     /// <summary>
     /// Gets the path to the aspire-managed executable.
@@ -89,6 +105,31 @@ public sealed class LayoutConfiguration
 
         return Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
     }
+
+    /// <summary>
+    /// Gets the path to the Native AOT Dashboard executable.
+    /// </summary>
+    /// <returns>The path to the Dashboard executable.</returns>
+    public string? GetDashboardPath()
+    {
+        var dashboardDir = GetComponentPath(LayoutComponent.Dashboard);
+        if (dashboardDir is null)
+        {
+            return null;
+        }
+
+        return Path.Combine(dashboardDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+    }
+
+    /// <summary>
+    /// Gets the standalone terminal host executable path.
+    /// </summary>
+    /// <returns>The executable path, or <see langword="null"/> when no component is configured.</returns>
+    public string? GetTerminalHostPath()
+    {
+        var directory = GetComponentPath(LayoutComponent.TerminalHost);
+        return directory is null ? null : Path.Combine(directory, BundleDiscovery.GetExecutableFileName(BundleDiscovery.TerminalHostExecutableName));
+    }
 }
 
 /// <summary>
@@ -96,6 +137,8 @@ public sealed class LayoutConfiguration
 /// </summary>
 public sealed class LayoutComponents
 {
+    internal const string MacTrayExecutablePath = "tray/Aspire Tray.app/Contents/MacOS/aspire-tray";
+
     /// <summary>
     /// Path to CLI executable (e.g., "aspire" or "aspire.exe").
     /// </summary>
@@ -107,7 +150,74 @@ public sealed class LayoutComponents
     public string? Dcp { get; set; } = BundleDiscovery.DcpDirectoryName;
 
     /// <summary>
+    /// Path to the Dashboard executable and static assets directory.
+    /// </summary>
+    public string? Dashboard { get; set; } = BundleDiscovery.DashboardDirectoryName;
+
+    /// <summary>
     /// Path to the unified managed binary directory.
     /// </summary>
     public string? Managed { get; set; } = BundleDiscovery.ManagedDirectoryName;
+
+    /// <summary>
+    /// Path to the standalone terminal host directory.
+    /// </summary>
+    public string? TerminalHost { get; set; } = BundleDiscovery.TerminalHostDirectoryName;
+
+    /// <summary>
+    /// Path to the optional native tray executable, relative to the layout root.
+    /// </summary>
+    public string? Tray { get; set; }
+}
+
+/// <summary>
+/// Selects a terminal launch contract compatible with the AppHost's Hosting version.
+/// </summary>
+internal static class TerminalHostLaunchHelper
+{
+    private static readonly SemVersion s_minimumDirectHostingVersion = SemVersion.Parse("17.0.0-0");
+
+    public static bool SupportsDirectLaunch(SemVersion? hostingVersion)
+        => hostingVersion is not null && hostingVersion.ComparePrecedenceTo(s_minimumDirectHostingVersion) >= 0;
+
+    public static (string Path, string InvocationArgs)? GetLaunch(LayoutConfiguration layout, bool supportsDirectLaunch)
+    {
+        if (supportsDirectLaunch)
+        {
+            var path = layout.GetTerminalHostPath();
+            return File.Exists(path) ? (path, string.Empty) : null;
+        }
+
+        // Older Hosting ignores empty invocation overrides and falls back to SDK metadata.
+        // Keep its executable and dispatcher argument paired rather than passing that argument to the native host.
+        var managedPath = layout.GetManagedPath();
+        return File.Exists(managedPath) ? (managedPath, "terminalhost") : null;
+    }
+}
+
+/// <summary>
+/// Selects a Dashboard executable compatible with the AppHost's Hosting version.
+/// </summary>
+internal static class DashboardLaunchHelper
+{
+    private static readonly SemVersion s_minimumNativeDashboardHostingVersion = SemVersion.Parse("13.6.0-0");
+
+    public static bool SupportsNativeDashboard(SemVersion? hostingVersion)
+    {
+        // Older Hosting converts the Dashboard path to a DLL and launches it with dotnet exec.
+        // Unknown versions use the managed forwarder to preserve that launch contract.
+        return hostingVersion is not null &&
+            hostingVersion.ComparePrecedenceTo(s_minimumNativeDashboardHostingVersion) >= 0;
+    }
+
+    public static string? GetDashboardPath(LayoutConfiguration layout, bool supportsNativeDashboard)
+    {
+        if (supportsNativeDashboard && layout.GetDashboardPath() is { } dashboardPath && File.Exists(dashboardPath))
+        {
+            return dashboardPath;
+        }
+
+        var managedPath = layout.GetManagedPath();
+        return File.Exists(managedPath) ? managedPath : null;
+    }
 }

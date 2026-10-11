@@ -8,8 +8,8 @@
 // module owns is the window handle, so the page that opened it can focus it, close it, and find out when the user
 // closed it themselves.
 //
-// Keys are opaque strings chosen by the caller: a dock terminal id, or "resource:<name>:<replica>". They only have to
-// be stable and unique within the page.
+// Keys are opaque strings chosen by the caller: a dock terminal id, or "resource:<canonical-resource-name>".
+// They only have to be stable and unique within the page.
 // Dock windows also have a durable, generation-scoped record. After a document reload that record keeps the dock
 // on its placeholder until the independent page supplies its WindowProxy through a same-origin message.
 // A missing response is NOT proof of closure: background pages can be suspended indefinitely.

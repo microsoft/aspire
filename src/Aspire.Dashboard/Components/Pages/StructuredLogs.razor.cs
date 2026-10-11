@@ -24,6 +24,10 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
 {
+    private static readonly IEqualityComparer<LogSummary> s_logSummaryComparer = EqualityComparer<LogSummary>.Create(
+        static (x, y) => ReferenceEquals(x, y) || (x is not null && y is not null && x.InternalId == y.InternalId),
+        static item => item.InternalId.GetHashCode());
+
     private const string ScrollContainerId = "structuredLogsScrollContainer";
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string LogLevelColumn = nameof(LogLevelColumn);
@@ -32,6 +36,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private const string TraceColumn = nameof(TraceColumn);
     private const string ActionsColumn = nameof(ActionsColumn);
 
+    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private SelectViewModel<ResourceTypeDetails> _allResource = default!;
 
     private TotalItemsFooter _totalItemsFooter = default!;
@@ -43,7 +48,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
     private int? _displayedItemCount;
-    private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
@@ -86,9 +90,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required DimensionManager DimensionManager { get; init; }
-
-    [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
 
     [Inject]
@@ -129,7 +130,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
         ViewModel.StartIndex = request.StartIndex;
-        ViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
+        ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
 
         var logs = await ViewModel.GetLogsAsync(request.CancellationToken);
 
@@ -161,6 +162,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
         TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
+
+        if (_endAnchorItemsProviderState.GetInitialResult(request.StartIndex, logs.Items, virtualizedLogCount) is { } initialResult)
+        {
+            return GridItemsProviderResult.From(initialResult.Items, initialResult.TotalItemCount);
+        }
 
         return GridItemsProviderResult.From(logs.Items, virtualizedLogCount);
     }
@@ -258,15 +264,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private Task HandleSelectedResourceChangedAsync()
     {
-        _resourceChanged = true;
-
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
     private async Task HandleSelectedLogLevelChangedAsync()
     {
-        _resourceChanged = true;
-
         await ClearSelectedLogEntryIfExcludedAsync(_filter, ViewModel.Filters);
 
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
@@ -426,25 +428,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<LogSummary>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
-        if (_resourceChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _resourceChanged = false;
-        }
         if (firstRender)
         {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
             // Focus the scroll container without showing the focus ring. The container is a large
             // content area where a visible focus indicator would be visually noisy on initial load.
             await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
 
         if (_pendingFocusElementId is { } pendingFocusElementId)
@@ -452,15 +440,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             _pendingFocusElementId = null;
             await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
-    }
 
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
+        if (_endAnchorItemsProviderState.TryBeginRefresh())
         {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
+            await _dataGrid!.RefreshDataAndRenderAsync();
+        }
     }
 
     private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
@@ -475,7 +459,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _cts.Cancel();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         TelemetryContext.Dispose();
     }
 

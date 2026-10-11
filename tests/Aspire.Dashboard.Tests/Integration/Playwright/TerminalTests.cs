@@ -19,7 +19,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     : PlaywrightTestsBase<TerminalTests.TerminalDashboardServerFixture>(fixture)
 {
     private const string ResourceName = "terminal-resource";
-    private const string Endpoint = "/api/terminal?resource=terminal-resource&replica=0";
+    private const string Endpoint = "/api/terminal?resource=terminal-resource";
 
     [Theory]
     [InlineData(false, false)]
@@ -41,6 +41,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await MountObserverAsync(page, requestPrimary: true);
             await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
             var primaryId = connection.Presentation.PrimaryPeerId;
+            var connectionCount = connection.ConnectionCount;
             Assert.NotNull(primaryId);
 
             var terminal = page.GetByTestId("module-terminal");
@@ -54,9 +55,10 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             connection.Workload.Write("\u001b[?25lOutput while read-only\r\n");
             await connection.WaitForProducerTextAsync("Output while read-only", CancellationToken.None).DefaultTimeout();
             await ExpectObserverTextAsync(page, "Output while read-only");
-            await Assertions.Expect(terminal.Locator("canvas")).ToBeVisibleAsync();
+            // The overlay scrollbar has its own canvas after the terminal surface.
+            await Assertions.Expect(terminal.Locator("canvas").First).ToBeVisibleAsync();
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
-            await page.Keyboard.TypeAsync("blocked-keyboard");
+            await page.Keyboard.TypeAsync("q");
             await PasteAsync(input, "blocked-paste");
             Assert.Equal(["Terminal view does not accept input", "Terminal view does not accept input"],
                 await page.EvaluateAsync<string[]>("""
@@ -108,7 +110,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await SetReadOnlyAsync(page, terminalId, session, true);
             await ExpectReadOnlyAsync(page, true);
             await page.EvaluateAsync("() => window.moduleTerminal.focus()");
-            await page.Keyboard.TypeAsync("blocked-again");
+            await page.Keyboard.TypeAsync("z");
             await PasteAsync(input, "blocked-paste-again");
             await page.EvaluateAsync("() => window.terminalObserver.paste('still-active')");
             Assert.Equal("still-active", await connection.ReadInputTextAsync("still-active".Length, CancellationToken.None).DefaultTimeout());
@@ -119,7 +121,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await ExpectObserverTextAsync(page, "Output after policy changes");
             await WaitForConnectedAsync(page, terminalId);
             Assert.True(await terminalElement.EvaluateAsync<bool>("element => element.isConnected"));
-            Assert.Equal(2, connection.ConnectionCount);
+            Assert.Equal(connectionCount, connection.ConnectionCount);
         });
     }
 
@@ -132,7 +134,8 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await using var connection = await OpenTerminalAsync(page);
             var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
             var decreaseFontButton = page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true });
-            var precedingControl = page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true });
+            var precedingControl = page.GetByLabel("Page toolbar", new() { Exact = true })
+                .GetByRole(AriaRole.Button, new() { Name = "View options", Exact = true });
             var focusHint = page.Locator(".terminal-focus-hint");
 
             await Assertions.Expect(decreaseFontButton).ToBeEnabledAsync();
@@ -199,10 +202,11 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await using var connection = await OpenTerminalAsync(page);
             await MountObserverAsync(page, requestPrimary: true);
             var primaryId = connection.Presentation.PrimaryPeerId;
-            var dimensions = page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true });
+            var dropdown = page.Locator("fluent-field.terminal-size-select fluent-dropdown");
+            var dimensions = TerminalDimensions(page);
             await dimensions.ClickAsync();
-            await page.GetByRole(AriaRole.Option, new() { Name = "80×24", Exact = true }).ClickAsync();
-            await Assertions.Expect(dimensions).ToHaveJSPropertyAsync("value", "80x24");
+            await dropdown.Locator("fluent-option[text='80×24']").ClickAsync();
+            await Assertions.Expect(dimensions).ToHaveTextAsync("80×24");
             Assert.NotNull(connection.Presentation.PrimaryPeerId);
             Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
             await page.WaitForFunctionAsync("() => window.terminalObserver.geometry.columns === 80 && window.terminalObserver.geometry.rows === 24").DefaultTimeout();
@@ -226,7 +230,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 await button.ClickAsync();
                 await Assertions.Expect(page.Locator(".terminal-font-size")).ToHaveTextAsync($"{fontSize}px");
             }
-            await Assertions.Expect(button).ToBeDisabledAsync();
+            await Assertions.Expect(button).ToHaveAttributeAsync("disabled", string.Empty);
             Assert.NotNull(connection.Presentation.PrimaryPeerId);
             Assert.NotEqual(primaryId, connection.Presentation.PrimaryPeerId);
         });
@@ -242,7 +246,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             await MountObserverAsync(page, requestPrimary: false);
             connection.Workload.Write("\u001b[?25lready");
             await ExpectObserverTextAsync(page, "ready");
-            var canvas = page.Locator(".terminal-view canvas");
+            var canvas = page.Locator(".terminal-view canvas").First;
             var before = await canvas.ScreenshotAsync();
             connection.Workload.Write("\r\nTerminal browser output is visible");
             await ExpectObserverTextAsync(page, "Terminal browser output is visible");
@@ -272,19 +276,192 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task HeaderCopy_CopiesFullTruncatedValuesWithIndependentFeedback()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(800, 700);
+            await using var connection = await OpenTerminalAsync(page);
+            await GrantClipboardPermissionsAsync(page);
+            var title = string.Concat(Enumerable.Repeat("Build <main> & \u03bb project ", 10));
+            const string directory = "/workspace/team/shared projects/distributed applications/services/backend/build output/project";
+            await WriteMetadataAsync(page, connection, title, directory);
+
+            var titleButton = page.Locator(".terminal-title-button");
+            var directoryButton = page.Locator(".terminal-directory");
+            await page.WaitForFunctionAsync("""
+                () => {
+                    const title = document.querySelector('.terminal-title');
+                    const path = document.querySelector('.terminal-directory-display');
+                    return title.scrollWidth > title.clientWidth && path.textContent.includes('\u2026');
+                }
+                """).DefaultTimeout();
+            await Assertions.Expect(titleButton).ToHaveAttributeAsync("aria-label", $"Copy terminal title: {title}");
+            await Assertions.Expect(directoryButton).ToHaveAttributeAsync("aria-label", $"Copy working directory: {directory}");
+
+            // Freeze browser time after the real terminal and metadata have settled.
+            // Overlapping copies must not reset the other button's independent 1500 ms timer.
+            await page.Clock.InstallAsync(new() { Time = "2026-01-01T00:00:00Z" });
+            await page.Clock.PauseAtAsync("2026-01-01T00:00:01Z");
+            await titleButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, title);
+            await Assertions.Expect(titleButton.Locator(".checkmark-icon")).ToBeVisibleAsync();
+            await Assertions.Expect(directoryButton.Locator(".checkmark-icon")).ToBeHiddenAsync();
+
+            await page.Clock.RunForAsync(500);
+            await directoryButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, directory);
+            await Assertions.Expect(titleButton.Locator(".checkmark-icon")).ToBeVisibleAsync();
+            await Assertions.Expect(directoryButton.Locator(".checkmark-icon")).ToBeVisibleAsync();
+
+            await page.Clock.RunForAsync(1000);
+            await Assertions.Expect(titleButton.Locator(".checkmark-icon")).ToBeHiddenAsync();
+            await Assertions.Expect(titleButton.Locator(".copy-icon")).ToBeVisibleAsync();
+            await Assertions.Expect(directoryButton.Locator(".checkmark-icon")).ToBeVisibleAsync();
+
+            await page.Clock.RunForAsync(500);
+            await Assertions.Expect(directoryButton.Locator(".checkmark-icon")).ToBeHiddenAsync();
+            await Assertions.Expect(directoryButton.Locator(".copy-icon")).ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
+    [InlineData("Enter")]
+    [InlineData("Space")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task HeaderCopy_KeyboardActivationPreservesFocusAndDoesNotForwardInput(string key)
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            await GrantClipboardPermissionsAsync(page);
+            var title = $"Keyboard {key} <title> & \u03bb";
+            const string directory = "/work/project with spaces/\u03bb";
+            await WriteMetadataAsync(page, connection, title, directory);
+            var titleButton = page.Locator(".terminal-title-button");
+            var directoryButton = page.Locator(".terminal-directory");
+
+            await titleButton.FocusAsync();
+            await page.Keyboard.PressAsync(key);
+            await ExpectClipboardTextAsync(page, title);
+            await Assertions.Expect(titleButton).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(directoryButton).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync(key);
+            await ExpectClipboardTextAsync(page, directory);
+            await Assertions.Expect(directoryButton).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Shift+Tab");
+            await Assertions.Expect(titleButton).ToBeFocusedAsync();
+
+            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
+            await input.FocusAsync();
+            await page.Keyboard.TypeAsync("x");
+            Assert.Equal("x", await connection.ReadInputTextAsync(1, CancellationToken.None).DefaultTimeout());
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task HeaderMetadata_LiveUpdatesAndFallbackPreserveFocusAndCopyCurrentValues()
+    {
+        await RunTestAsync(async page =>
+        {
+            await using var connection = await OpenTerminalAsync(page);
+            await GrantClipboardPermissionsAsync(page);
+            var titleButton = page.Locator(".terminal-title-button");
+            var directoryButton = page.Locator(".terminal-directory");
+            var input = page.GetByRole(AriaRole.Textbox, new() { Name = "Interactive terminal input", Exact = true });
+            var inputElement = await input.ElementHandleAsync();
+            Assert.NotNull(inputElement);
+            await titleButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, ResourceName);
+            await Assertions.Expect(page.Locator(".terminal-title-container [role=status]")).ToHaveTextAsync("Copied!");
+
+            await input.FocusAsync();
+            await WriteMetadataAsync(page, connection, "Building <app> & \u03bb", "/work/source files");
+            connection.Workload.Write("\u001b]9;4;1;42\u0007");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "normal");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("title", "42%");
+            await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveAttributeAsync("aria-valuenow", "42");
+            await Assertions.Expect(input).ToBeFocusedAsync();
+            await titleButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, "Building <app> & \u03bb");
+            await directoryButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, "/work/source files");
+
+            await directoryButton.FocusAsync();
+            await WriteMetadataAsync(page, connection, "Build failed", "/work/build output");
+            connection.Workload.Write("\u001b]9;4;2;75\u0007");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "error");
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("title", "75%");
+            await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveAttributeAsync("aria-valuenow", "75");
+            await Assertions.Expect(directoryButton).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await ExpectClipboardTextAsync(page, "/work/build output");
+            await titleButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, "Build failed");
+
+            await input.FocusAsync();
+            connection.Workload.Write("\u001b]2;\u0007\u001b]9;4;0\u0007");
+            await Assertions.Expect(page.Locator(".terminal-title")).ToHaveTextAsync(ResourceName);
+            await Assertions.Expect(page.Locator(".terminal-icon")).ToHaveAttributeAsync("data-state", "none");
+            await Assertions.Expect(page.Locator(".terminal-icon [role=progressbar]")).ToHaveCountAsync(0);
+            await Assertions.Expect(input).ToBeFocusedAsync();
+            Assert.True(await inputElement.EvaluateAsync<bool>("element => element.isConnected"));
+            Assert.Equal(1, connection.ConnectionCount);
+            await titleButton.ClickAsync();
+            await ExpectClipboardTextAsync(page, ResourceName);
+            await page.EvaluateAsync("""
+                () => Object.defineProperty(navigator.clipboard, "writeText", {
+                    configurable: true,
+                    value: () => Promise.reject(new Error("Clipboard denied"))
+                })
+                """);
+            await titleButton.ClickAsync();
+            await Assertions.Expect(page.Locator(".terminal-title-container [role=status]"))
+                .ToHaveTextAsync("Could not copy to clipboard.");
+        });
+    }
+
+    private static Task GrantClipboardPermissionsAsync(IPage page) =>
+        page.Context.GrantPermissionsAsync(["clipboard-read", "clipboard-write"], new()
+        {
+            Origin = new Uri(page.Url).GetLeftPart(UriPartial.Authority)
+        });
+
+    private static Task ExpectClipboardTextAsync(IPage page, string expected) =>
+        AsyncTestHelpers.AssertIsTrueRetryAsync(
+            async () => await page.EvaluateAsync<string>("() => navigator.clipboard.readText()") == expected,
+            $"The browser clipboard should contain the full value '{expected}'.");
+
+    private static async Task WriteMetadataAsync(IPage page, TestTerminalConnection connection, string title, string directory)
+    {
+        // OSC 2;title BEL and OSC 7;file:///percent-encoded/path BEL travel through
+        // the real producer, transport and browser client rather than mocked toolbar state.
+        var directoryUri = new Uri("file://" + directory).AbsoluteUri;
+        connection.Workload.Write($"\u001b]2;{title}\u0007\u001b]7;{directoryUri}\u0007");
+        await Assertions.Expect(page.Locator(".terminal-title")).ToHaveTextAsync(title);
+        await Assertions.Expect(page.Locator(".terminal-metadata")).ToHaveAttributeAsync("data-directory", directory);
+    }
+
     private async Task<TestTerminalConnection> OpenTerminalAsync(IPage page)
     {
         await fixture.TerminalResolver.DiscardPendingConnectionsAsync();
-        await page.GotoAsync($"/consolelogs/resource/{ResourceName}").DefaultTimeout();
+        await page.GotoAsync($"/terminals/resource/{ResourceName}").DefaultTimeout();
         var connection = await fixture.TerminalResolver.AcceptConnectionAsync(CancellationToken.None).DefaultTimeout();
         await connection.WaitForPeerHandshakesAsync(CancellationToken.None).DefaultTimeout();
-        await ExpectProducerDimensionsAsync(page);
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Decrease font size", Exact = true })).ToBeEnabledAsync();
         return connection;
     }
 
     private static Task ExpectProducerDimensionsAsync(IPage page) =>
-        Assertions.Expect(page.GetByRole(AriaRole.Combobox, new() { Name = "Terminal dimensions", Exact = true }))
-            .ToHaveJSPropertyAsync("value", $"{TestTerminalConnection.Columns}x{TestTerminalConnection.Rows}");
+        Assertions.Expect(TerminalDimensions(page))
+            .ToHaveTextAsync($"{TestTerminalConnection.Columns}×{TestTerminalConnection.Rows}");
+
+    private static ILocator TerminalDimensions(IPage page) =>
+        page.Locator("fluent-field.terminal-size-select [role='combobox']");
 
     private static Task SetReadOnlyAsync(IPage page, int terminalId, TerminalViewSession session, bool readOnly)
     {
@@ -351,7 +528,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
                 url.searchParams.set('viewId', viewId);
                 // Capture the public client returned by the real mount, without replacing
                 // its input implementation, to exercise direct paste/action entry points.
-                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.js');
+                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.min.js');
                 const mount = WebTerminal.mount;
                 WebTerminal.mount = async (...args) => {
                     const client = await mount.call(WebTerminal, ...args);
@@ -372,7 +549,7 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
     {
         await page.EvaluateAsync("""
             async ({ endpoint, requestPrimary, columns, rows }) => {
-                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.js');
+                const { WebTerminal } = await import('/js/hex1b-web-terminal/dist/index.min.js');
                 const container = document.createElement('div');
                 container.dataset.testid = 'observer-terminal';
                 container.style.cssText = 'position:fixed;right:0;top:0;width:400px;height:200px';

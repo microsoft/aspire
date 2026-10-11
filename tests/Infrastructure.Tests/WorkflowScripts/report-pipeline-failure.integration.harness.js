@@ -1,4 +1,4 @@
-// Integration harness for the nightly-pipeline failure reporter's report()
+// Integration harness for the scheduled-pipeline failure reporter's report()
 // orchestrator (.github/workflows/report-pipeline-failure.js). report() owns the
 // find-or-create + comment-dedup branching that the pure-helper tests cannot
 // reach, so this harness drives it against an in-memory fake of the octokit

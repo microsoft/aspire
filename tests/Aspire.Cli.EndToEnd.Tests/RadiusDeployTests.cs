@@ -29,7 +29,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// no image build, no registry round-trip, and no reliance on the mounted host
 /// Docker daemon for image movement — the single biggest reliability win for a
 /// per-PR test. The KinD cluster is still created via
-/// <see cref="KubernetesDeployTestHelpers.CreateKindClusterWithRegistryAsync"/>
+/// <see cref="KubernetesDeployTestHelpers.CreateKindClusterWithRegistryAsync(Hex1bTerminalAutomator, SequenceCounter, string)"/>
 /// (the registry sits idle) because that helper also performs the critical
 /// internal-kubeconfig networking fix that lets the helper container reach the
 /// cluster's API server.
@@ -704,7 +704,9 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
-            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l radapp.io/resource=docs --timeout=300s");
+            // MongoDB follows the legacy recipe path. Its Deployment and pods are labeled
+            // `resource=<name>`, unlike the Radius v2 recipes that use `radapp.io/resource`.
+            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l resource=docs --timeout=300s");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
@@ -871,7 +873,7 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // `mongosh` runs inside the server pod and authenticates against the server's own user
             // database — the same question `rabbitmqctl authenticate_user` answers for the broker:
             // do the projected credentials actually work against what the recipe provisioned?
-            await auto.TypeAsync($"MONGO_POD=$(kubectl get pod -n {radiusNamespace} -l radapp.io/resource=docs -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved mongo pod: $MONGO_POD\"");
+            await auto.TypeAsync($"MONGO_POD=$(kubectl get pod -n {radiusNamespace} -l resource=docs -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved mongo pod: $MONGO_POD\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 

@@ -31,6 +31,12 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironm
     {
         var minimumVersion = GetEffectiveMinimumSdkVersion(configuration);
 
+        // An invalid overrideMinimumSdkVersion can never be satisfied, so don't bother launching dotnet.
+        if (!SemVersion.TryParse(minimumVersion, SemVersionStyles.Strict, out var minVersion))
+        {
+            return (false, null, minimumVersion);
+        }
+
         try
         {
             // Add --arch flag to ensure we only get SDKs that match the current architecture
@@ -41,20 +47,41 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironm
             using var process = new Process { StartInfo = _createProcessStartInfo(dotnetPath, arguments) };
 
             process.Start();
-            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            SemVersion? highestDetectedVersion = null;
+            var meetsMinimum = false;
 
             try
             {
-                await Task.WhenAll(
-                    standardOutputTask,
-                    standardErrorTask,
-                    process.WaitForExitAsync(cancellationToken));
+                await foreach (var line in process.ReadAllLinesAsync(cancellationToken))
+                {
+                    if (line.StandardError)
+                    {
+                        continue;
+                    }
+
+                    // SDK records are emitted as "11.0.100 [path]"; diagnostics on stderr
+                    // are drained by ReadAllLinesAsync but must not be treated as SDKs.
+                    var spaceIndex = line.Content.IndexOf(' ');
+                    if (spaceIndex > 0 && SemVersion.TryParse(line.Content[..spaceIndex], SemVersionStyles.Strict, out var sdkVersion))
+                    {
+                        if (highestDetectedVersion is null || SemVersion.ComparePrecedence(sdkVersion, highestDetectedVersion) > 0)
+                        {
+                            highestDetectedVersion = sdkVersion;
+                        }
+
+                        if (MeetsMinimumRequirement(sdkVersion, minVersion, minimumVersion))
+                        {
+                            meetsMinimum = true;
+                        }
+                    }
+                }
+
+                await process.WaitForExitAsync(cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                // The doctor timeout owns this process, so cancellation must not leave dotnet or
-                // any child process running after the check has returned.
+                // RunAndCaptureTextAsync only kills the root process on cancellation. The doctor
+                // timeout must also stop any descendants, so retain explicit process ownership.
                 try
                 {
                     process.Kill(entireProcessTree: true);
@@ -68,46 +95,9 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration, IEnvironm
                 throw;
             }
 
-            var output = await standardOutputTask;
-
             if (process.ExitCode != 0)
             {
                 return (false, null, minimumVersion);
-            }
-
-            // Parse the minimum version requirement
-            if (!SemVersion.TryParse(minimumVersion, SemVersionStyles.Strict, out var minVersion))
-            {
-                return (false, null, minimumVersion);
-            }
-
-            // Parse each line of the output to find SDK versions
-            var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-            SemVersion? highestDetectedVersion = null;
-            bool meetsMinimum = false;
-
-            foreach (var line in lines)
-            {
-                // Each line is in format: "version [path]"
-                var spaceIndex = line.IndexOf(' ');
-                if (spaceIndex > 0)
-                {
-                    var versionString = line[..spaceIndex];
-                    if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var sdkVersion))
-                    {
-                        // Track the highest version
-                        if (highestDetectedVersion == null || SemVersion.ComparePrecedence(sdkVersion, highestDetectedVersion) > 0)
-                        {
-                            highestDetectedVersion = sdkVersion;
-                        }
-
-                        // Check if this version meets the minimum requirement
-                        if (MeetsMinimumRequirement(sdkVersion, minVersion, minimumVersion))
-                        {
-                            meetsMinimum = true;
-                        }
-                    }
-                }
             }
 
             return (meetsMinimum, highestDetectedVersion?.ToString(), minimumVersion);

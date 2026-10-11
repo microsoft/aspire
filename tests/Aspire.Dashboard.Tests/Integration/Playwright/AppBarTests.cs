@@ -90,8 +90,8 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 header => {
                     const bounds = header.getBoundingClientRect();
                     const rect = selector => header.querySelector(selector).getBoundingClientRect();
-                    const brand = rect('.brand-logo');
-                    const application = rect('a.logo:not(.brand-logo)');
+                    const brand = rect('.brand-logo-container > a.logo');
+                    const application = rect('.application-name');
                     const title = rect('.page-title-slot');
                     const actions = [...header.querySelectorAll('.header-button')]
                         .map(element => element.getBoundingClientRect());
@@ -125,7 +125,7 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
             Assert.True(root.GetProperty("brandRight").GetDouble() <= root.GetProperty("applicationLeft").GetDouble());
             Assert.True(root.GetProperty("applicationRight").GetDouble() <= root.GetProperty("titleLeft").GetDouble());
             Assert.True(root.GetProperty("titleRight").GetDouble() <= root.GetProperty("firstActionLeft").GetDouble());
-            Assert.InRange(root.GetProperty("widestAction").GetDouble(), 38, 42);
+            Assert.InRange(root.GetProperty("widestAction").GetDouble(), 31, 33);
             Assert.InRange(
                 root.GetProperty("headerRight").GetDouble() - root.GetProperty("lastActionRight").GetDouble(),
                 0,

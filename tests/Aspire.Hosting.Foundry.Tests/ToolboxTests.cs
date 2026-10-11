@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Pipelines APIs are experimental.
-#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is experimental.
 
 using System.ClientModel.Primitives;
 using System.Net;
@@ -258,11 +256,10 @@ public class ToolboxTests
         var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
             builder.ExecutionContext,
             hostedAgent,
-            agent.Resource,
             NullLogger<ToolboxTests>.Instance,
             cts.Token);
 
-        Assert.Equal("https://project.example.com/toolboxes/field-tools/versions/7/mcp?api-version=v1", envVars["ConnectionStrings__field-tools"]);
+        Assert.Equal("https://project.example.com/toolboxes/field-tools/versions/7/mcp?api-version=v1", envVars["ConnectionStrings__field_tools"]);
     }
 
     [Fact]

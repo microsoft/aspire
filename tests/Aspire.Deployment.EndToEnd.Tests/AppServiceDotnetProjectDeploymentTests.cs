@@ -42,7 +42,7 @@ public sealed class AppServiceDotnetProjectDeploymentTests(ITestOutputHelper out
             Assert.Contains("server.PublishWithContainerFiles(webfrontend, \"wwwroot\");", content, StringComparison.Ordinal);
             content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, "builder.Build().Run();",
                 "builder.AddAzureAppServiceEnvironment(\"infra\");\nbuilder.Build().Run();");
-            File.WriteAllText(appHostFile, "#pragma warning disable ASPIREDOTNETPROJECT001\n" + content);
+            File.WriteAllText(appHostFile, content);
             DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(projectDir, $"{projectName}.Server", "Program.cs"),
                 "app.Run();", $$"""
                 app.MapGet("/api/deployment-marker", () => "{{marker}}");

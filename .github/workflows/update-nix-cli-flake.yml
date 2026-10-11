@@ -108,25 +108,30 @@ jobs:
           echo "User $ACTOR is authorized (permission: $PERMISSION)"
 
       - name: Validate release version
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
-          VERSION="${{ inputs.release_version }}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid stable release version: $VERSION"
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid stable release version: $RELEASE_VERSION"
             echo "Expected format: major.minor.patch"
             exit 1
           fi
 
-          echo "Stable release version is valid: $VERSION"
+          echo "Stable release version is valid: $RELEASE_VERSION"
 
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the Nix-update branch; pull-requests creates or updates
+          # the Nix pull request and applies its labels.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Checkout main
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0

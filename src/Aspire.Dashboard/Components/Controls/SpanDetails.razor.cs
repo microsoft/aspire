@@ -49,24 +49,24 @@ public partial class SpanDetails : IDisposable
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private IQueryable<TelemetryPropertyViewModel> FilteredItems =>
-        ViewModel.Properties.Where(ApplyFilter).AsQueryable();
+    private IEnumerable<TelemetryPropertyViewModel> FilteredItems =>
+        ViewModel.Properties.Where(ApplyFilter);
 
-    private IQueryable<TelemetryPropertyViewModel> FilteredContextItems =>
-        _contextAttributes.Where(ApplyFilter).AsQueryable();
+    private IEnumerable<TelemetryPropertyViewModel> FilteredContextItems =>
+        _contextAttributes.Where(ApplyFilter);
 
-    private IQueryable<TelemetryPropertyViewModel> FilteredResourceItems =>
+    private IEnumerable<TelemetryPropertyViewModel> FilteredResourceItems =>
         ViewModel.Span.Source.AllProperties().Select(p => new TelemetryPropertyViewModel { Name = p.DisplayName, Key = p.Key, Value = p.Value })
-            .Where(ApplyFilter).AsQueryable();
+            .Where(ApplyFilter);
 
-    private IQueryable<OtlpSpanEvent> FilteredSpanEvents =>
-        ViewModel.Span.Events.Where(e => e.Name.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).OrderBy(e => e.Time).AsQueryable();
+    private IEnumerable<OtlpSpanEvent> FilteredSpanEvents =>
+        ViewModel.Span.Events.Where(e => e.Name.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).OrderBy(e => e.Time);
 
-    private IQueryable<SpanLinkViewModel> FilteredSpanLinks =>
-        ViewModel.Links.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).AsQueryable();
+    private IEnumerable<SpanLinkViewModel> FilteredSpanLinks =>
+        ViewModel.Links.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase));
 
-    private IQueryable<SpanLinkViewModel> FilteredSpanBacklinks =>
-        ViewModel.Backlinks.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase)).AsQueryable();
+    private IEnumerable<SpanLinkViewModel> FilteredSpanBacklinks =>
+        ViewModel.Backlinks.Where(e => e.SpanId.Contains(_filter, StringComparison.CurrentCultureIgnoreCase));
 
     private bool _isSpanEventsExpanded;
     private bool _isSpanLinksExpanded;

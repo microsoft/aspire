@@ -29,13 +29,13 @@ internal static class KnownFeatures
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
     public static string ShowAllTemplates => "showAllTemplates";
-    public static string ExperimentalPolyglotRust => "experimentalPolyglot:rust";
-    public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
-    public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
+    public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
+    public static string ExperimentalPolyglotGo => "experimentalPolyglotGo";
+    public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
+    public static string ExperimentalHostingIntegrations => "experimentalHostingIntegrations";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
-    public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
@@ -85,9 +85,14 @@ internal static class KnownFeatures
             "Enable or disable experimental Python language support for polyglot Aspire applications",
             DefaultValue: false),
 
+        [ExperimentalHostingIntegrations] = new(
+            ExperimentalHostingIntegrations,
+            "Enable experimental hosting integrations authored outside .NET",
+            DefaultValue: false),
+
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
-            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
             DefaultValue: true),
 
         [AspireSkillsRemoteFetchEnabled] = new(
@@ -98,11 +103,6 @@ internal static class KnownFeatures
             // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
             // still honored if set directly in config.
             Hidden: true),
-
-        [TerminalCommandsEnabled] = new(
-            TerminalCommandsEnabled,
-            "(Experimental) Enable the 'aspire terminal' command group ('aspire terminal ps', 'aspire terminal attach', 'aspire terminal tape play'). Used in conjunction with the experimental WithTerminal() API (ASPIRETERMINAL001). Hidden by default while the API surface is in preview.",
-            DefaultValue: false),
 
         [PolyglotIntegrationFilterEnabled] = new(
             PolyglotIntegrationFilterEnabled,
@@ -132,6 +132,19 @@ internal static class KnownFeatures
     public static IEnumerable<string> GetAllFeatureNames()
     {
         return s_featureMetadata.Keys.OrderBy(name => name);
+    }
+
+    /// <summary>
+    /// Resolves external hosting integration opt-in for the target AppHost.
+    /// </summary>
+    public static bool IsHostingIntegrationsEnabled(IFeatures features, AspireConfigFile config)
+    {
+        // --apphost can target a different directory than the CLI's configuration scope.
+        // Honor that AppHost's explicit setting before falling back to CLI/global settings.
+        return config.Features is { } projectFeatures
+            && projectFeatures.TryGetValue(ExperimentalHostingIntegrations, out var enabled)
+            ? enabled
+            : features.IsFeatureEnabled(ExperimentalHostingIntegrations, defaultValue: false);
     }
 
     /// <summary>

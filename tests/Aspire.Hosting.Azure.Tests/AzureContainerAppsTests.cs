@@ -2,13 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREDOTNETPROJECT001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
@@ -425,6 +422,33 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
               .AppendContentAsFile(bicep, "bicep")
               .AppendContentAsFile(identityManifest.ToString(), "json")
               .AppendContentAsFile(identityBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task ConnectionStringNamesWithHyphens_PreserveBothAliases()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var connection = builder.AddConnectionString("my-db", ReferenceExpression.Create($"Host=example"));
+        builder.AddContainer("api", "myimage")
+            .WithReference(connection);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var container = Assert.Single(model.GetContainerResources());
+        var resource = Assert.IsAssignableFrom<AzureProvisioningResource>(
+            container.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(resource);
+
+        var aliases = Regex.Matches(bicep, @"name: '(ConnectionStrings__[^']+)'")
+            .Select(static match => match.Groups[1].Value)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(
+            ["ConnectionStrings__my-db", "ConnectionStrings__my_db"],
+            aliases);
     }
 
     [Fact]
@@ -1506,6 +1530,17 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
               .AppendContentAsFile(bicep, "bicep");
     }
 
+    [Theory]
+    [InlineData(nameof(AzureContainerAppExtensions.WithCompactResourceNaming))]
+    [InlineData(nameof(AzureContainerAppExtensions.WithUniqueResourceNaming))]
+    public void ResourceNamingApisAreStable(string methodName)
+    {
+        var method = typeof(AzureContainerAppExtensions).GetMethod(methodName);
+
+        Assert.NotNull(method);
+        Assert.Empty(method.GetCustomAttributes(typeof(ExperimentalAttribute), inherit: false));
+    }
+
     [Fact]
     public async Task AddContainerAppEnvironmentWithCompactNamingPreservesUniqueString()
     {
@@ -2582,7 +2617,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpEndpoint()
@@ -2594,7 +2628,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .WithHttpEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2624,7 +2657,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 1111)
@@ -2634,7 +2666,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .AddProject<Project>("project1", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2664,7 +2695,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpsEndpoint(targetPort: 1111)
@@ -2674,7 +2704,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .AddProject<Project>("project1", launchProfileName: null)
             .WithHttpsEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 

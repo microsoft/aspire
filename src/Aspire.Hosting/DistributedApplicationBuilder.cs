@@ -2,12 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREFILESYSTEM001
-#pragma warning disable ASPIREUSERSECRETS001
 #pragma warning disable ASPIREWATCH001
 
 using System.Diagnostics;
@@ -226,6 +221,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
+        // Suppress routine HttpClientFactory Debug cleanup in every sink while retaining Information and higher diagnostics.
+        _innerBuilder.Logging.AddFilter("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogLevel.Information);
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
@@ -410,6 +407,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
+        _innerBuilder.Services.TryAddSingleton<IDotnetSdkVersionProvider, DotnetSdkVersionProvider>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
@@ -473,16 +471,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // resolve it) but its constructor is internal, and the DI container only activates public constructors.
         _innerBuilder.Services.AddSingleton(sp =>
         {
-            var logger = sp.GetRequiredService<ILogger<Terminals.TerminalService>>();
+            var logger = sp.GetRequiredService<ILogger<TerminalService>>();
 
-            return new Terminals.TerminalService(logger, sp.GetRequiredService<IConfiguration>())
+            return new TerminalService(logger, sp.GetRequiredService<IConfiguration>())
             {
                 // Terminals belonging to resources are discovered from the model rather than registered, so the
                 // service is given a catalog to consult instead of owning their lifetime.
-                ResourceTerminals = new Terminals.ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
+                ResourceTerminals = new ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
             };
         });
-        _innerBuilder.Services.AddHostedService<Terminals.TerminalServiceHost>();
+        _innerBuilder.Services.AddHostedService<TerminalServiceHost>();
 
         ConfigureHealthChecks();
 
@@ -573,6 +571,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+            _innerBuilder.Services.TryAddEventingSubscriber<DotnetBuildCommandEventingSubscriber>();
 
             // Terminal host binary path resolution (WithTerminal)
             _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
@@ -596,6 +595,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
             _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
             _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
@@ -839,6 +839,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP Publisher options, we should only process these in run mode
             { "--dcp-cli-path", "DcpPublisher:CliPath" },
             { "--dcp-container-runtime", "DcpPublisher:ContainerRuntime" },
+            { "--dcp-container-tunnel-base-image", "DcpPublisher:ContainerTunnelBaseImage" },
             { "--dcp-dependency-check-timeout", "DcpPublisher:DependencyCheckTimeout" },
             { "--dcp-dashboard-path", "DcpPublisher:DashboardPath" }
         };

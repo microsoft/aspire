@@ -239,8 +239,18 @@ fluent-dialog-body::part(actions) {
 
 /* This must remain global. The dialog body is the component root and its content part is inside
    Fluent's shadow DOM, so Razor CSS isolation can't produce a scoped selector that reaches it. */
-fluent-dialog-body.genai-dialog-body::part(content) {
+fluent-dialog-body.genai-dialog-body::part(content),
+fluent-dialog-body.text-visualizer-dialog-body::part(content) {
     overflow: hidden;
+}
+
+/* A single grid cell fills the available space without targeting Fluent's generated wrapper.
+   Zero track minimums keep scrolling inside the viewer instead of the dialog body. */
+fluent-dialog-body.text-visualizer-dialog-body::part(content) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 60px;
 }
 
 fluent-dialog-body > [slot="title"] {
@@ -625,6 +635,12 @@ fluent-dialog-body .fluent-message-box {
 
 .filter-toolbar > .toolbar-end > * {
     flex: 0 0 auto;
+}
+
+/* Fluent's inline-block badge container adds baseline space only while a count is visible. */
+.filter-toolbar fluent-counter-badge-container,
+.mobile-filter-toolbar fluent-counter-badge-container {
+    display: block;
 }
 
 .filter-toolbar > fluent-button,

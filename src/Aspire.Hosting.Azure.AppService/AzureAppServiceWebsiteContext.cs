@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -70,6 +72,38 @@ internal sealed class AzureAppServiceWebsiteContext(
             foreach (var c in environmentCallbacks)
             {
                 await c.Callback(context).ConfigureAwait(true);
+            }
+        }
+
+        ProjectPortableConnectionStringAliases();
+    }
+
+    private void ProjectPortableConnectionStringAliases()
+    {
+        var aliases = EnvironmentVariables.Values
+            .OfType<ConnectionStringReference>()
+            .Select(static reference => reference.EnvironmentVariableNames)
+            .OfType<ConnectionStringEnvironmentVariableNames>()
+            .Where(static names =>
+                !names.IsExplicit &&
+                !string.Equals(names.OriginalName, names.PortableName, StringComparison.OrdinalIgnoreCase))
+            .Where(names => EnvironmentVariables.ContainsKey(names.PortableName))
+            .Distinct()
+            .OrderBy(static names => names.OriginalName, StringComparer.Ordinal)
+            .ToArray();
+
+        if (aliases.Length == 0)
+        {
+            return;
+        }
+
+        foreach (var alias in aliases)
+        {
+            if (EnvironmentVariables.Remove(alias.OriginalName, out var originalValue))
+            {
+                // The original name wins when both aliases are present in the same configuration
+                // provider. Preserve that precedence when App Service can only receive the portable alias.
+                EnvironmentVariables[alias.PortableName] = originalValue;
             }
         }
     }
@@ -190,7 +224,7 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is ConnectionStringReference cs)
         {
-            return ProcessValue(cs.Resource.ConnectionStringExpression, secretType, parent, isSlot);
+            return ProcessValue(cs.ConnectionStringExpression, secretType, parent, isSlot);
         }
 
         if (value is IResourceWithConnectionString csrs)
@@ -638,7 +672,6 @@ internal sealed class AzureAppServiceWebsiteContext(
         }
 
         // Probes
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         if (resource.TryGetAnnotationsOfType<ProbeAnnotation>(out var probeAnnotations))
         {
             // AppService allow only one "health check" with only path, so prioritize "liveness" and/or take the first one
@@ -659,7 +692,6 @@ internal sealed class AzureAppServiceWebsiteContext(
                 }
             }
         }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         RoleAssignment? webSiteRa = null;
         if (environmentContext.Environment.EnableDashboard)

@@ -55,6 +55,12 @@ public partial class GridValue
     public string? ValueToVisualize { get; set; }
 
     /// <summary>
+    /// The initial visualizer format, overriding automatic format detection. Users can still change the format.
+    /// </summary>
+    [Parameter]
+    public string? TextVisualizerFormat { get; set; }
+
+    /// <summary>
     /// Determines whether or not masking support is enabled for this value
     /// </summary>
     [Parameter]
@@ -162,7 +168,8 @@ public partial class GridValue
             DialogService = DialogService,
             ValueDescription = ValueDescription,
             Value = ValueToVisualize ?? Value ?? string.Empty,
-            ContainsSecret = IsMasked || ContainsSecret
+            ContainsSecret = IsMasked || ContainsSecret,
+            InitialFormat = TextVisualizerFormat
         });
     }
 

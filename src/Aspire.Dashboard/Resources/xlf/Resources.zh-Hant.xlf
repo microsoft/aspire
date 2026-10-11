@@ -227,6 +227,16 @@
         <target state="translated">有篩選</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourcesGraphExportMermaidButton">
+        <source>Export as Mermaid</source>
+        <target state="new">Export as Mermaid</target>
+        <note>Opens a dialog showing the currently visible resource graph as Mermaid source, with separate actions to copy the source or download it as a .mmd file.</note>
+      </trans-unit>
+      <trans-unit id="ResourcesGraphExportMermaidDescription">
+        <source>Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).</source>
+        <target state="new">Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).</target>
+        <note>Markdown description displayed above the Mermaid source in the resource graph export dialog. Preserve the Markdown link syntax and documentation URL.</note>
+      </trans-unit>
       <trans-unit id="ResourcesGraphResetButton">
         <source>Reset</source>
         <target state="translated">重設</target>

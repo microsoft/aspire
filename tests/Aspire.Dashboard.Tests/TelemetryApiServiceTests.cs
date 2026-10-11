@@ -47,7 +47,7 @@ public class TelemetryApiServiceTests
     {
         using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
         var repository = repositoryContext.Repository;
-        await AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
+        await AddLogs(repository, ["résumé", "log2", "log3", "log4", "log5"]);
 
         var service = CreateService(repository);
 
@@ -62,6 +62,7 @@ public class TelemetryApiServiceTests
         }
 
         Assert.Equal(5, receivedItems.Count);
+        Assert.Contains("résumé", receivedItems[0]);
     }
 
     [Theory]

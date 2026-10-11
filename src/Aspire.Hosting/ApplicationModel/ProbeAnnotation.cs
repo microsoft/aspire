@@ -1,14 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Enum representing the type of probe.
 /// </summary>
-[Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public enum ProbeType
 {
     /// <summary>
@@ -30,7 +27,6 @@ public enum ProbeType
 /// <summary>
 /// Represents an annotation that specifies the probes (health, readiness, liveness, etc.) of a resource.
 /// </summary>
-[Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public abstract class ProbeAnnotation : IResourceAnnotation
 {
     /// <summary>
@@ -67,7 +63,6 @@ public abstract class ProbeAnnotation : IResourceAnnotation
 /// <summary>
 /// Represents an annotation that specifies the HTTP probes (health, readiness, liveness, etc.) of a resource.
 /// </summary>
-[Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class EndpointProbeAnnotation : ProbeAnnotation
 {
     /// <summary>

@@ -19,7 +19,7 @@ public class ResourceServiceConnectionProviderTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         JSInterop.SetupVoid("registerResourceServiceConnectionProvider", _ => true).SetVoidResult();
         JSInterop.SetupVoid("updateResourceServiceConnectionState", _ => true).SetException(new TaskCanceledException());
-        var cut = RenderComponent<ResourceServiceConnectionProvider>();
+        var cut = Render<ResourceServiceConnectionProvider>();
 
         await cut.InvokeAsync(() => dashboardClient.SetConnectionState(DashboardConnectionState.Disconnected));
 

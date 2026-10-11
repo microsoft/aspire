@@ -34,9 +34,7 @@
     <!-- Dashboard is invoked by dashboardpack via MSBuild task (not ProjectReference),
          so it must be explicitly included to ensure restore generates its assets file. -->
     <ProjectToBuild Include="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" />
-    <!-- TerminalHost is shipped only via the CLI managed bundle (no per-RID packaging
-         project), but it still needs to be restored so the bundle build can copy its
-         publish output. -->
+    <!-- TerminalHost is a native CLI bundle component without a separate RID packaging project. -->
     <ProjectToBuild Include="$(RepoRoot)src\Aspire.TerminalHost\Aspire.TerminalHost.csproj" />
   </ItemGroup>
 

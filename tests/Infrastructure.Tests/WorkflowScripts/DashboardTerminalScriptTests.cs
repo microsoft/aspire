@@ -29,6 +29,27 @@ public class DashboardTerminalScriptTests(ITestOutputHelper output)
         await RunScriptAsync("TerminalWindow.test.mjs");
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task TerminalTitleCompactionAndObserverCleanup()
+    {
+        await RunScriptAsync("TerminalTitle.test.mjs");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ClipboardFeedbackWaitsForWrite()
+    {
+        await RunScriptAsync("Clipboard.test.mjs");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task TerminalDockNavigationAndCleanup()
+    {
+        await RunScriptAsync("TerminalDock.test.mjs");
+    }
+
     private async Task RunScriptAsync(string script)
     {
         using var command = new NodeCommand(output)

@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREDOTNETPROJECT001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -17,6 +15,52 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 
 public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishAsync_SupportsFileKeyRef(bool? optional)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "nginx:alpine")
+            .PublishAsKubernetesService(resource =>
+            {
+                var pod = resource.Workload!.PodTemplate.Spec;
+                pod.Volumes.Add(new VolumeV1 { Name = "generated-env", EmptyDir = new() });
+                pod.InitContainers.Add(new ContainerV1
+                {
+                    Name = "prepare-env",
+                    Image = "docker.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e",
+                    Command = { "sh", "-ec" },
+                    Args = { "printf \"SOURCE_KEY='generated-value'\\nOTHER_KEY='other-value'\\n\" > /out/app.env" },
+                    VolumeMounts = { new VolumeMountV1 { Name = "generated-env", MountPath = "/out" } }
+                });
+                pod.Containers[0].Env.Add(new EnvVarV1
+                {
+                    Name = "APP_VALUE",
+                    ValueFrom = new EnvVarSourceV1
+                    {
+                        FileKeyRef = new FileKeySelectorV1
+                        {
+                            VolumeName = "generated-env",
+                            Path = "app.env",
+                            Key = "SOURCE_KEY",
+                            Optional = optional
+                        }
+                    }
+                });
+            });
+
+        using var app = builder.Build();
+        app.Run();
+
+        await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates/myapp/deployment.yaml")), "yaml")
+            .UseParameters(optional);
+    }
+
     [Fact]
     public async Task PublishAsync_GeneratesValidHelmChart()
     {
@@ -261,12 +305,17 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var param1 = builder.AddParameter("param1", secret: true);
         var cs = builder.AddConnectionString("api-cs", ReferenceExpression.Create($"Url={param0}, Secret={param1}"));
         var csPlain = builder.AddConnectionString("api-cs2", ReferenceExpression.Create($"host.local:80"));
+        var manualAlias = builder.AddConnectionString("manual-db", ReferenceExpression.Create($"unused"));
 
         var param3 = builder.AddResource(ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, "param3"));
         builder.AddProject<TestProject>("SpeciaL-ApP", launchProfileName: null)
             .WithEnvironment("param3", param3)
             .WithReference(cs)
-            .WithReference(csPlain);
+            .WithReference(csPlain)
+            .WithEnvironment("ConnectionStrings__api-cs2", "override")
+            .WithReferenceEnvironment(ReferenceEnvironmentInjectionFlags.ConnectionProperties)
+            .WithReference(manualAlias)
+            .WithEnvironment("ConnectionStrings__manual-db", "manual");
 
         var app = builder.Build();
 
@@ -313,7 +362,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         builder.AddKubernetesEnvironment("env");
 
         // Add a container to the application
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         var api = builder
             .AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
             .WithEnvironment("ASPNETCORE_ENVIRONMENT", "Development")
@@ -326,7 +374,6 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             .WithHttpsEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         var app = builder.Build();
 
@@ -973,11 +1020,9 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("k8s");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder.AddContainer("api", "questdb/questdb:9.4.1")
             .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
             .WithHttpProbe(ProbeType.Readiness, "/ready");
-#pragma warning restore ASPIREPROBES001
 
         var app = builder.Build();
         app.Run();
@@ -1746,6 +1791,179 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_WithConfigurationAppliesToGeneratedClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var data = k8s.AddPersistentVolume("data")
+            .WithPersistentVolumeName("existing-volume")
+            .WithConfiguration(claim =>
+            {
+                claim.Metadata.Labels["example.com/retention"] = "retain";
+                claim.Spec.VolumeMode = "Filesystem";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(data, "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        Assert.NotNull(data.Resource.GeneratedClaim);
+        var claim = data.Resource.GeneratedClaim!;
+        Assert.Equal("retain", claim.Metadata.Labels["example.com/retention"]);
+        Assert.Equal("Filesystem", claim.Spec.VolumeMode);
+
+        var claimPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(claimPath));
+        var content = await File.ReadAllTextAsync(claimPath);
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_StorageClassConfigurationPreservesOmissionAndEmptyValue()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+        var omitted = k8s.AddPersistentVolume("omitted")
+            .WithPersistentVolumeName("existing-volume")
+            .WithoutStorageClass();
+        var empty = k8s.AddPersistentVolume("empty")
+            .WithStorageClass(string.Empty);
+
+        builder.AddContainer("service", "nginx")
+            .WithPersistentVolume(omitted, "/var/lib/data")
+            .WithPersistentVolume(empty, "/var/lib/empty");
+
+        var app = builder.Build();
+        app.Run();
+
+        var omittedClaimPath = Path.Combine(workspace.Path, "templates", "omitted", "omitted.yaml");
+        var emptyClaimPath = Path.Combine(workspace.Path, "templates", "empty", "empty.yaml");
+        Assert.True(File.Exists(omittedClaimPath));
+        Assert.True(File.Exists(emptyClaimPath));
+
+        var omittedClaim = await File.ReadAllTextAsync(omittedClaimPath);
+        var emptyClaim = await File.ReadAllTextAsync(emptyClaimPath);
+
+        await Verify(omittedClaim, "yaml")
+            .AppendContentAsFile(emptyClaim, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeStorageClassLastCallWins()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+        var parameter = builder.AddParameter("storageclass");
+        var volumes = new[]
+        {
+            k8s.AddPersistentVolume("explicit").WithoutStorageClass().WithStorageClass("fast"),
+            k8s.AddPersistentVolume("classless").WithoutStorageClass().WithStorageClass(""),
+            k8s.AddPersistentVolume("parameter").WithoutStorageClass().WithStorageClass(parameter),
+            k8s.AddPersistentVolume("omitted").WithStorageClass("fast").WithoutStorageClass(),
+            k8s.AddPersistentVolume("omitted-parameter").WithStorageClass(parameter).WithoutStorageClass(),
+        };
+
+        foreach (var volume in volumes)
+        {
+            builder.AddContainer($"{volume.Resource.Name}-service", "nginx")
+                .WithPersistentVolume(volume, "/data");
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        SettingsTask settingsTask = default!;
+        foreach (var volume in volumes)
+        {
+            var name = volume.Resource.Name;
+            var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", name, $"{name}.yaml"));
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeStorageClassPreservesEmptyParameter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "");
+        var empty = builder.AddParameter("empty-class", "", publishValueAsDefault: true);
+        var whitespace = builder.AddParameter("whitespace-class", " \t", publishValueAsDefault: true);
+        var volumes = new[]
+        {
+            k8s.AddPersistentVolume("default"),
+            k8s.AddPersistentVolume("classless").WithStorageClass(empty),
+            k8s.AddPersistentVolume("whitespace").WithStorageClass(whitespace),
+        };
+
+        foreach (var volume in volumes)
+        {
+            builder.AddContainer($"{volume.Resource.Name}-service", "nginx")
+                .WithPersistentVolume(volume, "/data");
+        }
+
+        using var app = builder.Build();
+        app.Run();
+
+        SettingsTask settingsTask = default!;
+        foreach (var volume in volumes)
+        {
+            var name = volume.Resource.Name;
+            var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", name, $"{name}.yaml"));
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_PersistentVolumeCallbacksRunInOrderAfterDefaults()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var volume = k8s.AddPersistentVolume("data")
+            .WithStorageClass("fast")
+            .WithPersistentVolumeName("original-volume")
+            .WithConfiguration(claim =>
+            {
+                Assert.Equal("fast", claim.Spec.StorageClassName);
+                Assert.Equal("original-volume", claim.Spec.VolumeName);
+                claim.Spec.StorageClassName = "";
+                claim.Spec.VolumeName = "replacement-volume";
+                claim.Metadata.Labels["stage"] = "first";
+            })
+            .WithConfiguration(claim =>
+            {
+                Assert.Equal("first", claim.Metadata.Labels["stage"]);
+                claim.Metadata.Labels["stage"] = "second";
+            });
+        builder.AddContainer("service", "nginx").WithPersistentVolume(volume, "/data");
+
+        using var app = builder.Build();
+        app.Run();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "templates", "data", "data.yaml"));
+        await Verify(content, "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_KubernetesCustomizationOverridesDefaultFsGroup()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1857,6 +2075,36 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_StorageClassConfigurationControlsGeneratedClaim()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env")
+            .WithProperties(environment => environment.DefaultStorageClassName = "default-class");
+
+        var defaultVolume = k8s.AddPersistentVolume("default");
+        var explicitVolume = k8s.AddPersistentVolume("explicit")
+            .WithStorageClass("explicit-class");
+        var omittedVolume = k8s.AddPersistentVolume("omitted")
+            .WithoutStorageClass();
+
+        builder.AddContainer("default-service", "nginx")
+            .WithPersistentVolume(defaultVolume, "/data");
+        builder.AddContainer("explicit-service", "nginx")
+            .WithPersistentVolume(explicitVolume, "/data");
+        builder.AddContainer("omitted-service", "nginx")
+            .WithPersistentVolume(omittedVolume, "/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        Assert.Equal("default-class", ReadStorageClassName(workspace.Path, "default"));
+        Assert.Equal("explicit-class", ReadStorageClassName(workspace.Path, "explicit"));
+        Assert.Null(ReadStorageClassName(workspace.Path, "omitted"));
     }
 
     [Fact]
@@ -2108,6 +2356,19 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
             new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
                 System.Text.RegularExpressions.Regex.Escape(backupTierName) + @"\s*:"),
             valuesContent);
+    }
+    private static string? ReadStorageClassName(string workspacePath, string volumeName)
+    {
+        var claimPath = Path.Combine(workspacePath, "templates", volumeName, $"{volumeName}.yaml");
+        var yaml = new YamlStream();
+        using var reader = new StringReader(File.ReadAllText(claimPath));
+        yaml.Load(reader);
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var spec = (YamlMappingNode)root["spec"];
+        return spec.Children.TryGetValue("storageClassName", out var storageClass)
+            ? ((YamlScalarNode)storageClass).Value
+            : null;
     }
 
     /// <summary>

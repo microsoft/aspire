@@ -4,9 +4,10 @@
     "language": "go"
   },
   "features": {
-    "experimentalPolyglot:go": true
+    "experimentalPolyglotGo": true
   },
   "packages": {
+    "Aspire.Hosting.Azure.Provisioning.Kusto": "",
     "Aspire.Hosting.Azure.Kusto": ""
   }
 }

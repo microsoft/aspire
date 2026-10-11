@@ -39,7 +39,7 @@
   -->
   <PropertyGroup>
     <SkipTerminalHostProjectReference Condition=" '$(SkipTerminalHostProjectReference)' == '' and ('$(RepoRoot)' == '' or '$(ContinuousIntegrationBuild)' == 'true') ">true</SkipTerminalHostProjectReference>
-    <_TerminalHostOutputDir Condition=" '$(SkipTerminalHostProjectReference)' != 'true' ">$(ArtifactsBinDir)Aspire.TerminalHost\$(Configuration)\$(DefaultTargetFramework)\</_TerminalHostOutputDir>
+    <_TerminalHostOutputDir Condition=" '$(SkipTerminalHostProjectReference)' != 'true' ">$(ArtifactsBinDir)Aspire.TerminalHost\$(Configuration)\net11.0\</_TerminalHostOutputDir>
     <AspireTerminalHostPath Condition=" '$(SkipTerminalHostProjectReference)' != 'true' and '$(OS)' == 'Windows_NT' ">$(_TerminalHostOutputDir)Aspire.TerminalHost.exe</AspireTerminalHostPath>
     <AspireTerminalHostPath Condition=" '$(SkipTerminalHostProjectReference)' != 'true' and '$(OS)' != 'Windows_NT' ">$(_TerminalHostOutputDir)Aspire.TerminalHost</AspireTerminalHostPath>
   </PropertyGroup>
@@ -54,6 +54,12 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.MongoDB" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.MySql" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.SqlServer" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Valkey" />
   </ItemGroup>
 
 </Project>

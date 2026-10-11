@@ -269,6 +269,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel MuseSpark = new() { Name = "Muse-Spark", Version = "1", Format = "Meta" };
+
+        /// <summary>
+        /// Muse-Spark-1.3 is a Meta text-generation model for conversational experiences, drafting, summarization, and question answering.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MuseSpark13 = new() { Name = "Muse-Spark-1.3", Version = "1", Format = "Meta" };
     }
 
     /// <summary>
@@ -2182,6 +2188,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptImage25Sunburst = new() { Name = "gpt-image-2.5-sunburst", Version = "2026-09-08", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt-live-1 is a bidirectional voice API that lets applications listen and speak simultaneously instead of forcing rigid turn boundaries. It is being developed as a new specialized API surface rather than a small extension of the current Realtime S2S deploy
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptLive1 = new() { Name = "gpt-live-1", Version = "2026-09-10", Format = "OpenAI" };
 
         /// <summary>
         /// A new real-time speech-to-text (STT) model with enhanced transcription accuracy and low-latency streaming capabilities.

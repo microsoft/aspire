@@ -18,11 +18,13 @@ The individual tests need to create projects from templates just like a user wou
 
 ### Solution (SDK):
 
-- SDK is installed with `$(SdkVersionForTemplateTesting)` set to the version in `global.json` by default.
+- The .NET 10 SDK comes from `DotNetSdkNet10VersionForTesting` in `eng/Versions.props`; the .NET 11 SDK comes from `global.json`.
+- Templates support only `net10.0` and `net11.0`, defaulting to `net10.0`. Tests provision isolated SDKs in `artifacts/bin/dotnet-10` and `dotnet-11`, plus a .NET 11 SDK with the .NET 10 runtime in `dotnet-tests`.
 - The necessary Aspire components are installed using NuGet packages from `artifacts/packages/*/Shipping`
 - Then, with a custom `nuget.config` which points to the built NuGet packages in `artifacts`, the SDK is configured to use local packages
     - which installs the components using the NuGet packages from the `artifacts` into `artifacts/bin/dotnet-tests`
 - This simulates the SDK being installed on a user's machine, and being independent of the aspire repo.
+- The test command helper removes inherited `MSBuildSDKsPath` and `MSBuildExtensionsPath` before launching tools. Otherwise, tests started by the repository's MSBuild can load its SDK targets into an older test SDK; solution restore can then fail to load NuGet tasks or their runtime dependencies.
 - At this point the SDK is usable from outside the repo by using `source /path-to-aspire-repo/dogfood.sh`
 - The nuget versions for the locally built packages are like `8.0.0-dev` or `8.0.0-ci`.
 
@@ -58,10 +60,12 @@ The SDK in `artifacts/bin/dotnet-tests` is usable outside the repo at this point
 `NewUpAndBuildStandaloneTemplateTests` covers the three default application templates.
 `NewUpAndBuildStarterTestFrameworkTemplateTests` covers MSTest, NUnit, and default xUnit;
 `NewUpAndBuildStarterXUnitVersionTemplateTests` covers explicit xUnit v2, v3, and v3mtp.
-Each class runs 51 cases across the SDK/target-framework matrix. Keeping them separate
-lets CI shard all 153 cases without tripling a single job's runtime. The framework
+Each class runs 18 cases across the SDK/target-framework matrix. Keeping them separate
+lets CI shard all 54 cases without tripling a single job's runtime. The framework
 tests check generated package names, versions, and executable output where required
 before building, so update these expectations when changing starter test dependencies.
+The internal pipeline runs all `basic-build` cases in one process, so that invocation
+uses a 30-minute session timeout while the class-sharded runs retain the 20-minute timeout.
 
 - The sdk+workload is never updated automatically. In other words, once installed the workload packs don't get overwritten even when the source binaries changes in `artifacts`. This may change in future.
 
@@ -74,7 +78,7 @@ There are three categories of NuGet packages used by the workload:
 2. All the other `Aspire` NuGet packages
     - These are not part of the workload itself, but can be referenced from the user projects.
     - When tests build a project referencing such a NuGet package, it gets resolved from the `artifacts`.
-    - And a local tests-specific cache is used for this like `/path-to-aspire-repo/artifacts/bin/Aspire.Template.Tests/Release/net8.0/nuget-cache-Net80`
+    - And a local tests-specific cache is used for this like `/path-to-aspire-repo/artifacts/bin/Aspire.Templates.Tests/Release/net10.0/nuget-cache-<id>`
         - this is printed at the start of the test suite run
 
 3. Project templates installed in `artifacts/bin/dotnet-tests/template-packs`.

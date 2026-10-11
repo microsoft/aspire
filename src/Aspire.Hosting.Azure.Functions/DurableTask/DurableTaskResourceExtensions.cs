@@ -150,7 +150,11 @@ public static class DurableTaskResourceExtensions
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
                .WithHttpEndpoint(name: "dashboard", targetPort: 8082)
-               .WithUrlForEndpoint("dashboard", c => c.DisplayText = "Scheduler Dashboard")
+               .WithUrlForEndpoint("dashboard", c =>
+               {
+                   c.DisplayText = "Manage";
+                   c.DisplayOrder = 1;
+               })
                .WithAnnotation(new ContainerImageAnnotation
                {
                    Registry = DurableTaskSchedulerEmulatorContainerImageTags.Registry,

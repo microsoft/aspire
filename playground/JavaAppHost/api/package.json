@@ -18,5 +18,10 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "tsx": "^4.23.13"
+  },
+  "overrides": {
+    "brace-expansion@>=2 <3": "2.1.7",
+    "@grpc/grpc-js": "1.14.5",
+    "qs": "6.16.0"
   }
 }

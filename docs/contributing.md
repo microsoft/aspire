@@ -49,6 +49,8 @@ After restore, `dotnet` commands run from this repo use the repo-local SDK becau
 
 First run `./restore.sh` (macOS and Linux) or `.\restore.cmd` (Windows) to install the repo-local .NET SDK. Then build with `./build.sh` (macOS and Linux) or `.\build.cmd` (Windows).
 
+The repository uses the .NET 11 SDK pinned in `global.json` and .NET 10/11 runtimes. The default library target is `net10.0`; multitargeted libraries also target `net11.0`. The CLI targets `net11.0`. .NET 8/9 SDKs and runtimes are not needed for local builds or tests. MSBuild tasks retain a `net472` target for Visual Studio, and compiler-hosted analyzers retain `netstandard2.0`.
+
 Builds treat warnings as errors, except for the repository-wide `WarningsNotAsErrors` policy. The build entry points evaluate `eng/WarningPolicy.proj`, which imports `Directory.Build.props`, with the build's configuration and MSBuild property arguments. They forward the resulting exemptions through Arcade's `-warnNotAsError` option so they also apply to its standalone NuGet restore. Additional exemptions supplied with that option are merged with the evaluated policy; warning codes do not need to be duplicated in the scripts. Cleanup (`-clean`) skips this evaluation and does not require installing the SDK.
 
 NuGet auditing uses `https://data.nuget.org/v3/index.json` for vulnerability metadata, independently of the package download feeds. Vulnerability findings remain visible as warnings by default. Pass `/p:TreatNuGetAuditWarningsAsErrors=true` to make them errors instead. Arcade disables auditing for official builds; this behavior is unchanged. These exemptions do not remediate vulnerable dependencies.
@@ -149,6 +151,8 @@ Make sure you [build the repo](#build-the-repo) from command line at least once 
 ## Area-specific guidance
 
 ### Localization
+
+Shared metadata in `Directory.Build.targets` automatically configures resource/designer pairs in each project's `Resources` and `Properties` directories. Add a neutral resource as `Name.resx` with its matching `Name.Designer.cs`; both files must exist before the shared generator metadata applies, and no per-file project entries are needed. Dotted neutral names such as `Errors.Validation.resx` are supported. Resource classes use `ResXFileCodeGenerator` (internal) by default. The Dashboard sets `ResxCodeGenerator` to `PublicResXFileCodeGenerator` to keep its resource classes public. Culture-specific files such as `Name.fr.resx` should not have checked-in designers and are not configured for designer generation. Unrelated designers such as `Settings.Designer.cs` and linked resources outside these project-local directories are unchanged. This is still Visual Studio custom-tool generation, not build-time source generation: keep the checked-in designer file synchronized with the neutral resource file.
 
 If you are contributing to Aspire.Dashboard, please ensure that all strings are localized. If necessary,
 create a new resx file under `src/Aspire.Dashboard/Resources`. To reference a string, ensure the `IStringLocalizer` for the resx file is

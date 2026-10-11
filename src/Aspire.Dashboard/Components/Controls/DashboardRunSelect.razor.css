@@ -1,7 +1,7 @@
 .application-run-select ::deep .application-run-select-button {
     --colorNeutralBackground1: var(--aspire-page-background);
-    --colorNeutralBackground1Hover: var(--colorNeutralBackground3);
-    --colorNeutralBackground1Pressed: var(--colorNeutralBackground3);
+    --colorNeutralBackground1Hover: var(--run-select-hover-background);
+    --colorNeutralBackground1Pressed: var(--run-select-pressed-background);
     margin-right: 8px;
     height: 28px;
     min-height: 28px;

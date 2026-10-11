@@ -30,7 +30,7 @@ internal sealed class AspireSkillsInstaller(
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
-    internal const string Version = "0.0.2";
+    internal const string Version = "0.0.3";
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
@@ -72,7 +72,7 @@ internal sealed class AspireSkillsInstaller(
             effectiveVersion = Version;
         }
 
-        activity?.SetTag("aspire.skills.version", effectiveVersion);
+        telemetry.SetActivityProperty(activity, "aspire.skills.version", effectiveVersion);
 
         var cacheRoot = GetCacheRoot();
         Directory.CreateDirectory(cacheRoot);
@@ -97,7 +97,7 @@ internal sealed class AspireSkillsInstaller(
         var remoteFetchEnabled = features.IsFeatureEnabled(
             KnownFeatures.AspireSkillsRemoteFetchEnabled,
             KnownFeatures.GetFeatureMetadata(KnownFeatures.AspireSkillsRemoteFetchEnabled)!.DefaultValue);
-        activity?.SetTag("aspire.skills.remote_fetch_enabled", remoteFetchEnabled);
+        telemetry.SetActivityProperty(activity, "aspire.skills.remote_fetch_enabled", remoteFetchEnabled);
 
         AcquisitionResult? githubResult = null;
         if (remoteFetchEnabled)
@@ -255,8 +255,8 @@ internal sealed class AspireSkillsInstaller(
                     githubArchiveSha256,
                     validationDisabled ? BundleArchiveSource.UnverifiedGitHub : BundleArchiveSource.VerifiedGitHub,
                     cancellationToken).ConfigureAwait(false);
-                activity?.SetTag("aspire.skills.source", "github");
-                activity?.SetTag("aspire.skills.cache_hit", false);
+                telemetry.SetActivityProperty(activity, "aspire.skills.source", "github");
+                telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", false);
                 return AcquisitionResult.Installed(bundle, archiveSha512, githubArchiveSha256);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
@@ -353,8 +353,8 @@ internal sealed class AspireSkillsInstaller(
                 version: version,
                 source: BundleArchiveSource.Embedded,
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            activity?.SetTag("aspire.skills.source", "embedded");
-            activity?.SetTag("aspire.skills.cache_hit", false);
+            telemetry.SetActivityProperty(activity, "aspire.skills.source", "embedded");
+            telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", false);
             return AcquisitionResult.Installed(bundle, expectedArchiveSha512);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
@@ -559,7 +559,7 @@ internal sealed class AspireSkillsInstaller(
         Activity? activity,
         CancellationToken cancellationToken)
     {
-        activity?.SetTag("aspire.skills.cache_hit", false);
+        telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", false);
         if (expectedArchiveSha512 is null &&
             expectedGitHubArchiveSha256 is null &&
             !requireVerifiedGitHubSource)
@@ -709,7 +709,7 @@ internal sealed class AspireSkillsInstaller(
                 skipCompatibilityCheck).ConfigureAwait(false);
             ValidateBundleVersion(bundle, version);
             TouchLastUsed(cacheDirectory);
-            activity?.SetTag("aspire.skills.cache_hit", true);
+            telemetry.SetActivityProperty(activity, "aspire.skills.cache_hit", true);
             logger.LogDebug("Using cached Aspire skills bundle from {CacheDirectory}.", cacheDirectory);
             return AcquisitionResult.Installed(bundle, cachedArchiveSha512, cachedGitHubArchiveSha256);
         }
@@ -1064,8 +1064,8 @@ internal sealed class AspireSkillsInstaller(
 
     private static bool HasLegacyCacheLayout(string versionCacheDirectory)
     {
-        return Directory.Exists(Path.Combine(versionCacheDirectory, "skills")) ||
-            File.Exists(Path.Combine(versionCacheDirectory, "skill-manifest.json")) ||
+        return Directory.Exists(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.SkillsDirectoryName)) ||
+            File.Exists(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.ManifestFileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, ArchiveSha512FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName)) ||
             File.Exists(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName)) ||
@@ -1076,8 +1076,8 @@ internal sealed class AspireSkillsInstaller(
     {
         // Older CLIs stored extracted files directly in the version directory. Remove only
         // those known entries so digest-addressed children created by newer CLIs remain intact.
-        TryDeleteDirectory(Path.Combine(versionCacheDirectory, "skills"));
-        TryDeleteFile(Path.Combine(versionCacheDirectory, "skill-manifest.json"));
+        TryDeleteDirectory(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.SkillsDirectoryName));
+        TryDeleteFile(Path.Combine(versionCacheDirectory, AspireSkillsBundleLayout.ManifestFileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, ArchiveSha512FileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, GitHubArchiveSha256FileName));
         TryDeleteFile(Path.Combine(versionCacheDirectory, GitHubAttestationVerifiedFileName));

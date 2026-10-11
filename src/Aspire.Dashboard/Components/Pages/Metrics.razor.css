@@ -68,6 +68,8 @@
 
 ::deep .metrics-chart-header {
     grid-area: header;
+    max-width: 800px;
+    margin-right: 8px;
     overflow-x: hidden;
 }
 
@@ -143,7 +145,8 @@
     background-color: var(--colorBrandBackground);
 }
 
-::deep .fluent-multi-splitter-pane:has(> .metrics-content) {
+::deep .fluent-multi-splitter-pane:has(> .metrics-content),
+::deep .fluent-multi-splitter-pane:has(> .metrics-tree) {
     overflow: auto;
 }
 

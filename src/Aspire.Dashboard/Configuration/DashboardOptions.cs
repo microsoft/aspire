@@ -11,15 +11,22 @@ namespace Aspire.Dashboard.Configuration;
 
 public sealed class DashboardOptions
 {
+    internal const string DefaultApplicationName = "Aspire";
+
     public string? ApplicationName { get; set; }
+    public string? LaunchContext { get; set; }
     public OtlpOptions Otlp { get; set; } = new();
     public ApiOptions Api { get; set; } = new();
     public FrontendOptions Frontend { get; set; } = new();
     public ResourceServiceClientOptions ResourceServiceClient { get; set; } = new();
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
-    public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
     public DashboardDataOptions Data { get; set; } = new();
+
+    internal string GetApplicationNameOrDefault() => GetApplicationNameOrDefault(ApplicationName);
+
+    internal static string GetApplicationNameOrDefault(string? applicationName) =>
+        string.IsNullOrWhiteSpace(applicationName) ? DefaultApplicationName : applicationName;
 }
 
 public sealed class DashboardDataOptions
@@ -243,13 +250,22 @@ public sealed class FrontendOptions
     public string? PublicUrl { get; set; }
 
     /// <summary>
-    /// Gets and sets an optional limit on the number of console log messages to be retained in the viewer.
+    /// Gets or sets whether WebSocket compression is disabled for the Blazor connection.
     /// </summary>
     /// <remarks>
-    /// The viewer will retain at most this number of log messages. When the limit is reached, the oldest messages will be removed.
-    /// Defaults to 10,000, which matches the default used in the app host's circular buffer, on the publish side.
+    /// Defaults to false. Disable compression for reverse proxies that don't support compressed WebSocket messages.
     /// </remarks>
-    public int MaxConsoleLogCount { get; set; } = 10_000;
+    public bool DisableWebSocketCompression { get; set; }
+
+    /// <summary>
+    /// Gets and sets the limit on the number of console log messages retained in the viewer and database.
+    /// </summary>
+    /// <remarks>
+    /// The viewer retains at most this many messages. The database limit is shared across resources.
+    /// When either limit is exceeded, the oldest messages are removed.
+    /// Defaults to 100,000.
+    /// </remarks>
+    public int MaxConsoleLogCount { get; set; } = 100_000;
 
     public OpenIdConnectOptions OpenIdConnect { get; set; } = new();
 
@@ -313,8 +329,8 @@ public static class OptionsHelpers
 
 public sealed class TelemetryLimitOptions
 {
-    public int MaxLogCount { get; set; } = 10_000;
-    public int MaxTraceCount { get; set; } = 10_000;
+    public int MaxLogCount { get; set; } = 100_000;
+    public int MaxTraceCount { get; set; } = 100_000;
     public int MaxMetricsCount { get; set; } = 50_000; // Allows for 1 metric point per second for over 12 hours.
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;
@@ -393,6 +409,22 @@ public sealed class OpenIdConnectOptions
             _usernameClaimTypes = UsernameClaimType.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
 
+        for (var i = 0; i < ClaimActions.Count; i++)
+        {
+            var claimAction = ClaimActions[i];
+            if (string.IsNullOrWhiteSpace(claimAction.ClaimType))
+            {
+                messages ??= [];
+                messages.Add($"OpenID Connect claim action type not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:{i}:ClaimType value.");
+            }
+
+            if (string.IsNullOrWhiteSpace(claimAction.JsonKey))
+            {
+                messages ??= [];
+                messages.Add($"OpenID Connect claim action JSON key not configured. Specify a Dashboard:Frontend:OpenIdConnect:ClaimActions:{i}:JsonKey value.");
+            }
+        }
+
         errorMessages = messages;
 
         return messages is null;
@@ -401,56 +433,9 @@ public sealed class OpenIdConnectOptions
 
 public sealed class ClaimAction
 {
-    public required string ClaimType { get; set; }
-    public required string JsonKey { get; set; }
+    public string ClaimType { get; set; } = "";
+    public string JsonKey { get; set; } = "";
     public string? SubKey { get; set; }
     public bool? IsUnique { get; set; }
     public string? ValueType { get; set; }
-}
-
-public sealed class DebugSessionOptions
-{
-    private X509Certificate2? _serverCertificate;
-
-    public int? Port { get; set; }
-    public string? Token { get; set; }
-    public string? DcpInstanceId { get; set; }
-    public string? ServerCertificate { get; set; }
-    public bool? TelemetryOptOut { get; set; }
-
-    public X509Certificate2? GetServerCertificate() => _serverCertificate;
-
-    internal bool TryParseOptions([NotNullWhen(false)] out string? errorMessage)
-    {
-        if (!string.IsNullOrEmpty(ServerCertificate))
-        {
-            byte[] data;
-            try
-            {
-                data = Convert.FromBase64String(ServerCertificate);
-            }
-            catch (Exception ex)
-            {
-                errorMessage = $"Error converting server certificate payload from base64 to bytes: {ex.Message}";
-                return false;
-            }
-
-            try
-            {
-#if NET9_0_OR_GREATER
-                _serverCertificate = X509CertificateLoader.LoadCertificate(data);
-#else
-                _serverCertificate = new X509Certificate2(data);
-#endif
-            }
-            catch (Exception ex)
-            {
-                errorMessage = $"Error reading server certificate as X509Certificate2: {ex.Message}";
-                return false;
-            }
-        }
-
-        errorMessage = null;
-        return true;
-    }
 }

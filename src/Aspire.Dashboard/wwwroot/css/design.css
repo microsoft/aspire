@@ -43,6 +43,7 @@
     --aspire-font-sans: "Geist", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     --aspire-font-mono: "Cascadia Mono", "Geist Mono", Consolas, ui-monospace, "Courier New", monospace;
     --aspire-font-display: "Poppins", var(--aspire-font-sans);
+    --aspire-brand-hover-brightness: 1.1;
     --fontFamilyBase: var(--aspire-font-sans);
     --fontFamilyMonospace: var(--aspire-font-mono);
     --aspire-control-height: 28px;
@@ -64,6 +65,8 @@
     --colorNeutralStroke3: #e5e5e5;
     --aspire-button-hover-border: #c2c2c2;
     --aspire-link-button-pressed-background: #efefef;
+    --run-select-hover-background: color-mix(in srgb, var(--colorNeutralBackground3) 50%, var(--aspire-page-background));
+    --run-select-pressed-background: color-mix(in srgb, var(--colorNeutralBackground3) 80%, var(--aspire-page-background));
     --colorBrandBackground: #512bd4;
     --colorBrandBackgroundHover: #7455dd;
     --colorBrandBackgroundPressed: #512bd4;
@@ -243,6 +246,7 @@
 
 [data-theme="dark"] {
     color-scheme: dark;
+    --aspire-brand-hover-brightness: 0.9;
     --aspire-page-background: #221e2d;
     --aspire-shell-background: #000000;
     --aspire-control-background: #2d2937;
@@ -261,6 +265,8 @@
     --colorNeutralStroke3: #312e3c;
     --aspire-button-hover-border: #5c5865;
     --aspire-link-button-pressed-background: #2d2937;
+    --run-select-hover-background: var(--colorNeutralBackground3);
+    --run-select-pressed-background: var(--colorNeutralBackground3);
     --colorBrandBackground: #b9aaee;
     --colorBrandBackgroundHover: #dcd5f6;
     --colorBrandBackgroundPressed: #b9aaee;

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 
@@ -9,10 +10,14 @@ namespace Aspire.Dashboard.ServiceClient;
 internal sealed class SelectedDashboardClient(DashboardClient currentClient, DashboardDataSource dataSource) : IDashboardClient
 {
     public Task WhenConnected => IsReadOnly ? Task.CompletedTask : currentClient.WhenConnected;
+    public Task WhenResourcesReady => IsReadOnly ? Task.CompletedTask : currentClient.WhenResourcesReady;
     public bool IsEnabled => IsReadOnly || currentClient.IsEnabled;
     public bool IsReadOnly => dataSource.IsReadOnly;
     public DashboardConnectionState ConnectionState => IsReadOnly ? DashboardConnectionState.Connected : currentClient.ConnectionState;
-    public string ApplicationName => dataSource.SelectedRun.ApplicationName ?? currentClient.ApplicationName;
+    // Current runs must retain the resource service's name rather than the startup configuration stored in metadata.
+    public string ApplicationName => IsReadOnly
+        ? DashboardOptions.GetApplicationNameOrDefault(dataSource.SelectedRun.ApplicationName)
+        : currentClient.ApplicationName;
     public string? MinRequiredVersion => IsReadOnly ? null : currentClient.MinRequiredVersion;
 
     public event Action<DashboardConnectionState>? ConnectionStateChanged

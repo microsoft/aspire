@@ -3,7 +3,7 @@
 
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
-using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -14,16 +14,50 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 public class HelpDialogTests : DashboardTestContext
 {
     [Theory]
-    [InlineData(false, false, false)]
-    [InlineData(false, true, false)]
-    [InlineData(true, false, true)]
-    [InlineData(true, true, false)]
-    public void SiteWideNavigation_OnlyShowsTerminalShortcutWhenAvailable(bool isEnabled, bool isReadOnly, bool expectTerminalShortcut)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PageNavigation_OnlyShowsTerminalsShortcutWhenAvailable(bool expectTerminalsShortcut)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
-        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: isEnabled) { IsReadOnly = isReadOnly });
+        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
+        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.GoToMetrics));
+        if (expectTerminalsShortcut)
+        {
+            shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.GoToTerminals));
+        }
 
-        var cut = RenderComponent<HelpDialog>();
+        var cut = Render<HelpDialog>();
+
+        var heading = Assert.Single(cut.FindAll("h6"), h => h.TextContent == Resources.Dialogs.HelpDialogCategoryPageNavigation);
+        var navigationShortcuts = cut.Find($"dl[aria-labelledby='{heading.Id}']");
+        List<string> expectedDescriptions = [Resources.Dialogs.HelpDialogGoToMetrics];
+        List<string> expectedKeys = ["m"];
+        if (expectTerminalsShortcut)
+        {
+            expectedDescriptions.Add(Resources.Dialogs.HelpDialogGoToTerminals);
+            expectedKeys.Add("e");
+        }
+
+        Assert.Equal(expectedDescriptions, navigationShortcuts.QuerySelectorAll("dt").Select(element => element.TextContent));
+        Assert.Equal(expectedKeys, navigationShortcuts.QuerySelectorAll("kbd").Select(element => element.TextContent));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SiteWideNavigation_OnlyShowsTerminalShortcutWhenAvailable(bool expectTerminalShortcut)
+    {
+        FluentUISetupHelpers.SetupDialogInfrastructure(this);
+        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
+        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(
+            AspireKeyboardShortcut.Help,
+            AspireKeyboardShortcut.Settings));
+        if (expectTerminalShortcut)
+        {
+            shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(AspireKeyboardShortcut.ToggleTerminalDock));
+        }
+
+        var cut = Render<HelpDialog>();
 
         var heading = Assert.Single(cut.FindAll("h6"), h => h.TextContent == Resources.Dialogs.HelpDialogCategoryNavigation);
         var navigationShortcuts = cut.Find($"dl[aria-labelledby='{heading.Id}']");
@@ -38,5 +72,42 @@ public class HelpDialogTests : DashboardTestContext
         Assert.Equal(expectedDescriptions, navigationShortcuts.QuerySelectorAll("dt").Select(element => element.TextContent));
         Assert.Equal(expectedKeys, navigationShortcuts.QuerySelectorAll("kbd").Select(element => element.TextContent));
         Assert.Equal(expectTerminalShortcut ? 1 : 0, cut.FindAll("kbd").Count(element => element.TextContent == "`"));
+    }
+
+    [Fact]
+    public void Shortcuts_AlwaysShowsPanelsAndOnlyAvailableNavigation()
+    {
+        FluentUISetupHelpers.SetupDialogInfrastructure(this);
+        var shortcutManager = Services.GetRequiredService<ShortcutManager>();
+        shortcutManager.AddGlobalKeydownListener(new TestGlobalKeydownListener(
+            AspireKeyboardShortcut.Help,
+            AspireKeyboardShortcut.Settings,
+            AspireKeyboardShortcut.GoToStructuredLogs,
+            AspireKeyboardShortcut.GoToTraces,
+            AspireKeyboardShortcut.GoToMetrics));
+
+        var cut = Render<HelpDialog>();
+
+        Assert.Equal(
+            [
+                Resources.Dialogs.HelpDialogCategoryPageNavigation,
+                Resources.Dialogs.HelpDialogCategoryPanels,
+                Resources.Dialogs.HelpDialogCategoryNavigation
+            ],
+            cut.FindAll("h6").Select(element => element.TextContent));
+        Assert.Equal(
+            [
+                Resources.Dialogs.HelpDialogGoToStructuredLogs,
+                Resources.Dialogs.HelpDialogGoToTraces,
+                Resources.Dialogs.HelpDialogGoToMetrics,
+                Resources.Dialogs.HelpDialogIncreasePanelSize,
+                Resources.Dialogs.HelpDialogDecreasePanelSize,
+                Resources.Dialogs.HelpDialogResetPanelSize,
+                Resources.Dialogs.HelpDialogTogglePanelOrientation,
+                Resources.Dialogs.HelpDialogTogglePanelOpen,
+                Resources.Dialogs.HelpDialogGoToHelp,
+                Resources.Dialogs.HelpDialogGoToSettings
+            ],
+            cut.FindAll("dt").Select(element => element.TextContent));
     }
 }

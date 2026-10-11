@@ -7,6 +7,22 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal static class ProcessTestHelpers
 {
+    public static string CreateScript(DirectoryInfo directory, string name, string unixScript, string windowsScript)
+    {
+        var path = Path.Combine(directory.FullName, OperatingSystem.IsWindows() ? $"{name}.cmd" : name);
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllText(path, windowsScript.ReplaceLineEndings("\r\n") + "\r\n");
+        }
+        else
+        {
+            File.WriteAllText(path, "#!/bin/sh\n" + unixScript.ReplaceLineEndings("\n") + "\n");
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return path;
+    }
+
     public static async Task<int> WaitForProcessIdAsync(string pidFile, CancellationToken cancellationToken)
     {
         while (true)

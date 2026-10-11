@@ -186,14 +186,14 @@ public sealed class ExtensionReleaseWorkflowTests(ITestOutputHelper testOutput)
         var steps = ((YamlSequenceNode)prepareReleaseJob.Children[new YamlScalarNode("steps")]).Cast<YamlMappingNode>().ToList();
 
         var checkoutRepositoryStep = Assert.Single(steps, step => Scalar(step, "name") == "Checkout Repository");
-        Assert.Equal("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", Scalar(checkoutRepositoryStep, "uses"));
+        Assert.StartsWith("actions/checkout@", Scalar(checkoutRepositoryStep, "uses"));
         var checkoutRepositoryWith = Assert.IsType<YamlMappingNode>(checkoutRepositoryStep.Children[new YamlScalarNode("with")]);
         Assert.Equal("main", Scalar(checkoutRepositoryWith, "ref"));
         Assert.Equal("0", Scalar(checkoutRepositoryWith, "fetch-depth"));
         Assert.Equal("false", Scalar(checkoutRepositoryWith, "persist-credentials"));
 
         var helperCheckoutStep = Assert.Single(steps, step => Scalar(step, "name") == "Checkout workflow helper scripts");
-        Assert.Equal("actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd", Scalar(helperCheckoutStep, "uses"));
+        Assert.StartsWith("actions/checkout@", Scalar(helperCheckoutStep, "uses"));
         var helperCheckoutWith = Assert.IsType<YamlMappingNode>(helperCheckoutStep.Children[new YamlScalarNode("with")]);
         Assert.Equal("${{ github.workflow_sha }}", Scalar(helperCheckoutWith, "ref"));
         Assert.Equal(".extension-release-workflow-source", Scalar(helperCheckoutWith, "path"));

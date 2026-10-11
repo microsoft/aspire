@@ -1,15 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Text;
 using Aspire.Dashboard.Components;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
-using Aspire.Tests;
-using Google.Protobuf;
+using Aspire.Dashboard.Tests.Shared;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -521,27 +518,6 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         Assert.Equal(s_testTime.AddMinutes(2), repositoryContext.Repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "test"));
         Assert.Null(repositoryContext.Repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "missing"));
-    }
-
-    protected static Exemplar CreateExemplar(DateTime startTime, double value, IEnumerable<KeyValuePair<string, string>>? attributes = null)
-    {
-        var exemplar = new Exemplar
-        {
-            TimeUnixNano = DateTimeToUnixNanoseconds(startTime),
-            AsDouble = value,
-            SpanId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("span-id")),
-            TraceId = ByteString.CopyFrom(Encoding.UTF8.GetBytes("trace-id"))
-        };
-
-        if (attributes != null)
-        {
-            foreach (var attribute in attributes)
-            {
-                exemplar.FilteredAttributes.Add(new KeyValue { Key = attribute.Key, Value = new AnyValue { StringValue = attribute.Value } });
-            }
-        }
-
-        return exemplar;
     }
 
     [Fact]
@@ -1141,6 +1117,54 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task AddMetrics_UnsupportedAggregationTemporalities_RejectsAffectedMetricsOnly()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        var invalidSum = CreateSumMetric(metricName: "invalid-sum", startTime: s_testTime.AddMinutes(1));
+        invalidSum.Sum.AggregationTemporality = (AggregationTemporality)3;
+        var invalidHistogram = CreateHistogramMetric(metricName: "invalid-histogram", startTime: s_testTime.AddMinutes(1));
+        invalidHistogram.Histogram.AggregationTemporality = (AggregationTemporality)3;
+        var addContext = new AddContext();
+
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            invalidSum,
+                            CreateSumMetric(metricName: "valid", startTime: s_testTime.AddMinutes(1)),
+                            invalidHistogram
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(1, addContext.SuccessCount);
+        Assert.Equal(2, addContext.FailureCount);
+        var instrument = await repositoryContext.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "test-meter",
+            InstrumentName = "valid",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        }, cancellationToken: CancellationToken.None);
+        Assert.NotNull(instrument);
+        Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument.Dimensions).Values)).Value);
+        Assert.Collection(
+            repositoryContext.Repository.GetInstrumentSummaries(new ResourceKey("TestService", "TestId")),
+            summary => Assert.Equal("valid", summary.Name));
+    }
+
+    [Fact]
     public async Task AddMetrics_NonFiniteDoubleDataPointsRejectedIndividually()
     {
         using var repositoryContext = await CreateRepositoryAsync();
@@ -1253,7 +1277,8 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             StartTime = DateTime.MinValue,
             EndTime = DateTime.MaxValue
         }, cancellationToken: CancellationToken.None);
-        Assert.All(instrument!.Dimensions, dimension => Assert.Empty(dimension.Values));
+        Assert.NotNull(instrument);
+        Assert.Empty(instrument.Dimensions);
     }
 
     [Fact]
@@ -1676,6 +1701,250 @@ public sealed class SqliteMetricsTests : MetricsTests
 {
     private static readonly DateTime s_queryTestTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Numeric_SubTickExemplars_PreserveTimestampsAfterReopening(bool floatingPoint, bool rollup)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var first = CreateExemplar(s_queryTestTime, 1);
+        first.TimeUnixNano = 10;
+        var second = first.Clone();
+        second.TimeUnixNano = 20;
+        var metric = CreateSumMetric("test", s_queryTestTime, exemplars: [first, second, first.Clone()]);
+        metric.Sum.DataPoints[0].TimeUnixNano = 80;
+        if (floatingPoint)
+        {
+            metric.Sum.DataPoints[0].AsDouble = 1;
+        }
+        await context.Repository.AddMetricsAsync(new AddContext(), [CreateResourceMetrics(metric)]);
+        using (var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath))
+        {
+            await reopened.Repository.AddMetricsAsync(new AddContext(), [CreateResourceMetrics(metric)]);
+        }
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath, readOnly: true);
+        var instrument = await readOnly.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime,
+            DataPointInterval = rollup ? TimeSpan.FromSeconds(1) : null
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        var value = Assert.Single(Assert.Single(instrument.Dimensions).Values);
+        Assert.Equal([10ul, 20ul], value.Exemplars.Select(exemplar => exemplar.TimeUnixNano));
+        var exported = TelemetryExportService.ConvertMetricsToOtlpJson([instrument]);
+        var exportedPoint = Assert.Single(Assert.Single(Assert.Single(Assert.Single(exported.ResourceMetrics!).ScopeMetrics!).Metrics!).Sum!.DataPoints!);
+        Assert.Equal([10ul, 20ul], exportedPoint.Exemplars!.Select(exemplar => exemplar.TimeUnixNano!.Value));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Numeric_SubTickTimestamps_PreserveIntervalsAfterReopening(bool floatingPoint, bool sameRequest)
+    {
+        using var context = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var first = CreateSumMetric("test", s_queryTestTime, value: 1);
+        var firstPoint = first.Sum.DataPoints[0];
+        firstPoint.StartTimeUnixNano = 10;
+        firstPoint.TimeUnixNano = 20;
+        if (floatingPoint)
+        {
+            firstPoint.AsDouble = 1;
+        }
+        var unchanged = first.Clone();
+        unchanged.Sum.DataPoints[0].TimeUnixNano = 40;
+        var batches = sameRequest ? new[] { new[] { first, unchanged } } : [[first], [unchanged]];
+        var addContext = new AddContext();
+        foreach (var batch in batches)
+        {
+            await context.Repository.AddMetricsAsync(addContext, [.. batch.Select(CreateResourceMetrics)]);
+        }
+
+        var changed = first.Clone();
+        changed.Sum.DataPoints[0].TimeUnixNano = 80;
+        if (floatingPoint)
+        {
+            changed.Sum.DataPoints[0].AsDouble = 2;
+        }
+        else
+        {
+            changed.Sum.DataPoints[0].AsInt = 2;
+        }
+        using (var reopened = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath))
+        {
+            await reopened.Repository.AddMetricsAsync(addContext, [CreateResourceMetrics(changed)]);
+        }
+        Assert.Equal(3, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+
+        using (var connection = context.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT start_time_unix_nano, end_time_unix_nano, repeat_count FROM telemetry_metric_points ORDER BY point_id;";
+            using var reader = command.ExecuteReader();
+            var rows = new List<(long Start, long End, long RepeatCount)>();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2)));
+            }
+            Assert.Equal([(10L, 40L, 2L), (40L, 80L, 1L)], rows);
+        }
+
+        using var readOnly = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(context.Database.DatabasePath, readOnly: true);
+        var resourceKey = CreateResource().GetResourceKey();
+        var instrument = await readOnly.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = resourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = readOnly.Repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "test")
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        var values = Assert.Single(instrument.Dimensions).Values;
+        Assert.Equal([(10ul, 40ul), (40ul, 80ul)], values.Select(value => (value.StartTimeUnixNano, value.EndTimeUnixNano)));
+        Assert.Equal([2ul, 1ul], values.Select(value => value.Count));
+        Assert.All(values, value => Assert.Equal(s_queryTestTime, value.Start));
+        Assert.All(values, value => Assert.Equal(s_queryTestTime, value.End));
+        var cursors = MetricInstrumentDataCache.CreateCursors(instrument, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        var cloned = MetricInstrumentDataCache.Merge(instrument, instrument, cursors, s_queryTestTime);
+        var exported = TelemetryExportService.ConvertMetricsToOtlpJson([cloned]);
+        var exportedPoints = Assert.Single(Assert.Single(Assert.Single(exported.ResourceMetrics!).ScopeMetrics!).Metrics!).Sum!.DataPoints!;
+        Assert.Equal([(10ul, 40ul), (40ul, 80ul)],
+            exportedPoints.Select(point => (point.StartTimeUnixNano!.Value, point.TimeUnixNano!.Value)));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Numeric_OutOfRangeNanosecondTimestamp_RejectsPointBeforeDimensionCreation(bool floatingPoint, bool invalidStart)
+    {
+        using var context = await CreateRepositoryAsync();
+        var metric = CreateSumMetric("test", s_queryTestTime);
+        var point = metric.Sum.DataPoints[0];
+        if (floatingPoint)
+        {
+            point.AsDouble = 1;
+        }
+        if (invalidStart)
+        {
+            point.StartTimeUnixNano = (ulong)long.MaxValue + 1;
+        }
+        else
+        {
+            point.TimeUnixNano = (ulong)long.MaxValue + 1;
+        }
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        Assert.Equal(0, addContext.SuccessCount);
+        Assert.Equal(1, addContext.FailureCount);
+        var instrument = await context.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        Assert.Empty(instrument.Dimensions);
+    }
+
+    [Fact]
+    public async Task GetInstrument_NanosecondRollup_AlignsBucketsAndCursorsToUnixEpoch()
+    {
+        using var context = await CreateRepositoryAsync();
+        var first = CreateSumMetric("test", s_queryTestTime, value: 1, exemplars: [CreateExemplar(s_queryTestTime.AddTicks(1), 1)]);
+        first.Sum.DataPoints[0].TimeUnixNano = 800;
+        var second = CreateSumMetric("test", s_queryTestTime, value: 2, exemplars: [CreateExemplar(s_queryTestTime.AddTicks(10), 2)]);
+        second.Sum.DataPoints[0].TimeUnixNano = 1500;
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext, [CreateResourceMetrics(first), CreateResourceMetrics(second)]);
+        Assert.Equal(2, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+        var instrument = await context.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddTicks(20),
+            DataPointInterval = TimeSpan.FromTicks(7)
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        var values = Assert.Single(instrument.Dimensions).Values;
+        Assert.Equal([(0ul, 800ul), (700ul, 1500ul)],
+            values.Select(value => (value.StartTimeUnixNano, value.EndTimeUnixNano)));
+        Assert.Equal([1d, 2d], values.Select(value => Assert.Single(value.Exemplars).Value));
+        var cursors = MetricInstrumentDataCache.CreateCursors(instrument, TimeSpan.Zero, TimeSpan.FromTicks(7));
+        Assert.Equal(s_queryTestTime.AddTicks(7), Assert.Single(cursors).StartTime);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Numeric_MaximumSignedNanosecondTimestamp_IsQueryableAndExportable(bool rollup)
+    {
+        using var context = await CreateRepositoryAsync();
+        var metric = CreateSumMetric("test", s_queryTestTime, value: 1);
+        var point = metric.Sum.DataPoints[0];
+        point.StartTimeUnixNano = (ulong)long.MaxValue - 200;
+        point.TimeUnixNano = (ulong)long.MaxValue;
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext, [CreateResourceMetrics(metric)]);
+        Assert.Equal(1, addContext.SuccessCount);
+        Assert.Equal(0, addContext.FailureCount);
+        var resourceKey = CreateResource().GetResourceKey();
+        var instrument = await context.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = resourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = context.Repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "test"),
+            DataPointInterval = rollup ? TimeSpan.FromSeconds(1) : null
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        var value = Assert.Single(Assert.Single(instrument.Dimensions).Values);
+        Assert.Equal(rollup ? point.StartTimeUnixNano / 1_000_000_000 * 1_000_000_000 : point.StartTimeUnixNano, value.StartTimeUnixNano);
+        Assert.Equal(point.TimeUnixNano, value.EndTimeUnixNano);
+        var exported = TelemetryExportService.ConvertMetricsToOtlpJson([instrument]);
+        var exportedPoint = Assert.Single(Assert.Single(Assert.Single(Assert.Single(exported.ResourceMetrics!).ScopeMetrics!).Metrics!).Sum!.DataPoints!);
+        Assert.Equal(point.TimeUnixNano, exportedPoint.TimeUnixNano);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetInstrument_WindowOutsideSupportedTimestampRange_ReturnsNoPoints(bool beforeUnixEpoch)
+    {
+        using var context = await CreateRepositoryAsync();
+        var addContext = new AddContext();
+        await context.Repository.AsWriter().AddMetricsAsync(addContext,
+            [CreateResourceMetrics(CreateSumMetric("test", s_queryTestTime, value: 1))]);
+        Assert.Equal(1, addContext.SuccessCount);
+        var afterMaximum = OtlpHelpers.UnixNanoSecondsToDateTime((ulong)long.MaxValue).AddTicks(1);
+        var instrument = await context.Repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = beforeUnixEpoch ? DateTime.MinValue : afterMaximum,
+            EndTime = beforeUnixEpoch ? s_queryTestTime.AddTicks(-1) : DateTime.MaxValue
+        }, CancellationToken.None);
+        Assert.NotNull(instrument);
+        Assert.Empty(Assert.Single(instrument.Dimensions).Values);
+    }
+
     [Fact]
     public async Task GetInstrument_PopulateExemplarAttributesFalse_SkipsAttributes()
     {
@@ -1689,10 +1958,6 @@ public sealed class SqliteMetricsTests : MetricsTests
                 value: 1,
                 exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(1), 2, [KeyValuePair.Create("key", "value")])]))
         });
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("metric exemplar attributes test").Start();
-
         var instrument = await repository.GetInstrumentAsync(new GetInstrumentRequest
         {
             ResourceKey = CreateResource().GetResourceKey(),
@@ -1705,15 +1970,10 @@ public sealed class SqliteMetricsTests : MetricsTests
 
         var exemplar = Assert.Single(Assert.Single(Assert.Single(instrument!.Dimensions).Values).Exemplars);
         Assert.Empty(exemplar.Attributes);
-        var queries = activities
-            .Where(activity => activity.ParentSpanId == parent.SpanId)
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!);
-        Assert.DoesNotContain(queries, query => query.Contains("telemetry_metric_exemplar_attributes", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.Contains("ranked_metric_points", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task GetInstrument_WithoutTimeRange_SkipsMetricPointQueries()
+    public async Task GetInstrument_WithoutTimeRange_ReturnsNoValues()
     {
         using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
@@ -1721,10 +1981,6 @@ public sealed class SqliteMetricsTests : MetricsTests
         {
             CreateResourceMetrics(CreateSumMetric("test", s_queryTestTime.AddMinutes(1)))
         });
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("metric metadata test").Start();
-
         var instrument = await repository.GetInstrumentAsync(new GetInstrumentRequest
         {
             ResourceKey = CreateResource().GetResourceKey(),
@@ -1733,10 +1989,6 @@ public sealed class SqliteMetricsTests : MetricsTests
         }, cancellationToken: CancellationToken.None);
 
         Assert.Empty(Assert.Single(instrument!.Dimensions).Values);
-        var queries = activities
-            .Where(activity => activity.ParentSpanId == parent.SpanId)
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!);
-        Assert.DoesNotContain(queries, query => query.Contains("telemetry_metric_points", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2130,49 +2382,6 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public async Task AddMetrics_ReusesInstrumentAndDimensionLookupsWithinBatch()
-    {
-        using var repositoryContext = await CreateRepositoryAsync();
-        var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("metric ingestion test").Start();
-
-        var context = new AddContext();
-        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
-        {
-            new ResourceMetrics
-            {
-                Resource = CreateResource(),
-                ScopeMetrics =
-                {
-                    new ScopeMetrics
-                    {
-                        Scope = CreateScope(name: "test-meter"),
-                        Metrics =
-                        {
-                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1),
-                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(2), value: 2),
-                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(3), value: 2)
-                        }
-                    }
-                }
-            }
-        });
-
-        var queries = activities
-            .Where(activity => activity.ParentSpanId == parent.SpanId)
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
-            .ToList();
-        Assert.Single(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
-        var insertQuery = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_points", StringComparison.Ordinal));
-        Assert.Equal(2, insertQuery.Split("@param_dimension_id_", StringSplitOptions.None).Length - 1);
-        Assert.Equal(3, context.SuccessCount);
-    }
-
-    [Fact]
     public async Task AddMetrics_LargeHistogramAndDimensionAttributeBatchesRoundTrip()
     {
         using var repositoryContext = await CreateRepositoryAsync();
@@ -2255,7 +2464,7 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public async Task AddMetrics_BatchesAndDeduplicatesExemplars()
+    public async Task AddMetrics_DeduplicatesExemplars()
     {
         using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
@@ -2267,10 +2476,6 @@ public sealed class SqliteMetricsTests : MetricsTests
                 value: 1,
                 exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(1), 2, [KeyValuePair.Create("first", "value")])]))
         });
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("metric exemplar test").Start();
-
         var context = new AddContext();
         await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
         {
@@ -2285,14 +2490,6 @@ public sealed class SqliteMetricsTests : MetricsTests
                 ]))
         });
 
-        var queries = activities
-            .Where(activity => activity.ParentSpanId == parent.SpanId)
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
-            .ToList();
-        Assert.DoesNotContain(queries, query => query.Contains("SELECT EXISTS", StringComparison.Ordinal));
-        var exemplarInsert = Assert.Single(queries, query => query.StartsWith("INSERT OR IGNORE INTO telemetry_metric_exemplars", StringComparison.Ordinal));
-        Assert.Equal(2, exemplarInsert.Split("@PointId", StringSplitOptions.None).Length - 1);
-        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_exemplar_attributes", StringComparison.Ordinal));
         Assert.Equal(1, context.SuccessCount);
         Assert.Equal(0, context.FailureCount);
 
@@ -2311,7 +2508,7 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public async Task AddMetrics_UpdateOnlyBatch_DoesNotTrimMetricPoints()
+    public async Task AddMetrics_UpdateOnlyBatch_ExtendsExistingPoint()
     {
         using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
@@ -2319,10 +2516,6 @@ public sealed class SqliteMetricsTests : MetricsTests
         {
             CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1))
         });
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("metric update test").Start();
-
         await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -2344,21 +2537,6 @@ public sealed class SqliteMetricsTests : MetricsTests
             }
         });
 
-        var queries = activities
-            .Where(activity => activity.ParentSpanId == parent.SpanId)
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
-            .ToList();
-        Assert.DoesNotContain(queries, query => query.Contains("SELECT resource_id", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_scopes", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_scope_attributes", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.StartsWith("UPDATE telemetry_resources SET has_metrics", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
-        var updateQuery = Assert.Single(queries, query => query.Contains("UPDATE telemetry_metric_points", StringComparison.Ordinal));
-        Assert.Contains("WITH updates", updateQuery, StringComparison.Ordinal);
-        Assert.Contains("FROM updates", updateQuery, StringComparison.Ordinal);
-        Assert.DoesNotContain("SELECT end_time_ticks FROM updates", updateQuery, StringComparison.Ordinal);
         var instrument = await repository.GetInstrumentAsync(new GetInstrumentRequest
         {
             ResourceKey = CreateResource().GetResourceKey(),
@@ -2370,6 +2548,85 @@ public sealed class SqliteMetricsTests : MetricsTests
         var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument!.Dimensions).Values));
         Assert.Equal(4UL, value.Count);
         Assert.Equal(s_queryTestTime.AddMinutes(4), value.End);
+    }
+
+    [Fact]
+    public async Task AddMetrics_Capacity_TrimsOnlyOverflowingDimensions()
+    {
+        using var repositoryContext = await CreateRepositoryAsync(maxMetricsCount: 3);
+        var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
+        static ResourceMetrics CreatePoint(string dimension, int value)
+        {
+            var metric = CreateSumMetric(
+                metricName: "test",
+                startTime: s_queryTestTime.AddMinutes(value),
+                value: value,
+                attributes: [KeyValuePair.Create("dimension", dimension)],
+                exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(value), value, [KeyValuePair.Create("key", "value")])]);
+            metric.Sum.DataPoints[0].StartTimeUnixNano = DateTimeToUnixNanoseconds(s_queryTestTime);
+
+            return CreateResourceMetrics(metric);
+        }
+
+        var context = new AddContext();
+        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
+        {
+            CreatePoint("first", 1),
+            CreatePoint("first", 2),
+            CreatePoint("first", 3),
+            CreatePoint("second", 1)
+        });
+        Assert.Equal(4, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        context = new AddContext();
+        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
+        {
+            CreatePoint("first", 4),
+            CreatePoint("first", 4),
+            CreatePoint("first", 5),
+            CreatePoint("second", 2)
+        });
+        Assert.Equal(4, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        var instrument = await repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        }, cancellationToken: CancellationToken.None);
+        Assert.Collection(instrument!.Dimensions,
+            dimension =>
+            {
+                Assert.Equal("first", Assert.Single(dimension.Attributes).Value);
+                Assert.Equal([3L, 4L, 5L], dimension.Values.Select(value => Assert.IsType<MetricValue<long>>(value).Value));
+                foreach (var value in dimension.Values)
+                {
+                    Assert.Equal("key", Assert.Single(Assert.Single(value.Exemplars).Attributes).Key);
+                }
+            },
+            dimension =>
+            {
+                Assert.Equal("second", Assert.Single(dimension.Attributes).Value);
+                Assert.Equal([1L, 2L], dimension.Values.Select(value => Assert.IsType<MetricValue<long>>(value).Value));
+            });
+
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreatePoint("first", 6)
+        });
+        instrument = await repository.GetInstrumentAsync(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        }, cancellationToken: CancellationToken.None);
+        Assert.Equal([4L, 5L, 6L], instrument!.Dimensions[0].Values.Select(value => Assert.IsType<MetricValue<long>>(value).Value));
     }
 
     [Fact]

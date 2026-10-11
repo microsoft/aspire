@@ -16,14 +16,14 @@ using static Aspire.Hosting.Interaction;
 
 #pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
-// Aspire.Hosting.Terminals cannot be imported wholesale: it declares TerminalDescriptor and TerminalChangeType,
+// Aspire.Hosting.ApplicationModel cannot be imported wholesale: it declares TerminalDescriptor and TerminalChangeType,
 // which collide with the identically named proto types this file converts them into. Alias the individual types
 // instead, so the AppHost-side names read cleanly and the proto names stay unqualified.
-using AppHostTerminalChange = Aspire.Hosting.Terminals.TerminalChange;
-using AppHostTerminalChangeType = Aspire.Hosting.Terminals.TerminalChangeType;
-using AppHostTerminalDescriptor = Aspire.Hosting.Terminals.TerminalDescriptor;
-using AppHostTerminalSnapshot = Aspire.Hosting.Terminals.TerminalSnapshot;
-using TerminalService = Aspire.Hosting.Terminals.TerminalService;
+using AppHostTerminalChange = Aspire.Hosting.ApplicationModel.TerminalChange;
+using AppHostTerminalChangeType = Aspire.Hosting.ApplicationModel.TerminalChangeType;
+using AppHostTerminalDescriptor = Aspire.Hosting.ApplicationModel.TerminalDescriptor;
+using AppHostTerminalSnapshot = Aspire.Hosting.ApplicationModel.TerminalSnapshot;
+using TerminalService = Aspire.Hosting.ApplicationModel.TerminalService;
 
 namespace Aspire.Hosting.Dashboard;
 
@@ -35,7 +35,7 @@ namespace Aspire.Hosting.Dashboard;
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
 /// <remarks>
-/// Types from <c>Aspire.Hosting.Terminals</c> are qualified rather than imported: several of them
+/// Types from <c>Aspire.Hosting.ApplicationModel</c> are qualified rather than imported: several of them
 /// (<c>TerminalDescriptor</c>, <c>TerminalChangeType</c>) share a name with their generated protobuf
 /// counterparts, and importing both namespaces would make every bare use ambiguous.
 /// </remarks>
@@ -744,8 +744,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             // Only dock terminals opt into dashboard-managed closure. Dialog and headless terminals
             // remain caller-owned, and resource handles are shared automation peers.
-            if (terminal.Owner != Aspire.Hosting.Terminals.TerminalOwner.AppHost ||
-                terminal.Placement != Aspire.Hosting.Terminals.TerminalPlacement.Dock)
+            if (terminal.Owner != Aspire.Hosting.ApplicationModel.TerminalOwner.AppHost ||
+                terminal.Placement != Aspire.Hosting.ApplicationModel.TerminalPlacement.Dock)
             {
                 throw new RpcException(new Status(StatusCode.InvalidArgument, "Only AppHost-owned dock terminals can be closed from the dashboard."));
             }
@@ -761,7 +761,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     /// <summary>
     /// Requests disposal while bounding only the dashboard's wait for cleanup.
     /// </summary>
-    internal async Task CloseTerminalAsync(Aspire.Hosting.Terminals.AspireTerminal terminal, CancellationToken cancellationToken)
+    internal async Task CloseTerminalAsync(Aspire.Hosting.ApplicationModel.AspireTerminal terminal, CancellationToken cancellationToken)
     {
         using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var timeout = Task.Delay(TimeSpan.FromSeconds(CloseTerminalTimeoutSeconds), waitCts.Token);

@@ -41,6 +41,7 @@ let usageTelemetryEnrichmentGeneration = 0;
 let errorTelemetryEnrichmentGeneration = 0;
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
 let commandInvocationListener: (() => void) | undefined;
+let activeCommandCount = 0;
 const telemetryClientVersion = (require('@vscode/extension-telemetry/package.json') as { version: string }).version;
 
 /**
@@ -195,8 +196,25 @@ export function clearTelemetryEnrichmentTask(): void {
 }
 
 function mergeProperties<E extends KnownTelemetryEventName>(
-    eventProperties?: EventProperties<E>
+    eventName: E,
+    eventProperties?: EventProperties<E>,
 ): Record<string, TelemetryPropertyValue> {
+    // Survey responses must not inherit employee alias/domain or future additions to the
+    // shared property bag. VS Code still owns platform properties and consent enforcement.
+    const isSurvey = eventName === 'aspire/vscode/survey/invitation' || eventName === 'aspire/vscode/survey/result';
+    if (isSurvey) {
+        const allowedProperties = eventName === 'aspire/vscode/survey/invitation'
+            ? ['campaign_id', 'question_id', 'is_microsoft_internal']
+            : ['campaign_id', 'question_id', 'outcome', 'is_microsoft_internal'];
+        const surveyProperties = Object.fromEntries(
+            Object.entries(eventProperties ?? {}).filter(([key]) => allowedProperties.includes(key)),
+        );
+        return {
+            ...(commonProperties.is_microsoft_internal === undefined ? {} : { is_microsoft_internal: commonProperties.is_microsoft_internal }),
+            ...surveyProperties,
+        } as Record<string, TelemetryPropertyValue>;
+    }
+
     return {
         ...commonProperties,
         ...(eventProperties ?? {}),
@@ -218,12 +236,20 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
         return;
     }
 
-    emitWhenEnriched('usage', () => {
+    const emit = () => {
         telemetryLogger?.logUsage(eventName, {
-            properties: mergeProperties(properties),
+            properties: mergeProperties(eventName, properties),
             measurements,
         });
-    });
+    };
+    // Feedback permission can be withdrawn independently of usage telemetry. Do not queue
+    // survey events behind identity enrichment after the producer's final permission check.
+    if (eventName === 'aspire/vscode/survey/invitation' || eventName === 'aspire/vscode/survey/result') {
+        emit();
+    }
+    else {
+        emitWhenEnriched('usage', emit);
+    }
 }
 
 /**
@@ -241,7 +267,7 @@ export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
 
     emitWhenEnriched('error', () => {
         telemetryLogger?.logError(eventName, {
-            properties: mergeProperties(properties),
+            properties: mergeProperties(eventName, properties),
             measurements,
         });
     });
@@ -295,6 +321,10 @@ export interface CommandInvocationEvent {
 const commandInvocationEmitter = new vscode.EventEmitter<CommandInvocationEvent>();
 export const onDidInvokeCommand = commandInvocationEmitter.event;
 
+export function getActiveCommandCount(): number {
+    return activeCommandCount;
+}
+
 /**
  * Wraps an extension command invocation so we capture invocation, outcome and
  * duration in one place. Every `vscode.commands.registerCommand` callback in
@@ -318,6 +348,7 @@ export async function withCommandTelemetry<T>(
     additionalProperties?: Partial<Record<'source', string>>
 ): Promise<T> {
     commandInvocationListener?.();
+    activeCommandCount++;
     const startTime = Date.now();
     let outcome: CommandOutcome = 'success';
     let errorKind: string | undefined;
@@ -344,6 +375,7 @@ export async function withCommandTelemetry<T>(
         throw err;
     }
     finally {
+        activeCommandCount--;
         const durationMs = Date.now() - startTime;
         const properties: EventProperties<'aspire/vscode/command/invoked'> = {
             command: commandName,

@@ -37,6 +37,13 @@
     <div class="text-visualizer-container">
         @if (IsTextContentDisplayed)
         {
+            if (Content.MarkdownDescription is { Length: > 0 } description)
+            {
+                <div class="text-visualizer-description">
+                    <MarkdownRenderer Markdown="@description" MarkdownProcessor="@GetMarkdownProcessor()" SuppressParagraphOnNewLines="false" />
+                </div>
+            }
+
             if (IsMarkdownFormat)
             {
                 <div class="markdown-content">

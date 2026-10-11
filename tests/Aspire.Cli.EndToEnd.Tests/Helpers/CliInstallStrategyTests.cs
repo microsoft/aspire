@@ -23,6 +23,29 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetLocalArchiveInstallCommandFromCurrentRef_AllowsHiveAutoDetection()
+    {
+        using var environment = new EnvironmentVariableScope(("GITHUB_SHA", "0123456789abcdef0123456789abcdef01234567"));
+
+        var command = AspireCliShellCommandHelpers.GetLocalArchiveInstallCommandFromCurrentRef("/tmp/cli-archives");
+
+        Assert.Equal(
+            "curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/0123456789abcdef0123456789abcdef01234567/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --local-dir '/tmp/cli-archives'",
+            command);
+    }
+
+    [Fact]
+    public void GetConfigureLocalHiveCommands_OverridesCliIdentity()
+    {
+        Assert.Equal(
+            [
+                "aspire config set channel local -g",
+                "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g && export ASPIRE_CLI_CHANNEL=local ASPIRE_CLI_VERSION=\"$SDK_VER\" ASPIRE_CLI_PACKAGES=\"$HOME/.aspire/hives/local/packages\""
+            ],
+            AspireCliShellCommandHelpers.GetConfigureLocalHiveCommands());
+    }
+
+    [Fact]
     public void GetRecordAspireCliVersionCommand_IsBestEffort()
     {
         var strategy = CliInstallStrategy.FromDotnetTool(includePrerelease: true);
@@ -779,6 +802,28 @@ public class CliInstallStrategyTests
             var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
 
             Assert.Equal("13.3.0-preview.1.12345.1", strategy.ExpectedVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("14.0.0-pr.20466.ga2bed197", "pr-20466")]
+    [InlineData("13.3.0-pr.1234.a1b2c3d4", "pr-1234")]
+    [InlineData("14.0.0-pr.20466.xyz", "local")]
+    [InlineData("14.0.0-ci", "local")]
+    public void FromLocalArchive_SelectsHiveMatchingPackageVersion(string version, string expectedHiveLabel)
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, $"Aspire.Cli.{version}.nupkg"), "");
+
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
+
+            Assert.Equal(expectedHiveLabel, strategy.LocalArchiveHiveLabel);
         }
         finally
         {

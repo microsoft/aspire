@@ -1,17 +1,39 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-// WithTerminal() is currently experimental (ASPIRETERMINAL001). Suppressed here
-// because this playground project intentionally exercises the experimental API.
+// This playground intentionally exercises the experimental terminal APIs.
 #pragma warning disable ASPIRETERMINAL001
 
 using Terminals.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+#pragma warning disable CS0618 // Exercise terminal support for legacy CSharpApp resources.
+builder.AddCSharpApp("palette-test", "Scripts/palette-test.cs")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 50;
+    });
+
+builder.AddCSharpApp("terminal-features", "Scripts/terminal-features.cs")
+    .WithTerminal(options =>
+    {
+        options.Columns = 120;
+        options.Rows = 32;
+    });
+#pragma warning restore CS0618
+
+builder.AddPostgres("postgres").WithRepl();
+builder.AddRedis("redis").WithRepl();
+builder.AddValkey("valkey").WithRepl();
+builder.AddMongoDB("mongo").WithRepl();
+builder.AddMySql("mysql").WithRepl();
+builder.AddSqlServer("sqlserver").WithRepl();
+
 // A multi-replica project that calls `WithTerminal()` so each replica gets its
 // own pseudo-terminal and the dashboard can attach to any of them via
-// `/api/terminal?resource=repl&replica=<i>`. The replica index is forwarded as
+// `/api/terminal?resource=<instance-name>`. The replica index is forwarded as
 // an environment variable so the REPL can stamp it on its banner.
 builder.AddProject<Projects.Terminals_Repl>("repl")
     .WithReplicas(2)
@@ -20,7 +42,6 @@ builder.AddProject<Projects.Terminals_Repl>("repl")
     {
         options.Columns = 120;
         options.Rows = 32;
-        options.ShowTerminalHost = true;
     })
     // Opens a shell owned by the AppHost rather than orchestrated by Aspire. It has nothing to do with `repl`;
     // commands just need a host resource to hang off.
@@ -60,7 +81,7 @@ if (OperatingSystem.IsWindows())
     // Single-replica executable wrapping cmd.exe to demonstrate that
     // WithTerminal() also works for arbitrary executables, not just projects.
     builder.AddExecutable("shell", "cmd.exe", ".")
-        .WithTerminal(options => options.ShowTerminalHost = true);
+        .WithTerminal();
 
     // A/B control resource: same cmd.exe but WITHOUT WithTerminal(). Used to
     // bisect whether the "Stop kills the dashboard" symptom is specific to
@@ -80,7 +101,7 @@ if (OperatingSystem.IsWindows())
     // ("node") appended after bash and immediately exit.
     builder.AddContainer("nodebox", "node", "lts")
         .WithArgs("bash", "-l")
-        .WithTerminal(options => options.ShowTerminalHost = true);
+        .WithTerminal();
 }
 else
 {
@@ -90,7 +111,7 @@ else
     // it source the user's login profile so `PATH`, aliases etc. behave the
     // same as a normal terminal session.
     builder.AddExecutable("shell", "/bin/bash", ".", "-i", "-l")
-        .WithTerminal(options => options.ShowTerminalHost = true);
+        .WithTerminal();
 }
 
 builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
@@ -100,7 +121,6 @@ builder.AddDockerfile("notcurses", "../Terminals.Notcurses")
         // https://manpages.ubuntu.com/manpages/noble/man1/notcurses-demo.1.html
         options.Columns = 120;
         options.Rows = 45;
-        options.ShowTerminalHost = true;
     });
 
 #if !SKIP_DASHBOARD_REFERENCE

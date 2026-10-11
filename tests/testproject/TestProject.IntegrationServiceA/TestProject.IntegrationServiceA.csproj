@@ -1,11 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <!--
-    Since this project uses both Npgsql and Npgsql.EntityFrameworkCore, we need to ensure they are both the same major version.
-    Aspire.Npgsql uses Npgsql v9, so we need to use Npgsql.EntityFrameworkCore v9 (by targeting net9.0) to match.
-    -->
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

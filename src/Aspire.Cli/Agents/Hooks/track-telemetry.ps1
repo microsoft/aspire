@@ -26,7 +26,7 @@ trap {
 # Allowlist of Aspire-owned skill names (keep in sync with github.com/microsoft/aspire-skills).
 # A shared .agents/skills directory can also contain third-party skills, so a path/name is only
 # treated as Aspire when its skill segment is one of these.
-$AspireSkills = @('aspire', 'aspire-init', 'aspireify', 'aspire-orchestration', 'aspire-deployment', 'aspire-monitoring')
+$AspireSkills = @('aspire', 'aspire-init', 'aspireify', 'aspire-project-v2-migration', 'aspire-orchestration', 'aspire-deployment', 'aspire-monitoring')
 
 $AspireMcpTools = @(
     'doctor',
@@ -65,6 +65,8 @@ $AspireReferenceFiles = @(
     'aspire-orchestration/references/detection.md',
     'aspire-orchestration/references/resource-management.md',
     'aspire-orchestration/references/safety-guardrails.md',
+    'aspire-project-v2-migration/references/compatibility-and-validation.md',
+    'aspire-project-v2-migration/references/migration-patterns.md',
     'aspire/references/aspire-13-3-breaking-changes.md',
     'aspire/references/aspire-13-5-breaking-changes.md',
     'aspireify/references/apphost-wiring.md',

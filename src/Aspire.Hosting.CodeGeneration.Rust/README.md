@@ -11,7 +11,7 @@ toolchain, including Cargo. In a new directory for your AppHost, enable the
 feature and initialize it:
 
 ```bash
-aspire config set features.experimentalPolyglot:rust true
+aspire config set features.experimentalPolyglotRust true
 aspire init --language rust
 ```
 

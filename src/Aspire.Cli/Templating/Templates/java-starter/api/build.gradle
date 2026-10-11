@@ -7,6 +7,13 @@ plugins {
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
+// Override Boot's Jackson BOM to include the CVE-2026-91776 and CVE-2026-91777 fixes.
+ext['jackson-bom.version'] = '2.21.7'
+
+// Override Boot's Log4j BOM to include the CVE-2026-49844 fix.
+// https://logging.apache.org/security.html#CVE-2026-49844
+ext['log4j2.version'] = '2.25.5'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(25)

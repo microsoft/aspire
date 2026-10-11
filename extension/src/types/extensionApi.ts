@@ -198,6 +198,7 @@ export interface AspireExtensionE2EControlPayload {
 }
 
 export type AspireExtensionE2EControlCommand =
+    | { name: 'probeUsefulnessSurvey'; reset: boolean }
     | { name: 'refreshAppHosts' }
     | { name: 'globalRefreshAppHosts' }
     | { name: 'switchToGlobalView' }
@@ -237,7 +238,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }
-    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number }
+    | { name: 'invokeLanguageModelTool'; toolName: string; input: Record<string, unknown>; times?: number; cancelBeforeInvocation?: boolean; invokeRegisteredToolDirectly?: boolean }
+    | { name: 'setDashboardBrowserForE2E'; value: 'integratedBrowser' | null }
     | { name: 'getDebugSessionProcessInfo'; appHostPath?: string }
     | { name: 'getExtensionPackageJson' }
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
@@ -276,6 +278,7 @@ export type AspireExtensionE2EControlCommand =
         csharpExtensionVersion?: string | null;
     }
     | { name: 'proveAppHostAndResourceDebugging'; appHostPath: string; resourceName: string; appHostSourcePath: string; appHostBreakpointLine: number; resourceSourcePath: string; resourceBreakpointLine: number; resourceRequestPath?: string; timeoutMs?: number }
+    | { name: 'prepareBlazorWasmDebugger' }
     | {
         name: 'proveBlazorWasmDebugging';
         appHostPath: string;

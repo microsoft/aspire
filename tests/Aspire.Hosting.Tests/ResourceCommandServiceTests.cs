@@ -1752,6 +1752,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => KnownResourceStates.BuildableStates.Contains(e.Snapshot.State?.Text), cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
 
+        var buildCountPath = Path.Combine(workspace.WorkspaceRoot.FullName, "build-count.txt");
         var result = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
 
         Assert.True(result.Success);
@@ -1759,6 +1760,14 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
         Assert.Contains("[build] Building project...", result.Data.Value);
         Assert.Contains(rebuildOutputMarker, result.Data.Value);
+        var firstBuildCount = File.ReadAllLines(buildCountPath).Length;
+
+        var secondResult = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        Assert.True(secondResult.Success);
+        Assert.NotNull(secondResult.Data);
+        Assert.Contains(rebuildOutputMarker, secondResult.Data.Value);
+        Assert.Equal(firstBuildCount + 1, File.ReadAllLines(buildCountPath).Length);
     }
 
     [Fact]
@@ -1811,6 +1820,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
               </PropertyGroup>
 
               <Target Name="EmitAspireRebuildOutputMarker" AfterTargets="Build">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" />
                 <Message Importance="High" Text="{{buildOutputMarker}}" />
               </Target>
             </Project>

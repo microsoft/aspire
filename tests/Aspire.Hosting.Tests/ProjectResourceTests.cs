@@ -2,12 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIRECSHARPAPPS001
 #pragma warning disable ASPIREEXTENSION001
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Ats;
@@ -1018,6 +1018,30 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddCSharpAppIsObsoleteNotExperimental()
+    {
+        var methods = typeof(ProjectResourceBuilderExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name is nameof(ProjectResourceBuilderExtensions.AddCSharpApp)
+                or nameof(ProjectResourceBuilderExtensions.AddCSharpAppForPolyglot))
+            .ToArray();
+
+        Assert.Equal(3, methods.Length);
+        Assert.All(methods, method =>
+        {
+            var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
+            Assert.NotNull(obsolete);
+            Assert.False(obsolete.IsError);
+            Assert.Equal(
+                method.IsPublic
+                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
+                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                obsolete.Message);
+            Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
+        });
+    }
+
+    [Fact]
     public void AddCSharpAppAddsSupportsDebuggingAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -1026,6 +1050,37 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Theory]
+    [InlineData("9.0.100", true)]
+    [InlineData("10.0.100-preview.1", false)]
+    [InlineData(null, false)]
+    public async Task AddCSharpAppValidatesSelectedSdkVersion(string? version, bool expectFailure)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(
+            new TestDotnetSdkVersionProvider(version));
+        var appResource = builder.AddCSharpApp(
+            "app",
+            Path.Combine(builder.AppHostDirectory, "app.cs"),
+            options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var publishTask = builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(appResource.Resource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        if (expectFailure)
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => publishTask);
+            Assert.Contains("only supported on .NET 10 or later", exception.Message);
+        }
+        else
+        {
+            await publishTask;
+        }
     }
 
     [Fact]

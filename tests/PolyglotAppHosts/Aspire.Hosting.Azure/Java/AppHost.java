@@ -3,6 +3,12 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         builder.addAzureProvisioning();
+        var frontDoor = builder.addAzureFrontDoor("frontdoor");
+        frontDoor.configureInfrastructure(infrastructure -> {
+            var profile = infrastructure.getCdnProfile();
+            profile.setOriginResponseTimeoutSeconds(60);
+            var _originTimeout = profile.originResponseTimeoutSeconds();
+        });
         var location = builder.addParameter("location");
         var resourceGroup = builder.addParameter("resource-group");
         var existingName = builder.addParameter("existing-name");

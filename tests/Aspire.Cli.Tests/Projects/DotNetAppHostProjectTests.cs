@@ -26,15 +26,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public DotNetAppHostProjectTests UseFakeRepoRoot()
     {
         // Tests that build their own fake bundle layout under a temp directory must opt out
-        // of the in-repo aspire-managed discovery; otherwise the repo's real built artifact
+        // of the in-repo terminal-host discovery; otherwise the repo's real built artifact
         // shadows the fake bundle path the test pre-stamped into the layout.
-        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => null;
+        DotNetAppHostProject.RepoLocalTerminalHostPathProviderOverride = () => null;
         return this;
     }
 
     public void Dispose()
     {
-        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = null;
+        DotNetAppHostProject.RepoLocalTerminalHostPathProviderOverride = null;
 
         foreach (var serviceProvider in _serviceProviders)
         {
@@ -336,6 +336,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(noBuild);
             Assert.True(noRestore);
             Assert.False(options.NoLaunchProfile);
+            Assert.True(options.IsolateConsole);
+            Assert.False(options.KillOnParentExit);
             Assert.Equal("Development", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
@@ -430,16 +432,33 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.True(File.Exists(socketPath));
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
+    [Theory]
+    [InlineData("13.5.3", true, false, false)]
+    [InlineData("13.6.0-preview.1", true, true, false)]
+    [InlineData("13.6.0", true, true, false)]
+    [InlineData("13.6.0", false, false, false)]
+    [InlineData("17.0.0-preview.1", true, true, true)]
+    [InlineData("17.0.0", true, true, true)]
+    public async Task RunAsync_ProjectAppHostUsingCliBundlePassesBundleEnvironmentToRunner(string hostingVersion, bool nativeExists, bool useNativeDashboard, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
         var appHostFile = CreateProjectAppHost();
         var bundleRoot = CreateCliBundle(out var layout);
+        if (!nativeExists)
+        {
+            File.Delete(layout.GetDashboardPath()!);
+        }
 
         var runner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (_, _, _, _) => 0,
+            BuildAsyncWithEnvironmentCallback = (_, _, env, _, _) =>
+            {
+                Assert.NotNull(env);
+                Assert.Equal(bundleRoot.FullName, env["AspireCliBundlePath"]);
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar));
+                return 0;
+            },
             GetProjectItemsAndPropertiesAsyncCallback = (_, _, properties, _, _) =>
             {
                 Assert.Contains("AspireUseCliBundle", properties);
@@ -448,7 +467,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                       "Properties": {
                         "MSBuildVersion": "17.0.0",
                         "IsAspireHost": "true",
-                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireHostingSDKVersion": "{{hostingVersion}}",
                         "AspireUseCliBundle": "true"
                       },
                       "Items": {}
@@ -467,15 +486,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(bundleRoot.FullName, env!["AspireCliBundlePath"]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
-                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                useNativeDashboard ? layout.GetDashboardPath() : layout.GetManagedPath(),
                 env[BundleDiscovery.DashboardPathEnvVar]);
-            // Terminal host env vars are always injected when the bundle layout is available
-            // — see the comment in ConfigureCliBundleEnvironmentAsync. For CliBundle AppHosts
-            // they sit alongside the DCP/Dashboard vars; both point at aspire-managed.
             Assert.Equal(
-                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                supportsDirectLaunch ? layout.GetTerminalHostPath() : layout.GetManagedPath(),
                 env[BundleDiscovery.TerminalHostPathEnvVar]);
-            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            Assert.Equal(supportsDirectLaunch ? string.Empty : "terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -646,7 +662,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
         {
             Assert.Equal(layout.GetDcpPath(), env![BundleDiscovery.DcpPathEnvVar]);
-            Assert.Equal(layout.GetManagedPath(), env[BundleDiscovery.DashboardPathEnvVar]);
+            Assert.Equal(layout.GetDashboardPath(), env[BundleDiscovery.DashboardPathEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -715,6 +731,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         _ = CreateCliBundle(out var layout);
         File.Delete(BundleDiscovery.GetDcpExecutablePath(layout.GetDcpPath()!));
         File.Delete(layout.GetManagedPath()!);
+        File.Delete(layout.GetDashboardPath()!);
+        File.Delete(layout.GetTerminalHostPath()!);
 
         var runner = new TestDotNetCliRunner
         {
@@ -813,16 +831,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(bundleAcquisitionRequested);
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostNotUsingCliBundleStillReceivesTerminalHostEnvironment()
+    [Theory]
+    [InlineData("13.6.0", false)]
+    [InlineData("17.0.0-preview.1", true)]
+    [InlineData("17.0.0", true)]
+    public async Task RunAsync_ProjectAppHostNotUsingCliBundleStillReceivesTerminalHostEnvironment(string hostingVersion, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
-        // AppHosts created by `aspire new` default to per-RID NuGets (AspireUseCliBundle != true).
-        // Today no per-RID NuGet stamps the terminal host metadata path, so without env-var
-        // injection WithTerminal() resources fail at run time with <unresolved>. The CLI ships
-        // aspire-managed in its bundle and that binary exposes the `terminalhost` subcommand,
-        // so injecting ASPIRE_TERMINAL_HOST_PATH unconditionally lights up WithTerminal() for
-        // per-RID-NuGet AppHosts launched via `aspire run`.
+        // Per-RID NuGets do not ship the terminal host, so these AppHosts still need
+        // the CLI bundle's terminal executable without replacing DCP/Dashboard metadata.
         var appHostFile = CreateProjectAppHost();
         var bundleRoot = CreateCliBundle(out var layout);
 
@@ -836,7 +853,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                       "Properties": {
                         "MSBuildVersion": "17.0.0",
                         "IsAspireHost": "true",
-                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireHostingSDKVersion": "{{hostingVersion}}",
                         "AspireUseCliBundle": "false"
                       },
                       "Items": {}
@@ -857,9 +874,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
             // Terminal host env vars must be injected even though AspireUseCliBundle=false.
             Assert.Equal(
-                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                supportsDirectLaunch ? layout.GetTerminalHostPath() : layout.GetManagedPath(),
                 env[BundleDiscovery.TerminalHostPathEnvVar]);
-            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            Assert.Equal(supportsDirectLaunch ? string.Empty : "terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -876,18 +893,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task RunAsync_ProjectAppHostNotUsingCliBundleUsesRepoLocalManagedWhenAvailable()
+    public async Task RunAsync_ProjectAppHostNotUsingCliBundleUsesRepoLocalTerminalHostWhenAvailable()
     {
         // When running `dotnet run --project src/Aspire.Cli` from inside the Aspire repo,
-        // the just-built aspire-managed under artifacts/ should be preferred over the bundle
-        // layout aspire-managed. The bundle layout points at the user's installed CLI cache
-        // (e.g. ~/.aspire/bundle/) whose aspire-managed predates the `terminalhost`
-        // subcommand and fails the AppHost launch.
+        // Prefer the just-built standalone host over installed bundle code for rapid iteration.
         var appHostFile = CreateProjectAppHost();
         var bundleRoot = CreateCliBundle(out var layout);
-        var repoLocalManaged = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo-local-aspire-managed");
-        File.WriteAllText(repoLocalManaged, "fake");
-        DotNetAppHostProject.RepoLocalManagedPathProviderOverride = () => repoLocalManaged;
+        var repoLocalTerminalHost = Path.Combine(_workspace.WorkspaceRoot.FullName, "repo-local-terminalhost");
+        File.WriteAllText(repoLocalTerminalHost, "fake");
+        DotNetAppHostProject.RepoLocalTerminalHostPathProviderOverride = () => repoLocalTerminalHost;
 
         var runner = new TestDotNetCliRunner
         {
@@ -911,13 +925,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         runner.RunAsyncCallback = (_, _, _, _, _, env, _, _, _) =>
         {
-            // Repo-local managed path wins over the bundle layout path.
-            Assert.Equal(repoLocalManaged, env![BundleDiscovery.TerminalHostPathEnvVar]);
+            // Repo-local standalone host wins over the bundle layout path.
+            Assert.Equal(repoLocalTerminalHost, env![BundleDiscovery.TerminalHostPathEnvVar]);
             Assert.NotEqual(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
                 env[BundleDiscovery.TerminalHostPathEnvVar]);
-            // Args still synthesized — repo-local aspire-managed is the same dispatcher binary.
-            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            Assert.Equal(string.Empty, env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -933,8 +946,11 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(0, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_PreservesExplicitTerminalHostEnvironmentVariables()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("--custom-terminal")]
+    public async Task RunAsync_PreservesExplicitTerminalHostEnvironmentVariables(string? invocationArgs)
     {
         UseFakeRepoRoot();
         // Users can side-load a custom terminal host binary by setting ASPIRE_TERMINAL_HOST_PATH
@@ -944,6 +960,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var appHostFile = CreateProjectAppHost();
         _ = CreateCliBundle(out var layout);
         var customTerminalHost = Path.Combine(_workspace.WorkspaceRoot.FullName, "my-custom-terminal-host");
+        var environmentVariables = new Dictionary<string, string>
+        {
+            [BundleDiscovery.TerminalHostPathEnvVar] = customTerminalHost
+        };
+        if (invocationArgs is not null)
+        {
+            environmentVariables[BundleDiscovery.TerminalHostInvocationArgsEnvVar] = invocationArgs;
+        }
 
         var runner = new TestDotNetCliRunner
         {
@@ -971,7 +995,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(customTerminalHost, env![BundleDiscovery.TerminalHostPathEnvVar]);
             // And the CLI must NOT synthesize invocation args for a binary it didn't choose —
             // those args are bundle-binary-specific (today: "terminalhost" for aspire-managed).
-            Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar));
+            if (invocationArgs is null)
+            {
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar));
+            }
+            else
+            {
+                Assert.Equal(invocationArgs, env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            }
             return Task.FromResult(0);
         };
 
@@ -981,10 +1012,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             NoBuild = false,
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,
-            EnvironmentVariables = new Dictionary<string, string>
-            {
-                [BundleDiscovery.TerminalHostPathEnvVar] = customTerminalHost
-            }
+            EnvironmentVariables = environmentVariables
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
@@ -993,6 +1021,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [Fact]
     public async Task RunAsync_ProjectAppHostUsesDirectCommandLaunchAndAppliesLaunchSettings()
     {
+        const string configuredImage = "example.com/aspire-tunnel:configured";
+        const string launchProfileImage = "example.com/aspire-tunnel:launch-profile";
+
         var appHostFile = CreateProjectAppHost();
         var targetPath = CreateBuiltAppHostAssembly("AppHost.dll");
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
@@ -1000,6 +1031,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var appHostCommandJson = JsonSerializer.Serialize(appHostCommand.FullName);
         var targetPathJson = JsonSerializer.Serialize(targetPath.FullName);
         var runWorkingDirectoryJson = JsonSerializer.Serialize(runWorkingDirectory.FullName);
+        WriteAspireConfigJson(appHostFile.DirectoryName!, $$"""
+            {
+              "containerTunnel": {
+                "baseImage": "{{configuredImage}}"
+              }
+            }
+            """);
         Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
         File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
             {
@@ -1014,7 +1052,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                   "commandLineArgs": "--from-profile \"profile value\"",
                   "environmentVariables": {
                     "DOTNET_ENVIRONMENT": "Development",
-                    "CUSTOM_ENV": "custom-value"
+                    "CUSTOM_ENV": "custom-value",
+                    "ASPIRE_CONTAINER_TUNNEL_BASE_IMAGE": "example.com/aspire-tunnel:launch-profile"
                   }
                 },
                 "https": {
@@ -1056,6 +1095,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(appHostCommand.FullName, command);
             Assert.Equal(runWorkingDirectory.FullName, workingDirectory.FullName);
             Assert.False(options.NoLaunchProfile);
+            Assert.True(options.IsolateConsole);
+            Assert.True(options.KillOnParentExit);
             Assert.Equal(
                 ["--from-msbuild", "two words", "--explicit", "1"],
                 args);
@@ -1071,6 +1112,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal("http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.Equal("context-value", env["CUSTOM_ENV"]);
+            Assert.Equal(launchProfileImage, env[KnownConfigNames.ContainerTunnelBaseImage]);
             return Task.FromResult(123);
         };
 
@@ -2202,28 +2244,41 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(105, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_SingleFileAppHostUsingCliBundlePassesBundleEnvironmentToRunner()
+    [Theory]
+    [InlineData("13.5.3", false, false)]
+    [InlineData("13.6.0-preview.1", true, false)]
+    [InlineData("13.6.0", true, false)]
+    [InlineData("17.0.0-preview.1", true, true)]
+    [InlineData("17.0.0", true, true)]
+    [InlineData("", false, false)]
+    public async Task RunAsync_SingleFileAppHostUsingCliBundlePassesBundleEnvironmentToRunner(string hostingVersion, bool supportsNativeDashboard, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
-        var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
+        // A valid SDK directive can coexist with an inspection result that omits the Hosting version.
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: string.IsNullOrEmpty(hostingVersion) ? "17.0.0" : hostingVersion);
         var bundleRoot = CreateCliBundle(out var layout);
 
         var runner = new TestDotNetCliRunner
         {
-            BuildAsyncCallback = (projectFile, _, _, _) =>
+            BuildAsyncWithEnvironmentCallback = (projectFile, _, env, _, _) =>
             {
                 Assert.Equal(appHostFile.FullName, projectFile.FullName);
+                Assert.NotNull(env);
+                Assert.Equal(bundleRoot.FullName, env["AspireCliBundlePath"]);
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar));
                 return 0;
             },
             GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, properties, _, _) =>
             {
                 Assert.Equal(appHostFile.FullName, projectFile.FullName);
                 Assert.Contains("AspireUseCliBundle", properties);
-                return (0, JsonDocument.Parse("""
+                                return (0, JsonDocument.Parse($$"""
                     {
                       "Properties": {
                         "MSBuildVersion": "17.0.0",
+                                                "IsAspireHost": "true",
+                                                "AspireHostingSDKVersion": "{{hostingVersion}}",
                         "AspireUseCliBundle": "true"
                       },
                       "Items": {}
@@ -2242,12 +2297,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(options.NoLaunchProfile);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
-                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                supportsNativeDashboard ? layout.GetDashboardPath() : layout.GetManagedPath(),
                 env[BundleDiscovery.DashboardPathEnvVar]);
             Assert.Equal(
-                Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+                supportsDirectLaunch ? layout.GetTerminalHostPath() : layout.GetManagedPath(),
                 env[BundleDiscovery.TerminalHostPathEnvVar]);
-            Assert.Equal("terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
+            Assert.Equal(supportsDirectLaunch ? string.Empty : "terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
             return Task.FromResult(0);
         };
 
@@ -2263,29 +2318,50 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(0, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_SingleFileNoBuildUsingCliBundlePassesBundleEnvironmentToSafetyBuild()
+    [Theory]
+    [InlineData("13.6.0", false)]
+    [InlineData("17.0.0-preview.1", true)]
+    [InlineData("17.0.0", true)]
+    [InlineData("", false)]
+    public async Task RunAsync_SingleFileNoBuildUsingCliBundlePassesBundleEnvironmentToSafetyBuild(string hostingVersion, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();
-        var appHostFile = CreateSingleFileAppHost(useCliBundle: true);
+        var appHostFile = CreateSingleFileAppHost(useCliBundle: true, sdkVersion: string.IsNullOrEmpty(hostingVersion) ? "17.0.0" : hostingVersion);
         var bundleRoot = CreateCliBundle(out var layout);
 
         var runner = new TestDotNetCliRunner
         {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                (0, JsonSerializer.SerializeToDocument(new
+                {
+                    Properties = new
+                    {
+                        IsAspireHost = "true",
+                        AspireHostingSDKVersion = hostingVersion,
+                        AspireUseCliBundle = "true",
+                    },
+                    Items = new { }
+                })),
             BuildAsyncWithEnvironmentCallback = (projectFile, noRestore, env, _, _) =>
             {
                 Assert.Equal(appHostFile.FullName, projectFile.FullName);
                 Assert.False(noRestore);
                 Assert.NotNull(env);
                 Assert.Equal(bundleRoot.FullName, env["AspireCliBundlePath"]);
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostPathEnvVar));
+                Assert.False(env.ContainsKey(BundleDiscovery.TerminalHostInvocationArgsEnvVar));
                 return 0;
             },
-            RunAsyncCallback = (projectFile, watch, noBuild, noRestore, _, _, _, _, _) =>
+            RunAsyncCallback = (projectFile, watch, noBuild, noRestore, _, env, _, _, _) =>
             {
                 Assert.Equal(appHostFile.FullName, projectFile.FullName);
                 Assert.False(watch);
                 Assert.True(noBuild);
                 Assert.True(noRestore);
+                Assert.Equal(
+                    supportsDirectLaunch ? layout.GetTerminalHostPath() : layout.GetManagedPath(),
+                    env![BundleDiscovery.TerminalHostPathEnvVar]);
+                Assert.Equal(supportsDirectLaunch ? string.Empty : "terminalhost", env[BundleDiscovery.TerminalHostInvocationArgsEnvVar]);
                 return Task.FromResult(0);
             }
         };
@@ -2913,17 +2989,17 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal("https://myapp.dev.localhost:17050", env[KnownAspNetCoreConfigNames.Urls]);
     }
 
-    private FileInfo CreateSingleFileAppHost(bool useCliBundle = false)
+    private FileInfo CreateSingleFileAppHost(bool useCliBundle = false, string sdkVersion = "13.0.0")
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.cs");
         var useCliBundleProperty = useCliBundle ? "#:property AspireUseCliBundle=true" : string.Empty;
-        File.WriteAllText(appHostPath, """
-            #:sdk Aspire.AppHost.Sdk@13.0.0
-            {0}
+        File.WriteAllText(appHostPath, $$"""
+            #:sdk Aspire.AppHost.Sdk@{{sdkVersion}}
+            {{useCliBundleProperty}}
 
             var builder = DistributedApplication.CreateBuilder(args);
             builder.Build().Run();
-            """.Replace("{0}", useCliBundleProperty, StringComparison.Ordinal));
+            """);
 
         return new FileInfo(appHostPath);
     }
@@ -4625,9 +4701,17 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var bundleRoot = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, Guid.NewGuid().ToString()));
         var dcpDirectory = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName));
         var managedDirectory = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName));
+        var dashboardDirectory = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.DashboardDirectoryName));
+        var terminalHostDirectory = Directory.CreateDirectory(Path.Combine(bundleRoot.FullName, BundleDiscovery.TerminalHostDirectoryName));
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), "");
         File.WriteAllText(
             Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "");
+        File.WriteAllText(
+            Path.Combine(dashboardDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)),
+            "");
+        File.WriteAllText(
+            Path.Combine(terminalHostDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.TerminalHostExecutableName)),
             "");
 
         layout = new LayoutConfiguration
@@ -4637,6 +4721,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             {
                 Dcp = BundleDiscovery.DcpDirectoryName,
                 Managed = BundleDiscovery.ManagedDirectoryName,
+                Dashboard = BundleDiscovery.DashboardDirectoryName,
+                TerminalHost = BundleDiscovery.TerminalHostDirectoryName,
             }
         };
 

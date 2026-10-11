@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Milvus;
+using Aspire.Dashboard.Model;
 
 namespace Aspire.Hosting;
 
@@ -150,9 +151,18 @@ public static class MilvusBuilderExtensions
                                                         .WithImage(MilvusContainerImageTags.AttuImage, MilvusContainerImageTags.AttuTag)
                                                         .WithImageRegistry(MilvusContainerImageTags.Registry)
                                                         .WithIconName("WindowDatabase")
-                                                        .WithHttpEndpoint(targetPort: 3000, name: "http")
+                                                        .WithHttpEndpoint(targetPort: 3000, name: AttuResource.PrimaryEndpointName)
                                                         .WithEnvironment(context => ConfigureAttuContainer(context, builder.Resource))
+                                                        .WithParentRelationship(builder)
+                                                        .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                                                         .ExcludeFromManifest();
+
+        resourceBuilder.WithHidden();
+        builder.WithUrlForEndpoint(attuContainer.PrimaryEndpoint, url =>
+        {
+            url.DisplayText = "Manage";
+            url.DisplayOrder = 1;
+        });
 
         configureContainer?.Invoke(resourceBuilder);
 

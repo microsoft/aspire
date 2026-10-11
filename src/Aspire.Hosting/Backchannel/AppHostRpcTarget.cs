@@ -293,7 +293,6 @@ internal class AppHostRpcTarget(
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetPipelineStepsAsync), streaming: false, request?.TraceContext);
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
-#pragma warning disable ASPIREPIPELINES001
         var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>() as DistributedApplicationPipeline
             ?? throw new InvalidOperationException("Pipeline is not a DistributedApplicationPipeline.");
 
@@ -321,7 +320,6 @@ internal class AppHostRpcTarget(
         }
 
         var orderedSteps = DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
-#pragma warning restore ASPIREPIPELINES001
 
         return new GetPipelineStepsResponse
         {

@@ -63,7 +63,9 @@ suite('CLI process termination', () => {
 
         const termination = terminateCliProcess(childProcess, 'Aspire CLI');
 
-        await assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        const rejection = assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        await clock.tickAsync(5000);
+        await rejection;
         sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
         assert.strictEqual(childProcess.listenerCount('close'), 0);
         assert.strictEqual(childProcess.listenerCount('exit'), 0);
@@ -97,7 +99,9 @@ suite('CLI process termination', () => {
 
         const termination = terminateCliProcess(childProcess, 'Aspire CLI');
 
-        await assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        const rejection = assert.rejects(termination, /Could not terminate Aspire CLI because no process identifier was available/);
+        await clock.tickAsync(5000);
+        await rejection;
         sinon.assert.calledOnceWithExactly(childProcess.kill, undefined);
         assert.strictEqual(childProcess.listenerCount('close'), 0);
         assert.strictEqual(childProcess.listenerCount('exit'), 0);

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001 // AddDotnetProject and the DotnetProjectResource-backed gateway are experimental
 #pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
@@ -58,6 +57,16 @@ public class AddDotnetProjectBlazorGatewayTests(ITestOutputHelper testOutputHelp
             .ToList();
 
         Assert.Contains("weatherapi", gatewayRefs);
+    }
+
+    [Fact]
+    public async Task AddDotnetProjectBlazorGateway_RendersCompleteProcessLaunchPlan()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var gateway = builder.AddDotnetProjectBlazorGateway("gateway");
+        using var app = builder.Build();
+
+        await AddBlazorGatewayTests.AssertGatewayProcessLaunchPlanAsync(gateway.Resource, builder, app.Services);
     }
 
     [Fact]

@@ -6,7 +6,6 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
-using Aspire.Hosting.Terminals;
 using Aspire.Shared;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +34,9 @@ public static class TerminalResourceBuilderExtensions
     /// (PTY) per replica and a hidden terminal host process bridges the PTY traffic over Hex1b's
     /// HMP v1 protocol. The terminal session can be accessed from the Aspire Dashboard's terminal
     /// page or via the <c>aspire terminal</c> CLI command.
+    /// Terminal host resources can be revealed using the dashboard's Show hidden resources control
+    /// to inspect their state and diagnostic telemetry. Terminal host telemetry is disabled when
+    /// <see cref="DistributedApplicationOptions.DisableDashboard"/> is <see langword="true"/>.
     /// </para>
     /// <para>
     /// One terminal host process is spawned per parent replica (e.g. <c>WithReplicas(3).WithTerminal()</c>
@@ -179,25 +181,15 @@ public static class TerminalResourceBuilderExtensions
         }
 
         var trmnlDirectory = configuration[TerminalHostPaths.DirectoryOverrideConfigName];
+        var useDefaultDirectory = string.IsNullOrEmpty(trmnlDirectory);
         if (string.IsNullOrEmpty(trmnlDirectory))
         {
             var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
         }
 
-        // 0700 on Unix so other local users cannot enumerate which terminals exist on
-        // this machine. On Windows the user-profile ACLs (per-user by default) make this
-        // a no-op; CreateDirectory is idempotent.
-        try
-        {
-            DirectoryHelper.CreateWithOwnerOnlyPermissions(trmnlDirectory);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
-        {
-            // Best-effort: directory may already have stricter perms or be on a filesystem
-            // that does not support chmod (e.g. some FAT-formatted home dirs). Per-socket
-            // 0600 in TerminalHostControlListener still protects each endpoint.
-        }
+        // Secure the directory before writing terminal metadata or starting any socket listeners.
+        SocketPermissionHelper.CreateDirectory(trmnlDirectory, repairExisting: useDefaultDirectory);
 
         var terminalHosts = new TerminalHostResource[replicaCount];
         var replicaIds = new string[replicaCount];
@@ -207,6 +199,7 @@ public static class TerminalResourceBuilderExtensions
         var appHostProcessScopeId = TerminalHostOrphanCleanupService.GetCurrentProcessScopeId();
         var appHostBootId = TerminalHostOrphanCleanupService.GetCurrentBootId();
         var createdAtUtc = DateTime.UtcNow;
+        var dashboardEnabled = @event.Services.GetRequiredService<DistributedApplicationOptions>().DashboardEnabled;
 
         for (var i = 0; i < replicaCount; i++)
         {
@@ -219,22 +212,21 @@ public static class TerminalResourceBuilderExtensions
                 terminalHost,
                 options,
                 appHostPid,
-                appHostProcessIdentity);
+                appHostProcessIdentity,
+                dashboardEnabled);
 
-            // Telemetry creates dashboard resource entries independently of IsHidden.
-            // Only export helper diagnostics when the user explicitly makes the host visible.
-            if (options.ShowTerminalHost)
+            if (dashboardEnabled)
             {
                 OtlpConfigurationExtensions.AddOtlpEnvironment(terminalHost, configuration, @event.Services.GetRequiredService<IHostEnvironment>());
+            }
 
-                var hostLogLevel = Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_HOST_LOG_LEVEL");
-                if (!string.IsNullOrWhiteSpace(hostLogLevel))
+            var hostLogLevel = Environment.GetEnvironmentVariable("ASPIRE_TERMINAL_HOST_LOG_LEVEL");
+            if (!string.IsNullOrWhiteSpace(hostLogLevel))
+            {
+                terminalHost.Annotations.Add(new EnvironmentCallbackAnnotation(ctx =>
                 {
-                    terminalHost.Annotations.Add(new EnvironmentCallbackAnnotation(ctx =>
-                    {
-                        ctx.EnvironmentVariables["ASPIRE_TERMINAL_HOST_LOG_LEVEL"] = hostLogLevel;
-                    }));
-                }
+                    ctx.EnvironmentVariables["ASPIRE_TERMINAL_HOST_LOG_LEVEL"] = hostLogLevel;
+                }));
             }
 
             @event.Model.Resources.Add(terminalHost);
@@ -362,7 +354,8 @@ public static class TerminalResourceBuilderExtensions
         TerminalHostResource host,
         TerminalOptions options,
         int appHostPid,
-        long appHostProcessIdentity)
+        long appHostProcessIdentity,
+        bool dashboardEnabled)
     {
         // Equivalent to the previous WithInitialState(...).ExcludeFromManifest().WithArgs(...) chain
         // but we can't go through IResourceBuilder<T> here — we're running mid-event without an
@@ -374,21 +367,17 @@ public static class TerminalResourceBuilderExtensions
             ResourceType = "TerminalHost",
             State = KnownResourceStates.NotStarted,
             Properties = [],
-            // Hidden by default — terminal hosts are an implementation detail of
-            // WithTerminal(). Users opt in to seeing them via
-            // TerminalOptions.ShowTerminalHost = true when diagnosing host startup /
-            // recycle / DCP-connectivity problems.
-            IsHidden = !options.ShowTerminalHost,
+            // Terminal hosts are implementation details, but can be revealed in the dashboard.
+            IsHidden = true,
         }));
 
         host.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
         host.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
         {
-            // Explicitly disable telemetry for hidden hosts even if OTLP settings or a
-            // diagnostic opt-in were inherited from the AppHost's environment.
-            context.EnvironmentVariables[KnownConfigNames.TerminalHostTelemetryEnabled] =
-                options.ShowTerminalHost ? "true" : "false";
+            // Explicitly disable the exporter for dashboard-free AppHosts, even if the process
+            // inherits telemetry activation or an OTLP endpoint from its environment.
+            context.EnvironmentVariables[KnownConfigNames.TerminalHostTelemetryEnabled] = dashboardEnabled ? "true" : "false";
             context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessId] =
                 appHostPid.ToString(CultureInfo.InvariantCulture);
             context.EnvironmentVariables[KnownConfigNames.TerminalHostParentProcessStartedStable] =

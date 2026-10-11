@@ -31,18 +31,18 @@ public partial class StructuredLogDetails : IDisposable
     [Inject]
     public required StructuredLogMenuBuilder StructuredLogMenuBuilder { get; init; }
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredItems =>
-        _logEntryAttributes.Where(ApplyFilter).AsQueryable();
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredItems =>
+        _logEntryAttributes.Where(ApplyFilter);
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredExceptionItems =>
-        _exceptionAttributes.Where(ApplyFilter).AsQueryable();
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredExceptionItems =>
+        _exceptionAttributes.Where(ApplyFilter);
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredContextItems =>
-        _contextAttributes.Where(ApplyFilter).AsQueryable();
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredContextItems =>
+        _contextAttributes.Where(ApplyFilter);
 
-    internal IQueryable<TelemetryPropertyViewModel> FilteredResourceItems =>
+    internal IEnumerable<TelemetryPropertyViewModel> FilteredResourceItems =>
         ViewModel.LogEntry.ResourceView.AllProperties().Select(p => new TelemetryPropertyViewModel { Name = p.DisplayName, Key = p.Key, Value = p.Value })
-            .Where(ApplyFilter).AsQueryable();
+            .Where(ApplyFilter);
 
     private string _filter = "";
     private bool _dataChanged;
@@ -74,7 +74,13 @@ public partial class StructuredLogDetails : IDisposable
             // Move some attributes to separate lists, e.g. exception attributes to their own list.
             // Remaining attributes are displayed along side the message.
             var attributes = _viewModel.LogEntry.Attributes
-                .Select(a => new TelemetryPropertyViewModel { Name = a.Key, Key = $"unknown-{a.Key}", Value = a.Value })
+                .Select(a => new TelemetryPropertyViewModel
+                {
+                    Name = a.Key,
+                    Key = $"unknown-{a.Key}",
+                    Value = a.Value,
+                    TextVisualizerFormat = TextVisualizerFormatHelpers.GetLogFormat(a.Key, _viewModel.LogEntry.Scope.Name, _viewModel.LogEntry.Attributes)
+                })
                 .ToList();
 
             _contextAttributes =
@@ -100,7 +106,13 @@ public partial class StructuredLogDetails : IDisposable
             _logEntryAttributes =
             [
                 new TelemetryPropertyViewModel { Name = "Level", Key = KnownStructuredLogFields.LevelField, Value = _viewModel.LogEntry.Severity.ToString() },
-                new TelemetryPropertyViewModel { Name = "Message", Key = KnownStructuredLogFields.MessageField, Value = _viewModel.LogEntry.Message },
+                new TelemetryPropertyViewModel
+                {
+                    Name = "Message",
+                    Key = KnownStructuredLogFields.MessageField,
+                    Value = _viewModel.LogEntry.Message,
+                    TextVisualizerFormat = TextVisualizerFormatHelpers.GetLogMessageFormat(_viewModel.LogEntry.Scope.Name)
+                },
                 .. attributes,
             ];
 

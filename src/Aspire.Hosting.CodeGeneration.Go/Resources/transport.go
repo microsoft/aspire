@@ -860,7 +860,12 @@ func openConnection(socketPath string, timeout time.Duration) (io.ReadWriteClose
 }
 
 func openNamedPipe(path string) (io.ReadWriteCloser, error) {
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	// Go 1.26 supports Windows FILE_FLAG_* bits in os.OpenFile.
+	// Overlapped I/O lets the background read and authentication write run
+	// concurrently and allows Close to cancel a pending read.
+	// https://go.dev/doc/go1.26#os
+	const fileFlagOverlapped = 0x40000000
+	f, err := os.OpenFile(path, os.O_RDWR|fileFlagOverlapped, 0)
 	if err != nil {
 		return nil, err
 	}

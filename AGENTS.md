@@ -113,11 +113,32 @@ Treat a relaxed negative expectation as a signal to verify the consuming
 workflow's artifacts and execution lane. See `docs/ci/test-trigger-map.md` for
 the map vocabulary and maintenance guidance.
 
+### Official Azure Pipelines validation
+
+When reviewing official Azure Pipelines YAML changes, validate them by running
+the internal `microsoft-aspire` pipeline (definition 1602 in `dnceng/internal`)
+and checking the relevant stage's timeline, logs, and artifacts. A green GitHub
+PR check or a test that asserts the YAML's exact command string does not prove
+the pipeline behavior. Keep non-obvious rationale next to the YAML change
+instead of duplicating it in exact-string tests. Use the `azdo-internal` skill
+for validation; explicitly record stages excluded by personal-branch gating
+(such as source indexing on main) as unvalidated, not passed.
+
 ### Visual-only styling changes
 
 When reviewing a pull request, do not request automated tests solely for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests are appropriate when a styling change also affects functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.
 
 ### API Files and Public API Surface
+
+`Aspire.Dashboard` and `Aspire.Cli` are applications, not reusable libraries.
+Their public C# types and members are implementation details, not supported
+public APIs. Do not flag breaking changes to those types or members, require
+compatibility overloads or deprecation shims, or flag missing XML documentation.
+XML documentation is optional for application code regardless of accessibility.
+Continue reviewing compatibility of user-visible behavior and external contracts,
+such as CLI commands, options, exit codes, machine-readable output, and dashboard
+endpoints and protocols. The library API guidance below does not apply to these
+application implementation details.
 
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.
 
@@ -147,6 +168,32 @@ When reviewing pull requests:
   - The packages be mirrored to an approved internal feed, or
   - Use existing internal feeds that already mirror public packages (like dotnet-public, dotnet-eng)
 * The wildcard pattern mappings (`<package pattern="*" />`) in dotnet-public and dotnet-eng feeds typically provide access to commonly-used public packages
+
+### Pinned GitHub Actions and the Actions Allow-List
+
+Third-party actions in `.github/workflows/**` are pinned to immutable commit SHAs
+(`owner/repo[/path]@<sha>`). The repository/enterprise GitHub Actions policy allows only
+specific SHAs, and that allow-list lives in repository/organization settings, outside git.
+A workflow that references a SHA missing from the allow-list fails at runtime with an
+"actions not allowed" error, even though the PR itself builds and reviews cleanly.
+
+When authoring or reviewing any change that modifies a pinned action SHA (including
+bulk regeneration such as gh-aw workflow updates):
+
+* Identify every changed `owner/repo[/path]@<sha>` reference in the diff.
+* Verify each newly introduced SHA is permitted by the repository/enterprise allowed-actions
+  policy. Verify by SHA, not by tag name.
+* Coordinate the allow-list update in repository/organization settings as part of the same
+  change, before merging. The PR cannot make that settings change itself, so the PR
+  description must call out which SHAs an admin needs to add.
+* Treat a changed pin without a confirmed matching allow-list update as a blocking review
+  issue.
+* Do not request allow-list changes when a pin is unchanged, or for first-party
+  `actions/*` actions already covered by policy.
+
+Example: PR #20209 bumped `dotnet/issue-labeler/*` from `46125e85e6a568dc712f358c39f35317366f5eed`
+(v2.0.0) to `160b6b1e1e8d36da09beb34ef1e4806d2c0520a3` (v2.2.0) without the corresponding
+allow-list update, which broke the labeler workflows (issue #20277).
 
 ## Formatting
 
@@ -344,7 +391,7 @@ kill <pid>
 * Do not leave newly-added tests commented out. All added tests should be building and passing.
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
 * Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
-* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
+* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.targets` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
 * Use `Verify` (snapshot testing) for generated artifacts (files, serialized output, structured text). Prefer `await Verify(value, "ext")` over `Assert.Contains` / `Assert.DoesNotContain` / `Assert.Equal` on the same value. Run the test once to generate the `.received.` file, review it, then rename it to `.verified.` to accept it.
 * Avoid `Assert.DoesNotContain` as it is a weak assertion that easily goes out of date — it only proves something is absent without verifying what *is* present. Prefer `Assert.Equal` to check the entire string value, or `Assert.Collection` to verify the complete contents of a collection.
 
@@ -606,7 +653,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
-- **azdo-internal**: Triggers, monitors, and validates changes to the Aspire internal Azure DevOps pipeline (`microsoft-aspire`, definition 1602) on `dnceng/internal`. Use when asked to trigger an internal/AzDO build, check build status, push to the internal mirror, or validate `eng/` pipeline changes.
+- **azdo-internal**: Use when asked to trigger or inspect Aspire internal Azure DevOps builds, source indexing (`microsoft-aspire-source-index`, definition 1693), or release validation on `dnceng/internal`; push to the internal mirror; download logs or artifacts; or validate `eng/` pipeline changes.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
@@ -622,6 +669,7 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
 | `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
 | `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Aspire.Cli/**/*.cs` | `.github/instructions/cli.instructions.md` - CLI application review guidance |
 | `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |

@@ -7,6 +7,21 @@
         <target state="new">Toggle terminal (`)</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalCopyFailed">
+        <source>Could not copy to clipboard.</source>
+        <target state="new">Could not copy to clipboard.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalCopyTitle">
+        <source>Copy terminal title: {0}</source>
+        <target state="new">Copy terminal title: {0}</target>
+        <note>{0} is the terminal title.</note>
+      </trans-unit>
+      <trans-unit id="TerminalCopyWorkingDirectory">
+        <source>Copy working directory: {0}</source>
+        <target state="new">Copy working directory: {0}</target>
+        <note>{0} is the working directory path.</note>
+      </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
         <target state="new">The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</target>
@@ -67,11 +82,6 @@
         <target state="new">More information</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
-      <trans-unit id="TerminalDockPanelBody">
-        <source>App host code can open terminals here. Resource terminals are shown separately on their resource pages.</source>
-        <target state="new">App host code can open terminals here. Resource terminals are shown separately on their resource pages.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
         <source>No docked terminals</source>
         <target state="new">No docked terminals</target>
@@ -87,19 +97,29 @@
         <target state="new">This terminal may still be open in a separate window. Focus it or return it to the panel to continue.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalDockReorderHelp">
+        <source>Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</source>
+        <target state="new">Drag to reorder tabs, or use Alt+Shift+Left or Alt+Shift+Right while a tab is focused.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
         <target state="new">Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalDockResourceTerminals">
-        <source>Resource terminals:</source>
-        <target state="new">Resource terminals:</target>
-        <note>Label before a comma-separated list of links to resource terminal pages in the empty terminal dock.</note>
-      </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
         <source>Return to panel</source>
         <target state="new">Return to panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockScrollLeft">
+        <source>Scroll terminal tabs left</source>
+        <target state="new">Scroll terminal tabs left</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalDockScrollRight">
+        <source>Scroll terminal tabs right</source>
+        <target state="new">Scroll terminal tabs right</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockTabs">
@@ -107,9 +127,9 @@
         <target state="new">Terminals</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalFocusControlsHint">
-        <source>F6: Focus terminal controls</source>
-        <target state="new">F6: Focus terminal controls</target>
+      <trans-unit id="TerminalFocusControlsDescription">
+        <source>Focus terminal controls</source>
+        <target state="new">Focus terminal controls</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalInputFailed">
@@ -127,9 +147,54 @@
         <target state="new">The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalPalette">
+        <source>Terminal palette</source>
+        <target state="new">Terminal palette</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteDark">
+        <source>Dark</source>
+        <target state="new">Dark</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteLabel">
+        <source>Palette</source>
+        <target state="new">Palette</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteLight">
+        <source>Light</source>
+        <target state="new">Light</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPaletteSaveFailed">
+        <source>Unable to save the terminal palette. Check that browser storage is available and try again.</source>
+        <target state="new">Unable to save the terminal palette. Check that browser storage is available and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalProgress">
+        <source>Terminal progress</source>
+        <target state="new">Terminal progress</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalProgressError">
+        <source>Error</source>
+        <target state="new">Error</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalProgressWarning">
+        <source>Warning</source>
+        <target state="new">Warning</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TerminalRetry">
         <source>Reconnect terminal</source>
         <target state="new">Reconnect terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalSizeLabel">
+        <source>Size</source>
+        <target state="new">Size</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalSizingFailed">
@@ -153,8 +218,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit</source>
-        <target state="new">Fit</target>
+        <source>Fit terminal to available space</source>
+        <target state="new">Fit terminal to available space</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
@@ -185,6 +250,31 @@
       <trans-unit id="TerminalWindowTrackingFailed">
         <source>Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</source>
         <target state="new">Unable to recover the terminal window state. Check browser storage permissions, reload, or explicitly return the terminal to the panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsHeader">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsPageTitle">
+        <source>Terminals</source>
+        <target state="new">Terminals</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsSelectAResource">
+        <source>Select a resource to view its terminal</source>
+        <target state="new">Select a resource to view its terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsSelectResourceToolbar">
+        <source>Select resource</source>
+        <target state="new">Select resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsSettings">
+        <source>View options</source>
+        <target state="new">View options</target>
         <note />
       </trans-unit>
     </body>

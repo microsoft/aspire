@@ -19,7 +19,17 @@ public class DashboardImageTests
     [InlineData("not-a-version", "10.3.0.0", "10.3")]
     public void ResolveTag_ReturnsMajorMinor(string? informationalVersion, string? assemblyVersion, string expected)
     {
-        Assert.Equal(expected, DashboardImage.ResolveTag(informationalVersion, assemblyVersion));
+        Assert.Equal(expected, DashboardImage.ResolveTag(informationalVersion, assemblyVersion, imageTag: null));
+    }
+
+    [Theory]
+    [InlineData("14.0.0-preview.1+commit", "14.0.0.0", "13.6", "13.6")]
+    [InlineData("14.0.0", "14.0.0.0", "13.6", "13.6")]
+    [InlineData(null, null, "13.6", "13.6")]
+    [InlineData("14.0.0-preview.1", "14.0.0.0", "", "14.0")]
+    public void ResolveTag_PrefersBuildTimeImageTag(string? informationalVersion, string? assemblyVersion, string imageTag, string expected)
+    {
+        Assert.Equal(expected, DashboardImage.ResolveTag(informationalVersion, assemblyVersion, imageTag));
     }
 
     [Theory]
@@ -29,16 +39,12 @@ public class DashboardImageTests
     [InlineData("garbage", "also-garbage")]
     public void ResolveTag_WithoutParseableVersion_FallsBackToLatest(string? informationalVersion, string? assemblyVersion)
     {
-        Assert.Equal("latest", DashboardImage.ResolveTag(informationalVersion, assemblyVersion));
+        Assert.Equal("latest", DashboardImage.ResolveTag(informationalVersion, assemblyVersion, imageTag: null));
     }
 
     [Fact]
-    public void ResolveTag_FromRunningAssembly_MatchesPinnedImageName()
+    public void ResolveTag_FromRunningAssembly_UsesBuildTimeImageTag()
     {
-        // The running assembly always carries a version, so a real tag (never "latest") is produced.
-        var tag = DashboardImage.ResolveTag();
-
-        Assert.NotEqual("latest", tag);
-        Assert.Matches(@"^\d+\.\d+$", tag);
+        Assert.Equal("13.6", DashboardImage.ResolveTag());
     }
 }

@@ -25,6 +25,9 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </remarks>
 public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 {
+    private const string TestConnectionStringName = "deployment-test";
+    private const string TestConnectionStringValue = "https://portable-alias-test.vault.azure.net/";
+
     // AKS provisioning (~10-15 min) + Radius control-plane install + two image builds + recipe
     // deployment push the total well past the pure-AKS test's budget, so allow up to 55 minutes.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(55);
@@ -338,6 +341,30 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             output.WriteLine($"Step 16: Modifying AppHost.cs at: {appHostFilePath}");
             var content = File.ReadAllText(appHostFilePath);
+            const string apiServiceDeclarationPattern = "var apiService = builder.AddProject";
+            const string apiServiceReferencePattern = "    .WithReference(apiService)";
+            if (!content.Contains(apiServiceDeclarationPattern, StringComparison.Ordinal) ||
+                !content.Contains(apiServiceReferencePattern, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("Could not find the API service or its web frontend reference in the generated AppHost.");
+            }
+
+            content = content
+                .Replace(
+                    apiServiceDeclarationPattern,
+                    $$"""
+                    var deploymentTest = builder.AddConnectionString("{{TestConnectionStringName}}", expression => expression.AppendLiteral("{{TestConnectionStringValue}}"));
+
+                    {{apiServiceDeclarationPattern}}
+                    """,
+                    StringComparison.Ordinal)
+                .Replace(
+                    apiServiceReferencePattern,
+                    $"""
+                        .WithReference(deploymentTest)
+                    {apiServiceReferencePattern}
+                    """,
+                    StringComparison.Ordinal);
 
             // Attach the pushed ACR image to each project resource. The Radius publisher fails
             // publish for project resources without an image annotation (no <name>:latest
@@ -355,14 +382,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                 "builder.Build().Run();",
                 $"builder.AddRadiusEnvironment(\"radius\").WithNamespace(\"{appNamespace}\");\n\nbuilder.Build().Run();");
 
-            // WithContainerImage is Experimental (ASPIRERADIUS057) and the pipeline APIs used by
-            // compute environments are Experimental (ASPIREPIPELINES001); suppress both. Add each
-            // pragma independently so one already being present (e.g. a future template that emits
-            // ASPIREPIPELINES001 itself) never skips adding the other and fails the warning-as-error build.
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
-            {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
-            }
+            // WithContainerImage is experimental (ASPIRERADIUS057).
             if (!content.Contains("#pragma warning disable ASPIRERADIUS057"))
             {
                 content = "#pragma warning disable ASPIRERADIUS057\n" + content;
@@ -397,6 +417,8 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
                     return cached is { Length: 4 } ? Results.Ok("OK") : Results.Problem("Redis output cache round-trip failed.");
                 });
+
+                app.MapGet("/radius-diagnostics/connection-string", () => Environment.GetEnvironmentVariable("ConnectionStrings__deployment_test"));
 
                 app.MapRazorComponents<App>()
                 """);
@@ -564,6 +586,12 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
             await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/ -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            output.WriteLine("Step 27b: Verifying the deployed web frontend resolves the portable connection-string alias...");
+            await auto.TypeAsync($"resolved=0; for i in $(seq 1 10); do sleep 3; value=$(curl -sf http://localhost:18081/radius-diagnostics/connection-string 2>/dev/null) || value=''; " +
+                $"if [ \"$value\" = \"{TestConnectionStringValue}\" ]; then echo 'Portable connection-string alias resolved'; resolved=1; break; fi; done; [ \"$resolved\" -eq 1 ]");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 

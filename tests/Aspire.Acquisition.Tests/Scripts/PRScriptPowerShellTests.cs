@@ -66,7 +66,21 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("SkipExtension", normalized);
         Assert.Contains("UseInsiders", normalized);
         Assert.Contains("SkipPath", normalized);
+        Assert.Contains("SkipCompletions", normalized);
         Assert.Contains("KeepArchive", normalized);
+    }
+
+    [Fact]
+    public async Task SkipCompletions_WhatIf_DoesNotGenerateOrRegister()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("1234", "-WhatIf", "-SkipPath", "-SkipExtension", "-SkipCompletions");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Skipping shell completions due to -SkipCompletions", result.Output);
+        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire")));
     }
 
     [Fact]

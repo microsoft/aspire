@@ -17,7 +17,7 @@ aspire run \
 From a repository checkout, use the built CLI directly:
 
 ```sh
-./dotnet.sh exec artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll run \
+./dotnet.sh exec artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll run \
   --project tests/TestingAppHost1/TestingAppHost1.AppHost/TestingAppHost1.AppHost.csproj \
   --capture-profile \
   --capture-profile-output artifacts/tmp/startup-profile/profile.zip \

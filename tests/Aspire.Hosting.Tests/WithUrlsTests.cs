@@ -15,6 +15,27 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1000)]
+    public void WithEndpointPreservesDisplayOrder(int? displayOrder)
+    {
+        var endpoint = new EndpointReference(new ContainerResource("container"), "http");
+        var annotation = new ResourceUrlAnnotation
+        {
+            Url = "https://example.com",
+            DisplayOrder = displayOrder
+        };
+
+        var updatedAnnotation = annotation.WithEndpoint(endpoint);
+
+        Assert.Equal(displayOrder, updatedAnnotation.DisplayOrder);
+        Assert.Same(endpoint, updatedAnnotation.Endpoint);
+        Assert.Null(annotation.Endpoint);
+    }
+
     [Fact]
     public void WithUrlsAddsAnnotationForAsyncCallback()
     {
@@ -339,7 +360,6 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-#pragma warning disable CS0618 // This test intentionally verifies the obsolete DisplayOrder behavior.
         var projectA = builder.AddProject<ProjectA>("projecta")
             .WithHttpEndpoint(name: "test")
             .WithUrlForEndpoint("test", u =>
@@ -364,7 +384,6 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
             && u.DisplayText == "Link Text"
             && u.Endpoint?.EndpointName == "test"
             && u.DisplayOrder == 1000);
-#pragma warning restore CS0618
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
     }
@@ -913,6 +932,94 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithUrlForEndpointCanLinkToAnotherResourcesEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var manager = builder.AddProject<ProjectA>("manager").WithHttpEndpoint(name: "http");
+        var managed = builder.AddProject<ProjectB>("managed");
+        managed.WithUrlForEndpoint(manager.GetEndpoint("http"), url =>
+        {
+            Assert.Same(manager.Resource, url.Endpoint?.Resource);
+            url.Url = "/admin";
+            url.DisplayText = "Manage";
+        });
+
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        managed.OnBeforeResourceStarted((_, _, _) =>
+        {
+            tcs.SetResult();
+            return Task.CompletedTask;
+        });
+
+        await using var app = await builder.BuildAsync();
+        await app.StartAsync();
+        await tcs.Task.DefaultTimeout();
+
+        var url = Assert.Single(managed.Resource.Annotations.OfType<ResourceUrlAnnotation>(), u => u.DisplayText == "Manage");
+        Assert.Same(manager.Resource, url.Endpoint?.Resource);
+        Assert.Equal($"{manager.GetEndpoint("http").Url.TrimEnd('/')}/admin", url.Url);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+    }
+
+    [Fact]
+    public async Task WithUrlForEndpointMatchesEquivalentEndpointOwnerByResourceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var innerResource = new CustomResource("resource");
+        var surrogateResource = new CustomResource("resource", innerResource.Annotations);
+        var surrogateBuilder = builder.CreateResourceBuilder(surrogateResource)
+            .WithHttpEndpoint(name: "http")
+            .WithUrlForEndpoint("http", url => url.DisplayText = "Manage");
+        var url = new ResourceUrlAnnotation
+        {
+            Endpoint = innerResource.GetEndpoint("http"),
+            Url = "http://localhost:8080"
+        };
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            innerResource,
+            [url]);
+
+        var callback = Assert.Single(surrogateBuilder.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
+        await callback.Callback(context);
+
+        Assert.Equal("Manage", url.DisplayText);
+        Assert.Single(context.Urls);
+    }
+
+    [Fact]
+    public async Task WithUrlForEndpointDoesNotMatchAnotherEndpointOwnerWithTheSameEndpointName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var manager = builder.AddResource(new CustomResource("manager"))
+            .WithHttpEndpoint(name: "http");
+        var otherManager = builder.AddResource(new CustomResource("other-manager"))
+            .WithHttpEndpoint(name: "http");
+        var managed = builder.AddResource(new CustomResource("managed"))
+            .WithUrlForEndpoint(manager.GetEndpoint("http"), url => url.DisplayText = "Manage");
+        var otherUrl = new ResourceUrlAnnotation
+        {
+            Endpoint = otherManager.GetEndpoint("http"),
+            Url = "http://localhost:8080"
+        };
+        var context = new ResourceUrlsCallbackContext(
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            managed.Resource,
+            [otherUrl]);
+
+        var callback = Assert.Single(managed.Resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
+        await callback.Callback(context);
+
+        Assert.Null(otherUrl.DisplayText);
+        var managementUrl = Assert.Single(context.Urls, url => url.DisplayText == "Manage");
+        Assert.Same(manager.Resource, managementUrl.Endpoint?.Resource);
+    }
+
+    [Fact]
     public async Task WithUrlsTurnsRelativeEndpointUrlsIntoAbsoluteUrls()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -1054,9 +1161,9 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
     }
 
-    private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints
+    private sealed class CustomResource(string name, ResourceAnnotationCollection? annotations = null) : Resource(name), IResourceWithEndpoints
     {
-
+        public override ResourceAnnotationCollection Annotations { get; } = annotations ?? [];
     }
 
     private sealed class ProjectA : IProjectMetadata

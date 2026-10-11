@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.CodeDom.Compiler;
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Hosting;
@@ -9,6 +10,9 @@ namespace Aspire.Hosting.Testing;
 
 internal static class DistributedApplicationEntryPointInvoker
 {
+    private const string AspireHostingGeneratedCodeToolName = "Aspire.Hosting";
+    private const string MicrosoftTestingPlatformApplicationMetadataKey = "Microsoft.Testing.Platform.Application";
+
     // This helpers encapsulates all of the complex logic required to:
     // 1. Execute the entry point of the specified assembly in a different thread.
     // 2. Wait for the diagnostic source events to fire
@@ -16,28 +20,73 @@ internal static class DistributedApplicationEntryPointInvoker
     // 4. Resolve the instance of the DistributedApplication
     // 5. Allow the caller to determine if the entry point has completed
     public static Func<string[], CancellationToken, Task<DistributedApplication>>? ResolveEntryPoint(
-        Assembly assembly,
+        Type entryPointType,
         Action<DistributedApplicationOptions, HostApplicationBuilderSettings>? onConstructing = null,
         Action<DistributedApplicationBuilder>? onConstructed = null,
         Action<DistributedApplicationBuilder>? onBuilding = null,
         Action<Exception?>? entryPointCompleted = null)
     {
-        if (assembly.EntryPoint is null)
+        var assembly = entryPointType.Assembly;
+        var entryPoint = assembly.EntryPoint;
+        if (entryPoint is null)
         {
             return null;
+        }
+
+        if (IsMicrosoftTestingPlatformApplication(assembly))
+        {
+            if (GetAspireProjectMetadata(entryPointType) is { } projectMetadata)
+            {
+                throw new InvalidOperationException(
+                    $"The specified entry point type '{entryPointType.FullName}' is generated project metadata for '{projectMetadata.ProjectPath}', " +
+                    $"but it was resolved from the Microsoft.Testing.Platform test application '{assembly.GetName().Name}'. " +
+                    "This can happen when an Aspire.AppHost.Sdk test project generates a Projects.* type that shadows the AppHost's generated marker. " +
+                    "Test projects should use Microsoft.NET.Sdk instead of Aspire.AppHost.Sdk and reference the AppHost project so the entry point type belongs to the AppHost executable assembly. " +
+                    $"If the AppHost is discovered dynamically, load its assembly and pass a type from that assembly to {nameof(DistributedApplicationTestingBuilder)}.{nameof(DistributedApplicationTestingBuilder.CreateAsync)}(Type).");
+            }
+
+            throw new InvalidOperationException(
+                $"The assembly '{assembly.GetName().Name}' is a Microsoft.Testing.Platform test application. " +
+                $"Invoking its entry point from {nameof(DistributedApplicationFactory)} would recursively run the test application. " +
+                "Test projects should use Microsoft.NET.Sdk instead of Aspire.AppHost.Sdk and reference the AppHost project so the entry point type belongs to the AppHost executable assembly. " +
+                "Alternatively, use " +
+                $"{nameof(DistributedApplicationTestingBuilder)}.{nameof(DistributedApplicationTestingBuilder.Create)} to construct the application without invoking an entry point.");
         }
 
         return async (args, ct) =>
         {
             var invoker = new EntryPointInvoker(
                 args,
-                assembly.EntryPoint,
+                entryPoint,
                 onConstructing,
                 onConstructed,
                 onBuilding,
                 entryPointCompleted);
             return await invoker.InvokeAsync(ct).ConfigureAwait(false);
         };
+    }
+
+    private static IProjectMetadata? GetAspireProjectMetadata(Type type)
+    {
+        // Aspire generates referenced project markers as:
+        //   [GeneratedCode("Aspire.Hosting", null)]
+        //   public class MyProject : IProjectMetadata
+        if (!typeof(IProjectMetadata).IsAssignableFrom(type) ||
+            type.GetCustomAttribute<GeneratedCodeAttribute>() is not { Tool: AspireHostingGeneratedCodeToolName })
+        {
+            return null;
+        }
+
+        return (IProjectMetadata)Activator.CreateInstance(type, nonPublic: true)!;
+    }
+
+    private static bool IsMicrosoftTestingPlatformApplication(Assembly assembly)
+    {
+        // MTP identifies test application assemblies with:
+        //   [assembly: AssemblyMetadata("Microsoft.Testing.Platform.Application", "true")]
+        return assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Any(static metadata =>
+            string.Equals(metadata.Key, MicrosoftTestingPlatformApplicationMetadataKey, StringComparison.Ordinal) &&
+            string.Equals(metadata.Value, bool.TrueString, StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed class EntryPointInvoker : IObserver<DiagnosticListener>

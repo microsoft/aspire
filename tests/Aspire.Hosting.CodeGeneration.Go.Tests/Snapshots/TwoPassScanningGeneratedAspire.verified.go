@@ -1040,6 +1040,7 @@ type ResourceUrlAnnotation struct {
 	Url string `json:"Url,omitempty"`
 	DisplayText *string `json:"DisplayText,omitempty"`
 	Endpoint *EndpointReference `json:"Endpoint,omitempty"`
+	DisplayOrder *float64 `json:"DisplayOrder,omitempty"`
 	DisplayLocation UrlDisplayLocation `json:"DisplayLocation,omitempty"`
 }
 
@@ -1049,6 +1050,7 @@ func (d *ResourceUrlAnnotation) ToMap() map[string]any {
 	m["Url"] = serializeValue(d.Url)
 	if d.DisplayText != nil { m["DisplayText"] = serializeValue(d.DisplayText) }
 	if d.Endpoint != nil { m["Endpoint"] = serializeValue(d.Endpoint) }
+	if d.DisplayOrder != nil { m["DisplayOrder"] = serializeValue(d.DisplayOrder) }
 	m["DisplayLocation"] = serializeValue(d.DisplayLocation)
 	return m
 }
@@ -1446,6 +1448,8 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	ExcludeFromMcp() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1461,10 +1465,12 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithArgsReplace(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBuildArg(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBuildSecret(name string, value ParameterResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCertificateTrustScope(scope CertificateTrustScope) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithChildRelationship(child Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1545,6 +1551,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1654,6 +1661,38 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetResourceNam
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -1915,6 +1954,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsCallba
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsReplace(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithBindMount adds a bind mount to a container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -1985,6 +2036,25 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3317,6 +3387,19 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSerializedAnnotation(annotationId string, json string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -3674,6 +3757,8 @@ type CSharpAppResource interface {
 	ExcludeFromMcp() CSharpAppResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) CSharpAppResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) CSharpAppResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) CSharpAppResource
@@ -3689,7 +3774,9 @@ type CSharpAppResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) CSharpAppResource
 	WithArgs(args []string) CSharpAppResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) CSharpAppResource
+	WithArgsReplace(args []string) CSharpAppResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) CSharpAppResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) CSharpAppResource
 	WithCertificateTrustScope(scope CertificateTrustScope) CSharpAppResource
 	WithChildRelationship(child Resource) CSharpAppResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) CSharpAppResource
@@ -3756,6 +3843,7 @@ type CSharpAppResource interface {
 	WithReplicas(replicas float64) CSharpAppResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) CSharpAppResource
+	WithSerializedAnnotation(annotationId string, json string) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
 	WithTerminal() CSharpAppResource
@@ -3875,6 +3963,38 @@ func (s *cSharpAppResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *cSharpAppResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *cSharpAppResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -4154,6 +4274,18 @@ func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *cSharpAppResource) WithArgsReplace(args []string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithCancellableOperation performs a cancellable operation
 func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *CancellationToken)) CSharpAppResource {
 	if s.err != nil { return s }
@@ -4170,6 +4302,25 @@ func (s *cSharpAppResource) WithCancellableOperation(operation func(arg *Cancell
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *cSharpAppResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -5261,6 +5412,19 @@ func (s *cSharpAppResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *cSharpAppResource) WithSerializedAnnotation(annotationId string, json string) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
 	if s.err != nil { return s }
@@ -5530,6 +5694,7 @@ func (s *commandLineArgsCallbackContext) Resource() Resource {
 type CommandLineArgsEditor interface {
 	handleReference
 	Add(value any) error
+	Clear() error
 	Err() error
 }
 
@@ -5559,6 +5724,17 @@ func (s *commandLineArgsEditor) Add(value any) error {
 	}
 	if !isNil(value) { reqArgs["value"] = serializeValue(value) }
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/add", reqArgs)
+	return err
+}
+
+// Clear clears all command-line arguments.
+func (s *commandLineArgsEditor) Clear() error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/clear", reqArgs)
 	return err
 }
 
@@ -6567,6 +6743,8 @@ type ContainerRegistryResource interface {
 	ExcludeFromManifest() ContainerRegistryResource
 	ExcludeFromMcp() ContainerRegistryResource
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ContainerRegistryResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerRegistryResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerRegistryResource
@@ -6612,6 +6790,7 @@ type ContainerRegistryResource interface {
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
+	WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
 	WithTerminal() ContainerRegistryResource
@@ -6687,6 +6866,38 @@ func (s *containerRegistryResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *containerRegistryResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *containerRegistryResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -7424,6 +7635,19 @@ func (s *containerRegistryResource) WithRequiredCommandValidation(command string
 	return s
 }
 
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *containerRegistryResource) WithSerializedAnnotation(annotationId string, json string) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -7572,6 +7796,8 @@ type ContainerResource interface {
 	ExcludeFromMcp() ContainerResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ContainerResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ContainerResource
@@ -7587,10 +7813,12 @@ type ContainerResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ContainerResource
 	WithArgs(args []string) ContainerResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ContainerResource
+	WithArgsReplace(args []string) ContainerResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) ContainerResource
 	WithBuildArg(name string, value any) ContainerResource
 	WithBuildSecret(name string, value ParameterResource) ContainerResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ContainerResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ContainerResource
 	WithCertificateTrustScope(scope CertificateTrustScope) ContainerResource
 	WithChildRelationship(child Resource) ContainerResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerResource
@@ -7671,6 +7899,7 @@ type ContainerResource interface {
 	WithRemoteImageTag(remoteImageTag string) ContainerResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerResource
+	WithSerializedAnnotation(annotationId string, json string) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
 	WithTerminal() ContainerResource
@@ -7779,6 +8008,38 @@ func (s *containerResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *containerResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *containerResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -8040,6 +8301,18 @@ func (s *containerResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *containerResource) WithArgsReplace(args []string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithBindMount adds a bind mount to a container resource.
 func (s *containerResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) ContainerResource {
 	if s.err != nil { return s }
@@ -8110,6 +8383,25 @@ func (s *containerResource) WithCancellableOperation(operation func(arg *Cancell
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *containerResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -9439,6 +9731,19 @@ func (s *containerResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *containerResource) WithSerializedAnnotation(annotationId string, json string) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11240,6 +11545,8 @@ type DotnetToolResource interface {
 	ExcludeFromMcp() DotnetToolResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) DotnetToolResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) DotnetToolResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) DotnetToolResource
@@ -11254,7 +11561,9 @@ type DotnetToolResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) DotnetToolResource
 	WithArgs(args []string) DotnetToolResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) DotnetToolResource
+	WithArgsReplace(args []string) DotnetToolResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) DotnetToolResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) DotnetToolResource
 	WithCertificateTrustScope(scope CertificateTrustScope) DotnetToolResource
 	WithChildRelationship(child Resource) DotnetToolResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) DotnetToolResource
@@ -11275,6 +11584,7 @@ type DotnetToolResource interface {
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) DotnetToolResource
 	WithEnvironmentVariables(variables map[string]string) DotnetToolResource
 	WithExecutableCommand(command string) DotnetToolResource
+	WithExecutableDebugSupport(launchConfigurationType string, scriptPath string, options ...*WithExecutableDebugSupportOptions) DotnetToolResource
 	WithExplicitStart() DotnetToolResource
 	WithExternalHttpEndpoints() DotnetToolResource
 	WithHealthCheck(key string) DotnetToolResource
@@ -11320,6 +11630,7 @@ type DotnetToolResource interface {
 	WithRemoteImageTag(remoteImageTag string) DotnetToolResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) DotnetToolResource
+	WithSerializedAnnotation(annotationId string, json string) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
 	WithTerminal() DotnetToolResource
@@ -11435,6 +11746,38 @@ func (s *dotnetToolResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *dotnetToolResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *dotnetToolResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -11693,6 +12036,18 @@ func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *dotnetToolResource) WithArgsReplace(args []string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithCancellableOperation performs a cancellable operation
 func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *CancellationToken)) DotnetToolResource {
 	if s.err != nil { return s }
@@ -11709,6 +12064,25 @@ func (s *dotnetToolResource) WithCancellableOperation(operation func(arg *Cancel
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *dotnetToolResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12017,6 +12391,26 @@ func (s *dotnetToolResource) WithExecutableCommand(command string) DotnetToolRes
 	}
 	reqArgs["command"] = serializeValue(command)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExecutableCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithExecutableDebugSupport adds VS Code-compatible debug metadata for an executable resource.
+func (s *dotnetToolResource) WithExecutableDebugSupport(launchConfigurationType string, scriptPath string, options ...*WithExecutableDebugSupportOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchConfigurationType"] = serializeValue(launchConfigurationType)
+	reqArgs["scriptPath"] = serializeValue(scriptPath)
+	if len(options) > 0 {
+		merged := &WithExecutableDebugSupportOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExecutableDebugSupport", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12785,6 +13179,19 @@ func (s *dotnetToolResource) WithRequiredCommandValidation(command string, valid
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *dotnetToolResource) WithSerializedAnnotation(annotationId string, json string) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14064,6 +14471,8 @@ type ExecutableResource interface {
 	ExcludeFromMcp() ExecutableResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ExecutableResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ExecutableResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ExecutableResource
@@ -14078,7 +14487,9 @@ type ExecutableResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ExecutableResource
 	WithArgs(args []string) ExecutableResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ExecutableResource
+	WithArgsReplace(args []string) ExecutableResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ExecutableResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ExecutableResource
 	WithCertificateTrustScope(scope CertificateTrustScope) ExecutableResource
 	WithChildRelationship(child Resource) ExecutableResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExecutableResource
@@ -14099,6 +14510,7 @@ type ExecutableResource interface {
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ExecutableResource
 	WithEnvironmentVariables(variables map[string]string) ExecutableResource
 	WithExecutableCommand(command string) ExecutableResource
+	WithExecutableDebugSupport(launchConfigurationType string, scriptPath string, options ...*WithExecutableDebugSupportOptions) ExecutableResource
 	WithExplicitStart() ExecutableResource
 	WithExternalHttpEndpoints() ExecutableResource
 	WithHealthCheck(key string) ExecutableResource
@@ -14144,6 +14556,7 @@ type ExecutableResource interface {
 	WithRemoteImageTag(remoteImageTag string) ExecutableResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExecutableResource
+	WithSerializedAnnotation(annotationId string, json string) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
 	WithTerminal() ExecutableResource
@@ -14253,6 +14666,38 @@ func (s *executableResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *executableResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *executableResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -14511,6 +14956,18 @@ func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *executableResource) WithArgsReplace(args []string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithCancellableOperation performs a cancellable operation
 func (s *executableResource) WithCancellableOperation(operation func(arg *CancellationToken)) ExecutableResource {
 	if s.err != nil { return s }
@@ -14527,6 +14984,25 @@ func (s *executableResource) WithCancellableOperation(operation func(arg *Cancel
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *executableResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14835,6 +15311,26 @@ func (s *executableResource) WithExecutableCommand(command string) ExecutableRes
 	}
 	reqArgs["command"] = serializeValue(command)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExecutableCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithExecutableDebugSupport adds VS Code-compatible debug metadata for an executable resource.
+func (s *executableResource) WithExecutableDebugSupport(launchConfigurationType string, scriptPath string, options ...*WithExecutableDebugSupportOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["launchConfigurationType"] = serializeValue(launchConfigurationType)
+	reqArgs["scriptPath"] = serializeValue(scriptPath)
+	if len(options) > 0 {
+		merged := &WithExecutableDebugSupportOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExecutableDebugSupport", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15606,6 +16102,19 @@ func (s *executableResource) WithRequiredCommandValidation(command string, valid
 	return s
 }
 
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *executableResource) WithSerializedAnnotation(annotationId string, json string) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *executableResource) WithSessionLifetime() ExecutableResource {
 	if s.err != nil { return s }
@@ -16065,6 +16574,8 @@ type ExternalServiceResource interface {
 	ExcludeFromManifest() ExternalServiceResource
 	ExcludeFromMcp() ExternalServiceResource
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ExternalServiceResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ExternalServiceResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ExternalServiceResource
@@ -16111,6 +16622,7 @@ type ExternalServiceResource interface {
 	WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
+	WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
 	WithTerminal() ExternalServiceResource
@@ -16186,6 +16698,38 @@ func (s *externalServiceResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *externalServiceResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *externalServiceResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -16938,6 +17482,19 @@ func (s *externalServiceResource) WithRequiredCommandValidation(command string, 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *externalServiceResource) WithSerializedAnnotation(annotationId string, json string) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18750,6 +19307,8 @@ type ParameterResource interface {
 	ExcludeFromManifest() ParameterResource
 	ExcludeFromMcp() ParameterResource
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ParameterResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource
@@ -18801,6 +19360,7 @@ type ParameterResource interface {
 	WithRequired(options ...*WithRequiredOptions) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
+	WithSerializedAnnotation(annotationId string, json string) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
 	WithTerminal() ParameterResource
@@ -18876,6 +19436,38 @@ func (s *parameterResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *parameterResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *parameterResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -19709,6 +20301,19 @@ func (s *parameterResource) WithRequiredCommandValidation(command string, valida
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *parameterResource) WithSerializedAnnotation(annotationId string, json string) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20559,6 +21164,8 @@ type ProjectResource interface {
 	ExcludeFromMcp() ProjectResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ProjectResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) ProjectResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ProjectResource
@@ -20574,7 +21181,9 @@ type ProjectResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ProjectResource
 	WithArgs(args []string) ProjectResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ProjectResource
+	WithArgsReplace(args []string) ProjectResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) ProjectResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ProjectResource
 	WithCertificateTrustScope(scope CertificateTrustScope) ProjectResource
 	WithChildRelationship(child Resource) ProjectResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ProjectResource
@@ -20641,6 +21250,7 @@ type ProjectResource interface {
 	WithReplicas(replicas float64) ProjectResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ProjectResource
+	WithSerializedAnnotation(annotationId string, json string) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
 	WithTerminal() ProjectResource
@@ -20760,6 +21370,38 @@ func (s *projectResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *projectResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *projectResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -21039,6 +21681,18 @@ func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCall
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *projectResource) WithArgsReplace(args []string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithCancellableOperation performs a cancellable operation
 func (s *projectResource) WithCancellableOperation(operation func(arg *CancellationToken)) ProjectResource {
 	if s.err != nil { return s }
@@ -21055,6 +21709,25 @@ func (s *projectResource) WithCancellableOperation(operation func(arg *Cancellat
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *projectResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22143,6 +22816,19 @@ func (s *projectResource) WithRequiredCommandValidation(command string, validati
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommandValidation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *projectResource) WithSerializedAnnotation(annotationId string, json string) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23950,6 +24636,8 @@ type TestDatabaseResource interface {
 	ExcludeFromMcp() TestDatabaseResource
 	GetEndpoint(name string) EndpointReference
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) TestDatabaseResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) TestDatabaseResource
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) TestDatabaseResource
@@ -23965,10 +24653,12 @@ type TestDatabaseResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestDatabaseResource
 	WithArgs(args []string) TestDatabaseResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestDatabaseResource
+	WithArgsReplace(args []string) TestDatabaseResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) TestDatabaseResource
 	WithBuildArg(name string, value any) TestDatabaseResource
 	WithBuildSecret(name string, value ParameterResource) TestDatabaseResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) TestDatabaseResource
 	WithCertificateTrustScope(scope CertificateTrustScope) TestDatabaseResource
 	WithChildRelationship(child Resource) TestDatabaseResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestDatabaseResource
@@ -24049,6 +24739,7 @@ type TestDatabaseResource interface {
 	WithRemoteImageTag(remoteImageTag string) TestDatabaseResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestDatabaseResource
+	WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
 	WithTerminal() TestDatabaseResource
@@ -24157,6 +24848,38 @@ func (s *testDatabaseResource) GetResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *testDatabaseResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *testDatabaseResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -24418,6 +25141,18 @@ func (s *testDatabaseResource) WithArgsCallback(callback func(obj CommandLineArg
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *testDatabaseResource) WithArgsReplace(args []string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithBindMount adds a bind mount to a container resource.
 func (s *testDatabaseResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -24488,6 +25223,25 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *testDatabaseResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -25820,6 +26574,19 @@ func (s *testDatabaseResource) WithRequiredCommandValidation(command string, val
 	return s
 }
 
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *testDatabaseResource) WithSerializedAnnotation(annotationId string, json string) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
 	if s.err != nil { return s }
@@ -26211,7 +26978,9 @@ type TestRedisResource interface {
 	GetEndpoint(name string) EndpointReference
 	GetEndpoints() ([]string, error)
 	GetResourceName() (string, error)
+	GetSerializedAnnotation(annotationId string) (string, error)
 	GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error)
+	HasSerializedAnnotation(annotationId string) (bool, error)
 	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) TestRedisResource
 	OnConnectionStringAvailable(callback func(arg ConnectionStringAvailableEvent)) TestRedisResource
 	OnInitializeResource(callback func(arg InitializeResourceEvent)) TestRedisResource
@@ -26229,10 +26998,12 @@ type TestRedisResource interface {
 	WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestRedisResource
 	WithArgs(args []string) TestRedisResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestRedisResource
+	WithArgsReplace(args []string) TestRedisResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) TestRedisResource
 	WithBuildArg(name string, value any) TestRedisResource
 	WithBuildSecret(name string, value ParameterResource) TestRedisResource
 	WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource
+	WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) TestRedisResource
 	WithCertificateTrustScope(scope CertificateTrustScope) TestRedisResource
 	WithChildRelationship(child Resource) TestRedisResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestRedisResource
@@ -26323,6 +27094,7 @@ type TestRedisResource interface {
 	WithRemoteImageTag(remoteImageTag string) TestRedisResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) TestRedisResource
+	WithSerializedAnnotation(annotationId string, json string) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithTerminal() TestRedisResource
@@ -26505,6 +27277,22 @@ func (s *testRedisResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
+// GetSerializedAnnotation gets a serialized ATS annotation payload from a resource.
+func (s *testRedisResource) GetSerializedAnnotation(annotationId string) (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // GetStatusAsync gets the status of the resource asynchronously
 func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
@@ -26539,6 +27327,22 @@ func (s *testRedisResource) GetTags() *List[string] {
 		s.getTags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getTags")
 	}
 	return s.getTags
+}
+
+// HasSerializedAnnotation determines whether a resource has a serialized ATS annotation with the specified ID.
+func (s *testRedisResource) HasSerializedAnnotation(annotationId string) (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/hasSerializedAnnotation", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
 }
 
 // OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
@@ -26848,6 +27652,18 @@ func (s *testRedisResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
+// WithArgsReplace replaces the arguments to be passed to a resource that supports arguments when it is launched.
+func (s *testRedisResource) WithArgsReplace(args []string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if args != nil { reqArgs["args"] = serializeValue(args) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithBindMount adds a bind mount to a container resource.
 func (s *testRedisResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) TestRedisResource {
 	if s.err != nil { return s }
@@ -26918,6 +27734,25 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 		reqArgs["operation"] = s.client.registerCallback(shim)
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCertificateTrustEnvironment configures environment variables that point to Aspire-managed certificate trust paths.
+func (s *testRedisResource) WithCertificateTrustEnvironment(certificateBundleEnvironmentVariable string, options ...*WithCertificateTrustEnvironmentOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["certificateBundleEnvironmentVariable"] = serializeValue(certificateBundleEnvironmentVariable)
+	if len(options) > 0 {
+		merged := &WithCertificateTrustEnvironmentOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCertificateTrustEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -28405,6 +29240,19 @@ func (s *testRedisResource) WithRequiredCommandValidation(command string, valida
 	return s
 }
 
+// WithSerializedAnnotation stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID.
+func (s *testRedisResource) WithSerializedAnnotation(annotationId string, json string) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resource": s.handle.ToJSON(),
+	}
+	reqArgs["annotationId"] = serializeValue(annotationId)
+	reqArgs["json"] = serializeValue(json)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSerializedAnnotation", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testRedisResource) WithSessionLifetime() TestRedisResource {
 	if s.err != nil { return s }
@@ -29596,6 +30444,18 @@ func (o *WithCommandOptions) ToMap() map[string]any {
 	return m
 }
 
+// WithCertificateTrustEnvironmentOptions carries optional parameters for WithCertificateTrustEnvironment.
+type WithCertificateTrustEnvironmentOptions struct {
+	CertificateDirectoriesEnvironmentVariable *string `json:"certificateDirectoriesEnvironmentVariable,omitempty"`
+}
+
+func (o *WithCertificateTrustEnvironmentOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.CertificateDirectoriesEnvironmentVariable != nil { m["certificateDirectoriesEnvironmentVariable"] = serializeValue(o.CertificateDirectoriesEnvironmentVariable) }
+	return m
+}
+
 // WithHttpsDeveloperCertificateOptions carries optional parameters for WithHttpsDeveloperCertificate.
 type WithHttpsDeveloperCertificateOptions struct {
 	Password *ParameterResource `json:"password,omitempty"`
@@ -29617,6 +30477,20 @@ func (o *WithIconNameOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.IconVariant != nil { m["iconVariant"] = serializeValue(o.IconVariant) }
+	return m
+}
+
+// WithExecutableDebugSupportOptions carries optional parameters for WithExecutableDebugSupport.
+type WithExecutableDebugSupportOptions struct {
+	RuntimeExecutable *string `json:"runtimeExecutable,omitempty"`
+	LaunchMethod *string `json:"launchMethod,omitempty"`
+}
+
+func (o *WithExecutableDebugSupportOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.RuntimeExecutable != nil { m["runtimeExecutable"] = serializeValue(o.RuntimeExecutable) }
+	if o.LaunchMethod != nil { m["launchMethod"] = serializeValue(o.LaunchMethod) }
 	return m
 }
 

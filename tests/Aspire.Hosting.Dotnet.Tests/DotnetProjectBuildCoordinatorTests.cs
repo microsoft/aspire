@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOTNETPROJECT001, ASPIREEXTENSION001, ASPIREPIPELINES001, ASPIREPROJECTS001
+#pragma warning disable ASPIREEXTENSION001, ASPIREPROJECTS001
 
+using System.IO.Compression;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Helpers;
@@ -35,6 +38,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rc.1.26425.128");
         var apiPath = Path.Combine(builder.AppHostDirectory, "Api", "Api.csproj");
         var workerPath = Path.Combine(builder.AppHostDirectory, "Worker", "Worker.csproj");
 
@@ -64,6 +68,12 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             Assert.Single(buildResource.Annotations.OfType<ManifestPublishingCallbackAnnotation>()));
 
         using var app = builder.Build();
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
         var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         var buildProjectPath = Assert.IsType<string>(args[1]);
         Assert.Equal(
@@ -72,9 +82,175 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.StartsWith(buildResource.BuildDirectory, buildProjectPath, StringComparison.Ordinal);
         Assert.True(File.Exists(buildProjectPath));
 
-        var expected = new List<string> { "build", buildProjectPath };
+        var expected = new List<string> { "build", buildProjectPath, "-mt" };
         AddExpectedConfiguration(builder, expected);
         Assert.Equal(expected, args);
+        Assert.Equal(1, versionProvider.CallCount);
+        Assert.Equal(buildResource.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("10.0.999")]
+    [InlineData("11.0.100-preview.7.25380.108")]
+    [InlineData("11.0.100-rc.0.1")]
+    public async Task CoordinatedBuildOmitsMultiThreadedSwitchWhenUnsupported(string? version)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, version);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+
+        var expected = new List<string> { "build", Assert.IsType<string>(args[1]) };
+        AddExpectedConfiguration(builder, expected);
+        Assert.Equal(expected, args);
+    }
+
+    [Theory]
+    [InlineData("11.0.100-rc.1", "10.0.999", true, false)]
+    [InlineData("10.0.999", "11.0.100-rc.1", false, true)]
+    public async Task CoordinatedBuildReevaluatesMultiThreadedSwitchWhenGlobalJsonChanges(
+        string firstVersion,
+        string secondVersion,
+        bool firstSupportsMultiThreadedBuild,
+        bool secondSupportsMultiThreadedBuild)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var globalJsonPath = Path.Combine(workspace.Path, "global.json");
+        File.WriteAllText(
+            globalJsonPath,
+            JsonSerializer.Serialize(new { sdk = new { version = firstVersion } }));
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: [firstVersion]);
+        processRunner.EnqueueResult(output: [secondVersion]);
+        var versionProvider = new DotnetSdkVersionProvider(
+            processRunner,
+            NullLogger<DotnetSdkVersionProvider>.Instance,
+            CancellationToken.None);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var eventing = new DistributedApplicationEventing();
+        await new DotnetBuildCommandEventingSubscriber(versionProvider).SubscribeAsync(
+            eventing,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            TestContext.Current.CancellationToken);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var firstArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var firstExpected = new List<string> { "build", Assert.IsType<string>(firstArgs[1]) };
+        if (firstSupportsMultiThreadedBuild)
+        {
+            firstExpected.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, firstExpected);
+        Assert.Equal(firstExpected, firstArgs);
+
+        File.WriteAllText(
+            globalJsonPath,
+            JsonSerializer.Serialize(new { sdk = new { version = secondVersion } }));
+        ForgetCachedCallbackResults(buildResource);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var secondArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
+        var secondExpected = new List<string> { "build", Assert.IsType<string>(secondArgs[1]) };
+        if (secondSupportsMultiThreadedBuild)
+        {
+            secondExpected.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, secondExpected);
+        Assert.Equal(secondExpected, secondArgs);
+        Assert.Equal(2, processRunner.ProcessSpecs.Count);
+    }
+
+    [Fact]
+    public async Task DirectBuildAndRebuilderProbeSdkUsingCurrentBuildEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(output: ["11.0.100-rc.1"]);
+        processRunner.EnqueueResult(output: ["10.0.999"]);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(
+            new DotnetSdkVersionProvider(
+                processRunner,
+                NullLogger<DotnetSdkVersionProvider>.Instance,
+                CancellationToken.None));
+        var projectPath = CreateProject(workspace.Path, "Worker", "Worker.csproj");
+        var firstDotnetPath = Path.Combine(workspace.Path, "first-sdk");
+        var secondDotnetPath = Path.Combine(workspace.Path, "second-sdk");
+        var dotnetPath = firstDotnetPath;
+        builder.AddDotnetProject("worker", projectPath, options => options.ExcludeLaunchProfile = true)
+            .WithBuildEnvironment(context => context.EnvironmentVariables["PATH"] = dotnetPath);
+        await using var app = builder.Build();
+
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+        var buildArguments = await ArgumentEvaluator.GetArgumentListAsync(
+            buildResource,
+            app.Services);
+        Assert.Equal(1, buildArguments.Count(argument => argument == "-mt"));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        dotnetPath = secondDotnetPath;
+        ForgetCachedCallbackResults(rebuilder);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArguments = await ArgumentEvaluator.GetArgumentListAsync(
+            rebuilder,
+            app.Services);
+        Assert.Equal(0, rebuildArguments.Count(argument => argument == "-mt"));
+        await app.ResourceNotifications.PublishUpdateAsync(
+            rebuilder,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            processSpec => Assert.Equal(firstDotnetPath, processSpec.EnvironmentVariables["PATH"]),
+            processSpec => Assert.Equal(secondDotnetPath, processSpec.EnvironmentVariables["PATH"]));
     }
 
     [Theory]
@@ -218,18 +394,24 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         AssertBuildDependency(project.Resource, buildResource);
     }
 
-    [Fact]
-    public async Task FileOnlyModelCreatesDirectCoordinatedBuild()
+    [Theory]
+    [InlineData("11.0.100-rc.1.26425.128", false)]
+    [InlineData("11.0.100-rtm.26473.104", true)]
+    public async Task FileOnlyModelCreatesDirectCoordinatedBuild(
+        string sdkVersion,
+        bool supportsFileBasedMultiThreadedBuild)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        UseDotnetSdkVersion(builder, sdkVersion);
         var filePath = Path.Combine(workspace.Path, "worker.cs");
         File.WriteAllText(filePath, "System.Console.WriteLine(\"Hello\");");
 
         var file = builder.AddDotnetProject("worker", filePath, options => options.ExcludeLaunchProfile = true);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
         AssertBuildDependency(file.Resource, buildResource);
         await using var app = builder.Build();
 
@@ -241,10 +423,41 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             await buildResource.GetBuildTargetPathAsync(
                 NullLogger.Instance,
                 TestContext.Current.CancellationToken));
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
         var buildArgs = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         var expectedBuildArgs = new List<string> { "build", filePath };
+        if (supportsFileBasedMultiThreadedBuild)
+        {
+            expectedBuildArgs.Add("-mt");
+        }
+
         AddExpectedConfiguration(builder, expectedBuildArgs);
         Assert.Equal(expectedBuildArgs, buildArgs);
+        await app.ResourceNotifications.PublishUpdateAsync(
+            buildResource,
+            snapshot => snapshot with
+            {
+                State = KnownResourceStates.Finished,
+                ExitCode = 0,
+            });
+
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var rebuildArgs = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+        var expectedRebuildArgs = new List<string> { "build", filePath };
+        if (supportsFileBasedMultiThreadedBuild)
+        {
+            expectedRebuildArgs.Add("-mt");
+        }
+
+        AddExpectedConfiguration(builder, expectedRebuildArgs);
+        Assert.Equal(expectedRebuildArgs, rebuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
         var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
@@ -262,6 +475,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper);
+        var versionProvider = UseDotnetSdkVersion(builder, "11.0.100-rtm.26473.104");
         var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
         var fileDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "worker"));
         var filePath = Path.Combine(fileDirectory.FullName, "worker.cs");
@@ -291,23 +505,49 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var fileBuild = Assert.Single(
             buildResources,
             build => build.ProjectPaths.SequenceEqual([NormalizeProjectPath(filePath)]));
+        Assert.Equal(
+            fileFirst ? "__dotnet-project-build-2" : "__dotnet-project-build",
+            projectBuild.Name);
+        Assert.Equal(
+            fileFirst ? "__dotnet-project-build" : "__dotnet-project-build-2",
+            fileBuild.Name);
+        var projectBuildTarget = await projectBuild.GetBuildTargetPathAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var fileBuildTarget = await fileBuild.GetBuildTargetPathAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
         Assert.EndsWith(
             ".proj",
-            await projectBuild.GetBuildTargetPathAsync(
-                NullLogger.Instance,
-                TestContext.Current.CancellationToken),
+            projectBuildTarget,
             StringComparison.Ordinal);
-        Assert.Equal(
-            filePath,
-            await fileBuild.GetBuildTargetPathAsync(
-                NullLogger.Instance,
-                TestContext.Current.CancellationToken));
+        Assert.Equal(filePath, fileBuildTarget);
         AssertBuildDependency(
             fileFirst ? projectBuild : fileBuild,
             fileFirst ? fileBuild : projectBuild);
         var finalBuild = buildResources[^1];
         AssertBuildDependency(project.Resource, finalBuild);
         AssertBuildDependency(file.Resource, finalBuild);
+
+        var eventing = new DistributedApplicationEventing();
+        await new DotnetBuildCommandEventingSubscriber(versionProvider).SubscribeAsync(
+            eventing,
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            TestContext.Current.CancellationToken);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(projectBuild, app.Services),
+            TestContext.Current.CancellationToken);
+        await eventing.PublishAsync(
+            new BeforeResourceStartedEvent(fileBuild, app.Services),
+            TestContext.Current.CancellationToken);
+        var projectBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(projectBuild, app.Services);
+        var expectedProjectBuildArgs = new List<string> { "build", projectBuildTarget, "-mt" };
+        AddExpectedConfiguration(builder, expectedProjectBuildArgs);
+        Assert.Equal(expectedProjectBuildArgs, projectBuildArgs);
+        var fileBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(fileBuild, app.Services);
+        var expectedFileBuildArgs = new List<string> { "build", fileBuildTarget, "-mt" };
+        AddExpectedConfiguration(builder, expectedFileBuildArgs);
+        Assert.Equal(expectedFileBuildArgs, fileBuildArgs);
 
         var fileArgs = await ArgumentEvaluator.GetArgumentListAsync(file.Resource, app.Services);
         var expectedFileArgs = new List<string> { "run", "--file", filePath, "--no-build" };
@@ -470,8 +710,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Empty(project.Resource.Annotations.OfType<WaitAnnotation>());
     }
 
-    [Fact]
-    public async Task GeneratedTraversalProjectContainsOnlyUniqueProjectsInModelOrder()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GeneratedTraversalProjectContainsOnlyUniqueProjectsInModelOrder(bool restoreProjectsIndividually)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -482,6 +724,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         builder.AddDotnetProject("first", firstProject, options => options.ExcludeLaunchProfile = true);
         builder.AddDotnetProject("second", secondProject, options => options.ExcludeLaunchProfile = true);
         builder.AddDotnetProject("first-copy", firstProject, options => options.ExcludeLaunchProfile = true);
+        builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = restoreProjectsIndividually.ToString();
+        await using var app = builder.Build();
+        await PublishBeforeStartAsync(builder, app);
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         using var buildResourceScope = buildResource;
 
@@ -496,7 +741,119 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             "Second/Second.csproj",
             StringComparison.Ordinal);
 
-        await Verify(contents, "proj");
+        await Verify(contents, "proj").UseParameters(restoreProjectsIndividually);
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task GeneratedTraversalProjectHonorsNuGetRestoreTargetsOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Service", "Service.csproj");
+        var customTargetsPath = Path.Combine(workspace.Path, "CustomNuGet.targets");
+        File.WriteAllText(customTargetsPath, """
+            <Project>
+              <Target Name="VerifyCustomNuGetRestoreTargets">
+                <Message Importance="high" Text="Custom NuGet restore targets imported." />
+              </Target>
+            </Project>
+            """);
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            TimeProvider.System);
+        buildResource.ConfigureTraversalBuild(
+            [projectPath],
+            workspace.Path,
+            buildConfiguration: null,
+            restoreProjectsIndividually: false);
+        var buildProjectPath = await buildResource.WriteBuildProjectAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        {
+            WorkingDirectory = workspace.Path,
+            ArgumentList =
+            [
+                "msbuild", buildProjectPath,
+                "--nologo",
+                "-target:VerifyCustomNuGetRestoreTargets",
+                $"-property:NuGetRestoreTargets={customTargetsPath}",
+            ],
+            OnOutputData = outputHelper.WriteLine,
+            OnErrorData = outputHelper.WriteLine,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
+        });
+        await using (process)
+        {
+            var result = await completion.WaitAsync(
+                TestConstants.LongTimeoutTimeSpan,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains(
+                result.ProcessOutput,
+                line => line.Contains("Custom NuGet restore targets imported.", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["dotnet"])]
+    public async Task GeneratedTraversalProjectFallsBackWhenNuGetRestoreTargetsAreUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProjectFile(workspace.Path, "Service", """
+            <Project>
+              <Target Name="Restore">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/restore-ran.txt" Lines="restore" Overwrite="true" />
+              </Target>
+            </Project>
+            """);
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            TimeProvider.System);
+        buildResource.ConfigureTraversalBuild(
+            [projectPath],
+            workspace.Path,
+            buildConfiguration: null,
+            restoreProjectsIndividually: false);
+        var buildProjectPath = await buildResource.WriteBuildProjectAsync(
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+        var missingTargetsPath = Path.Combine(workspace.Path, "missing", "NuGet.targets");
+        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        {
+            WorkingDirectory = workspace.Path,
+            ArgumentList =
+            [
+                "msbuild", buildProjectPath,
+                "--nologo",
+                "-target:Restore",
+                $"-property:NuGetRestoreTargets={missingTargetsPath}",
+            ],
+            OnOutputData = outputHelper.WriteLine,
+            OnErrorData = outputHelper.WriteLine,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
+        });
+        await using (process)
+        {
+            var result = await completion.WaitAsync(
+                TestConstants.LongTimeoutTimeSpan,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains(
+                result.ProcessOutput,
+                line => line.Contains(
+                    "Restoring projects individually because the selected NuGet restore targets are unavailable.",
+                    StringComparison.Ordinal));
+            Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(projectPath)!, "restore-ran.txt")));
+        }
     }
 
     [Fact]
@@ -516,6 +873,178 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(Path.Combine(aspireStoreRoot, ".aspire", "build"), buildResource.BuildDirectory);
         Assert.StartsWith(buildResource.BuildDirectory, buildProjectPath, StringComparison.Ordinal);
         Assert.True(File.Exists(buildProjectPath));
+    }
+
+    [Fact]
+    public async Task RestoreStrategyChangesBuildArtifactIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Service", "Service.csproj");
+        var buildDirectory = Path.Combine(workspace.Path, "obj", ".aspire", "build");
+        using var unified = new DotnetProjectBuildResource("unified", workspace.Path, buildDirectory, TimeProvider.System);
+        using var individual = new DotnetProjectBuildResource("individual", workspace.Path, buildDirectory, TimeProvider.System);
+        unified.ConfigureTraversalBuild([projectPath], workspace.Path, buildConfiguration: null, restoreProjectsIndividually: false);
+        individual.ConfigureTraversalBuild([projectPath], workspace.Path, buildConfiguration: null, restoreProjectsIndividually: true);
+
+        var unifiedPath = await unified.WriteBuildProjectAsync(NullLogger.Instance, TestContext.Current.CancellationToken);
+        var individualPath = await individual.WriteBuildProjectAsync(NullLogger.Instance, TestContext.Current.CancellationToken);
+
+        Assert.NotEqual(unifiedPath, individualPath);
+        Assert.True(File.Exists(unifiedPath));
+        Assert.True(File.Exists(individualPath));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("invalid")]
+    [InlineData("1")]
+    public async Task InvalidRestoreConfigurationDoesNotMaterializeBuildPlanAndCanBeRetried(string value)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        var projectPath = CreateProject(workspace.Path, "Service", "Service.csproj");
+        var project = builder.AddDotnetProject("service", projectPath, options => options.ExcludeLaunchProfile = true);
+        builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = value;
+        await using var app = builder.Build();
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => PublishBeforeStartAsync(builder, app));
+
+        Assert.Contains("Aspire:Dotnet:RestoreProjectsIndividually", exception.Message, StringComparison.Ordinal);
+        Assert.False(buildResource.RestoreProjectsIndividually);
+        Assert.Null(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).BuildWorkingDirectory);
+
+        builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = "true";
+        await PublishBeforeStartAsync(builder, app);
+
+        Assert.True(buildResource.RestoreProjectsIndividually);
+        Assert.Equal(Path.GetDirectoryName(projectPath), buildResource.WorkingDirectory);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [RequiresTools(["dotnet"])]
+    public async Task TraversalRestoreUsesProjectNuGetConfigAndHandlesColdPackagesChangedImportsAndLockedMode(
+        bool restoreProjectsIndividually)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectRoot = workspace.CreateDirectory("projects").FullName;
+        // A local build-only package exercises restored imports without network access or targeting packs.
+        var feed = Directory.CreateDirectory(Path.Combine(projectRoot, "feed")).FullName;
+        CreateRestoreTestPackage(feed, "1.0.0");
+        CreateRestoreTestPackage(feed, "2.0.0");
+        var feedSource = new Uri(feed + Path.DirectorySeparatorChar).AbsoluteUri;
+        // The generated traversal lives outside this directory, so successful restore requires NuGet to
+        // discover configuration from the entry projects instead of the traversal's location.
+        File.WriteAllText(Path.Combine(projectRoot, "nuget.config"), $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{{feedSource}}" />
+              </packageSources>
+            </configuration>
+            """);
+        File.WriteAllText(Path.Combine(projectRoot, "Directory.Build.props"), """
+            <Project>
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+                <RestorePackagesPath>$(MSBuildThisFileDirectory)packages</RestorePackagesPath>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+                <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+                <NuGetAudit>false</NuGetAudit>
+              </PropertyGroup>
+            </Project>
+            """);
+        var versionsPath = Path.Combine(projectRoot, "Directory.Packages.props");
+        const string versions = """
+            <Project>
+              <ItemGroup>
+                <PackageVersion Include="Aspire.RestoreTest" Version="1.0.0" />
+              </ItemGroup>
+            </Project>
+            """;
+        File.WriteAllText(versionsPath, versions);
+        var sharedProject = CreateProjectFile(projectRoot, "Shared", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework />
+                <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.RestoreTest" />
+              </ItemGroup>
+            </Project>
+            """);
+        const string projectContents = """
+            <Project>
+              <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+              <ItemGroup>
+                <PackageReference Include="Aspire.RestoreTest" />
+                <ProjectReference Include="../Shared/Shared.csproj" />
+              </ItemGroup>
+              <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+              <Target Name="Build">
+                <Error Condition="'$(RestoreTestPackageVersion)' == ''" Text="The restored package props must be imported before Build." />
+                <Error Condition="'$(Configuration)' != 'DebugLocal'" Text="The custom configuration must reach each project." />
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/package-version.txt" Lines="$(RestoreTestPackageVersion)" Overwrite="true" />
+              </Target>
+            </Project>
+            """;
+        var firstProject = CreateProjectFile(projectRoot, "First", projectContents);
+        var secondProject = CreateProjectFile(projectRoot, "Second", projectContents);
+        var escapedDirectory = Path.Combine(projectRoot, "First's Project;100% (test)");
+        Directory.Move(Path.GetDirectoryName(firstProject)!, escapedDirectory);
+        firstProject = Path.Combine(escapedDirectory, Path.GetFileName(firstProject));
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            workspace.Path,
+            Path.Combine(workspace.Path, "obj", ".aspire", "build"),
+            TimeProvider.System);
+        buildResource.ConfigureTraversalBuild(
+            [firstProject, secondProject],
+            workspace.Path,
+            "DebugLocal",
+            restoreProjectsIndividually);
+
+        var coldBuild = await BuildTraversalAsync(buildResource, restoreLockedMode: false);
+        Assert.Equal(0, coldBuild.ExitCode);
+
+        foreach (var project in new[] { firstProject, secondProject })
+        {
+            Assert.Equal("1.0.0" + Environment.NewLine,
+                File.ReadAllText(Path.Combine(Path.GetDirectoryName(project)!, "package-version.txt")));
+            Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(project)!, "packages.lock.json")));
+        }
+        using (var assets = JsonDocument.Parse(File.ReadAllText(
+            Path.Combine(Path.GetDirectoryName(sharedProject)!, "obj", "project.assets.json"))))
+        {
+            Assert.Equal(
+                ["net10.0", "net11.0"],
+                assets.RootElement.GetProperty("project").GetProperty("frameworks")
+                    .EnumerateObject().Select(framework => framework.Name).Order(StringComparer.Ordinal));
+        }
+
+        File.WriteAllText(versionsPath, versions.Replace("1.0.0", "2.0.0", StringComparison.Ordinal));
+        var lockedBuild = await BuildTraversalAsync(buildResource, restoreLockedMode: true);
+        Assert.NotEqual(0, lockedBuild.ExitCode);
+        Assert.Contains(lockedBuild.ProcessOutput, line => line.Contains("NU1004", StringComparison.Ordinal));
+        foreach (var project in new[] { firstProject, secondProject })
+        {
+            Assert.Equal("1.0.0" + Environment.NewLine,
+                File.ReadAllText(Path.Combine(Path.GetDirectoryName(project)!, "package-version.txt")));
+        }
+
+        var changedBuild = await BuildTraversalAsync(buildResource, restoreLockedMode: false);
+        Assert.Equal(0, changedBuild.ExitCode);
+        foreach (var project in new[] { firstProject, secondProject })
+        {
+            Assert.Equal("2.0.0" + Environment.NewLine,
+                File.ReadAllText(Path.Combine(Path.GetDirectoryName(project)!, "package-version.txt")));
+        }
     }
 
     [Theory]
@@ -1726,8 +2255,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
                 .ToArray());
     }
 
-    [Fact]
-    public async Task ProjectsWithDifferentGlobalJsonRootsUseSerializedTraversalBuilds()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public async Task ProjectsWithDifferentGlobalJsonRootsUseSerializedTraversalBuilds(
+        string? restoreProjectsIndividually,
+        bool expectedIndividualRestore)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -1745,11 +2279,13 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             """);
         var first = builder.AddDotnetProject("first", firstPath, options => options.ExcludeLaunchProfile = true);
         var second = builder.AddDotnetProject("second", secondPath, options => options.ExcludeLaunchProfile = true);
+        builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = restoreProjectsIndividually;
         await using var app = builder.Build();
 
         await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
 
         var buildResources = builder.Resources.OfType<DotnetProjectBuildResource>().ToArray();
+        Assert.All(buildResources, buildResource => Assert.Equal(expectedIndividualRestore, buildResource.RestoreProjectsIndividually));
         var buildTargets = await Task.WhenAll(buildResources.Select(buildResource =>
             buildResource.GetBuildTargetPathAsync(NullLogger.Instance, TestContext.Current.CancellationToken)));
         Assert.Collection(
@@ -2042,6 +2578,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             """);
         builder.AddDotnetProject("first", firstPath, options => options.ExcludeLaunchProfile = true);
         builder.AddDotnetProject("second", secondPath, options => options.ExcludeLaunchProfile = true);
+        builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = "true";
         var conflictingResource = new ParameterResource(
             $"{DotnetProjectBuildCoordinator.BuildResourceName}-2",
             _ => "conflict");
@@ -2060,6 +2597,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(firstException.Message, secondException.Message);
         Assert.Equal(originalProjectPaths, primaryBuildResource.ProjectPaths);
         Assert.Equal(originalWorkingDirectory, primaryBuildResource.WorkingDirectory);
+        Assert.False(primaryBuildResource.RestoreProjectsIndividually);
         var executableAnnotation = Assert.Single(primaryBuildResource.Annotations.OfType<ExecutableAnnotation>());
         Assert.Equal("dotnet", executableAnnotation.Command);
         Assert.Equal(originalWorkingDirectory, executableAnnotation.WorkingDirectory);
@@ -2072,6 +2610,10 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             builder.Resources.OfType<DotnetProjectResource>(),
             resource => resource.Name == "second")
             .Annotations.OfType<DotnetProjectMetadata>().Single().BuildWorkingDirectory);
+
+        Assert.True(builder.Resources.Remove(conflictingResource));
+        await PublishBeforeStartAsync(builder, app);
+        Assert.All(builder.Resources.OfType<DotnetProjectBuildResource>(), resource => Assert.True(resource.RestoreProjectsIndividually));
     }
 
     [Theory]
@@ -2156,24 +2698,35 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, DotnetProjectBuildCoordinator.IsSettledBuildSnapshot(snapshot));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
     [RequiresTools(["dotnet"])]
-    public async Task SharedProjectGraphBuildsOnceBeforeServicesRun()
+    public async Task SharedProjectGraphBuildsOnceBeforeServicesRun(bool restoreProjectsIndividually, bool useStaticGraphEvaluation)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sharedProject = CreateSharedProject(workspace.Path);
         var apiProject = CreateConsoleProject(workspace.Path, "Api", sharedProject);
         var workerProject = CreateConsoleProject(workspace.Path, "Worker", sharedProject);
+        var escapedDirectory = Path.Combine(workspace.Path, "Api's Project 100% (test)");
+        Directory.Move(Path.GetDirectoryName(apiProject)!, escapedDirectory);
+        apiProject = Path.Combine(escapedDirectory, Path.GetFileName(apiProject));
         var apiSentinel = Path.Combine(workspace.Path, "api-ran.txt");
         var workerSentinel = Path.Combine(workspace.Path, "worker-ran.txt");
 
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.ProjectDirectory = workspace.Path,
             outputHelper).WithResourceCleanUp(true);
+        builder.Configuration["Aspire:Dotnet:RestoreProjectsIndividually"] = restoreProjectsIndividually.ToString();
         builder.AddDotnetProject("api", apiProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(apiSentinel);
         builder.AddDotnetProject("worker", workerProject, options => options.ExcludeLaunchProfile = true)
             .WithArgs(workerSentinel);
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        builder.CreateResourceBuilder(buildResource)
+            .WithEnvironment("RestoreUseStaticGraphEvaluation", useStaticGraphEvaluation.ToString());
 
         await using var app = builder.Build();
 
@@ -2199,6 +2752,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Single(File.ReadAllLines(GetBuildCountPath(sharedProject)));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(apiProject)));
         Assert.Single(File.ReadAllLines(GetBuildCountPath(workerProject)));
+        foreach (var project in new[] { apiProject, workerProject })
+        {
+            var restoreCountPath = Path.Combine(Path.GetDirectoryName(project)!, "restore-count.txt");
+            Assert.Equal(restoreProjectsIndividually || useStaticGraphEvaluation, File.Exists(restoreCountPath));
+            if (restoreProjectsIndividually || useStaticGraphEvaluation)
+            {
+                Assert.Equal(["restore"], File.ReadAllLines(restoreCountPath));
+            }
+        }
     }
 
     [Fact]
@@ -2406,7 +2968,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
             </Project>
             """);
@@ -2494,7 +3056,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <UseAppHost>false</UseAppHost>
                 <BUILD_FLAVOR>project-default</BUILD_FLAVOR>
@@ -3139,6 +3701,58 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await app.StopAsync(stopCts.Token);
     }
 
+    private async Task<ProcessResult> BuildTraversalAsync(DotnetProjectBuildResource resource, bool restoreLockedMode)
+    {
+        var path = await resource.GetBuildTargetPathAsync(NullLogger.Instance, TestContext.Current.CancellationToken);
+        var (completion, process) = ProcessUtil.Run(new ProcessSpec("dotnet")
+        {
+            WorkingDirectory = resource.WorkingDirectory,
+            ArgumentList =
+            [
+                "build", path,
+                "--configuration", resource.BuildConfiguration!,
+                "--nologo",
+                $"-property:RestoreLockedMode={restoreLockedMode}",
+            ],
+            OnOutputData = outputHelper.WriteLine,
+            OnErrorData = outputHelper.WriteLine,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
+        });
+        await using (process)
+        {
+            return await completion.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+        }
+    }
+
+    private static void CreateRestoreTestPackage(string feed, string version)
+    {
+        using var archive = ZipFile.Open(Path.Combine(feed, $"Aspire.RestoreTest.{version}.nupkg"), ZipArchiveMode.Create);
+        using (var writer = new StreamWriter(archive.CreateEntry("Aspire.RestoreTest.nuspec").Open()))
+        {
+            writer.Write($$"""
+                <package>
+                  <metadata>
+                    <id>Aspire.RestoreTest</id>
+                    <version>{{version}}</version>
+                    <authors>Aspire</authors>
+                    <description>Build-only package for coordinated restore tests.</description>
+                  </metadata>
+                </package>
+                """);
+        }
+        using (var writer = new StreamWriter(archive.CreateEntry("build/Aspire.RestoreTest.props").Open()))
+        {
+            writer.Write($$"""
+                <Project>
+                  <PropertyGroup>
+                    <RestoreTestPackageVersion>{{version}}</RestoreTestPackageVersion>
+                  </PropertyGroup>
+                </Project>
+                """);
+        }
+    }
+
     private static string CreateProject(string root, string directoryName, string projectFileName)
     {
         var directory = Directory.CreateDirectory(Path.Combine(root, directoryName));
@@ -3170,7 +3784,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProjectFile(root, "Shared", """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               <Target Name="ValidateSolutionIdentity" BeforeTargets="CoreCompile">
                 <Error Condition="'$(BuildingSolutionFile)' == 'true'" Text="BuildingSolutionFile must match a direct project build." />
@@ -3206,12 +3820,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <ImplicitUsings>enable</ImplicitUsings>
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{relativeSharedProject}}" />
               </ItemGroup>
+              <Target Name="RecordRestore" BeforeTargets="Restore">
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/restore-count.txt" Lines="restore" Overwrite="false" />
+              </Target>
               <Target Name="RecordBuild" BeforeTargets="CoreCompile">
                 <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="build" Overwrite="false" />
               </Target>
@@ -3233,7 +3850,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               {{additionalTargets}}
             </Project>
@@ -3249,7 +3866,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectPath = CreateProjectFile(root, "Broken", """
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               <Target Name="WaitThenFailBuild" BeforeTargets="CoreCompile">
                 <Exec Command="dotnet run --file &quot;$(MSBuildProjectDirectory)/BuildGate.cs&quot; --no-cache --no-launch-profile" />
@@ -3276,7 +3893,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
                 <UseAppHost>false</UseAppHost>
               </PropertyGroup>
               <Target Name="WriteBuildSentinel" AfterTargets="Build">
@@ -3298,7 +3915,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <OutputType>Exe</OutputType>
-                <TargetFramework>net8.0</TargetFramework>
+                <TargetFramework>net10.0</TargetFramework>
               </PropertyGroup>
               <Target Name="EmitBuildMarker" BeforeTargets="CoreCompile">
                 <Message Importance="high" Text="{{buildLogMarker}}" />
@@ -3339,6 +3956,15 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
     private static string NormalizeProjectPath(string path) =>
         Path.GetFullPath(path);
+
+    private static TestDotnetSdkVersionProvider UseDotnetSdkVersion(
+        IDistributedApplicationBuilder builder,
+        string? version)
+    {
+        var provider = new TestDotnetSdkVersionProvider(version);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(provider);
+        return provider;
+    }
 
     /// <summary>
     /// Emulates what DCP does to a resource when it restarts it.

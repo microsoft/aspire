@@ -93,7 +93,9 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
 | `job:nix-package` | `tests.yml` `nix_package` |
 | `job:cli-starter-validation` | `tests.yml` `cli_starter_validation_{linux,windows,macos}_{x64,arm64}` → [`cli-starter-validation.yml`](../../.github/workflows/cli-starter-validation.yml) |
+| `job:native-dashboard-validation` | `tests.yml` `native_dashboard_validation_{linux,windows,macos}_{x64,arm64}` → [`native-dashboard-validation.yml`](../../.github/workflows/native-dashboard-validation.yml) |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
+| `DOTNET_TESTS` | every .NET test project in the PR `run-tests.yml` matrix, without non-.NET PR-gated jobs |
 | `ALL` | every selector target; PR CI runs the full PR test matrix and all PR-gated jobs, while independently scheduled, dispatched, or outerloop targets remain advisory |
 | `<GROUP_NAME>` | a named group (see `groups:`) expanding **recursively** to its `test:`/`job:` members |
 
@@ -139,16 +141,32 @@ dirs with no same-named test produce nothing here. They fall through to
 
 ### Catch-all → `ALL`
 
-A single `path_rules` entry whose target is `ALL`. Build infrastructure and
-broadly shared code re-run everything. Examples:
+Categorized `path_rules` entries whose target is `ALL`. Build infrastructure and
+broadly shared code re-run everything; keep the entries grouped by the reason the
+input affects the whole regular PR-CI test matrix. Examples:
 
 ```text
-global.json, NuGet.config, .config/dotnet-tools.json
-Directory.Build.*, Directory.Packages.props, Aspire.slnx
-eng/*.props, eng/*.targets, eng/common/**, eng/OuterPreBuild.proj
+global.json, NuGet.config
+Directory.Build.*, Directory.Packages.props
+eng/Build.props, eng/Testing.props, eng/Versions.props, eng/*.targets
+eng/common/**, eng/OuterPreBuild.proj
 tests/Shared/**/*.props, tests/Shared/**/*.targets, tests/Shared/Dockerfile*
-.github/workflows/tests.yml, run-tests.yml, build-packages.yml, ...
+.github/workflows/tests.yml, run-tests.yml, ...
 ```
+
+Some regular PR-CI infrastructure is narrower than `ALL`:
+
+```text
+.github/actions/enumerate-tests/**      -> DOTNET_TESTS
+.github/actions/check-changed-files/**  -> test:Infrastructure.Tests
+.github/actions/select-tests/**         -> test:Infrastructure.Tests
+.github/actions/setup-deno/**           -> test:Aspire.Hosting.JavaScript.Tests + job:extension-e2e
+```
+
+`enumerate-tests` only enumerates the managed .NET test-project matrix, so it
+does not select extension, polyglot, installer, or other non-.NET PR-gated jobs.
+When a local action has a broader or unclear blast radius, keep it conservative
+with `ALL`.
 
 `Directory.Packages.props` is intentionally here. Layer 1 uses a HEAD-only graph
 and does not attempt two-commit central-package diffing, so central package
@@ -182,6 +200,11 @@ the selector treats them all identically.
 
 Highlights:
 
+- **RESX metadata inputs** — the resource metadata tests read seven production
+  project configurations and top-level resource filenames at runtime. Explicit
+  paths select `Infrastructure.Tests` in addition to graph-owned consumers.
+  Keep these paths aligned with the scenarios in `ResourceGeneratorMetadataTests`;
+  the shared `Directory.Build.targets` is already covered by the `ALL` rule.
 - **convention misses** — `src/Aspire.Hosting.Azure.*/**` →
   `test:Aspire.Hosting.Azure.Tests`, and
   `src/Aspire.Hosting.Integration.Analyzers/**` →
@@ -231,6 +254,10 @@ The opt-in `Aspire.Hosting.Azure.Provisioning*` packages and their source
 generator route to `job:polyglot`. The per-language AppHost fixtures load these
 packages through `aspire.config.json`, so their SDK validation is not expressed
 by the .NET project graph.
+
+Hosting packages used by those fixtures also need routing entries even when
+they have no dedicated fixture directory. For example, `Aspire.Hosting.Azure.FrontDoor`
+is consumed by the base Azure fixtures alongside the CDN provisioning proxy.
 
 ```yaml
 - projects: [Aspire.Hosting*, Aspire.Cli]

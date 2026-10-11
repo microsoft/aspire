@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRERADIUS003 // WithContainerImage is marked experimental; opt in for tests.
-#pragma warning disable ASPIREDOTNETPROJECT001
 #pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;

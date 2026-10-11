@@ -2524,6 +2524,43 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public CSharpAppResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public CSharpAppResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -3158,6 +3195,22 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("scope", AspireClient.serializeValue(scope));
         getClient().invokeCapability("Aspire.Hosting/withCertificateTrustScope", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public CSharpAppResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
         return this;
     }
 
@@ -4308,6 +4361,13 @@ import java.util.Map;
 public class CommandLineArgsEditor extends HandleWrapperBase {
     CommandLineArgsEditor(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Clears all command-line arguments. */
+    public void clear() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/clear", reqArgs);
     }
 
     public void add(String value) {
@@ -5510,6 +5570,34 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
         getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
+    }
+
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
     }
 
     /** Registers a callback to customize the URLs displayed for the resource. */
@@ -6805,6 +6893,43 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public ContainerResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public ContainerResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7425,6 +7550,22 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("scope", AspireClient.serializeValue(scope));
         getClient().invokeCapability("Aspire.Hosting/withCertificateTrustScope", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public ContainerResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
         return this;
     }
 
@@ -9514,6 +9655,43 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public DotnetToolResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public DotnetToolResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10137,6 +10315,22 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    public DotnetToolResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public DotnetToolResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
+        return this;
+    }
+
     public DotnetToolResource withHttpsDeveloperCertificate() {
         return withHttpsDeveloperCertificate(null);
     }
@@ -10263,6 +10457,33 @@ public class DotnetToolResource extends ExecutableResource {
 
     public DotnetToolResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
+    /** Adds VS Code-compatible debug metadata for an executable resource. */
+    public DotnetToolResource withExecutableDebugSupport(String launchConfigurationType, String scriptPath, WithExecutableDebugSupportOptions optionsBag) {
+        var runtimeExecutable = optionsBag == null ? null : optionsBag.getRuntimeExecutable();
+        var launchMethod = optionsBag == null ? null : optionsBag.getLaunchMethod();
+        return withExecutableDebugSupportImpl(launchConfigurationType, scriptPath, runtimeExecutable, launchMethod);
+    }
+
+    public DotnetToolResource withExecutableDebugSupport(String launchConfigurationType, String scriptPath) {
+        return withExecutableDebugSupport(launchConfigurationType, scriptPath, null);
+    }
+
+    /** Adds VS Code-compatible debug metadata for an executable resource. */
+    private DotnetToolResource withExecutableDebugSupportImpl(String launchConfigurationType, String scriptPath, String runtimeExecutable, String launchMethod) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchConfigurationType", AspireClient.serializeValue(launchConfigurationType));
+        reqArgs.put("scriptPath", AspireClient.serializeValue(scriptPath));
+        if (runtimeExecutable != null) {
+            reqArgs.put("runtimeExecutable", AspireClient.serializeValue(runtimeExecutable));
+        }
+        if (launchMethod != null) {
+            reqArgs.put("launchMethod", AspireClient.serializeValue(launchMethod));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableDebugSupport", reqArgs);
+        return this;
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -11906,6 +12127,43 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public ExecutableResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public ExecutableResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12529,6 +12787,22 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ExecutableResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public ExecutableResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
+        return this;
+    }
+
     public ExecutableResource withHttpsDeveloperCertificate() {
         return withHttpsDeveloperCertificate(null);
     }
@@ -12655,6 +12929,33 @@ public class ExecutableResource extends ResourceBuilderBase {
 
     public ExecutableResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
+    /** Adds VS Code-compatible debug metadata for an executable resource. */
+    public ExecutableResource withExecutableDebugSupport(String launchConfigurationType, String scriptPath, WithExecutableDebugSupportOptions optionsBag) {
+        var runtimeExecutable = optionsBag == null ? null : optionsBag.getRuntimeExecutable();
+        var launchMethod = optionsBag == null ? null : optionsBag.getLaunchMethod();
+        return withExecutableDebugSupportImpl(launchConfigurationType, scriptPath, runtimeExecutable, launchMethod);
+    }
+
+    public ExecutableResource withExecutableDebugSupport(String launchConfigurationType, String scriptPath) {
+        return withExecutableDebugSupport(launchConfigurationType, scriptPath, null);
+    }
+
+    /** Adds VS Code-compatible debug metadata for an executable resource. */
+    private ExecutableResource withExecutableDebugSupportImpl(String launchConfigurationType, String scriptPath, String runtimeExecutable, String launchMethod) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("launchConfigurationType", AspireClient.serializeValue(launchConfigurationType));
+        reqArgs.put("scriptPath", AspireClient.serializeValue(scriptPath));
+        if (runtimeExecutable != null) {
+            reqArgs.put("runtimeExecutable", AspireClient.serializeValue(runtimeExecutable));
+        }
+        if (launchMethod != null) {
+            reqArgs.put("launchMethod", AspireClient.serializeValue(launchMethod));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExecutableDebugSupport", reqArgs);
+        return this;
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -13625,6 +13926,34 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
         getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
+    }
+
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
     }
 
     /** Registers a callback to customize the URLs displayed for the resource. */
@@ -18458,6 +18787,34 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
     /** Registers a callback to customize the URLs displayed for the resource. */
     public ParameterResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20172,6 +20529,43 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public ProjectResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public ProjectResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20806,6 +21200,22 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("scope", AspireClient.serializeValue(scope));
         getClient().invokeCapability("Aspire.Hosting/withCertificateTrustScope", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public ProjectResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
         return this;
     }
 
@@ -22709,6 +23119,7 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     private String url;
     private String displayText;
     private EndpointReference endpoint;
+    private Number displayOrder;
     private UrlDisplayLocation displayLocation;
 
     public String getUrl() { return url; }
@@ -22717,6 +23128,8 @@ public class ResourceUrlAnnotation implements JsonSerializable {
     public void setDisplayText(String value) { this.displayText = value; }
     public EndpointReference getEndpoint() { return endpoint; }
     public void setEndpoint(EndpointReference value) { this.endpoint = value; }
+    public Number getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Number value) { this.displayOrder = value; }
     public UrlDisplayLocation getDisplayLocation() { return displayLocation; }
     public void setDisplayLocation(UrlDisplayLocation value) { this.displayLocation = value; }
 
@@ -22729,6 +23142,8 @@ public class ResourceUrlAnnotation implements JsonSerializable {
         value.setDisplayText(displayTextValue == null ? null : (String) displayTextValue);
         var endpointValue = map.get("Endpoint");
         value.setEndpoint((EndpointReference) endpointValue);
+        var displayOrderValue = map.get("DisplayOrder");
+        value.setDisplayOrder(displayOrderValue == null ? null : ((Number) displayOrderValue).doubleValue());
         var displayLocationValue = map.get("DisplayLocation");
         value.setDisplayLocation(UrlDisplayLocation.fromValue((String) displayLocationValue));
         return value;
@@ -22739,6 +23154,7 @@ public class ResourceUrlAnnotation implements JsonSerializable {
         map.put("Url", AspireClient.serializeValue(url));
         map.put("DisplayText", AspireClient.serializeValue(displayText));
         map.put("Endpoint", AspireClient.serializeValue(endpoint));
+        map.put("DisplayOrder", AspireClient.serializeValue(displayOrder));
         map.put("DisplayLocation", AspireClient.serializeValue(displayLocation));
         return map;
     }
@@ -23654,6 +24070,43 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public TestDatabaseResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public TestDatabaseResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -24274,6 +24727,22 @@ public class TestDatabaseResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("scope", AspireClient.serializeValue(scope));
         getClient().invokeCapability("Aspire.Hosting/withCertificateTrustScope", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public TestDatabaseResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
         return this;
     }
 
@@ -25887,6 +26356,43 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public TestRedisResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public TestRedisResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -26516,6 +27022,22 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("scope", AspireClient.serializeValue(scope));
         getClient().invokeCapability("Aspire.Hosting/withCertificateTrustScope", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public TestRedisResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
         return this;
     }
 
@@ -28322,6 +28844,43 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID. */
+    public IResource withSerializedAnnotation(String annotationId, String json) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        reqArgs.put("json", AspireClient.serializeValue(json));
+        var result = getClient().invokeCapability("Aspire.Hosting/withSerializedAnnotation", reqArgs);
+        return (IResource) result;
+    }
+
+    /** Gets a serialized ATS annotation payload from a resource. */
+    public String getSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/getSerializedAnnotation", reqArgs);
+        return (String) result;
+    }
+
+    /** Determines whether a resource has a serialized ATS annotation with the specified ID. */
+    public boolean hasSerializedAnnotation(String annotationId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("annotationId", AspireClient.serializeValue(annotationId));
+        var result = getClient().invokeCapability("Aspire.Hosting/hasSerializedAnnotation", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Replaces the arguments to be passed to a resource that supports arguments when it is launched. */
+    public TestVaultResource withArgsReplace(String[] args) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("args", AspireClient.serializeValue(args));
+        getClient().invokeCapability("Aspire.Hosting/withArgsReplace", reqArgs);
+        return this;
+    }
+
     /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public TestVaultResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -28942,6 +29501,22 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("scope", AspireClient.serializeValue(scope));
         getClient().invokeCapability("Aspire.Hosting/withCertificateTrustScope", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable) {
+        return withCertificateTrustEnvironment(certificateBundleEnvironmentVariable, null);
+    }
+
+    /** Configures environment variables that point to Aspire-managed certificate trust paths. */
+    public TestVaultResource withCertificateTrustEnvironment(String certificateBundleEnvironmentVariable, String certificateDirectoriesEnvironmentVariable) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("certificateBundleEnvironmentVariable", AspireClient.serializeValue(certificateBundleEnvironmentVariable));
+        if (certificateDirectoriesEnvironmentVariable != null) {
+            reqArgs.put("certificateDirectoriesEnvironmentVariable", AspireClient.serializeValue(certificateDirectoriesEnvironmentVariable));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withCertificateTrustEnvironment", reqArgs);
         return this;
     }
 
@@ -30170,6 +30745,31 @@ public final class WithEndpointOptions {
 
 }
 
+// ===== aspire/WithExecutableDebugSupportOptions.java =====
+// WithExecutableDebugSupportOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** Options for WithExecutableDebugSupport. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public final class WithExecutableDebugSupportOptions {
+    private String runtimeExecutable;
+    private String launchMethod;
+
+    public String getRuntimeExecutable() { return runtimeExecutable; }
+    public WithExecutableDebugSupportOptions runtimeExecutable(String value) {
+        this.runtimeExecutable = value;
+        return this;
+    }
+
+    public String getLaunchMethod() { return launchMethod; }
+    public WithExecutableDebugSupportOptions launchMethod(String value) {
+        this.launchMethod = value;
+        return this;
+    }
+
+}
+
 // ===== aspire/WithHiddenOnCompletionOptions.java =====
 // WithHiddenOnCompletionOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -30861,6 +31461,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/WithDockerfileBaseImageOptions.java
 .aspire/modules/aspire/WithDockerfileOptions.java
 .aspire/modules/aspire/WithEndpointOptions.java
+.aspire/modules/aspire/WithExecutableDebugSupportOptions.java
 .aspire/modules/aspire/WithHiddenOnCompletionOptions.java
 .aspire/modules/aspire/WithHttpEndpointCallbackOptions.java
 .aspire/modules/aspire/WithHttpEndpointOptions.java

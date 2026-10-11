@@ -135,7 +135,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private class TelemetryResourceRecord
+    internal class TelemetryResourceRecord
     {
         public required string ResourceName { get; init; }
         public string? InstanceId { get; init; }

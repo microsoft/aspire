@@ -5,8 +5,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
-using Aspire.Managed.NuGet.Commands;
-using Aspire.TerminalHost;
 using Xunit;
 
 namespace Aspire.Managed.Tests;
@@ -15,14 +13,17 @@ public partial class TerminalHostSignalTests
 {
     private const int SigTerm = 15;
 
-    [Fact]
-    public async Task TerminalHostSubcommandHandlesSigTermAndUnlinksSockets()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TerminalHostSubcommandUnlinksSocketsAfterTermination(bool forceTermination)
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "This test sends a Unix SIGTERM directly.");
 
-        var socketDirectory = Directory.CreateTempSubdirectory("ath-");
+        var root = Directory.CreateTempSubdirectory();
         try
         {
+            var socketDirectory = new DirectoryInfo(Path.Combine(root.FullName, "terminals"));
             var producerPath = Path.Combine(socketDirectory.FullName, "p.sock");
             var consumerPath = Path.Combine(socketDirectory.FullName, "h.sock");
             var controlPath = Path.Combine(socketDirectory.FullName, "c.sock");
@@ -51,21 +52,33 @@ public partial class TerminalHostSignalTests
                 {
                     Assert.Fail(
                         $"aspire-managed exited before binding its sockets with code {process.ExitCode}.{Environment.NewLine}" +
-                        await standardErrorTask);
+                        $"stdout: {await standardOutputTask}{Environment.NewLine}stderr: {await standardErrorTask}");
                 }
 
                 await readyTask;
 
-                Assert.Equal(0, SendSignal(process.Id, SigTerm));
+                if (forceTermination)
+                {
+                    process.Kill(entireProcessTree: false);
+                }
+                else
+                {
+                    Assert.Equal(0, SendSignal(process.Id, SigTerm));
+                }
                 await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
                 var standardOutput = await standardOutputTask;
                 var standardError = await standardErrorTask;
                 Assert.True(
-                    process.ExitCode == 0,
+                    forceTermination || process.ExitCode == 0,
                     $"aspire-managed exited with code {process.ExitCode}.{Environment.NewLine}" +
                     $"stdout: {standardOutput}{Environment.NewLine}stderr: {standardError}");
-                Assert.All(socketPaths, path => Assert.False(File.Exists(path), $"Expected '{path}' to be unlinked."));
+                // A forcibly killed shim cannot wait for its child's parent watchdog.
+                using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                while (socketPaths.Any(File.Exists))
+                {
+                    await Task.Delay(50, cleanupCts.Token);
+                }
             }
             finally
             {
@@ -78,7 +91,7 @@ public partial class TerminalHostSignalTests
         }
         finally
         {
-            Directory.Delete(socketDirectory.FullName, recursive: true);
+            root.Delete(recursive: true);
         }
     }
 
@@ -87,15 +100,82 @@ public partial class TerminalHostSignalTests
         => await AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(hostAssemblyPath: null);
 
     [Fact]
+    public async Task TerminalHostControlShutdownUnlinksSockets()
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var paths = new[] { "p.sock", "h.sock", "c.sock" }
+                .Select(name => Path.Combine(root.FullName, "terminals", name)).ToArray();
+            var startInfo = CreateTerminalHostStartInfo(paths[0], paths[1], paths[2]);
+            using var process = Process.Start(startInfo)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            try
+            {
+                await WaitForFilesAsync(paths, TimeSpan.FromSeconds(10));
+                using var shutdownTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await TerminalHostForwarder.RequestShutdownAsync(startInfo.ArgumentList.ToArray(), shutdownTimeout.Token);
+                await process.WaitForExitAsync().WaitAsync(shutdownTimeout.Token);
+                Assert.True(process.ExitCode == 0,
+                    $"Terminal host exited with code {process.ExitCode}.{Environment.NewLine}stdout: {await stdout}{Environment.NewLine}stderr: {await stderr}");
+                Assert.All(paths, path => Assert.False(File.Exists(path), $"Expected '{path}' to be unlinked."));
+            }
+            finally
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                    await process.WaitForExitAsync();
+                }
+            }
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(false, 64)]
+    [InlineData(true, 1)]
+    public async Task TerminalHostForwarderReportsMissingPayloadAndPropagatesExitStatus(bool missingPayload, int expectedExitCode)
+    {
+        var root = Directory.CreateTempSubdirectory();
+        try
+        {
+            var startInfo = CreateTerminalHostStartInfo(Path.Combine(root.FullName, "s", "p.sock"), "consumer", "control");
+            startInfo.ArgumentList.Add("--invalid");
+            if (missingPayload)
+            {
+                File.Delete(Path.Combine(root.FullName, "terminalhost", OperatingSystem.IsWindows() ? "Aspire.TerminalHost.exe" : "Aspire.TerminalHost"));
+            }
+
+            using var process = Process.Start(startInfo)!;
+            var stdout = process.StandardOutput.ReadToEndAsync();
+            var stderr = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(expectedExitCode, process.ExitCode);
+            Assert.Contains(missingPayload ? "Terminal host executable was not found" : "--invalid", await stderr);
+            await stdout;
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task StandaloneTerminalHostStopsWhenOwningAppHostIsGone()
         => await AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(
-            typeof(TerminalHostProcessRunner).Assembly.Location);
+            "Aspire.TerminalHost.dll");
 
     private static async Task AssertTerminalHostStopsWhenOwningAppHostIsGoneAsync(string? hostAssemblyPath)
     {
-        var socketDirectory = Directory.CreateTempSubdirectory("ath-");
+        var root = Directory.CreateTempSubdirectory();
         try
         {
+            var socketDirectory = new DirectoryInfo(Path.Combine(root.FullName, "terminals"));
             var parentProducerPath = Path.Combine(socketDirectory.FullName, "pp.sock");
             var parentConsumerPath = Path.Combine(socketDirectory.FullName, "ph.sock");
             var parentControlPath = Path.Combine(socketDirectory.FullName, "pc.sock");
@@ -118,7 +198,7 @@ public partial class TerminalHostSignalTests
                 {
                     Assert.Fail(
                         $"The parent terminal host exited before binding its sockets with code {parentProcess.ExitCode}.{Environment.NewLine}" +
-                        await parentStandardErrorTask);
+                        $"stdout: {await parentStandardOutputTask}{Environment.NewLine}stderr: {await parentStandardErrorTask}");
                 }
 
                 await parentReadyTask;
@@ -148,7 +228,7 @@ public partial class TerminalHostSignalTests
                     {
                         Assert.Fail(
                             $"The terminal host exited before binding its sockets with code {process.ExitCode}.{Environment.NewLine}" +
-                            await standardErrorTask);
+                            $"stdout: {await standardOutputTask}{Environment.NewLine}stderr: {await standardErrorTask}");
                     }
 
                     await readyTask;
@@ -188,7 +268,7 @@ public partial class TerminalHostSignalTests
         }
         finally
         {
-            Directory.Delete(socketDirectory.FullName, recursive: true);
+            root.Delete(recursive: true);
         }
     }
 
@@ -207,18 +287,31 @@ public partial class TerminalHostSignalTests
         };
         if (hostAssemblyPath is null)
         {
-            startInfo.ArgumentList.Add(typeof(ManifestCommand).Assembly.Location);
+            // Reproduce the shipped sibling layout without sharing mutable output between tests.
+            var root = Path.GetDirectoryName(Path.GetDirectoryName(producerPath))!;
+            var managed = Directory.CreateDirectory(Path.Combine(root, "managed"));
+            var terminal = Directory.CreateDirectory(Path.Combine(root, "terminalhost"));
+            foreach (var (fixture, directory) in new[] { ("terminalhost", terminal.FullName), ("managed", managed.FullName) })
+            {
+                var output = Path.Combine(AppContext.BaseDirectory, "ProcessFixtures", fixture);
+                foreach (var file in Directory.EnumerateFiles(output, "*", SearchOption.AllDirectories))
+                {
+                    var target = Path.Combine(directory, Path.GetRelativePath(output, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    if (!File.Exists(target))
+                    {
+                        File.Copy(file, target);
+                    }
+                }
+            }
+            var managedAssembly = Path.Combine(managed.FullName, "aspire-managed.dll");
+            startInfo.ArgumentList.Add(managedAssembly);
             startInfo.ArgumentList.Add("terminalhost");
         }
         else
         {
-            var testAssemblyPath = typeof(TerminalHostSignalTests).Assembly.Location;
-            startInfo.ArgumentList.Add("exec");
-            startInfo.ArgumentList.Add("--runtimeconfig");
-            startInfo.ArgumentList.Add(Path.ChangeExtension(testAssemblyPath, ".runtimeconfig.json"));
-            startInfo.ArgumentList.Add("--depsfile");
-            startInfo.ArgumentList.Add(Path.ChangeExtension(testAssemblyPath, ".deps.json"));
-            startInfo.ArgumentList.Add(hostAssemblyPath);
+            var output = Path.Combine(AppContext.BaseDirectory, "ProcessFixtures", "terminalhost");
+            startInfo.ArgumentList.Add(Path.Combine(output, Path.GetFileName(hostAssemblyPath)));
         }
         startInfo.ArgumentList.Add("--producer-uds");
         startInfo.ArgumentList.Add(producerPath);

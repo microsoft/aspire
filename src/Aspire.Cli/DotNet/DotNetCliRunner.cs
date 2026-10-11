@@ -85,30 +85,26 @@ internal sealed class ProcessInvocationOptions
     public bool IsolateConsole { get; set; }
 
     /// <summary>
-    /// When <c>true</c>, the child is bound to the CLI's Windows kill-on-close job so the OS terminates
-    /// it when the CLI exits unexpectedly (crash / SIGKILL), even if the child does not react 
-    /// to cancellation request. This is an OS-level, Windows-only crash-time safety net
-    /// for background helpers that must never outlive their parent — the <c>aspire-managed</c> NuGet
-    /// helper, the standalone dashboard, and the profiling collector — and, unlike
-    /// <see cref="IsolateConsole"/>, it does not give the child a new console group.
+    /// Binds a child to its owner's lifetime, independently of cooperative cancellation.
     /// </summary>
     /// <remarks>
-    /// On non-Windows hosts this is a no-op; process-group signalling plus the in-child
-    /// parent-liveness watchdog (which self-terminates when <c>ASPIRE_CLI_PID</c> disappears) provide
-    /// the cross-platform equivalent. The two layers are complementary: the job is the instant,
-    /// guaranteed backstop on Windows, and the watchdog is the graceful, cross-platform mechanism.
+    /// Ordinary owned children use the shared guardian on every platform. AppHost children
+    /// retain the Windows breakaway job so DCP can finish cleanup after the AppHost exits.
     /// </remarks>
     public bool KillOnParentExit { get; set; }
+    public ChildProcessLifetime Lifetime { get; set; }
+    public string? CompletionPath { get; set; }
+    public Func<ProcessStartInfo, string?, TimeSpan, ProcessStartInfo> CreateSupervisorStartInfo { get; set; } = ProcessSupervisor.CreateStartInfo;
 
     /// <summary>
     /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
+    /// Standard streams are connected to the null device and inherited handles are not passed to it.
     /// </summary>
+    /// <remarks>
+    /// On Unix the child starts in a new session (<see cref="System.Diagnostics.ProcessStartInfo.StartDetached"/>).
+    /// On Windows it keeps a console (hidden when <see cref="IsolateConsole"/> is set) so it can still receive CTRL+C.
+    /// </remarks>
     public bool Detached { get; set; }
-
-    /// <summary>
-    /// Test hook for overriding the DCP executable used to launch detached Unix processes.
-    /// </summary>
-    internal string? DetachedUnixLauncherPathOverride { get; set; }
 
     /// <summary>
     /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
@@ -164,8 +160,10 @@ internal sealed class ProcessInvocationOptions
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
+        Lifetime = Lifetime,
+        CompletionPath = CompletionPath,
+        CreateSupervisorStartInfo = CreateSupervisorStartInfo,
         Detached = Detached,
-        DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
         AppHostArgumentStartIndex = AppHostArgumentStartIndex,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
@@ -404,8 +402,10 @@ internal sealed class DotNetCliRunner(
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Lifetime = options.Lifetime,
+            CompletionPath = options.CompletionPath,
+            CreateSupervisorStartInfo = options.CreateSupervisorStartInfo,
             Detached = options.Detached,
-            DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             // Without this the redaction boundary is lost between the runner and the process
             // factory, and a direct AppHost launch would log its forwarded arguments verbatim.
@@ -638,7 +638,7 @@ internal sealed class DotNetCliRunner(
         }
 
         // Users often invoke the dogfood CLI through a symlink such as
-        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net11.0/aspire. Resolve the
         // link before forwarding so a symlinked raw build cannot stamp stale
         // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
         var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);

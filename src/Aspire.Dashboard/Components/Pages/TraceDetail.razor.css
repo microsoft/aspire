@@ -310,11 +310,6 @@
     background: color-mix(in srgb, var(--button-color), white 30%);
 }
 
-::deep .log-tooltip {
-    max-width: 350px;
-    flex-direction: column;
-}
-
 ::deep .log-tooltip-title {
     font-weight: bold;
     font-size: 15px;

@@ -38,7 +38,7 @@ RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-java.sh /scripts/test-jav
 ENTRYPOINT ["/bin/bash", "-c", "\
     set -e && \
     /scripts/setup-local-cli.sh && \
-    aspire --nologo config set features:experimentalPolyglot:java true --global && \
+    aspire --nologo config set features:experimentalPolyglotJava true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
     /scripts/test-java.sh && \

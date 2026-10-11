@@ -21,7 +21,7 @@ namespace Aspire.Cli.Projects;
 /// <see cref="IAppHostServerProject.RunAsync"/>. Termination is requested either by cancelling the
 /// <c>stopRequested</c> token passed to the constructor, or by calling <see cref="DisposeAsync"/>.
 /// Both routes cancel the same internal linked CTS, which the drive loop passes to
-/// <see cref="IProcessExecution.WaitForExitAsync(CancellationToken)"/>; the execution runs the
+/// <see cref="Aspire.Shared.IChildProcess.WaitForExitAsync(CancellationToken)"/>; the execution runs the
 /// shared shutdown ladder (graceful signal → bounded wait → tree-kill, or force-kill fallback)
 /// from inside that call. The session itself never spawns or kills — there is exactly one shutdown
 /// driver, and it lives in <see cref="ProcessExecution"/>.
@@ -111,10 +111,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     /// <summary>
     /// Gets whether the underlying AppHost server process has exited, or <see langword="null"/>
     /// if <see cref="StartAsync"/> has not been called (or threw before the process was
-    /// published). Routes through the <see cref="IProcessExecution"/>, which encapsulates the
-    /// isolated Windows spawn quirk (the underlying Process is obtained via
-    /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/>); see
-    /// https://github.com/dotnet/runtime/issues/45003.
+    /// published).
     /// </summary>
     public bool? HasServerExited => _execution?.HasExited;
 
@@ -305,10 +302,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
         // ConnectAsync already retries until the RPC socket is available. Race it against the
         // server-exit signal instead of sleeping first, so fast startups connect immediately and
-        // failed server launches surface as soon as the process exits. We race _completion rather
-        // than Process.WaitForExitAsync because on the isolated Windows path the Process is
-        // GetProcessById-derived and its lifetime getters are unreliable — the completion is
-        // tripped from the IsolatedProcess wrapper that holds the original CreateProcess handle.
+        // failed server launches surface as soon as the process exits.
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var connectTask = AppHostRpcClient.ConnectAsync(socketPath, _authenticationToken, _environment, _profilingTelemetry, connectCts.Token);
         var completedTask = await Task.WhenAny(connectTask, serverExitTask).ConfigureAwait(false);
@@ -327,6 +321,14 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // cancellation/failure it reports so the losing task cannot raise an unobserved exception.
         connectCts.Cancel();
         ObserveFaultedTask(connectTask);
+        // The exit task drains stdout/stderr. Surface that output even when the server
+        // died too quickly to return its startup failure through RPC.
+        var outputLines = _output?.GetLines().ToArray();
+        if (outputLines is { Length: > 0 })
+        {
+            _logger.LogError("AppHost server startup output:\n{Output}", string.Join(Environment.NewLine, outputLines.Select(line => line.Line)));
+        }
+
         var exitCode = TryGetServerExitCode();
         throw new InvalidOperationException(
             exitCode is { } code

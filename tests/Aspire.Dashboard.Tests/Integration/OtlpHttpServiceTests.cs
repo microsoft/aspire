@@ -13,6 +13,7 @@ using Aspire.Hosting;
 using Google.Protobuf;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Collector.Logs.V1;
 using OpenTelemetry.Proto.Collector.Metrics.V1;
 using OpenTelemetry.Proto.Collector.Trace.V1;
@@ -105,8 +106,11 @@ public class OtlpHttpServiceTests
         return request;
     }
 
-    [Fact]
-    public async Task CallService_OtlpHttpEndPoint_RequiredApiKeyMissing_Failure()
+    [Theory]
+    [InlineData("/v1/logs")]
+    [InlineData("/v1/metrics")]
+    [InlineData("/v1/traces")]
+    public async Task CallService_OtlpHttpEndPoint_RequiredApiKeyMissing_Failure(string path)
     {
         // Arrange
         var apiKey = "TestKey123!";
@@ -123,7 +127,81 @@ public class OtlpHttpServiceTests
         content.Headers.TryAddWithoutValidation("content-type", OtlpHttpEndpointsBuilder.ProtobufContentType);
 
         // Act
-        var responseMessage = await httpClient.PostAsync("/v1/logs", content).DefaultTimeout();
+        var responseMessage = await httpClient.PostAsync(path, content).DefaultTimeout();
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, responseMessage.StatusCode);
+        Assert.Null(responseMessage.Content.Headers.ContentType);
+        Assert.Equal(string.Empty, await responseMessage.Content.ReadAsStringAsync().DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData("null", false)]
+    [InlineData("\"\"", true)]
+    public async Task Configuration_OtlpHttpEndPoint_SecondaryApiKeyInJson_Validation(string secondaryApiKeyJson, bool isEmpty)
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var configFilePath = Path.Combine(tempDirectory.FullName, "appsettings.json");
+        var configJson = $$"""
+            {
+              "Dashboard": {
+                "Otlp": {
+                  "AuthMode": "ApiKey",
+                  "PrimaryApiKey": "TestKey123!",
+                  "SecondaryApiKey": {{secondaryApiKeyJson}}
+                }
+              }
+            }
+            """;
+        await File.WriteAllTextAsync(configFilePath, configJson).DefaultTimeout();
+
+        try
+        {
+            await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+            {
+                config[KnownConfigNames.DashboardConfigFilePath] = configFilePath;
+            });
+
+            if (isEmpty)
+            {
+                var exception = Assert.Throws<OptionsValidationException>(() => _ = app.DashboardOptionsMonitor.CurrentValue);
+                Assert.Contains($"SecondaryApiKey must not be empty when OTLP authentication mode is API key. Remove {DashboardConfigNames.DashboardOtlpSecondaryApiKeyName.ConfigKey} or specify a non-empty value.", exception.Failures);
+            }
+            else
+            {
+                var options = app.DashboardOptionsMonitor.CurrentValue.Otlp;
+                Assert.Equal(OtlpAuthMode.ApiKey, options.AuthMode);
+                Assert.Equal("TestKey123!", options.PrimaryApiKey);
+                Assert.Null(options.SecondaryApiKey);
+            }
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CallService_OtlpHttpEndPoint_EmptyApiKey_Failure()
+    {
+        // Arrange
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = OtlpAuthMode.ApiKey.ToString();
+            config[DashboardConfigNames.DashboardOtlpPrimaryApiKeyName.ConfigKey] = "TestKey123!";
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.OtlpServiceHttpEndPointAccessor().EndPoint}");
+        using var requestMessage = new HttpRequestMessage(HttpMethod.Post, "/v1/logs")
+        {
+            Content = new ByteArrayContent(new ExportLogsServiceRequest().ToByteArray())
+        };
+        requestMessage.Content.Headers.TryAddWithoutValidation("content-type", OtlpHttpEndpointsBuilder.ProtobufContentType);
+        requestMessage.Headers.TryAddWithoutValidation(OtlpApiKeyAuthenticationHandler.ApiKeyHeaderName, string.Empty);
+
+        // Act
+        var responseMessage = await httpClient.SendAsync(requestMessage).DefaultTimeout();
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, responseMessage.StatusCode);

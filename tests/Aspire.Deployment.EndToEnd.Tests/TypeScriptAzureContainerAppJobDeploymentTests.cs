@@ -65,6 +65,7 @@ public sealed class TypeScriptAzureContainerAppJobDeploymentTests(ITestOutputHel
 
             await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
             await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.AppContainers");
+            await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.Provisioning.AppContainers");
 
             WriteContainerAppJobsAppHost(workspace);
 
@@ -132,7 +133,14 @@ public sealed class TypeScriptAzureContainerAppJobDeploymentTests(ITestOutputHel
 
             await (await builder.addContainer('manual-job', 'mcr.microsoft.com/azurelinux/base/core:3.0'))
                 .withComputeEnvironment(env)
-                .publishAsAzureContainerAppJob();
+                .publishAsAzureContainerAppJob({
+                    configure: async (infrastructure, job) => {
+                        const provisionedJob = await infrastructure.getContainerAppJobByIdentifier(await job.bicepIdentifier.get());
+                        const configuration = await provisionedJob.configuration.get();
+                        await configuration.replicaTimeout.set(300);
+                        await configuration.replicaRetryLimit.set(1);
+                    }
+                });
 
             await (await builder.addContainer('scheduled-job', 'mcr.microsoft.com/azurelinux/base/core:3.0'))
                 .withComputeEnvironment(env)
@@ -152,8 +160,12 @@ public sealed class TypeScriptAzureContainerAppJobDeploymentTests(ITestOutputHel
             "manual_trigger=$(az containerapp job list -g \"$RG_NAME\" --query \"[?contains(name, 'manual-job')].properties.configuration.triggerType | [0]\" -o tsv) && " +
             "scheduled_trigger=$(az containerapp job list -g \"$RG_NAME\" --query \"[?contains(name, 'scheduled-job')].properties.configuration.triggerType | [0]\" -o tsv) && " +
             "scheduled_cron=$(az containerapp job list -g \"$RG_NAME\" --query \"[?contains(name, 'scheduled-job')].properties.configuration.scheduleTriggerConfig.cronExpression | [0]\" -o tsv) && " +
+            "manual_timeout=$(az containerapp job list -g \"$RG_NAME\" --query \"[?contains(name, 'manual-job')].properties.configuration.replicaTimeout | [0]\" -o tsv) && " +
+            "manual_retries=$(az containerapp job list -g \"$RG_NAME\" --query \"[?contains(name, 'manual-job')].properties.configuration.replicaRetryLimit | [0]\" -o tsv) && " +
             "if [ \"$manual_trigger\" != \"Manual\" ]; then echo \"manual-job trigger was '$manual_trigger', expected Manual\"; exit 1; fi && " +
             "if [ \"$scheduled_trigger\" != \"Schedule\" ]; then echo \"scheduled-job trigger was '$scheduled_trigger', expected Schedule\"; exit 1; fi && " +
+            "if [ \"$manual_timeout\" != \"300\" ]; then echo \"manual-job timeout was '$manual_timeout', expected 300\"; exit 1; fi && " +
+            "if [ \"$manual_retries\" != \"1\" ]; then echo \"manual-job retries was '$manual_retries', expected 1\"; exit 1; fi && " +
             "if [ \"$scheduled_cron\" != \"0 0 * * *\" ]; then echo \"scheduled-job cron was '$scheduled_cron', expected 0 0 * * *\"; exit 1; fi";
     }
 

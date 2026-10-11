@@ -13,9 +13,13 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class DashboardRunSelect : ComponentBase
 {
+    private const string DashboardRunsHelpUrl = "https://aka.ms/aspire/run-persistence";
+
     private static readonly Icon s_checkmarkIcon = new Icons.Regular.Size16.Checkmark();
+    private static readonly Icon s_helpIcon = new Icons.Regular.Size16.QuestionCircle();
     private static readonly Icon s_pinIcon = new Icons.Regular.Size16.Pin();
     private static readonly Icon s_pinnedIcon = new Icons.Filled.Size16.Pin();
+    private readonly string _runMenuItemIdPrefix = $"dashboard-run-{Guid.NewGuid():N}";
 
     private string RunSelectTitle => Loc[nameof(LayoutResources.DashboardRunSelectTitle)];
     private string RunSelectAccessibleLabel => Loc[nameof(LayoutResources.DashboardRunSelectAccessibleLabel), SelectedRunText];
@@ -57,6 +61,8 @@ public partial class DashboardRunSelect : ComponentBase
             var isCompatible = run.IsCompatible;
             var menuItem = new MenuButtonItem
             {
+                Id = $"{_runMenuItemIdPrefix}-{Uri.EscapeDataString(run.RunId)}",
+                RenderKey = run.RunId,
                 Text = FormatRunOption(run),
                 Role = MenuItemRole.Radio,
                 Checked = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal),
@@ -82,6 +88,13 @@ public partial class DashboardRunSelect : ComponentBase
                 menuItems.Add(new MenuButtonItem { IsDivider = true });
             }
         }
+
+        menuItems.Add(new MenuButtonItem { IsDivider = true });
+        menuItems.Add(MenuButtonItem.CreateExternalLink(
+            Loc[nameof(LayoutResources.DashboardRunSelectHelp)],
+            DashboardRunsHelpUrl,
+            s_helpIcon,
+            tooltip: Loc[nameof(LayoutResources.DashboardRunSelectHelpTooltip)]));
 
         return menuItems;
     }

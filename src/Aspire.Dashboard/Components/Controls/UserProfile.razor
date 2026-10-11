@@ -5,6 +5,7 @@
             <div class="profile-menu-container" style="--profile-button-size: @ButtonSize; --profile-image-size: @ImageSize;">
                 <FluentButton Id="@_profileButtonId"
                               Class="profile-menu-button"
+                              Style="@($"anchor-name: --{_profileButtonId}")"
                               Appearance="ButtonAppearance.Transparent"
                               IconOnly="true"
                               OnClick="@(() => _profileMenuOpen = !_profileMenuOpen)"
@@ -14,7 +15,10 @@
                               aria-expanded="@_profileMenuOpen.ToString().ToLowerInvariant()">
                     <span class="profile-initials">@_initials</span>
                 </FluentButton>
-                <FluentPopover AnchorId="@_profileButtonId" @bind-Opened="_profileMenuOpen" Class="profile-menu-popover">
+                <FluentPopover AnchorId="@_profileButtonId"
+                               @bind-Opened="_profileMenuOpen"
+                               Class="profile-menu-popover"
+                               Style="@($"--profile-menu-anchor: --{_profileButtonId};")">
                     <div class="profile-popover-content">
                         <div class="profile-popover-header">
                             <span>@Loc[nameof(Resources.Login.LoggedInAs)]</span>

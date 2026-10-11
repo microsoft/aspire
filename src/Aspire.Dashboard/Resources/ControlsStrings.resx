@@ -251,6 +251,9 @@
   <data name="ChartContainerShowCountLabel" xml:space="preserve">
     <value>Show count</value>
   </data>
+  <data name="ChartContainerIncompatibleHistogramBounds" xml:space="preserve">
+    <value>Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</value>
+  </data>
   <data name="LabelNone" xml:space="preserve">
     <value>(None)</value>
   </data>

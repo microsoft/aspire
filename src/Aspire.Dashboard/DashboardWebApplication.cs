@@ -20,17 +20,18 @@ using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Serialization;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
+using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Certificate;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
-using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -41,6 +42,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using OpenIdConnectOptions = Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions;
 
@@ -63,10 +65,17 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
-    private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
-    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
-    private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+    private const string DashboardAntiForgeryCookieNamePrefix = ".Aspire.Dashboard.Antiforgery";
     private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
+    private const string DefaultOtlpServiceName = "aspire-dashboard";
+    // Blazor discovers routed pages and layouts as Type values, then activates them and assigns
+    // component parameters and [Inject] properties through reflection.
+    // The explicit DynamicDependency annotations below can probably be removed once Blazor is
+    // fully annotated for trimming and Native AOT.
+    private const DynamicallyAccessedMemberTypes RuntimeActivatedComponentMembers =
+        DynamicallyAccessedMemberTypes.PublicConstructors |
+        DynamicallyAccessedMemberTypes.PublicProperties |
+        DynamicallyAccessedMemberTypes.NonPublicProperties;
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -126,10 +135,25 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// </summary>
     /// <param name="preConfigureBuilder">Configuration for the internal app builder *before* normal dashboard configuration is done. This is for unit testing.</param>
     /// <param name="options">Environment configuration for the internal app builder. This is for unit testing</param>
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Layout.MainLayout))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(ConsoleLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Error))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Login))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Metrics))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(NotFound))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Components.Pages.Resources))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(StructuredLogs))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Terminals))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TerminalWindow))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(TraceDetail))]
+    [DynamicDependency(RuntimeActivatedComponentMembers, typeof(Traces))]
+    [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "AddRazorComponents and AddInteractiveServerComponents still warn that Blazor does not support trimming. Routed components and MainLayout are explicitly preserved, and circuit serialization uses generated Dashboard and Fluent UI contexts. Remove when Blazor supports trimming: https://aka.ms/aspnet/nativeaot.")]
     public DashboardWebApplication(
         Action<WebApplicationBuilder>? preConfigureBuilder = null,
         WebApplicationOptions? options = null)
     {
+        var startupTimestamp = Stopwatch.GetTimestamp();
+
         // Workaround MaxItemCount regression. In .NET 8 the value is set via AppContext.
         // The issue doesn't appear to impact .NET 8, but setting this value ensures the dashbaord is always run with a consistent MaxItemCount value.
         AppContext.SetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount", 10_000);
@@ -197,7 +221,41 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<IPostConfigureOptions<DashboardOptions>, PostConfigureDashboardOptions>();
         builder.Services.AddSingleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>();
 
-        if (!TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages))
+        // Telemetry must be available before options validation so failed startup attempts
+        // can be recorded even though the host never starts.
+        builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
+        builder.Services.TryAddSingleton<DashboardTelemetryService>();
+        builder.Services.TryAddSingleton(services => DashboardTelemetryConfiguration.Create(
+            services.GetRequiredService<IConfiguration>()));
+        builder.Services.AddSingleton<DashboardTelemetryManager>();
+        builder.Services.AddHostedService(services => services.GetRequiredService<DashboardTelemetryManager>());
+        builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
+        builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
+        if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
+        {
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing
+                    // Diagnostic identity must not flow into product usage logs.
+                    .ConfigureResource(resource => resource
+                        .AddService(DefaultOtlpServiceName, autoGenerateServiceInstanceId: false)
+                        // Reapply the detector after the fallback so OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES
+                        // from the application's IConfiguration retain their precedence.
+                        .AddEnvironmentVariableDetector())
+                    .AddAspNetCoreInstrumentation()
+                    .AddSource(DashboardActivitySource.ActivitySourceName)
+                    .AddSource(TracingSqliteConnection.ActivitySourceName)
+                    .AddOtlpExporter());
+        }
+
+        var validDashboardOptions = TryGetDashboardOptions(builder, dashboardConfigSection, out var dashboardOptions, out var failureMessages);
+        // Use the bound snapshot even when validation fails. Resolving options through DI
+        // would throw instead of allowing startup failure telemetry to be recorded.
+        builder.Services.TryAddSingleton(services => new DashboardStartupTelemetry(
+            services.GetRequiredService<DashboardTelemetryService>(),
+            dashboardOptions,
+            startupTimestamp));
+
+        if (!validDashboardOptions)
         {
             // The options have validation failures. Write them out to the user and return a non-zero exit code.
             // We don't want to start the app, but we need to build the app to access the logger to log the errors.
@@ -230,12 +288,22 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         ConfigureAuthentication(builder, dashboardOptions);
 
+        builder.Services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.TypeInfoResolverChain.Insert(0, DashboardJsonSerializerContext.Default);
+            options.SerializerOptions.TypeInfoResolverChain.Insert(1, OtlpJsonSerializerContext.Default);
+        });
+
         // Add services to the container.
-        builder.Services.AddRazorComponents().AddInteractiveServerComponents();
-    #if !NET9_0_OR_GREATER
-        // Fluent uses constructor injection, which Blazor's default activator only supports in .NET 9+.
-        builder.Services.Replace(ServiceDescriptor.Scoped<IComponentActivator, DashboardComponentActivator>());
-    #endif
+        builder.Services.AddRazorComponents().AddInteractiveServerComponents(options =>
+        {
+#pragma warning disable FLUENTUI0001 // Fluent UI Native AOT serialization support is experimental.
+#pragma warning disable ASPNETCORE9004 // Native AOT resolver composition is experimental in .NET 11.
+            options.JsonTypeInfoResolvers.Add(FluentUIJsonSerializerContext.Default);
+            options.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
+#pragma warning restore ASPNETCORE9004
+#pragma warning restore FLUENTUI0001
+        });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
@@ -280,7 +348,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
-                options.KnownNetworks.Clear();
+                options.KnownIPNetworks.Clear();
                 options.KnownProxies.Clear();
             });
         }
@@ -306,22 +374,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddScoped<DashboardCommandExecutor>();
 
         builder.Services.AddSingleton<PauseManager>();
-
-        // Telemetry
-        builder.Services.TryAddScoped<ComponentTelemetryContextProvider>();
-        builder.Services.TryAddSingleton<DashboardTelemetryService>();
-        builder.Services.TryAddSingleton<IDashboardTelemetrySender, DashboardTelemetrySender>();
-        builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
-        builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
-        if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
-        {
-            builder.Services.AddOpenTelemetry()
-                .WithTracing(tracing => tracing
-                    .AddAspNetCoreInstrumentation()
-                    .AddSource(DashboardActivitySource.ActivitySourceName)
-                    .AddSource(TracingSqliteConnection.ActivitySourceName)
-                    .AddOtlpExporter());
-        }
 
         // OTLP services.
         builder.Services.AddGrpc();
@@ -394,7 +446,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddAntiforgery(options =>
         {
-            options.Cookie.Name = DashboardAntiForgeryCookieName;
+            var applicationNameKey = DashboardApplicationNameKey.Create(dashboardOptions.GetApplicationNameOrDefault());
+            options.Cookie.Name = $"{DashboardAntiForgeryCookieNamePrefix}.{applicationNameKey}";
         });
 
         _app = builder.Build();
@@ -417,6 +470,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.Lifetime.ApplicationStarted.Register(() =>
         {
+            Services.GetRequiredService<DashboardStartupTelemetry>().RecordSuccess();
+
             ResolvedEndpointInfo? frontendEndpointInfo = null;
             if (_frontendEndPointAccessor.Count > 0)
             {
@@ -468,19 +523,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
             PrintSummary(frontendEndpointInfo);
 
-            // One-off async initialization of telemetry service.
-            var telemetryService = _app.Services.GetRequiredService<DashboardTelemetryService>();
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await telemetryService.InitializeAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error initializing telemetry service.");
-                }
-            });
         });
 
         // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
@@ -574,7 +616,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode(options =>
+        {
+            options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
+        });
 
         // Terminal WebSocket proxy
         _app.MapTerminalWebSocket();
@@ -644,7 +689,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     /// Load <see cref="DashboardOptions"/> from configuration without using DI. This performs
     /// the same steps as getting the options from DI but without the need for a service provider.
     /// </summary>
-    private static bool TryGetDashboardOptions(WebApplicationBuilder builder, IConfigurationSection dashboardConfigSection, [NotNullWhen(true)] out DashboardOptions? dashboardOptions, [NotNullWhen(false)] out IEnumerable<string>? failureMessages)
+    private static bool TryGetDashboardOptions(WebApplicationBuilder builder, IConfigurationSection dashboardConfigSection, out DashboardOptions dashboardOptions, out IEnumerable<string> failureMessages)
     {
         dashboardOptions = new DashboardOptions();
         dashboardConfigSection.Bind(dashboardOptions);
@@ -657,7 +702,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         else
         {
-            failureMessages = null;
+            failureMessages = Array.Empty<string>();
             return true;
         }
     }
@@ -807,8 +852,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             .AddScheme<ConnectionTypeAuthenticationHandlerOptions, ConnectionTypeAuthenticationHandler>(ConnectionTypeAuthenticationDefaults.AuthenticationSchemeOtlp, o => o.RequiredConnectionTypes = [ConnectionType.OtlpGrpc, ConnectionType.OtlpHttp])
             .AddCertificate(options =>
             {
-                // Bind options to configuration so they can be overridden by environment variables.
-                builder.Configuration.Bind("Dashboard:Otlp:CertificateAuthOptions", options);
+                BindCertificateAuthenticationOptions(
+                    builder.Configuration.GetSection("Dashboard:Otlp:CertificateAuthOptions"),
+                    options);
 
                 options.Events = new CertificateAuthenticationEvents
                 {
@@ -857,6 +903,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 };
             });
 
+        var (authCookieName, httpAuthCookieName) = DashboardAuthenticationCookieNames.Create(dashboardOptions.GetApplicationNameOrDefault());
+
         switch (dashboardOptions.Frontend.AuthMode)
         {
             case FrontendAuthMode.OpenIdConnect:
@@ -869,8 +917,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                 authentication.AddCookie(options =>
                 {
-                    options.Cookie.Name = DashboardAuthCookieName;
-                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
+                    options.Cookie.Name = authCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
 
                 authentication.AddOpenIdConnect(options =>
@@ -929,8 +977,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         claimsIdentity.AddClaim(new Claim(FrontendAuthorizationDefaults.BrowserTokenClaimName, bool.TrueString));
                         return Task.CompletedTask;
                     };
-                    options.Cookie.Name = DashboardAuthCookieName;
-                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
+                    options.Cookie.Name = authCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(httpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:
@@ -992,6 +1040,56 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
     }
 
+    internal static void BindCertificateAuthenticationOptions(
+        IConfigurationSection configuration,
+        CertificateAuthenticationOptions options)
+    {
+        // Binding the entire options object produces SYSLIB1100/SYSLIB1101 even for scalar-only config:
+        // TimeProvider has no public constructor, and CustomTrustStore contains unsupported certificate
+        // types. Generated certificate bindings also access obsolete APIs. Bind supported scalars explicitly
+        // rather than suppressing these diagnostics or falling back to reflection under Native AOT.
+        // https://learn.microsoft.com/dotnet/fundamentals/syslib-diagnostics/syslib1100
+        options.AllowedCertificateTypes = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.AllowedCertificateTypes),
+            options.AllowedCertificateTypes);
+        options.ChainTrustValidationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ChainTrustValidationMode),
+            options.ChainTrustValidationMode);
+        options.RevocationFlag = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationFlag),
+            options.RevocationFlag);
+        options.RevocationMode = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.RevocationMode),
+            options.RevocationMode);
+        options.ValidateCertificateUse = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateCertificateUse),
+            options.ValidateCertificateUse);
+        options.ValidateValidityPeriod = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ValidateValidityPeriod),
+            options.ValidateValidityPeriod);
+        options.ClaimsIssuer = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ClaimsIssuer),
+            options.ClaimsIssuer);
+        options.ForwardAuthenticate = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardAuthenticate),
+            options.ForwardAuthenticate);
+        options.ForwardChallenge = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardChallenge),
+            options.ForwardChallenge);
+        options.ForwardDefault = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardDefault),
+            options.ForwardDefault);
+        options.ForwardForbid = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardForbid),
+            options.ForwardForbid);
+        options.ForwardSignIn = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignIn),
+            options.ForwardSignIn);
+        options.ForwardSignOut = configuration.GetValue(
+            nameof(CertificateAuthenticationOptions.ForwardSignOut),
+            options.ForwardSignOut);
+    }
+
     internal static Action<OpenIdConnectOptions> GetOidcClaimActionConfigure(ClaimAction action)
     {
         Action<OpenIdConnectOptions> configureAction = (action.SubKey is null, action.IsUnique) switch
@@ -1008,21 +1106,25 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     {
         if (_validationFailures.Count > 0)
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.ConfigurationValidation);
             return ExitCodeValidationFailure;
         }
 
         try
         {
-            _app.Run();
+            StartAsync().GetAwaiter().GetResult();
+            _app.WaitForShutdown();
             return 0;
         }
         catch (IOException ex) when (ContainsAddressInUse(ex))
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.AddressInUse);
             Console.Error.WriteLine($"Error: {ex.Message}");
             return ExitCodeAddressInUse;
         }
         catch (Exception ex)
         {
+            RecordStartupFailure(ex.GetType().FullName ?? ex.GetType().Name);
             // Include the full exception (type, stack trace, inner exceptions)
             // so that a "dashboard silently died" report has enough breadcrumbs
             // to find the root cause from the AppHost log alone, without
@@ -1042,28 +1144,31 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     {
         if (_validationFailures.Count > 0)
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.ConfigurationValidation);
             return ExitCodeValidationFailure;
         }
 
         try
         {
-            // Cast to IHost so this binds to the CancellationToken-aware HostingAbstractionsHostExtensions.RunAsync
-            // (WebApplication's own RunAsync only takes a URL). Cancelling the token stops the host gracefully.
-            await ((IHost)_app).RunAsync(cancellationToken).ConfigureAwait(false);
+            await StartAsync(cancellationToken).ConfigureAwait(false);
+            await _app.WaitForShutdownAsync(cancellationToken).ConfigureAwait(false);
             return 0;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Cancellation is the watchdog's normal shutdown signal (or a start-time race), not a failure.
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.Canceled);
             return 0;
         }
         catch (IOException ex) when (ContainsAddressInUse(ex))
         {
+            RecordStartupFailure(KnownDashboardStartupFailureReasons.AddressInUse);
             Console.Error.WriteLine($"Error: {ex.Message}");
             return ExitCodeAddressInUse;
         }
         catch (Exception ex)
         {
+            RecordStartupFailure(ex.GetType().FullName ?? ex.GetType().Name);
             // Include the full exception (type, stack trace, inner exceptions)
             // so that a "dashboard silently died" report has enough breadcrumbs
             // to find the root cause from the AppHost log alone, without
@@ -1087,10 +1192,36 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         return false;
     }
 
-    public Task StartAsync(CancellationToken cancellationToken = default)
+    private void RecordStartupFailure(string errorType)
+    {
+        Services.GetRequiredService<DashboardTelemetryManager>().Initialize();
+        Services.GetRequiredService<DashboardStartupTelemetry>().RecordFailure(errorType);
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         Debug.Assert(_validationFailures.Count == 0, "Validation failures: " + Environment.NewLine + string.Join(Environment.NewLine, _validationFailures));
-        return _app.StartAsync(cancellationToken);
+        try
+        {
+            await _app.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            RecordStartupFailure(GetStartupFailureReason(ex, cancellationToken));
+            throw;
+        }
+    }
+
+    internal static string GetStartupFailureReason(Exception exception, CancellationToken cancellationToken)
+    {
+        if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+        {
+            return KnownDashboardStartupFailureReasons.Canceled;
+        }
+
+        return exception is IOException && ContainsAddressInUse(exception)
+            ? KnownDashboardStartupFailureReasons.AddressInUse
+            : exception.GetType().FullName ?? exception.GetType().Name;
     }
 
     public Task StopAsync(CancellationToken cancellationToken = default)
@@ -1105,12 +1236,4 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     }
 
     private static bool IsHttpsOrNull(BindingAddress? address) => address == null || string.Equals(address.Scheme, "https", StringComparison.Ordinal);
-
-    private sealed class DashboardComponentActivator(IServiceProvider serviceProvider) : IComponentActivator
-    {
-        public IComponent CreateInstance([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type componentType)
-        {
-            return (IComponent)ActivatorUtilities.CreateInstance(serviceProvider, componentType);
-        }
-    }
 }

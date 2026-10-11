@@ -52,13 +52,19 @@
 }
 
 .profile-menu-container ::deep .profile-menu-popover::part(dialog) {
+    position-anchor: var(--profile-menu-anchor);
+    /* Fluent sets the dialog insets inline; the anchor position must override them. */
+    top: anchor(bottom) !important;
+    right: anchor(right) !important;
+    bottom: auto !important;
+    left: auto !important;
+    position-try-fallbacks: flip-block;
     box-sizing: border-box;
     min-width: 204px;
     min-height: 136px;
     padding: 16px;
     border: 0;
     border-radius: 0;
-    transform: translateX(calc(-100% + var(--profile-button-size)));
 }
 
 .profile-popover-content {

@@ -2,13 +2,27 @@
     margin-bottom: 1rem;
 }
 
-/* The terminal measures its container; an explicit height is needed even before it has any output.
-   Chromeless presentation keeps the dialog's title and the terminal's footer without a second title bar. */
+/* The terminal measures its container; an explicit height is needed even before it has any output. */
 .interaction-terminal-container {
+    display: flex;
+    flex-direction: column;
     width: 100%;
     height: min(420px, 60vh);
     min-width: 0;
     overflow: hidden;
     border: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
     border-radius: var(--aspire-control-radius);
+}
+
+.interaction-terminal-titlebar {
+    display: flex;
+    align-items: center;
+    flex: 0 0 30px;
+    padding-inline: 8px;
+    background: var(--colorNeutralBackground2);
+}
+
+.interaction-terminal-body {
+    flex: 1;
+    min-height: 0;
 }
