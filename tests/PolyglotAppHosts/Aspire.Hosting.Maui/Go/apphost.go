@@ -16,7 +16,7 @@ func main() {
 	maui.AddWindowsDevice("mauiapp-windows").WithOtlpDevTunnel()
 	maui.AddMacCatalystDevice("mauiapp-maccatalyst").WithOtlpDevTunnel()
 	maui.AddAndroidDevice("mauiapp-android-device", &aspire.AddAndroidDeviceOptions{DeviceId: aspire.StringPtr("emulator-5554")}).WithOtlpDevTunnel()
-	maui.AddAndroidEmulator("mauiapp-android-emulator", &aspire.AddAndroidEmulatorOptions{EmulatorId: aspire.StringPtr("Pixel_9_API_35")}).WithOtlpDevTunnel()
+	maui.AddAndroidEmulator("mauiapp-android-emulator", &aspire.AddAndroidEmulatorOptions{EmulatorId: aspire.StringPtr("emulator-5556")}).WithOtlpDevTunnel()
 	maui.AddiOSDevice("mauiapp-ios-device", &aspire.AddiOSDeviceOptions{DeviceId: aspire.StringPtr("00008030-001234567890123A")}).WithOtlpDevTunnel()
 	maui.AddiOSSimulator("mauiapp-ios-simulator", &aspire.AddiOSSimulatorOptions{SimulatorId: aspire.StringPtr("E25BBE37-69BA-4720-B6FD-D54C97791E79")}).WithOtlpDevTunnel()
 	if err = maui.Err(); err != nil {
