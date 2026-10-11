@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "frozen_before_calls": true,
+  "repeat_cases": ["feed401", "execution", "ordinary"],
+  "rubric": "Targets are actionable supported findings or bounded evidence gaps, not necessarily product bugs. TP/miss use adjudicated finding-to-target matches; false positives are definite unsupported defect/test demands; unsupported claims include safety/execution assertions. Format omissions alone are not substantive FP. Evidence fidelity denominators include only assessable explicit citations/head/execution statements. Allowed row states describe dominant condition, not exhaustive consumer states.",
+  "cases": {
+    "holds": {"states": ["defect"], "targets": {"build-hold": "Older VS hold removed", "cdn-hold": "Naming hold removed", "kusto-hold": "Cluster/API hold removed", "foundry-hold": "RID-independent hold removed", "npgsql-major": "net8 driver/provider majors mismatch"}},
+    "host-types": {"states": ["blocked", "risk", "unverified"], "targets": {"host-gap": "minimum host and Node runtime need actual verification; types alone not proof", "install-blocked": "401 blocks compile/host scenarios"}},
+    "toolchain": {"states": ["risk", "unverified"], "targets": {"compile-lint-gap": "coupled major toolchain needs compile/lint/peer evidence"}},
+    "feed401": {"states": ["blocked"], "targets": {"restore-blocked": "feed auth prerequisite blockage, not incompatibility"}},
+    "generated-drift": {"states": ["defect"], "targets": {"lock-drift": "current-head compiler generated actual lock drift"}},
+    "wrapper-versions": {"states": ["exercised", "no_issue"], "targets": {}},
+    "policy403": {"states": ["unverified", "blocked"], "targets": {"policy-unknown": "allow-list not confirmed; no confirmed violation"}},
+    "stateful": {"states": ["risk", "unverified"], "targets": {"migration-gap": "persisted volume upgrade untested", "platform-gap": "arm64 support not established"}},
+    "advisory": {"states": ["defect", "unverified"], "targets": {"resolution-mismatch": "selector/lock coherence discrepancy; no affected advisory established"}},
+    "patch": {"states": ["exercised", "no_issue"], "targets": {}},
+    "feed-path": {"states": ["defect"], "targets": {"traversal": "B decoded traversal violates stated scope; A encoded package scope is allowed"}},
+    "execution": {"states": ["unverified", "exercised"], "targets": {"redis-skipped": "Redis selected but skipped, template actually exercised"}},
+    "stale": {"states": ["unverified"], "targets": {"stale-head": "H0 evidence cannot validate H1"}},
+    "ordinary": {"states": ["defect"], "targets": {"null-invariant": "null guard removed", "duplicate-invariant": "duplicate guard removed"}},
+    "visual": {"states": ["no_issue"], "targets": {}}
+  }
+}

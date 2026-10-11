@@ -1,0 +1,8 @@
+{
+  "provenance": "Synthetic machine-readable projection of holds and feed-path cases. Created after model calls; never passed to blind evaluators. No real manifest edits or command logs.",
+  "packages_xml": "<Project><PropertyGroup><Npgsql8Version>9.0.4</Npgsql8Version><Npgsql9Version>9.0.5</Npgsql9Version></PropertyGroup><ItemGroup><PackageVersion Include=\"Microsoft.Build.Utilities.Core\" Version=\"17.14.8\"/><PackageVersion Include=\"Azure.Provisioning.Cdn\" Version=\"1.0.0\"/><PackageVersion Include=\"Azure.Provisioning.Kusto\" Version=\"1.0.0\"/><PackageVersion Include=\"Microsoft.AI.Foundry.Local\" Version=\"1.2.0\"/></ItemGroup></Project>",
+  "urls": {
+    "A": "https://pkgs.dev.azure.com/dnceng/public/_packaging/npm/npm/registry/%40scope/pkg/-/pkg.tgz",
+    "B": "https://pkgs.dev.azure.com/dnceng/%2e%2e/other/_packaging/npm/npm/registry/pkg.tgz"
+  }
+}
