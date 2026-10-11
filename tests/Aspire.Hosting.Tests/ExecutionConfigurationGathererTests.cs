@@ -949,6 +949,8 @@ public class ExecutionConfigurationGathererTests
 
         public bool SupportsContainerTrust => true;
 
+        public bool SupportsLoopbackAddresses => true;
+
         public bool TrustCertificate => true;
 
         public bool UseForHttps => true;
