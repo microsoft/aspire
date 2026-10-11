@@ -14,7 +14,7 @@ jobs:
   backmerge:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
 
     steps:
       - name: Generate GitHub App Token

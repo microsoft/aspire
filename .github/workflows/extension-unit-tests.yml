@@ -18,6 +18,7 @@ permissions:
 jobs:
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: windows-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/

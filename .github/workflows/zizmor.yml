@@ -19,6 +19,7 @@ permissions: {}
 jobs:
   zizmor:
     name: Zizmor
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

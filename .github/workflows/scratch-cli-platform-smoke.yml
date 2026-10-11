@@ -21,6 +21,7 @@ run-name: "CLI platform smoke tests for PR #${{ inputs.pr_number }} (run ${{ inp
 jobs:
   source:
     name: Resolve artifact source
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     outputs:
       sha: ${{ steps.source.outputs.sha }}
@@ -56,6 +57,7 @@ jobs:
   smoke:
     name: ${{ matrix.name }}
     needs: source
+    if: ${{ github.repository == 'microsoft/aspire' }}
     strategy:
       fail-fast: false
       matrix:

@@ -25,6 +25,7 @@ permissions:
 jobs:
   validate:
     name: Compile, lint, and test agentic workflows
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
 
     steps:

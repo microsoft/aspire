@@ -10,6 +10,7 @@ on:
 jobs:
   build_packages:
     name: Build packages
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: 8-core-ubuntu-latest
     steps:
       - name: Checkout code

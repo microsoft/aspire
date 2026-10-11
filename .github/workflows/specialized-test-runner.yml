@@ -33,7 +33,7 @@ jobs:
   generate_tests_matrix:
     name: Generate test runsheet
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     outputs:
       runsheet: ${{ steps.inject_properties.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
@@ -119,19 +119,19 @@ jobs:
   build_packages:
     name: Build packages
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.generate_tests_matrix.outputs.requiresNugets == 'true' }}
     uses: ./.github/workflows/build-packages.yml
 
   build_cli_archives:
     name: Build native CLI archives
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
+    if: ${{ github.repository == 'microsoft/aspire' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
     uses: ./.github/workflows/build-cli-native-archives.yml
 
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     needs: [generate_tests_matrix]
-    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresCliArchive == 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.generate_tests_matrix.outputs.requiresCliArchive == 'true' }}
     uses: ./.github/workflows/build-cli-e2e-image.yml
 
   run_tests:
@@ -147,13 +147,15 @@ jobs:
     # We still require generate_tests_matrix and build_packages to succeed.
     if: >-
       ${{
-        github.repository_owner == 'microsoft' &&
+        github.repository == 'microsoft/aspire' &&
         !cancelled() &&
         needs.generate_tests_matrix.result == 'success' &&
         (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped') &&
         (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
       }}
     uses: ./.github/workflows/run-tests.yml
+    permissions:
+      contents: read
     with:
       testShortName: ${{ matrix.tests.project }}
       properties: ${{ toJson(matrix.tests.properties) }}
@@ -164,10 +166,12 @@ jobs:
 
 
   results:
-    if: ${{ always() && github.repository_owner == 'microsoft' }}
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Final Results
     needs: [generate_tests_matrix, build_packages, build_cli_archives, build_cli_e2e_image, run_tests]
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

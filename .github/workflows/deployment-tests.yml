@@ -40,7 +40,7 @@ jobs:
   notify-start:
     name: Notify PR
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' && inputs.pr_number != '' }}
+    if: ${{ github.repository == 'microsoft/aspire' && inputs.pr_number != '' }}
     permissions:
       pull-requests: write
     steps:
@@ -67,7 +67,7 @@ jobs:
   enumerate:
     name: Enumerate Tests
     runs-on: ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     permissions:
       contents: read
     outputs:
@@ -114,7 +114,7 @@ jobs:
   build:
     name: Build
     runs-on: 8-core-ubuntu-latest
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     permissions:
       contents: read
     steps:
@@ -641,7 +641,7 @@ jobs:
     name: Create Issue on Failure
     needs: [deploy-test]
     runs-on: ubuntu-latest
-    if: ${{ failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft' }}
+    if: ${{ failure() && github.event_name == 'schedule' && github.repository == 'microsoft/aspire' }}
     permissions:
       contents: read   # checkout to require the local .js modules
       issues: write

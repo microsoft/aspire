@@ -17,6 +17,7 @@ env:
 jobs:
   validate_python:
     name: Python SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -72,6 +73,7 @@ jobs:
 
   validate_go:
     name: Go SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -127,6 +129,7 @@ jobs:
 
   validate_java:
     name: Java SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -182,6 +185,7 @@ jobs:
 
   validate_rust:
     name: Rust SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     # Rust SDK has known issues - don't fail the workflow
     continue-on-error: true
@@ -239,6 +243,7 @@ jobs:
 
   validate_typescript:
     name: TypeScript SDK Validation (Node ${{ matrix.node-version }}.x)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -298,7 +303,7 @@ jobs:
             polyglot-typescript-node-${{ matrix.node-version }}
 
   results:
-    if: always()
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Polyglot Validation Results
     needs: [validate_python, validate_go, validate_java, validate_rust, validate_typescript]

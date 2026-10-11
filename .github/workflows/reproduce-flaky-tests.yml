@@ -45,6 +45,7 @@ jobs:
 
   setup:
     name: Generate matrix
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
@@ -127,7 +128,7 @@ jobs:
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     needs: setup
-    if: ${{ needs.setup.outputs.is_cli_e2e == 'true' }}
+    if: ${{ github.repository == 'microsoft/aspire' && needs.setup.outputs.is_cli_e2e == 'true' }}
     uses: ./.github/workflows/build-cli-e2e-image.yml
 
   reproduce:
@@ -135,6 +136,7 @@ jobs:
     needs: [setup, build_cli_e2e_image]
     if: >-
       ${{
+        github.repository == 'microsoft/aspire' &&
         !cancelled() &&
         needs.setup.result == 'success' &&
         (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
@@ -388,10 +390,11 @@ jobs:
           if-no-files-found: ignore
 
   results:
-    if: always()
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Reproduce Results
     needs: [reproduce]
+    permissions: {}
     steps:
       - name: Summary
         shell: bash

@@ -5,6 +5,7 @@ on:
 
 jobs:
   verify_extester_feed:
+    if: ${{ github.repository == 'microsoft/aspire' }}
     name: Verify ExTester internal feed availability
     runs-on: ubuntu-latest
     env:
@@ -72,6 +73,7 @@ jobs:
         run: node scripts/run-e2e.js --verify-extester-feed
 
   extension_e2e:
+    if: ${{ github.repository == 'microsoft/aspire' }}
     name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
     needs: verify_extester_feed
     runs-on: ${{ matrix.runner }}

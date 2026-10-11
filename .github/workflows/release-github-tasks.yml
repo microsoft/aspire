@@ -97,6 +97,7 @@ jobs:
   # `skip_*` inputs so partial-failure re-runs still behave the same way.
   release:
     name: Release Tasks
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     # Authorization uses github.token; release operations use the App token.
     permissions:
@@ -418,7 +419,7 @@ jobs:
   merge-pr:
     name: Create Merge-Back PR
     needs: release
-    if: inputs.skip_merge_pr != true
+    if: ${{ github.repository == 'microsoft/aspire' && inputs.skip_merge_pr != true }}
     runs-on: ubuntu-latest
     # Every GitHub operation in this job uses the App token minted below.
     permissions: {}
@@ -507,7 +508,7 @@ jobs:
   baseline-pr:
     name: Create Baseline Version Branch/PR
     needs: release
-    if: inputs.skip_baseline_pr != true && inputs.is_prerelease != true
+    if: ${{ github.repository == 'microsoft/aspire' && inputs.skip_baseline_pr != true && inputs.is_prerelease != true }}
     runs-on: ubuntu-latest
     # Every GitHub operation in this job uses the App token minted below.
     permissions: {}
@@ -663,7 +664,7 @@ jobs:
   summary:
     name: Summary
     needs: [release, merge-pr, baseline-pr]
-    if: always()
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Print Summary

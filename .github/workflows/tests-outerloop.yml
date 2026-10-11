@@ -36,7 +36,10 @@ concurrency:
 
 jobs:
   outerloop_tests:
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/specialized-test-runner.yml
+    permissions:
+      contents: read
     with:
       testRunnerName: "OuterloopTestRunsheetBuilder"
       attributeName: "OuterloopTest"
@@ -52,7 +55,7 @@ jobs:
   report_failures:
     name: Report failures
     needs: [outerloop_tests]
-    if: ${{ failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft' }}
+    if: ${{ failure() && github.event_name == 'schedule' && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read   # checkout to require the local .js modules
@@ -114,4 +117,3 @@ jobs:
           script: |
             const reporter = require('./.github/workflows/report-specialized-test-failures.js');
             await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
-

@@ -29,7 +29,7 @@ concurrency:
 jobs:
   warm_cli_e2e_image_cache:
     name: Warm CLI E2E image cache
-    if: ${{ github.repository_owner == 'microsoft' }}
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-e2e-image.yml
     with:
       includePolyglotImages: true

@@ -20,7 +20,7 @@ jobs:
   cleanup:
     if: >-
       github.event_name == 'schedule' &&
-      contains(fromJSON('["dotnet", "microsoft"]'), github.repository_owner)
+      github.repository == 'microsoft/aspire'
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -62,7 +62,7 @@ jobs:
   backport:
     if: >-
       github.event_name == 'issue_comment' &&
-      contains(fromJSON('["dotnet", "microsoft"]'), github.repository_owner) &&
+      github.repository == 'microsoft/aspire' &&
       github.event.issue.pull_request != '' &&
       contains(github.event.comment.body, '/backport to')
     runs-on: ubuntu-latest

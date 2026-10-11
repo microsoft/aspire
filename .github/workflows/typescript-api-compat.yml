@@ -9,7 +9,7 @@ permissions:
 jobs:
   typescript_api_compat:
     name: TypeScript API Compatibility
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.repository == 'microsoft/aspire' && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

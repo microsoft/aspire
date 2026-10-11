@@ -18,6 +18,7 @@ permissions:
 jobs:
   setup_for_tests:
     name: Setup for tests
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     # This job checks out and runs PR-authored code (SelectTests, the test build), so it is kept at
     # contents:read with no pull-requests:write. The selection comment is posted from the
@@ -254,12 +255,14 @@ jobs:
 
   build_packages:
     name: Build packages
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -267,6 +270,7 @@ jobs:
 
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -278,6 +282,7 @@ jobs:
   # without waiting for the slower Windows/macOS builds.
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -285,6 +290,7 @@ jobs:
 
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -293,6 +299,7 @@ jobs:
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -300,6 +307,7 @@ jobs:
 
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -476,7 +484,7 @@ jobs:
   cli_starter_validation_linux_x64:
     name: Aspire CLI Starter Validation (Ubuntu x64)
     needs: [setup_for_tests, build_packages, build_cli_archive_linux]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-latest
@@ -490,7 +498,7 @@ jobs:
   cli_starter_validation_linux_arm64:
     name: Aspire CLI Starter Validation (Ubuntu ARM64)
     needs: [setup_for_tests, build_packages, build_cli_archive_linux_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: ubuntu-24.04-arm
@@ -504,7 +512,7 @@ jobs:
   cli_starter_validation_windows_x64:
     name: Aspire CLI Starter Validation (Windows x64)
     needs: [setup_for_tests, build_packages, build_cli_archive_windows]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-latest
@@ -518,7 +526,7 @@ jobs:
   cli_starter_validation_windows_arm64:
     name: Aspire CLI Starter Validation (Windows ARM64)
     needs: [setup_for_tests, build_packages, build_cli_archive_windows_arm64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: windows-11-arm
@@ -532,7 +540,7 @@ jobs:
   cli_starter_validation_macos_x64:
     name: Aspire CLI Starter Validation (macOS x64)
     needs: [setup_for_tests, build_packages, build_cli_archive_macos_x64]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-15-intel
@@ -546,7 +554,7 @@ jobs:
   cli_starter_validation_macos_arm64:
     name: Aspire CLI Starter Validation (macOS ARM64)
     needs: [setup_for_tests, build_packages, build_cli_archive_macos]
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
+    if: ${{ github.event_name == 'pull_request' && github.repository == 'microsoft/aspire' && needs.setup_for_tests.outputs.run_cli_starter_validation == 'true' }}
     uses: ./.github/workflows/cli-starter-validation.yml
     with:
       runner: macos-latest
@@ -712,7 +720,7 @@ jobs:
     uses: ./.github/workflows/typescript-api-compat.yml
 
   results:
-    if: ${{ always() && github.repository_owner == 'microsoft' }}
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Final Test Results
     needs: [
