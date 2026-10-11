@@ -62,7 +62,14 @@ internal static class AnalyzerTest
             return netCoreAppRef;
         }
 
-        return netCoreAppRef.AddAssemblies([TrimAssemblyExtension(typeof(DistributedApplication).Assembly.Location)]);
+        // The Event Hubs integration and the Azure hosting assembly it depends on are included so tests can call
+        // its real APIs, e.g. AuthorshipAnnotationAnalyzerTests.
+        return netCoreAppRef.AddAssemblies(
+        [
+            TrimAssemblyExtension(typeof(DistributedApplication).Assembly.Location),
+            TrimAssemblyExtension(typeof(AzureEventHubsExtensions).Assembly.Location),
+            TrimAssemblyExtension(typeof(Aspire.Hosting.Azure.AzureProvisioningResource).Assembly.Location)
+        ]);
     }
 
     private static string TrimAssemblyExtension(string fullPath) => fullPath.Replace(".dll", string.Empty);
