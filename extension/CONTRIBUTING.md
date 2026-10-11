@@ -57,6 +57,34 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 - Open the extension folder in Visual Studio Code.
 - Launch either the `Run Extension` or `Run Extension (cli stop on entry)` launch configuration. The latter will set an environment variable that causes the CLI to wait until a debugger is attached to execute its logic.
 
+### AppHost launch profiles
+
+Select a profile from your .NET AppHost's `Properties/launchSettings.json` in `.vscode/launch.json`. This example selects `h2`; adjust `program` and the profile name for your AppHost:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "aspire",
+      "request": "launch",
+      "name": "Nested h2",
+      "program": "${workspaceFolder}/AppHost/AppHost.csproj",
+      "dashboardBrowser": "none",
+      "debuggers": {
+        "apphost": {
+          "launchProfile": "h2"
+        }
+      }
+    }
+  ]
+}
+```
+
+For .NET AppHosts, `debuggers.apphost.launchProfile` takes precedence over `debuggers.project.launchProfile`, which takes precedence over top-level `launchProfile`.
+
+The selection works with or without the C# extension. When the C# extension is disabled or not installed, the CLI must support `--launch-profile`; unsupported versions report an error instead of ignoring the selection.
+
 ### Optional: set the CLI path
 
 To debug the Aspire CLI together with the extension, set `Aspire Cli Executable Path` to the CLI output path. You can use an absolute path or a workspace token. If you opened the `extension` folder, the local build is:
