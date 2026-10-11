@@ -145,8 +145,9 @@ public class AddOracleTests
         var oracleDatabaseConnectionStringResource = (IResourceWithConnectionString)oracleDatabaseResource;
         var dbConnectionString = await oracleDatabaseConnectionStringResource.GetConnectionStringAsync();
 
-        Assert.Equal("{orcl.connectionString}/db", oracleDatabaseConnectionStringResource.ConnectionStringExpression.ValueExpression);
-        Assert.Equal(oracleConnectionString + "/db", dbConnectionString);
+        Assert.Equal("FREEPDB1", oracleDatabaseResource.DatabaseName);
+        Assert.Equal("{orcl.connectionString}/FREEPDB1", oracleDatabaseConnectionStringResource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal(oracleConnectionString + "/FREEPDB1", dbConnectionString);
     }
 
     [Fact]
@@ -222,7 +223,7 @@ public class AddOracleTests
         expectedManifest = """
             {
               "type": "value.v0",
-              "connectionString": "{oracle.connectionString}/db"
+              "connectionString": "{oracle.connectionString}/FREEPDB1"
             }
             """;
         Assert.Equal(expectedManifest, dbManifest.ToString());
@@ -296,6 +297,19 @@ public class AddOracleTests
 
         Assert.Equal("{oracle1.connectionString}/customers1", db1.Resource.ConnectionStringExpression.ValueExpression);
         Assert.Equal("{oracle1.connectionString}/customers2", db2.Resource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void AddDatabaseDefaultsToOracleFreePluggableDatabase()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var db = builder.AddOracle("oracle")
+            .AddDatabase("appdb");
+
+        Assert.Equal("appdb", db.Resource.Name);
+        Assert.Equal("FREEPDB1", db.Resource.DatabaseName);
+        Assert.Equal("{oracle.connectionString}/FREEPDB1", db.Resource.ConnectionStringExpression.ValueExpression);
     }
 
     [Fact]
