@@ -284,6 +284,8 @@ public sealed class TelemetryHookMaintenanceTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task ReplayingSameCommitPreservesBytesAndTimestamps()
     {
+        File.WriteAllBytes(HookPath(s_hookNames[0]), Encode(ShellText, "\r\n", true));
+        File.WriteAllBytes(HookPath(s_hookNames[1]), Encode(PowerShellText, "\r\n", true));
         var before = CaptureState();
 
         (await RunUpdateAsync(OldCommit, BaseVersion)).EnsureSuccessful();

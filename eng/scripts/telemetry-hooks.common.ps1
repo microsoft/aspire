@@ -392,11 +392,18 @@ function Publish-TelemetryHooks {
     $files = $Source.contents
     $json = ($Source.metadata | ConvertTo-Json -Depth 4) + "`n"
     $files[$script:TelemetryHooksMetadataFileName] = ConvertTo-TelemetryHookBytes ([System.Text.Encoding]::UTF8.GetBytes($json))
+    $hookFileNames = @(Get-TelemetryHookFileNames)
     $changes = @(
         foreach ($name in $files.Keys) {
             $path = Join-Path $Directory $name
             $existing = [System.IO.File]::ReadAllBytes($path)
-            if ([Convert]::ToBase64String($existing) -cne [Convert]::ToBase64String($files[$name])) {
+            $comparableExisting = if ($hookFileNames -ccontains $name) {
+                ConvertTo-TelemetryHookBytes $existing
+            }
+            else {
+                $existing
+            }
+            if ([Convert]::ToBase64String($comparableExisting) -cne [Convert]::ToBase64String($files[$name])) {
                 [pscustomobject]@{ Name = $name; Path = $path; LastWriteTimeUtc = [System.IO.File]::GetLastWriteTimeUtc($path) }
             }
         }
