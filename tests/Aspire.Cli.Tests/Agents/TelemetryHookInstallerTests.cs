@@ -141,10 +141,4 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
         return new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
     }
 
-    private static async Task<string> ReadLfNormalizedAsync(string path)
-    {
-        // Git can check the PowerShell resource out with CRLF; release hook hashes use LF UTF-8 without a BOM.
-        var content = await File.ReadAllTextAsync(path);
-        return content.Replace("\r\n", "\n").Replace('\r', '\n');
-    }
 }

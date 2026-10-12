@@ -142,96 +142,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-512 verification. Expected &apos;{0}&apos;, got &apos;{1}&apos;..
-        /// </summary>
-        internal static string AspireSkillsInstaller_ArchiveHashVerificationFailed {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_ArchiveHashVerificationFailed", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
-        /// </summary>
-        internal static string AspireSkillsInstaller_GitHubUnavailable {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_GitHubUnavailable", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Installing Aspire skills....
-        /// </summary>
-        internal static string AspireSkillsInstaller_InstallingStatus {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_InstallingStatus", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The Aspire skills bundle is invalid: {0}.
-        /// </summary>
-        internal static string AspireSkillsInstaller_InvalidBundle {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_InvalidBundle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills bundle metadata is invalid: {0}.
-        /// </summary>
-        internal static string AspireSkillsInstaller_InvalidMetadata {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_InvalidMetadata", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata repository &apos;{0}&apos; does not match expected repository &apos;{1}&apos;..
-        /// </summary>
-        internal static string AspireSkillsInstaller_MetadataRepositoryMismatch {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_MetadataRepositoryMismatch", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a release asset name..
-        /// </summary>
-        internal static string AspireSkillsInstaller_MissingMetadataAssetName {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataAssetName", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-512 hash..
-        /// </summary>
-        internal static string AspireSkillsInstaller_MissingMetadataSha512 {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataSha512", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a GitHub release tag..
-        /// </summary>
-        internal static string AspireSkillsInstaller_MissingMetadataTag {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataTag", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a version..
-        /// </summary>
-        internal static string AspireSkillsInstaller_MissingMetadataVersion {
-            get {
-                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataVersion", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to The following agent configurations use the deprecated &apos;mcp start&apos; command. Update them?.
         /// </summary>
         internal static string ConfigUpdatesSelectPrompt {
@@ -691,33 +601,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire CLI commands and workflows for distributed apps.
-        /// </summary>
-        internal static string SkillDescription_Aspire {
-            get {
-                return ResourceManager.GetString("SkillDescription_Aspire", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Aspire deployment target selection, preflight, publish, and deploy workflows.
-        /// </summary>
-        internal static string SkillDescription_AspireDeployment {
-            get {
-                return ResourceManager.GetString("SkillDescription_AspireDeployment", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to One-time setup: wire up AppHost with discovered projects.
-        /// </summary>
-        internal static string SkillDescription_Aspireify {
-            get {
-                return ResourceManager.GetString("SkillDescription_Aspireify", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Query .NET API surfaces across NuGet packages and platform libraries.
         /// </summary>
         internal static string SkillDescription_DotnetInspect {
@@ -790,22 +673,13 @@ namespace Aspire.Cli.Resources {
         }
 
         internal static string InitCommand_ExistingConfigurationConflict => ResourceManager.GetString("InitCommand_ExistingConfigurationConflict", resourceCulture);
-        /// <summary>
-        ///   Looks up a localized string similar to Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files).
-        /// </summary>
-        internal static string InitCommand_AspireSourceOptionDescription => ResourceManager.GetString("InitCommand_AspireSourceOptionDescription", resourceCulture);
-        internal static string InitCommand_EmbeddedSkillsChoice => ResourceManager.GetString("InitCommand_EmbeddedSkillsChoice", resourceCulture);
-        internal static string InitCommand_ConfigureAspireSourcePrompt => ResourceManager.GetString("InitCommand_ConfigureAspireSourcePrompt", resourceCulture);
         internal static string InitCommand_InvalidSkills => ResourceManager.GetString("InitCommand_InvalidSkills", resourceCulture);
         /// <summary>
         ///   Looks up a localized string similar to Agent assets from microsoft/aspire-skills.
         /// </summary>
         internal static string InitCommand_AspireSkillChoice => ResourceManager.GetString("InitCommand_AspireSkillChoice", resourceCulture);
         internal static string InitCommand_FailedTarget => ResourceManager.GetString("InitCommand_FailedTarget", resourceCulture);
-        internal static string InitCommand_InvalidAspireSource => ResourceManager.GetString("InitCommand_InvalidAspireSource", resourceCulture);
         internal static string InitCommand_LocalSkillsConflict => ResourceManager.GetString("InitCommand_LocalSkillsConflict", resourceCulture);
-        internal static string InitCommand_RemoteSkillsChoice => ResourceManager.GetString("InitCommand_RemoteSkillsChoice", resourceCulture);
-        internal static string InitCommand_RemoteSkillsConflict => ResourceManager.GetString("InitCommand_RemoteSkillsConflict", resourceCulture);
         internal static string InitCommand_PluginRiskWarning => ResourceManager.GetString("InitCommand_PluginRiskWarning", resourceCulture);
         internal static string InitCommand_ConfiguredTargets => ResourceManager.GetString("InitCommand_ConfiguredTargets", resourceCulture);
         internal static string InitCommand_ConfigurationTarget => ResourceManager.GetString("InitCommand_ConfigurationTarget", resourceCulture);
