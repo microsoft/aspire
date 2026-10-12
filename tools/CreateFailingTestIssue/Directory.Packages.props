@@ -4,6 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="System.CommandLine" Version="2.0.12" />
-    <PackageVersion Include="System.IO.Hashing" Version="10.0.3" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.12" />
   </ItemGroup>
 </Project>
