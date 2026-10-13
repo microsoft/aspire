@@ -232,6 +232,31 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ScrollButtons_FollowsInitialContentUntilUserInput()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+            await AddScrollRegionAsync(page, followInitialContent: true);
+
+            var region = page.Locator("#scroll-region");
+            var bottomButton = page.Locator(".scroll-to-bottom");
+            await page.WaitForFunctionAsync("""
+                () => {
+                    const region = document.getElementById('scroll-region');
+                    return region.scrollHeight - region.clientHeight - region.scrollTop < 1;
+                }
+                """).DefaultTimeout();
+            await Assertions.Expect(bottomButton).ToBeHiddenAsync();
+
+            await region.DispatchEventAsync("wheel");
+            await region.EvaluateAsync("element => element.scrollTop = 0");
+            await Assertions.Expect(bottomButton).ToBeVisibleAsync();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ScrollButtons_SmoothScrollHidesImmediately_AndReachesNewBottom()
     {
         await RunTestAsync(async page =>
@@ -556,17 +581,18 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
         });
     }
 
-    private static Task AddScrollRegionAsync(IPage page)
+    private static Task AddScrollRegionAsync(IPage page, bool followInitialContent = false)
     {
         // Connect the marker before adding the content, as can happen while Blazor applies a render
         // batch. The Resources page has no marker of its own, so registration comes from this one.
         return page.EvaluateAsync("""
-            () => {
+            followInitialContent => {
                 const owner = document.createElement('div');
                 owner.id = 'scroll-owner';
+                const followAttribute = followInitialContent ? ' data-follow-initial-content' : '';
                 owner.innerHTML = `
                     <div id="scroll-region" style="position:fixed;left:0;top:100px;width:400px;height:300px;overflow:auto;">
-                        <aspire-scroll-to-bottom hidden data-scroll-to-bottom-label="Jump to latest"></aspire-scroll-to-bottom>
+                        <aspire-scroll-to-bottom hidden${followAttribute} data-scroll-to-bottom-label="Jump to latest"></aspire-scroll-to-bottom>
                     </div>`;
                 document.body.appendChild(owner);
                 const content = document.createElement('div');
@@ -574,7 +600,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                 content.style.height = '2000px';
                 document.getElementById('scroll-region').appendChild(content);
             }
-            """);
+            """, followInitialContent);
     }
 
     private static async Task GoToResourcesAndWaitAsync(IPage page)
