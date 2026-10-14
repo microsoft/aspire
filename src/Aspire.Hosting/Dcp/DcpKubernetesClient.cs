@@ -18,6 +18,10 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
 
     public DcpKubernetesClient(KubernetesClientConfiguration config, params DelegatingHandler[] handlers) : base(config, handlers)
     {
+        // KubernetesService supplies the operation deadlines. The KubernetesClient NuGet package's
+        // separate HttpClientTimeout timer defaults to 100 seconds and would otherwise truncate
+        // configured budgets and surface as an unrelated cancellation.
+        HttpClientTimeout = Timeout.InfiniteTimeSpan;
     }
 
     /// <summary>
@@ -48,10 +52,6 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
         ArgumentException.ThrowIfNullOrWhiteSpace(plural, nameof(plural));
         ArgumentException.ThrowIfNullOrWhiteSpace(name, nameof(name));
         ArgumentException.ThrowIfNullOrWhiteSpace(subResource, nameof(subResource));
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(HttpClientTimeout);
-        cancellationToken = cts.Token;
 
         string url;
         if (string.IsNullOrEmpty(namespaceParameter))
@@ -89,10 +89,6 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
     /// </summary>
     public async Task<ApiServerExecution> GetExecutionDocumentAsync(CancellationToken cancellationToken = default)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(HttpClientTimeout);
-        cancellationToken = cts.Token;
-
         var httpRequest = new HttpRequestMessage
         {
             Method = HttpMethod.Get,
@@ -115,10 +111,6 @@ internal sealed class DcpKubernetesClient : k8s.Kubernetes
         ApiServerExecution apiServerExecution,
         CancellationToken cancellationToken = default)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        cts.CancelAfter(HttpClientTimeout);
-        cancellationToken = cts.Token;
-
         var httpRequest = new HttpRequestMessage
         {
             Method = HttpMethod.Patch,
