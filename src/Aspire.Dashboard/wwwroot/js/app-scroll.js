@@ -217,8 +217,9 @@ function updateEntry(entry, showImmediately = false) {
     // Decide whether a jump is useful before measuring the container and clipping ancestors.
     // A pending smooth scroll owns the trip to the bottom, so keep the button hidden until it ends.
     const overflow = container.scrollHeight - container.clientHeight;
-    const atBottom = overflow - container.scrollTop <= edgeThreshold;
-    if (entry.followInitialContent && !atBottom) {
+    const distanceFromBottom = overflow - container.scrollTop;
+    const atBottom = distanceFromBottom <= edgeThreshold;
+    if (entry.followInitialContent && distanceFromBottom > 1) {
         // Work around https://github.com/dotnet/aspnetcore/issues/69823. Virtualize can need
         // multiple measurement passes to converge on its end anchor, so keep an initially empty
         // live-data region pinned during those passes unless the user intervenes. Remove this
