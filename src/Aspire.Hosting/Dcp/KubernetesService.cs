@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
@@ -94,6 +95,7 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
 
     public TimeSpan MaxRetryDuration { get; set; } = TimeSpan.FromSeconds(20);
     public TimeSpan KubernetesInitializationTimeout { get; set; } = TimeSpan.FromSeconds(60);
+    internal TimeSpan WatchRestartInterval { get; set; } = TimeSpan.FromMinutes(5);
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default)
         where T : CustomResource, IKubernetesStaticMetadata
@@ -264,8 +266,14 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
         ObjectDisposedException.ThrowIf(_disposed, this);
         var resourceType = GetResourceFor<T>();
 
-        // WatchAsync can become unresponsive if running long enough
-        // We use a helper to periodically restart the inner watch enumerable
+        using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var channel = Channel.CreateUnbounded<(WatchEventType, T)>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            AllowSynchronousContinuations = false
+        });
+
         var innerWatchFactory = ((WatchEventType, T)? lastValue, CancellationToken restartCancellationToken) =>
         {
             return ExecuteWithRetry(
@@ -273,39 +281,58 @@ internal sealed class KubernetesService(ILogger<KubernetesService> logger, IOpti
                 T.ObjectKind,
                 async (kubernetes, operationCancellationToken) =>
                 {
-                    var responseTask = string.IsNullOrEmpty(namespaceParameter)
-                        ? kubernetes.CustomObjects.ListClusterCustomObjectWithHttpMessagesAsync(
-                            GroupVersion.Group,
-                            GroupVersion.Version,
-                            resourceType,
-                            watch: true,
-                            cancellationToken: operationCancellationToken)
-                        : kubernetes.CustomObjects.ListNamespacedCustomObjectWithHttpMessagesAsync(
-                            GroupVersion.Group,
-                            GroupVersion.Version,
-                            namespaceParameter,
-                            resourceType,
-                            watch: true,
-                            cancellationToken: operationCancellationToken);
-
-                    // KubernetesClient's lazy WatchAsync does not await the HTTP response until enumeration starts.
-                    await responseTask.ConfigureAwait(false);
-
-                    // TODO: KubernetesClient v18 marked WatchAsync extension method as obsolete.
-                    // The new pattern uses Watcher<T> directly, but requires significant refactoring.
-                    // This API still works in v18.x and will be updated in a future change.
-#pragma warning disable CS0618 // Type or member is obsolete
-                    return responseTask.WatchAsync<T, object>(onError: null, restartCancellationToken);
-#pragma warning restore CS0618 // Type or member is obsolete
+                    // The per-attempt budget covers response headers, not the lifetime of the
+                    // stream. Its owner uses the restart token after the attempt has completed.
+                    return await kubernetes.CreateWatchAsync<T>(
+                        GroupVersion.Group, GroupVersion.Version, resourceType,
+                        namespaceParameter, restartCancellationToken,
+                        operationCancellationToken).ConfigureAwait(false);
                 },
                 RetryOnConnectivityAndConflictErrors,
                 restartCancellationToken,
                 timeoutEachAttempt: true);
         };
 
-        await foreach (var item in PeriodicRestartAsyncEnumerable.CreateAsync(innerWatchFactory, restartInterval: TimeSpan.FromMinutes(5), cancellationToken: cancellationToken).ConfigureAwait(false))
+        // Drain DCP independently of resource handlers. Waiting on the resource watcher's output
+        // semaphore, lifecycle callbacks, or synchronous log subscribers must not leave HTTP/2
+        // flow control blocking DCP mutations. Keep every event, including intermediate states.
+        var watchTask = Task.Run(async () =>
         {
-            yield return item;
+            Exception? error = null;
+            try
+            {
+                await foreach (var item in PeriodicRestartAsyncEnumerable.CreateAsync(
+                    innerWatchFactory, WatchRestartInterval, watchCts.Token).ConfigureAwait(false))
+                {
+                    channel.Writer.TryWrite(item);
+                }
+            }
+            catch (OperationCanceledException) when (watchCts.IsCancellationRequested)
+            {
+                // The consumer canceled or disposed its enumeration.
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+            finally
+            {
+                channel.Writer.TryComplete(error);
+            }
+        }, CancellationToken.None);
+
+        try
+        {
+            await foreach (var item in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return item;
+            }
+        }
+        finally
+        {
+            await watchCts.CancelAsync().ConfigureAwait(false);
+            await watchTask.ConfigureAwait(false);
         }
     }
 
