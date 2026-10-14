@@ -28,6 +28,7 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for.
          For non-PR builds the value is one of: stable | staging | daily | local. For PR
          builds CI emits the per-PR hive label directly as `pr-<PR_NUMBER>` (no separate

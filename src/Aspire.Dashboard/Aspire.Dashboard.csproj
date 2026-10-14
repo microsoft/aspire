@@ -6,6 +6,7 @@
     <ResxCodeGenerator>PublicResXFileCodeGenerator</ResxCodeGenerator>
     <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <PublishAot>true</PublishAot>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
     <!-- .NET 11 persistent services serialize framework-owned state with the internal
          JsonSerializerOptionsProvider instead of CircuitOptions.JsonTypeInfoResolvers.
          Remove the reflection fallback when https://github.com/dotnet/aspnetcore/issues/69325 is fixed. -->
