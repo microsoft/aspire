@@ -447,7 +447,7 @@ public static class AzureContainerAppExtensions
                     Sku = new StorageSku() { Name = StorageSkuName.StandardLrs },
                     Kind = StorageKind.StorageV2,
                     LargeFileSharesState = LargeFileSharesState.Enabled,
-                    MinimumTlsVersion = StorageMinimumTlsVersion.Tls1_2,
+                    MinimumTlsVersion = StorageMinimumTlsVersion.Tls12,
                 };
 
                 infra.Add(storageVolume);
@@ -464,7 +464,7 @@ public static class AzureContainerAppExtensions
                     var shareName = Infrastructure.NormalizeBicepIdentifier($"shares_{outputName}");
                     var managedStorageName = Infrastructure.NormalizeBicepIdentifier($"managedStorage_{outputName}");
 
-                    var share = new FileShare(shareName)
+                    var share = new ContainerAppFileShare(shareName)
                     {
                         Parent = storageVolumeFileService,
                         ShareQuota = 1024,
@@ -1154,6 +1154,16 @@ public static class AzureContainerAppExtensions
         builder.WithAnnotation(new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
 
         return builder;
+    }
+
+    private sealed class ContainerAppFileShare(string bicepIdentifier) : FileShare(bicepIdentifier)
+    {
+        // Preserve generated share names and exclude underscores, which Azure Files does not allow.
+        // https://learn.microsoft.com/rest/api/storageservices/naming-and-referencing-shares--directories--files--and-metadata#share-names
+        public override ResourceNameRequirements GetResourceNameRequirements() => new(
+            minLength: 3,
+            maxLength: 63,
+            validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
     }
 
     private sealed class ManagedEnvironmentNameResolver(
