@@ -29,7 +29,7 @@ public class ConsoleInteractionServiceTests
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null, ILoggerFactory? loggerFactory = null)
     {
         executionContext ??= CreateExecutionContext();
-        var consoleEnvironment = new ConsoleEnvironment(console, console);
+        var consoleEnvironment = new ConsoleEnvironment(console, console, TextReader.Null);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), loggerFactory ?? NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
@@ -889,7 +889,7 @@ public class ConsoleInteractionServiceTests
         });
 
         var executionContext = CreateExecutionContext();
-        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole, TextReader.Null);
         var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         // Console defaults to Standard (stdout), but errors should still go to stderr
@@ -918,7 +918,7 @@ public class ConsoleInteractionServiceTests
         });
 
         var executionContext = CreateExecutionContext();
-        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole, TextReader.Null);
         var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         interactionService.DisplayMessage(KnownEmojis.Information, "Status update");

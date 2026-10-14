@@ -3,16 +3,16 @@
 
 using System.CommandLine;
 using System.Globalization;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Hidden, machine-facing command invoked by the agent telemetry hook scripts
-/// (<c>track-telemetry.sh</c> / <c>track-telemetry.ps1</c>) on each agent <c>PostToolUse</c>
-/// event. It records a single reported activity describing the Aspire skill, MCP tool, or
-/// reference-file usage that the hook detected.
+/// Handles native hooks, legacy telemetry arguments, and background uploading without blocking on ingestion.
 /// </summary>
 /// <remarks>
 /// Hook-safety contract: this command must never throw and must always exit 0. A hook that fails
@@ -29,6 +29,17 @@ namespace Aspire.Cli.Commands;
 /// </remarks>
 internal sealed class AgentTelemetryCommand : BaseCommand
 {
+    internal override bool InitializeTelemetryOnStartup => false;
+
+    private readonly TelemetryManager _telemetryManager;
+    private readonly AgentTelemetryHook _hook;
+    private readonly IEnvironment _environment;
+    private readonly ConsoleEnvironment _console;
+    private readonly IServiceProvider _services;
+    private readonly ILogger _logger;
+    private readonly Option<bool> _hookOption = new(AgentTelemetryProtocol.HookOptionName) { Hidden = true };
+    private readonly Option<bool> _drainOption = new(AgentTelemetryProtocol.DrainOptionName) { Hidden = true };
+
     // Defensive cap so a malformed or hostile hook payload cannot push oversized or
     // high-cardinality values into the telemetry backend. Real values (skill names, tool names,
     // skills-relative reference paths) are well under this length.
@@ -36,46 +47,59 @@ internal sealed class AgentTelemetryCommand : BaseCommand
 
     // The only event types the hook scripts emit. Anything else is dropped so a script bug or a
     // crafted argument cannot introduce arbitrary, high-cardinality event categories.
-    private static readonly string[] s_knownEventTypes = ["skill_invocation", "tool_invocation", "reference_file_read"];
+    private static readonly string[] s_knownEventTypes =
+    [
+        AgentTelemetryProtocol.SkillInvocationEventType,
+        AgentTelemetryProtocol.ToolInvocationEventType,
+        AgentTelemetryProtocol.ReferenceFileReadEventType
+    ];
 
-    private readonly Option<string?> _eventTypeOption = new("--event-type")
+    private readonly Option<string?> _eventTypeOption = new(AgentTelemetryProtocol.EventTypeOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_EventTypeDescription
     };
 
-    private readonly Option<string?> _clientNameOption = new("--client-name")
+    private readonly Option<string?> _clientNameOption = new(AgentTelemetryProtocol.ClientNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_ClientNameDescription
     };
 
-    private readonly Option<string?> _sessionIdOption = new("--session-id")
+    private readonly Option<string?> _sessionIdOption = new(AgentTelemetryProtocol.SessionIdOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_SessionIdDescription
     };
 
-    private readonly Option<string?> _skillNameOption = new("--skill-name")
+    private readonly Option<string?> _skillNameOption = new(AgentTelemetryProtocol.SkillNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_SkillNameDescription
     };
 
-    private readonly Option<string?> _toolNameOption = new("--tool-name")
+    private readonly Option<string?> _toolNameOption = new(AgentTelemetryProtocol.ToolNameOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_ToolNameDescription
     };
 
-    private readonly Option<string?> _fileReferenceOption = new("--file-reference")
+    private readonly Option<string?> _fileReferenceOption = new(AgentTelemetryProtocol.FileReferenceOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_FileReferenceDescription
     };
 
-    private readonly Option<string?> _timestampOption = new("--timestamp")
+    private readonly Option<string?> _timestampOption = new(AgentTelemetryProtocol.TimestampOptionName)
     {
         Description = AgentCommandStrings.AgentTelemetryCommand_TimestampDescription
     };
 
-    public AgentTelemetryCommand(CommonCommandServices services)
-        : base("telemetry", AgentCommandStrings.AgentTelemetryCommand_Description, services)
+    public AgentTelemetryCommand(CommonCommandServices services, TelemetryManager telemetryManager,
+        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console, IServiceProvider serviceProvider)
+        : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
+        _telemetryManager = telemetryManager;
+        _hook = hook;
+        _environment = environment;
+        _console = console;
+        _services = serviceProvider;
+        _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
+
         // This command is an implementation detail of the agent hook scripts, not a user-facing
         // command, so keep it out of help output.
         Hidden = true;
@@ -90,27 +114,82 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         Options.Add(_toolNameOption);
         Options.Add(_fileReferenceOption);
         Options.Add(_timestampOption);
+        Options.Add(_hookOption);
+        Options.Add(_drainOption);
     }
 
-    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         try
         {
-            // Validate every value up front. Invalid or oversized values are dropped (never recorded),
-            // so a parser bug in a hook script cannot leak an absolute path, user name, or other
-            // sensitive/high-cardinality data into telemetry.
-            var tags = CollectValidTags(parseResult);
-
-            // Nothing valid survived validation (for example a newer hook script paired with an older
-            // CLI dropped every field): emit no span rather than a tagless one.
-            if (tags.Count is 0)
+            if (parseResult.GetValue(_hookOption))
             {
-                return Task.FromResult(CommandResult.Success());
+                await _hook.RunAsync(_console.Input, _console.Out.Profile.Out.Writer, _console.Error.Profile.Out.Writer, async args =>
+                {
+                    // Classification produces the same options as legacy script invocations. Parse
+                    // those options on this command, without invoking another CLI or handler.
+                    await RecordAsync(Parse(args[2..])).ConfigureAwait(false);
+                    return CliExitCodes.Success;
+                }).ConfigureAwait(false);
             }
+            else if (parseResult.GetValue(_drainOption))
+            {
+                if (!IsOptedOut())
+                {
+                    _telemetryManager.Initialize();
+                    if (_telemetryManager.HasAzureMonitor)
+                    {
+                        await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
+                            AgentTelemetryUploader.LockPath, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
+            else
+            {
+                await RecordAsync(parseResult).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            // A telemetry failure must never interrupt the host agent's tool loop.
+            _logger.LogDebug(ex, "Failed to process agent telemetry.");
+        }
 
-            // Activity is null when telemetry is opted out (no reported provider) or no listener is
-            // attached; in that case this is a no-op, which is the desired behavior.
-            using var activity = Telemetry.StartReportedActivity(TelemetryConstants.Activities.AgentTelemetry);
+        return CommandResult.Success();
+    }
+
+    private bool IsOptedOut()
+        => _environment.IsFlagEnabled(AspireCliTelemetry.TelemetryOptOutConfigKey);
+
+    private async Task RecordAsync(ParseResult parseResult)
+    {
+        if (IsOptedOut())
+        {
+            return;
+        }
+
+        // Validate every value up front. Invalid or oversized values are dropped (never recorded),
+        // so a parser bug in a hook script cannot leak an absolute path, user name, or other
+        // sensitive/high-cardinality data into telemetry.
+        var tags = CollectValidTags(parseResult);
+
+        // Nothing valid survived validation (for example a newer hook script paired with an older
+        // CLI dropped every field): emit no span rather than a tagless one.
+        if (tags.Count is 0)
+        {
+            return;
+        }
+
+        // Defer providers and enrichment until classification/validation finds an event.
+        // Listeners must be attached before enrichment can emit detector activities.
+        var manager = _telemetryManager;
+        manager.Initialize();
+        Telemetry.Initialize();
+
+        // Activity is null when telemetry is opted out (no reported provider) or no listener is
+        // attached; in that case this is a no-op, which is the desired behavior.
+        using (var activity = Telemetry.StartReportedActivity(TelemetryConstants.Activities.AgentTelemetry))
+        {
             if (activity is not null)
             {
                 foreach (var (name, value) in tags)
@@ -119,12 +198,16 @@ internal sealed class AgentTelemetryCommand : BaseCommand
                 }
             }
         }
-        catch
-        {
-            // Telemetry must never break the calling agent's hook. Swallow everything and exit 0.
-        }
 
-        return Task.FromResult(CommandResult.Success());
+        await Telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
+        if (!await manager.ForceFlushReportedAsync().ConfigureAwait(false))
+        {
+            _logger.LogWarning("Agent telemetry persistence did not complete before the flush timeout.");
+        }
+        if (manager.HasAzureMonitor)
+        {
+            await AgentTelemetryUploader.EnsureRunningAsync(_services).ConfigureAwait(false);
+        }
     }
 
     private List<(string Name, string Value)> CollectValidTags(ParseResult parseResult)

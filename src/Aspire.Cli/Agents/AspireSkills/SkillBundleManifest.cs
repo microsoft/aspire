@@ -51,8 +51,8 @@ internal sealed class SkillBundleFile
 {
     public string? RelativePath { get; init; }
 
-    // Lowercase hex SHA-512 of the file contents (preferred), read from `skill-manifest.json` inside the
-    // bundle archive (an optional `sha512-` SRI-style prefix is tolerated). Emitted per-file by current
+    // Lowercase hex SHA-512 of the file contents (preferred), read from the manifest inside the bundle
+    // archive (an optional `sha512-` SRI-style prefix is tolerated). Emitted per-file by current
     // microsoft/aspire-skills' build-aspire-bundles.mjs and verified by AspireSkillsBundleProvider.
     public string? Sha512 { get; init; }
 
