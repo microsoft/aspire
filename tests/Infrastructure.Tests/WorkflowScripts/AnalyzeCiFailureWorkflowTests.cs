@@ -2863,6 +2863,18 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     }
 
     [Fact]
+    public void PublishDataAllowsMainScopeWithoutPrNumbers()
+    {
+        var publishData = GetSection(s_sourceWorkflow, "publish-data:", "rerun-failed-jobs:");
+        var publishPrNumbers = GetSection(publishData, "pr_numbers:", "env:");
+        Assert.DoesNotContain("required: true", publishPrNumbers, StringComparison.Ordinal);
+
+        var rerunFailedJobs = GetSection(s_sourceWorkflow, "rerun-failed-jobs:", "steps:");
+        var rerunPrNumbers = GetSection(rerunFailedJobs, "pr_numbers:", "reason:");
+        Assert.Contains("required: true", rerunPrNumbers, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CommentStepDefinesTrustedFailedJobsPath()
     {
         ForEachExecutableWorkflow(workflow =>
