@@ -182,15 +182,10 @@ internal sealed class ApplicationOrchestrator
                 return;
             }
 
+            // Parameter metadata may include references overridden in the launch configuration. Only
+            // actual dependencies gate this event; configuration resolution awaits the values still used.
             var completedTask = await Task.WhenAny(waitForDependenciesTask, waitForNonWaitingStateTask).ConfigureAwait(false);
             await completedTask.ConfigureAwait(false);
-
-            if (ReferenceEquals(completedTask, waitForDependenciesTask))
-            {
-                // Normal dependency completion does not bypass parameter blocking. Wait until the startup
-                // blocker reducer moves the resource out of both informational waiting states.
-                await waitForNonWaitingStateTask.ConfigureAwait(false);
-            }
         }
         catch (Exception ex)
         {

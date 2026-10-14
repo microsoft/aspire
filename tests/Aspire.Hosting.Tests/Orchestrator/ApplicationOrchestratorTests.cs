@@ -1471,6 +1471,79 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task OnResourceStarting_WithOverriddenParameterAndWaitFor_DoesNotWaitForUnusedValue(bool dependencyAlreadyReady)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var dependency = builder.AddContainer("dependency", "test-image");
+        var container = builder.AddContainer("api", "test-image")
+            .WithEnvironment("VALUE", parameter)
+            .WithEnvironment("VALUE", "literal")
+            .WaitFor(dependency);
+
+        using var app = builder.Build();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(cts.Token));
+
+        if (dependencyAlreadyReady)
+        {
+            await SetDependencyReadyAsync();
+        }
+
+        await events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Container, container.Resource, container.Resource.Name));
+        var startingTask = StartResourceAsync();
+
+        try
+        {
+            if (!dependencyAlreadyReady)
+            {
+                await notifications.WaitForResourceAsync(container.Resource.Name,
+                    e => e.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.WaitingFor)?.Value is string[] waitingFor &&
+                        waitingFor.SequenceEqual([dependency.Resource.Name]), cts.Token).DefaultTimeout();
+                Assert.False(startingTask.IsCompleted);
+                await SetDependencyReadyAsync();
+            }
+
+            var configuration = await startingTask.DefaultTimeout();
+            Assert.Null(configuration.Exception);
+            Assert.Collection(configuration.EnvironmentVariables, environmentVariable =>
+            {
+                Assert.Equal("VALUE", environmentVariable.Key);
+                Assert.Equal("literal", environmentVariable.Value);
+            });
+            Assert.NotNull(parameter.Resource.WaitForValueTcs);
+            Assert.False(parameter.Resource.WaitForValueTcs.Task.IsCompleted);
+        }
+        finally
+        {
+            cts.Cancel();
+        }
+
+        Task SetDependencyReadyAsync() => notifications.PublishUpdateAsync(dependency.Resource, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        });
+
+        async Task<IExecutionConfigurationResult> StartResourceAsync()
+        {
+            await events.PublishAsync(new OnResourceBeforeStartContext(cts.Token, container.Resource, container.Resource.Name));
+
+            return await ExecutionConfigurationBuilder.Create(container.Resource)
+                .WithEnvironmentVariablesConfig()
+                .BuildAsync(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run), NullLogger.Instance, cts.Token);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task OnResourceStarting_WithUnresolvedParameterAndWaitFor_WaitsForBothBlockers(bool dependencyResolvesFirst)
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -1502,7 +1575,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             KnownResourceTypes.Container,
             container.Resource,
             container.Resource.GetResolvedResourceNames()[0]));
-        var startingTask = events.PublishAsync(new OnResourceBeforeStartContext(CancellationToken.None, container.Resource, container.Resource.GetResolvedResourceNames()[0]));
+        var startingTask = BuildConfigurationAfterDependenciesAsync();
 
         var firstCompletedTask = await Task.WhenAny(startingTask, waitingForEventTask).DefaultTimeout();
         Assert.Same(waitingForEventTask, firstCompletedTask);
@@ -1545,7 +1618,18 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             }).DefaultTimeout();
         }
 
-        await startingTask.DefaultTimeout();
+        var configuration = await startingTask.DefaultTimeout();
+        Assert.Null(configuration.Exception);
+        Assert.Equal("resolved-value", configuration.EnvironmentVariables.Single(e => e.Key == "VALUE").Value);
+
+        async Task<IExecutionConfigurationResult> BuildConfigurationAfterDependenciesAsync()
+        {
+            await events.PublishAsync(new OnResourceBeforeStartContext(CancellationToken.None, container.Resource, container.Resource.GetResolvedResourceNames()[0]));
+
+            return await ExecutionConfigurationBuilder.Create(container.Resource)
+                .WithEnvironmentVariablesConfig()
+                .BuildAsync(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run), NullLogger.Instance);
+        }
     }
 
     [Fact]
@@ -1613,7 +1697,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
         }).DefaultTimeout();
         var unresolvedEvent = await parameterOnlyBlockerTask.DefaultTimeout();
-        Assert.False(beforeStartTask.IsCompleted);
+        await beforeStartTask.DefaultTimeout();
+        Assert.False(configurationTask.IsCompleted);
 
         Assert.Equal(KnownResourceStates.UnresolvedParameters, unresolvedEvent.Snapshot.State?.Text);
         Assert.DoesNotContain(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
@@ -1623,7 +1708,6 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             e => e.Snapshot.State?.Text == KnownResourceStates.Starting);
         await parameterProcessor.SetParameterCoreAsync(parameter.Resource, CreateSetParameterArguments("final-value"), CancellationToken.None);
         _ = await startingTask.DefaultTimeout();
-        await beforeStartTask.DefaultTimeout();
 
         var configuration = await configurationTask.DefaultTimeout();
         Assert.Null(configuration.Exception);
