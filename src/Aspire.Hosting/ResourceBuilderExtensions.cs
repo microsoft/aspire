@@ -559,7 +559,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        WalkAndLinkResourceReferences(builder, [value]);
+        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All);
 
         return builder.WithEnvironment(context =>
         {
@@ -586,7 +586,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        WalkAndLinkResourceReferences(builder, [value]);
+        WalkAndLinkResourceReferences(builder, [value], ResourceLinkTargets.All);
 
         return builder.WithEnvironment(context =>
         {
@@ -948,7 +948,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(args);
 
-        WalkAndLinkResourceReferences(builder, args);
+        WalkAndLinkResourceReferences(builder, args, ResourceLinkTargets.All);
 
         return builder.WithArgs(context => context.Args.AddRange(args));
     }
@@ -1392,7 +1392,7 @@ public static class ResourceBuilderExtensions
             injectedValues.AddRange(resource.Annotations.OfType<ConnectionPropertyAnnotation>().Select(static annotation => annotation.Value));
         }
 
-        WalkAndLinkResourceReferences(builder, injectedValues);
+        WalkAndLinkResourceReferences(builder, injectedValues, ResourceLinkTargets.Parameters);
 
         return builder.WithEnvironment(context =>
         {
@@ -4922,49 +4922,70 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(expression);
 
-        WalkAndLinkResourceReferences(builder, expression.ValueProviders);
+        WalkAndLinkResourceReferences(builder, expression.ValueProviders, ResourceLinkTargets.All);
 
         return builder;
     }
 
-    private static void WalkAndLinkResourceReferences<T>(IResourceBuilder<T> builder, IEnumerable<object> values)
+    [Flags]
+    private enum ResourceLinkTargets
+    {
+        None = 0,
+        Resources = 1,
+        Parameters = 2,
+        All = Resources | Parameters
+    }
+
+    private static void WalkAndLinkResourceReferences<T>(IResourceBuilder<T> builder, IEnumerable<object> values, ResourceLinkTargets linkTargets)
         where T : IResource
     {
-        var processed = new HashSet<object>();
+        var processed = new HashSet<(object Value, ResourceLinkTargets LinkTargets)>();
+        var linkedResources = new HashSet<IResource>(ReferenceEqualityComparer.Instance);
 
-        void AddReference(IResource resource)
+        void Walk(object value, ResourceLinkTargets linkTargets)
         {
-            builder.WithReferenceRelationship(resource);
-        }
-
-        void Walk(object value)
-        {
-            if (!processed.Add(value))
+            if (value is IResourceBuilder<IResource> resourceBuilder)
             {
-                return;
+                value = resourceBuilder.Resource;
             }
 
             if (value is IResource resource)
             {
-                AddReference(resource);
+                var target = resource switch
+                {
+                    ParameterResource => ResourceLinkTargets.Parameters,
+                    _ => ResourceLinkTargets.Resources
+                };
+
+                if (linkTargets.HasFlag(target) && linkedResources.Add(resource))
+                {
+                    builder.WithReferenceRelationship(resource);
+                }
+
+                // A resource's internal dependencies are not direct consumer references (e.g. a database's
+                // parent server). Keep only the caller-requested parameter links for this recursive branch.
+                linkTargets &= ResourceLinkTargets.Parameters;
             }
-            else if (value is IResourceBuilder<IResource> resourceBuilder)
+
+            // Link before checking traversal history: a resource first reached transitively may
+            // also appear later as a directly consumed value in the same expression or argument list.
+            if (!processed.Add((value, linkTargets)))
             {
-                AddReference(resourceBuilder.Resource);
+                return;
             }
 
             if (value is IValueWithReferences valueWithReferences)
             {
                 foreach (var reference in valueWithReferences.References)
                 {
-                    Walk(reference);
+                    Walk(reference, linkTargets);
                 }
             }
         }
 
         foreach (var value in values)
         {
-            Walk(value);
+            Walk(value, linkTargets);
         }
     }
 

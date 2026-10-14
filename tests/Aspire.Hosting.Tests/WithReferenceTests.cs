@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -727,6 +728,92 @@ public class WithReferenceTests
         // Verify connection properties ARE present
         Assert.Contains(config, kvp => kvp.Key == "RESOURCE_HOST" && kvp.Value == "localhost");
         Assert.Contains(config, kvp => kvp.Key == "RESOURCE_PORT" && kvp.Value == "5432");
+    }
+
+    [Theory]
+    [InlineData("Reference")]
+    [InlineData("Environment")]
+    [InlineData("GenericEnvironment")]
+    [InlineData("Arguments")]
+    [InlineData("Relationship")]
+    public void TransitiveConnectionStringReferencesOnlyLinkParameters(string usage)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var connectionStringParameter = builder.AddParameter("connectionStringParameter");
+        var connectionPropertyParameter = builder.AddParameter("connectionPropertyParameter");
+        var parent = builder.AddResource(new TestResourceWithReferencedProperties(
+            "parent", connectionStringParameter.Resource, connectionPropertyParameter.Resource));
+        var child = builder.AddConnectionString("child", ReferenceExpression.Create($"{parent.Resource};Database=appdb"));
+        var consumer = builder.AddExecutable("consumer", "unused", ".");
+        var expression = ReferenceExpression.Create($"{child.Resource}");
+
+        switch (usage)
+        {
+            case "Reference":
+                consumer.WithReference(child);
+                break;
+            case "Environment":
+                consumer.WithEnvironment("VALUE", expression);
+                break;
+            case "GenericEnvironment":
+                consumer.WithEnvironment<ExecutableResource, ReferenceExpression>("VALUE", expression);
+                break;
+            case "Arguments":
+                consumer.WithArgs(expression);
+                break;
+            case "Relationship":
+                consumer.WithReferenceRelationship(expression);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected usage '{usage}'.");
+        }
+
+        Assert.True(consumer.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Collection(relationships,
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(child.Resource, relationship.Resource);
+            },
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(connectionStringParameter.Resource, relationship.Resource);
+            });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DirectReferenceAfterTransitiveReferenceIsStillLinked(bool useExpression)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var connectionStringParameter = builder.AddParameter("connectionStringParameter");
+        var connectionPropertyParameter = builder.AddParameter("connectionPropertyParameter");
+        var parent = builder.AddResource(new TestResourceWithReferencedProperties(
+            "parent", connectionStringParameter.Resource, connectionPropertyParameter.Resource));
+        var child = builder.AddConnectionString("child", ReferenceExpression.Create($"{parent.Resource};Database=appdb"));
+        object directReference = useExpression ? child.Resource.ConnectionStringExpression : parent.Resource;
+        var consumer = builder.AddExecutable("consumer", "unused", ".")
+            .WithArgs(ReferenceExpression.Create($"{child.Resource}"), directReference);
+
+        Assert.True(consumer.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Collection(relationships,
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(child.Resource, relationship.Resource);
+            },
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(connectionStringParameter.Resource, relationship.Resource);
+            },
+            relationship =>
+            {
+                Assert.Equal(KnownRelationshipTypes.Reference, relationship.Type);
+                Assert.Same(parent.Resource, relationship.Resource);
+            });
     }
 
     [Theory]
