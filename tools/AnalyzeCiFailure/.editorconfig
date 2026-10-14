@@ -1,0 +1,4 @@
+[*.cs]
+# CA2007: Consider calling ConfigureAwait on the awaited task
+# A console app has no synchronization context, so ConfigureAwait(false) would only add noise.
+dotnet_diagnostic.CA2007.severity = silent

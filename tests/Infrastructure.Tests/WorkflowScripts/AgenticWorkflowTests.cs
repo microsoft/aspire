@@ -66,7 +66,7 @@ public sealed class AgenticWorkflowTests
 
         var validation = Step(root, "Validate analysis scope");
         Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(validation, "env"), "ANALYSIS_DIR"));
-        Assert.Contains("analyze-ci-failure-validation.sh", Scalar(validation, "run"), StringComparison.Ordinal);
+        Assert.Contains("--project tools/AnalyzeCiFailure -- validate", Scalar(validation, "run"), StringComparison.Ordinal);
 
         var publish = Step(root, "Publish analysis data and comment on PR");
         Assert.Equal("${{ steps.download-analysis.outputs.download-path }}", Scalar(Mapping(publish, "env"), "ANALYSIS_DIR"));

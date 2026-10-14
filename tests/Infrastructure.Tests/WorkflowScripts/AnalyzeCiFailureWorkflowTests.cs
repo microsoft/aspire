@@ -5,6 +5,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
+using AnalyzeCiFailure.Validation;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -12,7 +13,7 @@ namespace Infrastructure.Tests;
 
 public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : IDisposable
 {
-    private const string ValidationScriptRelativePath = ".github/workflows/analyze-ci-failure-validation.sh";
+    private const string ValidationCommand = "dotnet run --no-build --project tools/AnalyzeCiFailure -- validate";
     private const string HistoryScriptRelativePath = ".github/workflows/analyze-ci-failure-history.sh";
     private const string CandidatesScriptRelativePath = ".github/workflows/analyze-ci-failure-candidates.sh";
     private const string IssueScriptRelativePath = ".github/workflows/analyze-ci-failure-issue.sh";
@@ -20,8 +21,6 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private const string CommentScriptRelativePath = ".github/workflows/analyze-ci-failure-comment.sh";
 
     private static readonly string s_sourceWorkflow = ReadWorkflow("analyze-ci-failure.md");
-    private static readonly string s_validationScript = File.ReadAllText(
-        Path.Combine(RepoRoot.Path, ValidationScriptRelativePath));
     private static readonly string s_candidatesScript = File.ReadAllText(
         Path.Combine(RepoRoot.Path, CandidatesScriptRelativePath));
     private static readonly string s_issueScript = File.ReadAllText(
@@ -696,7 +695,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"main"}""",
             "[]");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -732,7 +731,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             JsonSerializer.Serialize(
                 failedJobs.Select(job => new { job.id, name = $"Job {job.id}" })));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -746,7 +745,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":123,"name":"Tests"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Single(GetWorkflowCommandLines(result.Output));
@@ -767,7 +766,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "invalid\n::warning::injected.json",
             cause);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Single(GetWorkflowCommandLines(result.Output));
@@ -784,7 +783,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             """{"id":"nuget-timeout","type":"invalid\n::warning::injected","title":"Failure","error_pattern":"boom","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Single(GetWorkflowCommandLines(result.Output));
@@ -806,7 +805,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(priorCausesDirectory, "nuget-timeout.json"),
             """{"id":"nuget-timeout","type":"invalid\n::warning::injected"}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Single(GetWorkflowCommandLines(result.Output));
@@ -828,7 +827,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(priorCausesDirectory, "flaky-failure.json"),
             """{"id":"flaky-failure","type":"flaky-test","title":"Stored failure","test_name":"Tests.Original","error_pattern":"old"}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -849,7 +848,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Invented","error_pattern":"invented","job_ids":[123]}""",
             writeTrustedTestFailures: false);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -881,7 +880,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                     """{"id":"second-failure","type":"flaky-test","title":"Second failure","test_name":"Tests.Second","error_pattern":"second","job_ids":[1]}""",
             });
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -908,7 +907,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "first-failure.json",
             """{"id":"first-failure","type":"flaky-test","title":"First failure","test_name":"Tests.First","error_pattern":"first","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -940,7 +939,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                     """{"id":"second-failure","type":"flaky-test","title":"Second failure","test_name":"Tests.Second","error_pattern":"second","job_ids":[2]}""",
             });
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -959,7 +958,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Flaky","job":"Tests","error":"Trusted\r\nerror\u001b[31m","stack_trace":"trusted\r\nframe","standard_output":"Authorization: Bearer artifact-secret\r\nassertion context","standard_error":"Server=db;Password='artifact-secret';Timeout=30"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
         using var analysis = JsonDocument.Parse(
@@ -992,7 +991,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Failed","job":"First job","error":"trusted","stack_trace":"trusted frame"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1027,7 +1026,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             ]
             """);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
         using var analysis = JsonDocument.Parse(
@@ -1055,7 +1054,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":123,"name":"Tests"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1076,7 +1075,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timed out","job_ids":[123]}""",
             testEvidenceState: "unavailable");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1097,7 +1096,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"timed out","job_ids":[123]}""",
             testEvidenceState: "not-applicable");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -1116,7 +1115,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Failed","job":"Tests","error":"boom","stack_trace":"frame"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1136,7 +1135,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "flaky-failure.json",
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"Tests.Other","error_pattern":"boom","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1156,7 +1155,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "flaky-failure.json",
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","test_name":"","error_pattern":"boom","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1179,7 +1178,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Flaky","job":"Tests","error":"trusted","stack_trace":"frame"},{"test":"Tests.Flaky","job":"Tests","error":"trusted","stack_trace":"frame"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -1198,7 +1197,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Flaky","job":"Tests","error":"linux failure","stack_trace":"linux frame"},{"test":"Tests.Flaky","job":"Tests","error":"windows failure","stack_trace":"windows frame"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1221,7 +1220,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "test-failures.json"),
             """[{"test":"Tests.Flaky","job":"Tests","error":"first","stack_trace":"first frame"},{"test":"Tests.Flaky","job":"Tests","error":"second","stack_trace":"second frame"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1253,7 +1252,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":123,"name":"Tests"}]""",
             causes);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1286,7 +1285,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":123,"name":"Tests"}]""",
             causes);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1322,7 +1321,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             JsonSerializer.Serialize(
                 failedJobs.Select(job => new { job.id, name = $"Job {job.id}" })));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1341,7 +1340,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":123,"name":"Tests"}]""");
         File.Delete(Path.Combine(_workspace.Path, "ci-failure-data", "run.json"));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1362,7 +1361,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             Path.Combine(_workspace.Path, "ci-failure-data", "run.json"),
             """{"id":123,"html_url":"https://github.com/microsoft\n@reviewers/aspire/actions/runs/123"}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1393,6 +1392,11 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
         """[{"id":123,"name":"Tests"}]""",
         "::error::Pull request analysis must identify a trusted subject PR")]
     [InlineData(
+        """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
+        """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
+        """[{"id":123,"name":"Tests"}]""",
+        "::error::Pull request analysis must identify a trusted subject PR")]
+    [InlineData(
         """{"run_id":123,"run_scope":"pull-request","verdict":"code-issue","pr":{},"failed_jobs":[{"id":123,"classification":"code-issue"}],"failed_tests":[],"causes":[]}""",
         """{"run_id":123,"run_scope":"pull-request","pr_numbers":""}""",
         """[{"id":123,"name":"Tests"}]""",
@@ -1411,7 +1415,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         await WriteValidationFixtureAsync(analysis, runContext, trustedFailedJobs);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(expectedError, result.Output, StringComparison.Ordinal);
@@ -1446,7 +1450,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1493,7 +1497,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":123,"name":"Tests"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
         using var sanitized = JsonDocument.Parse(
@@ -1523,7 +1527,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1543,7 +1547,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "flaky-failure.json",
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky test","error_pattern":"Tests.Deterministic","job_ids":[123]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1602,7 +1606,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             causeFileName,
             cause);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -1618,7 +1622,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out"}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1641,7 +1645,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             $$"""{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[123],"{{field}}":"{{value}}"}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1672,7 +1676,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             JsonSerializer.Serialize(cause));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1708,7 +1712,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "flaky-failure.json",
             JsonSerializer.Serialize(cause));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
         using var sanitizedCause = JsonDocument.Parse(
@@ -1735,7 +1739,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 job_ids = new[] { 123 },
             }));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1768,7 +1772,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             }));
 
         var causePath = Path.Combine(_workspace.Path, "ci-analysis-output", "causes", "nuget-timeout.json");
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
         using var cause = JsonDocument.Parse(await File.ReadAllTextAsync(causePath));
@@ -1787,7 +1791,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             """{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":[999]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1807,7 +1811,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "flaky-failure.json",
             """{"id":"flaky-failure","type":"flaky-test","title":"Flaky failure","error_pattern":"Failed","test_name":"Tests.Flaky","job_ids":[999]}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -1832,7 +1836,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "nuget-timeout.json",
             $$"""{"id":"nuget-timeout","type":"infra-failure","title":"NuGet timeout","error_pattern":"Request timed out","job_ids":{{jobIds}}}""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -2146,7 +2150,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             $"{causeId}.json",
             CreateCause(causeId, causeType, 1));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -2197,7 +2201,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """[{"id":1,"name":"Build"},{"id":2,"name":"Tests"},{"id":3,"name":"Setup"}]""",
             causes);
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -2220,7 +2224,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1),
             });
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -2239,7 +2243,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             """{"run_id":123,"run_scope":"pull-request","pr_numbers":"42"}""",
             """[{"id":1,"name":"Tests"}]""");
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -2267,7 +2271,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
                 ["flaky-failure.json"] = CreateCause("flaky-failure", "flaky-test", 1),
             });
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.Equal(0, result.ExitCode);
     }
@@ -2288,7 +2292,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
             "main-failure.json",
             CreateCause("main-failure", "main-repository-breakage", 1));
 
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -2530,56 +2534,20 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     {
         ForEachExecutableWorkflow(workflow =>
         {
-            Assert.Contains(".github/workflows/analyze-ci-failure-validation.sh", workflow, StringComparison.Ordinal);
+            Assert.Contains("tools/AnalyzeCiFailure/", workflow, StringComparison.Ordinal);
             Assert.Contains(".github/workflows/analyze-ci-failure-persistence.sh", workflow, StringComparison.Ordinal);
             Assert.Contains(".github/workflows/analyze-ci-failure-comment.sh", workflow, StringComparison.Ordinal);
-            Assert.Contains("run: bash .github/workflows/analyze-ci-failure-validation.sh", workflow, StringComparison.Ordinal);
+            Assert.Contains(ValidationCommand, workflow, StringComparison.Ordinal);
             Assert.Contains("jq -n --rawfile body \"$COMMENT_FILE\"", workflow, StringComparison.Ordinal);
             Assert.Contains("--input \"$COMMENT_REQUEST_FILE\"", workflow, StringComparison.Ordinal);
             Assert.DoesNotContain("-f body=\"$(cat \"$COMMENT_FILE\")\"", workflow, StringComparison.Ordinal);
-            var validationIndex = workflow.IndexOf(
-                "run: bash .github/workflows/analyze-ci-failure-validation.sh",
-                StringComparison.Ordinal);
+            var validationIndex = workflow.IndexOf(ValidationCommand, StringComparison.Ordinal);
             var publishStepIndex = workflow.IndexOf(
                 "- name: Publish analysis data and comment on PR",
                 validationIndex,
                 StringComparison.Ordinal);
             Assert.True(validationIndex >= 0 && publishStepIndex > validationIndex);
         });
-
-        var validationScript = NormalizeIndentation(s_validationScript);
-        Assert.Contains("RUN_CONTEXT_FILE=\"ci-failure-data/run-context.json\"", validationScript, StringComparison.Ordinal);
-        Assert.Contains("ANALYSIS_RUN_SCOPE=$(jq -r '.run_scope' \"$ANALYSIS_FILE\")", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis result does not match trusted run context\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Main run analysis must not identify a subject PR\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Pull request analysis must identify a trusted subject PR\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("TRUSTED_FAILED_JOBS_FILE=\"ci-failure-data/failed-jobs.json\"", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis must contain numeric-ID failed_jobs and string-valued causes arrays\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis failed_tests must match the safe field schema\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Cause ${CAUSE_BASENAME_DISPLAY} contains unsupported or publisher-owned fields\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis failed-job IDs do not match the trusted failed jobs\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Verdict ${VERDICT_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("type ${CAUSE_TYPE_DISPLAY} is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Cause ${CAUSE_BASENAME_DISPLAY} cannot change type from ${PRIOR_CAUSE_TYPE_DISPLAY} to ${CAUSE_TYPE_DISPLAY}\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Cause ${CAUSE_BASENAME_DISPLAY} is not referenced by the analysis summary\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis cause IDs must uniquely match the generated cause files\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis must classify every failed job with a recognized classification\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis contains a failed-job classification that is not permitted for run scope ${TRUSTED_RUN_SCOPE}\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("if [ \"$INFRA_JOB_COUNT\" -ne \"$FAILED_JOB_COUNT\" ] ||", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A transient-infra verdict requires every failed job and cause to be an infrastructure failure\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("if [ \"$FLAKY_JOB_COUNT\" -eq 0 ] || [ \"$TRANSIENT_JOB_COUNT\" -ne \"$FAILED_JOB_COUNT\" ] ||", validationScript, StringComparison.Ordinal);
-        Assert.Contains("[ \"$FLAKY_CAUSE_COUNT\" -eq 0 ]", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A flaky-test verdict requires at least one flaky job, only transient failed jobs, and only transient causes\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("if [ \"$CODE_ISSUE_JOB_COUNT\" -ne \"$FAILED_JOB_COUNT\" ] || [ \"$CAUSE_COUNT\" -ne 0 ]; then", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis failed_tests are incompatible with verdict code-issue\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A code-issue verdict requires every failed job to be a code issue and must not include cause files\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("if [ \"$MAIN_BREAK_JOB_COUNT\" -ne \"$FAILED_JOB_COUNT\" ] ||", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Analysis failed_tests are incompatible with verdict main-repository-breakage\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A main-repository-breakage verdict requires every failed job and cause to be a main repository breakage\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("{ [ \"$TRANSIENT_JOB_COUNT\" -eq 0 ] && [ \"$FLAKY_TEST_COUNT\" -eq 0 ]; }", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A mixed verdict for main requires a main-breakage job and cause plus transient job or test evidence and cause\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("A mixed verdict for a pull request requires a code-issue job plus transient job or test evidence and a transient cause\"\nexit 1", validationScript, StringComparison.Ordinal);
-        Assert.Contains("Every flaky test and job must be covered by a matching cause\"\nexit 1", validationScript, StringComparison.Ordinal);
 
         Assert.Contains("### If failures include Transient Test Failures and no deterministic failures:", s_sourceWorkflow, StringComparison.Ordinal);
         Assert.Contains("### If ALL failures are Non-Transient PR Code Issues:", s_sourceWorkflow, StringComparison.Ordinal);
@@ -6911,30 +6879,19 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
     private static string ReadWorkflow(string fileName)
         => File.ReadAllText(Path.Combine(RepoRoot.Path, ".github", "workflows", fileName));
 
-    private async Task<CommandResult> RunValidationScriptAsync(string agentOutputPath)
+    private async Task<CommandResult> RunValidationAsync()
     {
-        var scriptPath = Path.Combine(RepoRoot.Path, ValidationScriptRelativePath);
-        Assert.True(File.Exists(scriptPath), $"Expected validation helper at '{ValidationScriptRelativePath}'.");
-
-        using var process = new Process();
-        process.StartInfo.FileName = "bash";
-        process.StartInfo.ArgumentList.Add(scriptPath);
-        process.StartInfo.WorkingDirectory = _workspace.Path;
-        process.StartInfo.RedirectStandardError = true;
-        process.StartInfo.RedirectStandardOutput = true;
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.Environment["GH_AW_AGENT_OUTPUT"] = agentOutputPath;
-        process.StartInfo.Environment["ANALYSIS_DIR"] = Path.Combine(_workspace.Path, "ci-analysis-output");
-
-        process.Start();
-
-        // Read both streams concurrently to avoid deadlock when the validator emits diagnostics.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
+        // The validator runs in-process; it still shells out to the bash sanitizers and comment
+        // renderer under .github/workflows, so those must resolve from the repository root.
+        var paths = new ValidationPaths(
+            AnalysisDirectory: Path.Combine(_workspace.Path, "ci-analysis-output"),
+            WorkingDirectory: _workspace.Path,
+            ScriptsDirectory: Path.Combine(RepoRoot.Path, ".github", "workflows"));
+        using var output = new StringWriter();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-        await process.WaitForExitAsync(timeout.Token);
+        var exitCode = await AnalysisValidator.RunAsync(paths, output, timeout.Token);
 
-        return new CommandResult(process.ExitCode, await stdoutTask + await stderrTask);
+        return new CommandResult(exitCode, output.ToString());
     }
 
     private async Task<CommandResult> RunHistoryScriptAsync(
@@ -7362,7 +7319,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     private async Task AssertValidationRejectsMismatchedCausePresenceAsync()
     {
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(
@@ -7373,7 +7330,7 @@ public sealed class AnalyzeCiFailureWorkflowTests(ITestOutputHelper output) : ID
 
     private async Task AssertValidationRejectsIncompatibleCauseJobAsync()
     {
-        var result = await RunValidationScriptAsync(Path.Combine(_workspace.Path, "output.json"));
+        var result = await RunValidationAsync();
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(

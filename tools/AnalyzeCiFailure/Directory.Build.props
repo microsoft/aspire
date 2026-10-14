@@ -1,0 +1,3 @@
+<Project>
+  <!-- Cut inheritance from repo root to avoid Arcade SDK dependency -->
+</Project>

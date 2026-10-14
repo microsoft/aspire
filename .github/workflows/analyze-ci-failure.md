@@ -732,7 +732,8 @@ safe-outputs:
           with:
             persist-credentials: false
             sparse-checkout: |
-              .github/workflows/analyze-ci-failure-validation.sh
+              global.json
+              tools/AnalyzeCiFailure/
               .github/workflows/analyze-ci-failure-persistence.sh
               .github/workflows/analyze-ci-failure-comment.sh
               .github/workflows/analyze-ci-failure-issue.sh
@@ -741,10 +742,16 @@ safe-outputs:
           with:
             name: ci-failure-data
             path: ci-failure-data/
+        - name: Setup .NET SDK
+          uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+          with:
+            global-json-file: global.json
         - name: Validate analysis scope
           env:
             ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
-          run: bash .github/workflows/analyze-ci-failure-validation.sh
+          run: |
+            dotnet build tools/AnalyzeCiFailure -v:q
+            dotnet run --no-build --project tools/AnalyzeCiFailure -- validate
         - name: Publish analysis data and comment on PR
           env:
             ANALYSIS_DIR: ${{ steps.download-analysis.outputs.download-path }}
