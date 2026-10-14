@@ -1648,6 +1648,65 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ParameterDiscovery_WithThrowingConnectionMetadata_PreservesReferencesAndOtherResources(
+        bool throwOnConnectionStringExpression,
+        bool throwOnConnectionProperties)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var propertyParameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "property", secret: false);
+        var resource = builder.AddResource(new TestResourceWithConnectionString(
+            "resource", "connection-string", unresolvedProperty: ReferenceExpression.Create($"{propertyParameter}"))
+        {
+            ThrowOnConnectionStringExpression = throwOnConnectionStringExpression,
+            ThrowOnConnectionProperties = throwOnConnectionProperties
+        });
+        var parameter = builder.AddParameter("value", () => throw new MissingParameterValueException("Missing parameter."));
+        var container = builder.AddContainer("api", "test-image").WithEnvironment("VALUE", parameter);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var events = new DcpExecutorEvents();
+        var notifications = ResourceNotificationServiceTestHelpers.Create();
+        var orchestrator = CreateOrchestrator(model, notifications, out var parameterProcessor, dcpEvents: events);
+        await orchestrator.RunApplicationAsync();
+        await events.PublishAsync(new OnResourcesPreparedContext(CancellationToken.None)).DefaultTimeout();
+
+        Assert.NotNull(propertyParameter.WaitForValueTcs);
+        Assert.False(propertyParameter.WaitForValueTcs.Task.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(resource.Resource.Name, out _));
+        Assert.True(notifications.TryGetCurrentState(container.Resource.Name, out _));
+
+        await events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Executable, resource.Resource, "resource-dcp")).DefaultTimeout();
+        Assert.True(notifications.TryGetCurrentState("resource-dcp", out var resourceEvent));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, resourceEvent.Snapshot.State?.Text);
+        Assert.Equal(
+            ["property"],
+            Assert.IsType<string[]>(Assert.Single(resourceEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+
+        await events.PublishAsync(new OnResourceStartingContext(
+            CancellationToken.None, KnownResourceTypes.Container, container.Resource, container.Resource.Name)).DefaultTimeout();
+        await parameterProcessor.SetParameterCoreAsync(parameter.Resource, new InteractionInputCollection([
+            new InteractionInput { Name = ParameterProcessor.SetParameterValueName, InputType = InputType.Text, Value = "resolved-value" },
+            new InteractionInput { Name = ParameterProcessor.SaveToUserSecretsName, InputType = InputType.Boolean, Value = "false" }
+        ]), CancellationToken.None).DefaultTimeout();
+        await parameterProcessor.DeleteParameterCoreAsync(parameter.Resource, new InteractionInputCollection([]), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(notifications.TryGetCurrentState(container.Resource.Name, out var containerEvent));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, containerEvent.Snapshot.State?.Text);
+        Assert.Equal(
+            ["value"],
+            Assert.IsType<string[]>(Assert.Single(containerEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+
+        await propertyParameter.SetValueAsync("resolved-property", CancellationToken.None);
+        await parameter.Resource.SetValueAsync("resolved-value", CancellationToken.None);
+    }
+
     [Fact]
     public async Task OnResourceStarting_WithReferencedOnlyUnresolvedParameter_PublishesParameterName()
     {
@@ -2116,7 +2175,13 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
-        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{connectionString}");
+        public bool ThrowOnConnectionStringExpression { get; init; }
+
+        public bool ThrowOnConnectionProperties { get; init; }
+
+        public ReferenceExpression ConnectionStringExpression => ThrowOnConnectionStringExpression
+            ? throw new InvalidOperationException("Invalid connection string configuration.")
+            : ReferenceExpression.Create($"{connectionString}");
 
         public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
         {
@@ -2138,6 +2203,11 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             if (unresolvedProperty is not null)
             {
                 yield return new("Unavailable", unresolvedProperty);
+            }
+
+            if (ThrowOnConnectionProperties)
+            {
+                throw new InvalidOperationException("Invalid connection property configuration.");
             }
         }
     }

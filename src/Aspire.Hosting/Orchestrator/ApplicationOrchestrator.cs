@@ -323,7 +323,7 @@ internal sealed class ApplicationOrchestrator
         _ = MonitorUnresolvedParametersAsync(context.Resource, context.DcpResourceName, parameterValueTasks, context.CancellationToken);
     }
 
-    private static Dictionary<ParameterResource, Task<string?>?> GetReferencedParameterValueTasks(IResource resource)
+    private Dictionary<ParameterResource, Task<string?>?> GetReferencedParameterValueTasks(IResource resource)
     {
         var parameterValueTasks = new Dictionary<ParameterResource, Task<string?>?>(ReferenceEqualityComparer.Instance);
         foreach (var parameter in GetReferencedParameters(resource))
@@ -334,7 +334,7 @@ internal sealed class ApplicationOrchestrator
         return parameterValueTasks;
     }
 
-    private static IEnumerable<ParameterResource> GetReferencedParameters(IResource resource)
+    private IEnumerable<ParameterResource> GetReferencedParameters(IResource resource)
     {
         var parameters = new HashSet<ParameterResource>(ReferenceEqualityComparer.Instance);
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
@@ -349,9 +349,18 @@ internal sealed class ApplicationOrchestrator
 
         if (resource is IResourceWithConnectionString resourceWithConnectionString)
         {
-            foreach (var property in resourceWithConnectionString.GetConnectionProperties())
+            try
             {
-                Walk(property.Value);
+                foreach (var property in resourceWithConnectionString.GetConnectionProperties())
+                {
+                    Walk(property.Value);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Connection metadata can validate configuration before startup. Discovery is informational;
+                // keep references already found and let the resource's normal lifecycle report the failure.
+                _logger.LogDebug(ex, "Failed to discover parameters in connection properties for resource '{ResourceName}'.", resource.Name);
             }
         }
 
@@ -373,9 +382,18 @@ internal sealed class ApplicationOrchestrator
 
             if (value is IValueWithReferences valueWithReferences)
             {
-                foreach (var reference in valueWithReferences.References)
+                try
                 {
-                    Walk(reference);
+                    foreach (var reference in valueWithReferences.References)
+                    {
+                        Walk(reference);
+                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // References can also invoke a connection-string getter. Isolate a failing branch
+                    // so it cannot prevent discovery for other values or resources.
+                    _logger.LogDebug(ex, "Failed to discover referenced parameters for resource '{ResourceName}'.", resource.Name);
                 }
             }
         }
