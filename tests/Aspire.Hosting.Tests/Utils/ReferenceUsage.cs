@@ -7,6 +7,7 @@ public enum ReferenceUsage
 {
     Reference,
     Environment,
+    ConnectionStringEnvironment,
     GenericEnvironment,
     Arguments,
     Relationship

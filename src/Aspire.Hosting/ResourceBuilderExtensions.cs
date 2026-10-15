@@ -502,6 +502,7 @@ public static class ResourceBuilderExtensions
     /// <param name="envVarName">The name of the environment variable under which the connection string will be set.</param>
     /// <param name="resource">The resource builder of the referenced service from which to pull the connection string.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>Parameters referenced by the connection string are also tracked as references of the destination resource.</remarks>
     [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
@@ -513,12 +514,9 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(envVarName);
         ArgumentNullException.ThrowIfNull(resource);
 
-        builder.WithReferenceRelationship(resource.Resource);
-
-        return builder.WithEnvironment(context =>
-        {
-            context.EnvironmentVariables[envVarName] = new ConnectionStringReference(resource.Resource, optional: false);
-        });
+        // The value-provider overload adds reference relationships for the connection-string resource
+        // and its nested parameters, so a separate WithReferenceRelationship call is unnecessary.
+        return builder.WithEnvironment(envVarName, new ConnectionStringReference(resource.Resource, optional: false));
     }
 
     /// <summary>

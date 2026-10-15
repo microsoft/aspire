@@ -736,6 +736,7 @@ public class WithReferenceTests
     [Theory]
     [InlineData(ReferenceUsage.Reference)]
     [InlineData(ReferenceUsage.Environment)]
+    [InlineData(ReferenceUsage.ConnectionStringEnvironment)]
     [InlineData(ReferenceUsage.GenericEnvironment)]
     [InlineData(ReferenceUsage.Arguments)]
     [InlineData(ReferenceUsage.Relationship)]
@@ -757,6 +758,9 @@ public class WithReferenceTests
                 break;
             case ReferenceUsage.Environment:
                 consumer.WithEnvironment("VALUE", expression);
+                break;
+            case ReferenceUsage.ConnectionStringEnvironment:
+                consumer.WithEnvironment("VALUE", child);
                 break;
             case ReferenceUsage.GenericEnvironment:
                 consumer.WithEnvironment<ExecutableResource, ReferenceExpression>("VALUE", expression);

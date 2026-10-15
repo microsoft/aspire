@@ -1168,17 +1168,27 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             });
     }
 
-    [Fact]
-    public async Task OnResourceStarting_WithUnresolvedParameters_PublishesParameterNamesUntilResolved()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourceStarting_WithUnresolvedParameters_PublishesParameterNamesUntilResolved(bool useConnectionStringEnvironment)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
         var firstParameter = builder.AddParameter("first", () => throw new MissingParameterValueException("Missing first parameter."));
         var secondParameter = builder.AddParameter("second", () => throw new MissingParameterValueException("Missing second parameter."));
-        var container = builder.AddContainer("api", "test-image")
-            .WithEnvironment("FIRST", firstParameter)
-            .WithEnvironment("SECOND", secondParameter);
+        var container = builder.AddContainer("api", "test-image");
+        if (useConnectionStringEnvironment)
+        {
+            var source = builder.AddConnectionString("database", ReferenceExpression.Create($"First={firstParameter};Second={secondParameter}"));
+            container.WithEnvironment("CONNECTION", source);
+        }
+        else
+        {
+            container.WithEnvironment("FIRST", firstParameter)
+                .WithEnvironment("SECOND", secondParameter);
+        }
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1220,10 +1230,17 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var startingEvent = await startingTask.DefaultTimeout();
         var configuration = await configurationTask.DefaultTimeout();
 
-        Assert.DoesNotContain(startingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Empty(startingEvent.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
         Assert.Null(configuration.Exception);
-        Assert.Equal("first-value", configuration.EnvironmentVariables.Single(e => e.Key == "FIRST").Value);
-        Assert.Equal("second-value", configuration.EnvironmentVariables.Single(e => e.Key == "SECOND").Value);
+        if (useConnectionStringEnvironment)
+        {
+            Assert.Equal("First=first-value;Second=second-value", configuration.EnvironmentVariables.Single(e => e.Key == "CONNECTION").Value);
+        }
+        else
+        {
+            Assert.Equal("first-value", configuration.EnvironmentVariables.Single(e => e.Key == "FIRST").Value);
+            Assert.Equal("second-value", configuration.EnvironmentVariables.Single(e => e.Key == "SECOND").Value);
+        }
     }
 
     [Fact]
@@ -1299,16 +1316,25 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
     }
 
-    [Fact]
-    public async Task OnResourceStarting_WithReferencedOnlyParameterInReferencedConnectionString_PublishesParameterName()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnResourceStarting_WithReferencedOnlyParameterInReferencedConnectionString_PublishesParameterName(bool useConnectionStringEnvironment)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
         var parameter = ParameterResourceBuilderExtensions.CreateParameter(builder, "value", secret: false);
         var source = builder.AddResource(new ParameterConnectionStringResource("database", parameter));
-        var consumer = builder.AddContainer("api", "test-image")
-            .WithReference(source);
+        var consumer = builder.AddContainer("api", "test-image");
+        if (useConnectionStringEnvironment)
+        {
+            consumer.WithEnvironment("CONNECTION", source);
+        }
+        else
+        {
+            consumer.WithReference(source);
+        }
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1329,6 +1355,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(
             ["value"],
             Assert.IsType<string[]>(Assert.Single(unresolvedEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters).Value));
+
+        await parameter.SetValueAsync("cleanup-value").DefaultTimeout();
     }
 
     [Fact]
