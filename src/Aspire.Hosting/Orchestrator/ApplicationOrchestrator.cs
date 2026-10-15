@@ -170,7 +170,7 @@ internal sealed class ApplicationOrchestrator
 
                 // An already-armed watcher must keep waiting on parameter-only unresolved states;
                 // leaving the dependency wait alone does not mean the resource was force-started.
-                return e.Snapshot.State?.Text != KnownResourceStates.UnresolvedParameters &&
+                return !KnownResourceStates.WaitingStates.Contains(e.Snapshot.State?.Text) &&
                     waitingResourceIds.Contains(e.ResourceId);
             },
             cts.Token);

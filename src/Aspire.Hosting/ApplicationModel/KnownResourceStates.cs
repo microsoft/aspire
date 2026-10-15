@@ -85,7 +85,12 @@ public static class KnownResourceStates
     public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited];
 
     /// <summary>
+    /// List of states in which startup is waiting for dependencies or parameter values.
+    /// </summary>
+    public static readonly IReadOnlyList<string> WaitingStates = [Waiting, UnresolvedParameters];
+
+    /// <summary>
     /// List of states in which a resource can be rebuilt.
     /// </summary>
-    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited];
+    public static readonly IReadOnlyList<string> BuildableStates = [Running, .. WaitingStates, .. TerminalStates];
 }

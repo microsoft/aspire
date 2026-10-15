@@ -646,8 +646,7 @@ public class ResourceNotificationService : IDisposable
         state is null
         || (allowNotStarted && state == KnownResourceStates.NotStarted)
         || state == KnownResourceStates.Starting
-        || state == KnownResourceStates.Waiting
-        || state == KnownResourceStates.UnresolvedParameters;
+        || KnownResourceStates.WaitingStates.Contains(state);
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)
     {
@@ -666,8 +665,7 @@ public class ResourceNotificationService : IDisposable
         var state = snapshot.State?.Text;
         if (state is not null &&
             state != KnownResourceStates.Starting &&
-            state != KnownResourceStates.Waiting &&
-            state != KnownResourceStates.UnresolvedParameters)
+            !KnownResourceStates.WaitingStates.Contains(state))
         {
             return snapshot with { Properties = properties };
         }
@@ -902,8 +900,7 @@ public class ResourceNotificationService : IDisposable
 
             var newState = stateFactory(previousState);
 
-            if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState) &&
-                !string.Equals(newState.State?.Text, KnownResourceStates.UnresolvedParameters, StringComparisons.ResourceState))
+            if (!KnownResourceStates.WaitingStates.Contains(newState.State?.Text, StringComparers.ResourceState))
             {
                 newState = newState with
                 {
