@@ -1744,6 +1744,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         using var builder = CreateBuilder();
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        // dotnet run also builds this path-based project on startup and restart; count only explicit rebuilds.
+        builder.CreateResourceBuilder(rebuilder).WithArgs("-p:AspireRebuildSmokeTest=true");
         using var app = builder.Build();
 
         await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));
@@ -1760,14 +1763,14 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
         Assert.Contains("[build] Building project...", result.Data.Value);
         Assert.Contains(rebuildOutputMarker, result.Data.Value);
-        var firstBuildCount = File.ReadAllLines(buildCountPath).Length;
+        Assert.Equal("built", Assert.Single(File.ReadAllLines(buildCountPath)));
 
         var secondResult = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
 
         Assert.True(secondResult.Success);
         Assert.NotNull(secondResult.Data);
         Assert.Contains(rebuildOutputMarker, secondResult.Data.Value);
-        Assert.Equal(firstBuildCount + 1, File.ReadAllLines(buildCountPath).Length);
+        Assert.Equal(["built", "built"], File.ReadAllLines(buildCountPath));
     }
 
     [Fact]
@@ -1820,7 +1823,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
               </PropertyGroup>
 
               <Target Name="EmitAspireRebuildOutputMarker" AfterTargets="Build">
-                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" />
+                <WriteLinesToFile File="$(MSBuildProjectDirectory)/build-count.txt" Lines="built" Overwrite="false" Condition="'$(AspireRebuildSmokeTest)' == 'true'" />
                 <Message Importance="High" Text="{{buildOutputMarker}}" />
               </Target>
             </Project>
